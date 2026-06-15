@@ -35,3 +35,6 @@ yarn-error.log*
 next-env.d.ts
 .env.production
 supabase/.temp/
+
+# Contains real P&L figures — seed locally, keep out of history
+scripts/seed-financials.js

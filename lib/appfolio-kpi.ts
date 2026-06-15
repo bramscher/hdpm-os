@@ -22,6 +22,7 @@
  */
 
 import { getSupabaseAdmin } from './supabase';
+import { getDashboardConfig } from './dashboard-config';
 
 const APPFOLIO_V0_BASE = 'https://api.appfolio.com/api/v0';
 
@@ -157,6 +158,10 @@ interface V0Unit {
   PropertyId?: string;
   Status?: string;
   HiddenAt?: string | null;
+  City?: string | null;
+  MarketRent?: string | null;
+  NonRevenue?: boolean;
+  CurrentOccupancyId?: string | null;
 }
 
 interface V0Property {
@@ -194,6 +199,8 @@ interface V0Bill {
   TotalAmount: string;
   InvoiceDate: string;
   LastUpdatedAt: string;
+  VendorId?: string;
+  ManagementCompanyAsPayee?: boolean;
   LineItems?: V0BillLineItem[];
 }
 
@@ -1165,4 +1172,320 @@ export async function fetchManagementFeesKpi(): Promise<ManagementFeesKpi> {
   ).length;
 
   return { feeCount, totalProperties: active.length };
+}
+
+// ============================================
+// KPI 14: Occupancy Rate (Section C)
+// ============================================
+
+export interface OccupancyKpi {
+  rate: number;          // occupied ÷ total, %
+  occupiedCount: number;
+  vacantCount: number;
+  totalUnits: number;
+  target: number;        // from config (default 95%)
+}
+
+const isVacantStatus = (status: string | undefined): boolean => {
+  const s = (status || '').toLowerCase();
+  return s.includes('vacant') || s.includes('available');
+};
+
+export async function fetchOccupancyKpi(): Promise<OccupancyKpi> {
+  const config = getKpiConfig();
+  const { targets } = await getDashboardConfig();
+  if (!config) {
+    return { rate: 0, occupiedCount: 0, vacantCount: 0, totalUnits: 0, target: targets.occupancyPct };
+  }
+
+  const units = await v0FetchAll<V0Unit>(
+    '/units',
+    { 'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z' },
+    config
+  );
+
+  // Mirror the vacancy KPI's universe (all non-hidden units) so the two tiles
+  // reconcile: occupancy% = 100 − vacancy%.
+  const activeUnits = units.filter((u) => !u.HiddenAt);
+  const totalUnits = activeUnits.length;
+  const vacantCount = activeUnits.filter((u) => isVacantStatus(u.Status)).length;
+  const occupiedCount = totalUnits - vacantCount;
+  const rate = totalUnits > 0 ? Math.round((occupiedCount / totalUnits) * 1000) / 10 : 0;
+
+  return { rate, occupiedCount, vacantCount, totalUnits, target: targets.occupancyPct };
+}
+
+// ============================================
+// KPI 15: Bend Mix % + Rent Premium (Section B ★)
+// ============================================
+
+export interface BendGrowthKpi {
+  bendUnits: number;
+  totalUnits: number;
+  bendPct: number;          // Bend units ÷ total, %
+  targetPct: number;        // from config (default ~50%)
+  bendAvgRent: number;      // mean MarketRent for Bend units
+  nonBendAvgRent: number;   // mean MarketRent for non-Bend units
+  premiumPct: number;       // (bendAvg − nonBendAvg) ÷ nonBendAvg, %
+}
+
+/**
+ * Bend market penetration + the rent premium that justifies it. Units carry a
+ * City field directly. "Bend" = City trimmed/lowercased === 'bend' (Redmond,
+ * Sisters, Prineville, etc. are non-Bend per the spec's mix definition).
+ */
+export async function fetchBendGrowthKpi(): Promise<BendGrowthKpi> {
+  const config = getKpiConfig();
+  const { targets } = await getDashboardConfig();
+  const empty: BendGrowthKpi = {
+    bendUnits: 0, totalUnits: 0, bendPct: 0, targetPct: targets.bendMixPct,
+    bendAvgRent: 0, nonBendAvgRent: 0, premiumPct: 0,
+  };
+  if (!config) return empty;
+
+  const units = await v0FetchAll<V0Unit>(
+    '/units',
+    { 'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z' },
+    config
+  );
+
+  const active = units.filter((u) => !u.HiddenAt && !u.NonRevenue);
+  const totalUnits = active.length;
+  const isBend = (u: V0Unit) => (u.City || '').trim().toLowerCase() === 'bend';
+
+  const bendUnits = active.filter(isBend).length;
+  const bendPct = totalUnits > 0 ? Math.round((bendUnits / totalUnits) * 1000) / 10 : 0;
+
+  const avgRent = (list: V0Unit[]) => {
+    const rents = list
+      .map((u) => parseFloat(u.MarketRent || '0'))
+      .filter((r) => r > 0);
+    if (rents.length === 0) return 0;
+    return Math.round(rents.reduce((a, b) => a + b, 0) / rents.length);
+  };
+  const bendAvgRent = avgRent(active.filter(isBend));
+  const nonBendAvgRent = avgRent(active.filter((u) => !isBend(u)));
+  const premiumPct = nonBendAvgRent > 0
+    ? Math.round(((bendAvgRent - nonBendAvgRent) / nonBendAvgRent) * 1000) / 10
+    : 0;
+
+  return {
+    bendUnits, totalUnits, bendPct, targetPct: targets.bendMixPct,
+    bendAvgRent, nonBendAvgRent, premiumPct,
+  };
+}
+
+// ============================================
+// KPI 16: Lease Expirations 30/60/90 (Section C ★)
+// ============================================
+
+export interface LeaseExpirationsKpi {
+  within30: number;   // cumulative: active leases ending ≤30 days out
+  within60: number;   // ≤60 days
+  within90: number;   // ≤90 days
+  mtm: number;        // month-to-month (no fixed end / IsMtm)
+  activeLeases: number;
+}
+
+/**
+ * Upcoming fixed-term expirations from /leases (EndOn), plus the month-to-month
+ * count. Windows are cumulative (within30 ⊆ within60 ⊆ within90).
+ *
+ * Status='Fully Executed' alone over-counts ~3.4× because AppFolio keeps that
+ * status on every historical tenancy. We scope to *currently-occupied* units by
+ * intersecting lease OccupancyId with each active unit's CurrentOccupancyId —
+ * this reconciles exactly with the occupancy KPI's occupied-unit count.
+ */
+export async function fetchLeaseExpirationsKpi(): Promise<LeaseExpirationsKpi> {
+  const config = getKpiConfig();
+  if (!config) {
+    return { within30: 0, within60: 0, within90: 0, mtm: 0, activeLeases: 0 };
+  }
+
+  const [leases, units] = await Promise.all([
+    v0FetchAll<V0Lease>(
+      '/leases',
+      { 'filters[LastUpdatedAtFrom]': '2020-01-01T00:00:00Z' },
+      config
+    ),
+    v0FetchAll<V0Unit>(
+      '/units',
+      { 'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z' },
+      config
+    ),
+  ]);
+
+  const currentOccupancyIds = new Set(
+    units
+      .filter((u) => !u.HiddenAt && u.CurrentOccupancyId)
+      .map((u) => u.CurrentOccupancyId as string)
+  );
+
+  const now = new Date();
+  const dayMs = 86400000;
+  const active = leases.filter(
+    (l) => l.Status === 'Fully Executed' && currentOccupancyIds.has(l.OccupancyId)
+  );
+
+  let within30 = 0, within60 = 0, within90 = 0, mtm = 0;
+  for (const l of active) {
+    if (l.IsMtm || !l.EndOn) {
+      mtm++;
+      continue;
+    }
+    const days = (new Date(l.EndOn).getTime() - now.getTime()) / dayMs;
+    if (days < 0) continue; // already expired
+    if (days <= 30) within30++;
+    if (days <= 60) within60++;
+    if (days <= 90) within90++;
+  }
+
+  return { within30, within60, within90, mtm, activeLeases: active.length };
+}
+
+// ============================================
+// KPI 17: Work Orders Completed (MoM) (Section D)
+// ============================================
+
+export interface WorkOrdersCompletedKpi {
+  thisMonth: number;
+  lastMonth: number;
+  momDelta: number;
+  last90Days: number;
+}
+
+export async function fetchWorkOrdersCompletedKpi(): Promise<WorkOrdersCompletedKpi> {
+  const config = getKpiConfig();
+  if (!config) {
+    return { thisMonth: 0, lastMonth: 0, momDelta: 0, last90Days: 0 };
+  }
+
+  const sinceDate = new Date();
+  sinceDate.setDate(sinceDate.getDate() - 120);
+
+  const workOrders = await v0FetchAll<V0WorkOrder>(
+    '/work_orders',
+    { 'filters[LastUpdatedAtFrom]': sinceDate.toISOString() },
+    config
+  );
+
+  const now = new Date();
+  const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const lastMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 86400000);
+
+  let thisMonth = 0, lastMonth = 0, last90Days = 0;
+  for (const wo of workOrders) {
+    if (!wo.CompletedOn) continue;
+    const c = new Date(wo.CompletedOn);
+    if (c >= thisMonthStart && c <= now) thisMonth++;
+    if (c >= lastMonthStart && c < thisMonthStart) lastMonth++;
+    if (c >= ninetyDaysAgo && c <= now) last90Days++;
+  }
+
+  return { thisMonth, lastMonth, momDelta: thisMonth - lastMonth, last90Days };
+}
+
+// ============================================
+// KPI 18: Maintenance Economics (Section D ★)
+// ============================================
+
+export interface MaintenanceEconomicsKpi {
+  totalSpendTTM: number;
+  inHouseDollars: number;
+  outsourcedDollars: number;
+  inHousePct: number;
+  byCategory: Array<{ category: string; dollars: number }>;
+  workOrdersCompletedTTM: number;
+  costPerWorkOrder: number;
+  costPerDoor: number;
+}
+
+/**
+ * Trailing-12-month maintenance economics from /bills line items on the 6xxx
+ * maintenance GL accounts, split in-house vs outsourced by the configured
+ * internal-vendor IDs, grouped by GL category, with cost-per-WO and cost-per-
+ * door derived from /work_orders + /units counts.
+ *
+ * In-house share is ~0% today by design — HDPM is just standing up its own
+ * maintenance division; this KPI tracks that capture climbing over time.
+ */
+export async function fetchMaintenanceEconomicsKpi(): Promise<MaintenanceEconomicsKpi> {
+  const config = getKpiConfig();
+  const empty: MaintenanceEconomicsKpi = {
+    totalSpendTTM: 0, inHouseDollars: 0, outsourcedDollars: 0, inHousePct: 0,
+    byCategory: [], workOrdersCompletedTTM: 0, costPerWorkOrder: 0, costPerDoor: 0,
+  };
+  if (!config) return empty;
+
+  const { internalVendorIds } = await getDashboardConfig();
+  const internalSet = new Set(internalVendorIds);
+
+  const yearAgo = new Date(Date.now() - 365 * 86400000).toISOString();
+
+  const [bills, glAccounts, workOrders, units] = await Promise.all([
+    v0FetchAll<V0Bill>('/bills', { 'filters[LastUpdatedAtFrom]': yearAgo }, config),
+    v0FetchAll<V0GlAccount>('/gl_accounts', {}, config),
+    v0FetchAll<V0WorkOrder>('/work_orders', { 'filters[LastUpdatedAtFrom]': yearAgo }, config),
+    v0FetchAll<V0Unit>('/units', { 'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z' }, config),
+  ]);
+
+  // Maintenance GL accounts: 6xxx expense accounts.
+  const maintGl = new Map<string, string>();
+  for (const a of glAccounts) {
+    if (a.AccountType === 'ExpenseGlAccount' && (a.Number || '').startsWith('6')) {
+      maintGl.set(a.Id, `${a.Number} ${a.Name || a.AccountName || ''}`.trim());
+    }
+  }
+
+  let totalSpendTTM = 0;
+  let inHouseDollars = 0;
+  let outsourcedDollars = 0;
+  const byCategoryMap = new Map<string, number>();
+
+  for (const bill of bills) {
+    let billMaint = 0;
+    for (const li of bill.LineItems || []) {
+      const catName = li.GlAccountId ? maintGl.get(li.GlAccountId) : undefined;
+      if (!catName) continue;
+      const amt = parseFloat(li.Amount || '0');
+      billMaint += amt;
+      byCategoryMap.set(catName, (byCategoryMap.get(catName) || 0) + amt);
+    }
+    if (billMaint === 0) continue;
+    totalSpendTTM += billMaint;
+    if (bill.VendorId && internalSet.has(bill.VendorId)) inHouseDollars += billMaint;
+    else outsourcedDollars += billMaint;
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const inHousePct = totalSpendTTM > 0
+    ? Math.round((inHouseDollars / totalSpendTTM) * 1000) / 10
+    : 0;
+
+  const byCategory = Array.from(byCategoryMap.entries())
+    .map(([category, dollars]) => ({ category, dollars: round2(dollars) }))
+    .sort((a, b) => b.dollars - a.dollars);
+
+  const workOrdersCompletedTTM = workOrders.filter((wo) => {
+    if (!wo.CompletedOn) return false;
+    return new Date(wo.CompletedOn).toISOString() >= yearAgo;
+  }).length;
+
+  const doors = units.filter((u) => !u.HiddenAt).length;
+  const costPerWorkOrder = workOrdersCompletedTTM > 0
+    ? round2(totalSpendTTM / workOrdersCompletedTTM)
+    : 0;
+  const costPerDoor = doors > 0 ? round2(totalSpendTTM / doors) : 0;
+
+  return {
+    totalSpendTTM: round2(totalSpendTTM),
+    inHouseDollars: round2(inHouseDollars),
+    outsourcedDollars: round2(outsourcedDollars),
+    inHousePct,
+    byCategory,
+    workOrdersCompletedTTM,
+    costPerWorkOrder,
+    costPerDoor,
+  };
 }

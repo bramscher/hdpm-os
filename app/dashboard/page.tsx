@@ -27,6 +27,13 @@ import {
   UserPlus,
   Filter,
   Receipt,
+  CheckCircle2,
+  MapPin,
+  CalendarClock,
+  ClipboardCheck,
+  Hammer,
+  Settings,
+  X,
 } from "lucide-react";
 
 // ============================================
@@ -109,6 +116,50 @@ interface ManagementFeesData {
   totalProperties: number;
 }
 
+interface OccupancyData {
+  rate: number;
+  occupiedCount: number;
+  vacantCount: number;
+  totalUnits: number;
+  target: number;
+}
+
+interface BendGrowthData {
+  bendUnits: number;
+  totalUnits: number;
+  bendPct: number;
+  targetPct: number;
+  bendAvgRent: number;
+  nonBendAvgRent: number;
+  premiumPct: number;
+}
+
+interface LeaseExpirationsData {
+  within30: number;
+  within60: number;
+  within90: number;
+  mtm: number;
+  activeLeases: number;
+}
+
+interface WorkOrdersCompletedData {
+  thisMonth: number;
+  lastMonth: number;
+  momDelta: number;
+  last90Days: number;
+}
+
+interface MaintenanceEconomicsData {
+  totalSpendTTM: number;
+  inHouseDollars: number;
+  outsourcedDollars: number;
+  inHousePct: number;
+  byCategory: Array<{ category: string; dollars: number }>;
+  workOrdersCompletedTTM: number;
+  costPerWorkOrder: number;
+  costPerDoor: number;
+}
+
 interface LeasingFunnelData {
   period: string;
   funnel: {
@@ -135,7 +186,16 @@ interface LeasingFunnelData {
 
 type KpiData = DelinquencyData | VacancyData | WorkOrderData | NoticeData | InsuranceData
   | OwnerRetentionData | MaintenanceCostData | DaysToLeaseData | LeaseRenewalData | NetDoorsData
-  | GuestCardData | LeasingFunnelData | ManagementFeesData;
+  | GuestCardData | LeasingFunnelData | ManagementFeesData
+  | OccupancyData | BendGrowthData | LeaseExpirationsData | WorkOrdersCompletedData
+  | MaintenanceEconomicsData;
+
+// Compact money formatter for maintenance economics ($1.41M / $842k / $312)
+function fmtMoney(n: number): string {
+  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(n) >= 1_000) return `$${Math.round(n / 1_000)}k`;
+  return `$${Math.round(n)}`;
+}
 
 interface KpiState<T extends KpiData> {
   data: T | null;
@@ -573,6 +633,149 @@ const KPI_CARDS: KpiCardConfig[] = [
       };
     },
   },
+  {
+    name: "Occupancy",
+    key: "occupancy",
+    endpoint: "/api/kpi/occupancy",
+    icon: CheckCircle2,
+    color: "text-green-600",
+    bgColor: "bg-green-100",
+    iconColor: "text-green-600",
+    sparkColor: "#16a34a",
+    sparkFill: "#bbf7d0",
+    dataTag: "live",
+    formatPrimary: (d) => `${(d as OccupancyData).rate}%`,
+    formatSecondary: (d) => {
+      const data = d as OccupancyData;
+      return `${data.occupiedCount} occupied of ${data.totalUnits} | target ${data.target}%`;
+    },
+    getSparklineValue: (s) => (s.rate as number) ?? 0,
+    getDelta: (current, prior) => {
+      const curr = (current as OccupancyData).rate;
+      const prev = (prior as { rate?: number }).rate;
+      if (prev == null) return null;
+      const diff = curr - prev;
+      if (Math.abs(diff) < 0.1) return { direction: "flat", sentiment: "neutral", label: "No change" };
+      return {
+        direction: diff > 0 ? "up" : "down",
+        sentiment: diff > 0 ? "good" : "bad",
+        label: `${Math.abs(diff).toFixed(1)}pp`,
+      };
+    },
+  },
+  {
+    name: "Bend Mix & Premium",
+    key: "bend_growth",
+    endpoint: "/api/kpi/bend-growth",
+    icon: MapPin,
+    color: "text-terra-600",
+    bgColor: "bg-terra-100",
+    iconColor: "text-terra-600",
+    sparkColor: "#c2562d",
+    sparkFill: "#f5d0c0",
+    dataTag: "live",
+    formatPrimary: (d) => `${(d as BendGrowthData).bendPct}%`,
+    formatSecondary: (d) => {
+      const data = d as BendGrowthData;
+      const prem = data.premiumPct >= 0 ? `+${data.premiumPct}` : `${data.premiumPct}`;
+      return `${data.bendUnits} of ${data.totalUnits} units in Bend | ${prem}% rent premium | target ${data.targetPct}%`;
+    },
+    getSparklineValue: (s) => (s.bendPct as number) ?? 0,
+    getDelta: (current, prior) => {
+      const curr = (current as BendGrowthData).bendPct;
+      const prev = (prior as { bendPct?: number }).bendPct;
+      if (prev == null) return null;
+      const diff = curr - prev;
+      if (Math.abs(diff) < 0.1) return { direction: "flat", sentiment: "neutral", label: "No change" };
+      return {
+        direction: diff > 0 ? "up" : "down",
+        sentiment: diff > 0 ? "good" : "bad",
+        label: `${Math.abs(diff).toFixed(1)}pp`,
+      };
+    },
+  },
+  {
+    name: "Lease Expirations",
+    key: "lease_expirations",
+    endpoint: "/api/kpi/lease-expirations",
+    icon: CalendarClock,
+    color: "text-amber-600",
+    bgColor: "bg-amber-100",
+    iconColor: "text-amber-600",
+    sparkColor: "#d97706",
+    sparkFill: "#fde68a",
+    dataTag: "live",
+    formatPrimary: (d) => `${(d as LeaseExpirationsData).within30}`,
+    formatSecondary: (d) => {
+      const data = d as LeaseExpirationsData;
+      return `${data.within30} in 30d | ${data.within60} in 60d | ${data.within90} in 90d | ${data.mtm} MTM`;
+    },
+    getSparklineValue: (s) => (s.within30 as number) ?? 0,
+    getDelta: (current, prior) => {
+      const curr = (current as LeaseExpirationsData).within30;
+      const prev = (prior as { within30?: number }).within30;
+      if (prev == null) return null;
+      const diff = curr - prev;
+      if (diff === 0) return { direction: "flat", sentiment: "neutral", label: "No change" };
+      return { direction: diff > 0 ? "up" : "down", sentiment: "neutral", label: `${Math.abs(diff)}` };
+    },
+  },
+  {
+    name: "Work Orders Completed",
+    key: "work_orders_completed",
+    endpoint: "/api/kpi/work-orders-completed",
+    icon: ClipboardCheck,
+    color: "text-blue-600",
+    bgColor: "bg-blue-100",
+    iconColor: "text-blue-600",
+    sparkColor: "#2563eb",
+    sparkFill: "#bfdbfe",
+    dataTag: "live",
+    formatPrimary: (d) => `${(d as WorkOrdersCompletedData).thisMonth}`,
+    formatSecondary: (d) => {
+      const data = d as WorkOrdersCompletedData;
+      return `${data.lastMonth} last month | ${data.last90Days} in 90 days`;
+    },
+    getSparklineValue: (s) => (s.thisMonth as number) ?? 0,
+    getDelta: (current, prior) => {
+      const curr = (current as WorkOrdersCompletedData).thisMonth;
+      const prev = (prior as { thisMonth?: number }).thisMonth;
+      if (prev == null) return null;
+      const diff = curr - prev;
+      if (diff === 0) return { direction: "flat", sentiment: "neutral", label: "No change" };
+      return { direction: diff > 0 ? "up" : "down", sentiment: "neutral", label: `${Math.abs(diff)}` };
+    },
+  },
+  {
+    name: "Maintenance Economics",
+    key: "maintenance_economics",
+    endpoint: "/api/kpi/maintenance-economics",
+    icon: Hammer,
+    color: "text-orange-600",
+    bgColor: "bg-orange-100",
+    iconColor: "text-orange-600",
+    sparkColor: "#ea580c",
+    sparkFill: "#fed7aa",
+    dataTag: "live",
+    formatPrimary: (d) => fmtMoney((d as MaintenanceEconomicsData).totalSpendTTM),
+    formatSecondary: (d) => {
+      const data = d as MaintenanceEconomicsData;
+      return `TTM spend | In-house ${data.inHousePct}% · ${fmtMoney(data.costPerDoor)}/door · ${data.workOrdersCompletedTTM} WOs`;
+    },
+    getSparklineValue: (s) => (s.inHousePct as number) ?? 0,
+    getDelta: (current, prior) => {
+      const curr = (current as MaintenanceEconomicsData).inHousePct;
+      const prev = (prior as { inHousePct?: number }).inHousePct;
+      if (prev == null) return null;
+      const diff = curr - prev;
+      if (Math.abs(diff) < 0.1) return { direction: "flat", sentiment: "neutral", label: "No change" };
+      return {
+        direction: diff > 0 ? "up" : "down",
+        sentiment: diff > 0 ? "good" : "bad",
+        label: `${Math.abs(diff).toFixed(1)}pp in-house`,
+      };
+    },
+  },
 ];
 
 // ============================================
@@ -730,6 +933,371 @@ function KpiCard({
 }
 
 // ============================================
+// Config Drawer
+// ============================================
+
+interface DashboardConfig {
+  internalVendorIds: string[];
+  targets: {
+    bendMixPct: number;
+    occupancyPct: number;
+    doorsGoal: number;
+    netIncomeGoal: number;
+    ownerCashGoal: number;
+    maintBillableRateMin: number;
+  };
+  financials: {
+    loanBalance: number;
+    loanRatePct: number;
+    annualDebtService: number;
+    staffAnnualCost: number;
+    gmAnnualCost: number;
+    ownerDrawTarget: number;
+  };
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  prefix,
+  suffix,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  prefix?: string;
+  suffix?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-charcoal-500">{label}</span>
+      <div className="mt-1 flex items-center gap-1.5 rounded-lg border border-sand-200 bg-white px-2.5 focus-within:border-terra-300">
+        {prefix && <span className="text-xs text-charcoal-400">{prefix}</span>}
+        <input
+          type="number"
+          value={Number.isFinite(value) ? value : 0}
+          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          className="w-full bg-transparent py-2 text-sm text-charcoal-900 outline-none"
+        />
+        {suffix && <span className="text-xs text-charcoal-400">{suffix}</span>}
+      </div>
+    </label>
+  );
+}
+
+function ConfigDrawer({
+  open,
+  onClose,
+  config,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  config: DashboardConfig | null;
+  onSaved: (c: DashboardConfig) => void;
+}) {
+  const [draft, setDraft] = useState<DashboardConfig | null>(config);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(config);
+  }, [config]);
+
+  if (!open) return null;
+
+  const save = async () => {
+    if (!draft) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      onSaved(await res.json());
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setTarget = (k: keyof DashboardConfig["targets"], v: number) =>
+    setDraft((d) => (d ? { ...d, targets: { ...d.targets, [k]: v } } : d));
+  const setFin = (k: keyof DashboardConfig["financials"], v: number) =>
+    setDraft((d) => (d ? { ...d, financials: { ...d.financials, [k]: v } } : d));
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-charcoal-900/30" onClick={onClose} />
+      <div className="relative h-full w-full max-w-md overflow-y-auto bg-sand-50 shadow-xl animate-slide-up">
+        <div className="sticky top-0 flex items-center justify-between border-b border-sand-200 bg-sand-50 px-6 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-terra-500">
+              Dashboard Config
+            </p>
+            <h2 className="text-lg font-bold text-charcoal-900">Targets & Inputs</h2>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-charcoal-400 hover:bg-sand-100">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {!draft ? (
+          <div className="p-6 text-sm text-charcoal-400">Loading config…</div>
+        ) : (
+          <div className="space-y-6 p-6">
+            {/* Internal vendors */}
+            <section>
+              <h3 className="mb-1 text-sm font-semibold text-charcoal-900">
+                In-house maintenance vendors
+              </h3>
+              <p className="mb-2 text-xs text-charcoal-400">
+                AppFolio vendor IDs counted as in-house (HDPM&apos;s own crew). One per line.
+                Powers the in-house vs outsourced split.
+              </p>
+              <textarea
+                value={draft.internalVendorIds.join("\n")}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    internalVendorIds: e.target.value
+                      .split(/[\n,]/)
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  })
+                }
+                rows={3}
+                className="w-full rounded-lg border border-sand-200 bg-white p-2.5 font-mono text-xs text-charcoal-900 outline-none focus:border-terra-300"
+              />
+            </section>
+
+            {/* Targets */}
+            <section>
+              <h3 className="mb-3 text-sm font-semibold text-charcoal-900">KPI targets</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <NumberField label="Bend mix target" value={draft.targets.bendMixPct} onChange={(v) => setTarget("bendMixPct", v)} suffix="%" />
+                <NumberField label="Occupancy target" value={draft.targets.occupancyPct} onChange={(v) => setTarget("occupancyPct", v)} suffix="%" />
+                <NumberField label="Doors goal" value={draft.targets.doorsGoal} onChange={(v) => setTarget("doorsGoal", v)} />
+                <NumberField label="Billable rate floor" value={draft.targets.maintBillableRateMin} onChange={(v) => setTarget("maintBillableRateMin", v)} prefix="$" suffix="/hr" />
+                <NumberField label="Net income goal" value={draft.targets.netIncomeGoal} onChange={(v) => setTarget("netIncomeGoal", v)} prefix="$" />
+                <NumberField label="Owner cash goal" value={draft.targets.ownerCashGoal} onChange={(v) => setTarget("ownerCashGoal", v)} prefix="$" />
+              </div>
+            </section>
+
+            {/* Financials */}
+            <section>
+              <h3 className="mb-1 text-sm font-semibold text-charcoal-900">Financial inputs</h3>
+              <p className="mb-3 text-xs text-charcoal-400">
+                Power the Owner Goals panel (NOI → $1M, owner cash → $500K, DSCR).
+                <strong className="text-charcoal-500"> Annual staff cost is required</strong> —
+                QuickBooks doesn&apos;t book payroll, so without it true NOI can&apos;t be computed.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <NumberField label="Annual staff cost (incl. GM)" value={draft.financials.staffAnnualCost} onChange={(v) => setFin("staffAnnualCost", v)} prefix="$" />
+                <NumberField label="Annual debt service (P&I)" value={draft.financials.annualDebtService} onChange={(v) => setFin("annualDebtService", v)} prefix="$" />
+                <NumberField label="Loan balance" value={draft.financials.loanBalance} onChange={(v) => setFin("loanBalance", v)} prefix="$" />
+                <NumberField label="Loan rate" value={draft.financials.loanRatePct} onChange={(v) => setFin("loanRatePct", v)} suffix="%" />
+                <NumberField label="GM annual cost (info)" value={draft.financials.gmAnnualCost} onChange={(v) => setFin("gmAnnualCost", v)} prefix="$" />
+                <NumberField label="Owner draw target" value={draft.financials.ownerDrawTarget} onChange={(v) => setFin("ownerDrawTarget", v)} prefix="$" />
+              </div>
+            </section>
+
+            {error && <p className="text-xs text-red-500">{error}</p>}
+
+            <div className="flex items-center justify-end gap-3 border-t border-sand-200 pt-4">
+              <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-charcoal-500 hover:text-charcoal-700">
+                Cancel
+              </button>
+              <button
+                onClick={save}
+                disabled={saving}
+                className="rounded-lg bg-terra-600 px-4 py-2 text-sm font-medium text-white hover:bg-terra-700 disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// Section A — Owner Goals panel (QuickBooks)
+// ============================================
+
+interface FinancialsResponse {
+  seeded: boolean;
+  source?: string;
+  note?: string | null;
+  periodStart?: string;
+  periodEnd?: string;
+  capturedAt?: string;
+  revenueTTM?: number;
+  bookedOpexTTM?: number;
+  qbNetIncomeTTM?: number;
+  staffAnnualCost?: number;
+  annualDebtService?: number;
+  goals?: { netIncomeGoal: number; ownerCashGoal: number };
+  needsStaffCost?: boolean;
+  adjustedNoiTTM?: number | null;
+  noiMarginPct?: number | null;
+  ownerDistributableCash?: number | null;
+  dscr?: number | null;
+  noiProgressPct?: number | null;
+  ownerCashProgressPct?: number | null;
+}
+
+function ProgressGauge({
+  label,
+  value,
+  sub,
+  pct,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  pct: number | null;
+  accent: string; // tailwind bg color for the bar
+}) {
+  const clamped = pct == null ? 0 : Math.max(0, Math.min(100, pct));
+  return (
+    <div className="bg-white rounded-xl border border-sand-200 p-5 shadow-card">
+      <p className="text-xs font-medium text-charcoal-500">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-charcoal-900 tracking-tight">{value}</p>
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-sand-100">
+        <div className={`h-full rounded-full ${accent}`} style={{ width: `${clamped}%` }} />
+      </div>
+      <p className="mt-1.5 text-xs text-charcoal-400">
+        {pct != null && <span className="font-semibold text-charcoal-600">{pct}%</span>} {sub}
+      </p>
+    </div>
+  );
+}
+
+function FinancialsPanel({
+  data,
+  loading,
+  onOpenConfig,
+}: {
+  data: FinancialsResponse | null;
+  loading: boolean;
+  onOpenConfig: () => void;
+}) {
+  const needsConfig = data?.seeded && data?.needsStaffCost;
+
+  return (
+    <div className="mb-8">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold text-terra-500 uppercase tracking-widest">
+            Owner Goals
+          </p>
+          <h2 className="text-lg font-bold text-charcoal-900 tracking-tight">
+            Progress to $1M net income / $500K owner cash
+          </h2>
+        </div>
+        {data?.seeded && data.periodEnd && (
+          <p className="text-xs text-charcoal-400">
+            QuickBooks · TTM thru{" "}
+            {new Date(data.periodEnd + "T00:00:00").toLocaleDateString("en-US", {
+              month: "short",
+              year: "numeric",
+            })}
+          </p>
+        )}
+      </div>
+
+      {!data && loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-32 bg-white rounded-xl border border-sand-200 shadow-card animate-pulse" />
+          ))}
+        </div>
+      ) : !data?.seeded ? (
+        <div className="bg-white rounded-xl border border-sand-200 p-6 shadow-card text-sm text-charcoal-500">
+          No QuickBooks financials seeded yet. Run{" "}
+          <code className="text-xs bg-sand-100 px-1.5 py-0.5 rounded">node scripts/seed-financials.js</code>{" "}
+          to load the P&L.
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="bg-white rounded-xl border border-sand-200 p-5 shadow-card">
+              <p className="text-xs font-medium text-charcoal-500">Revenue (TTM)</p>
+              <p className="mt-1 text-2xl font-bold text-charcoal-900 tracking-tight">
+                {fmtMoney(data.revenueTTM ?? 0)}
+              </p>
+              <p className="mt-3 text-xs text-charcoal-400">
+                Booked opex {fmtMoney(data.bookedOpexTTM ?? 0)} · from QuickBooks
+              </p>
+            </div>
+
+            <ProgressGauge
+              label="Net Income → $1M"
+              value={data.adjustedNoiTTM != null ? fmtMoney(data.adjustedNoiTTM) : "—"}
+              sub={
+                data.adjustedNoiTTM != null
+                  ? `of ${fmtMoney(data.goals?.netIncomeGoal ?? 0)}${data.noiMarginPct != null ? ` · ${data.noiMarginPct}% margin` : ""}`
+                  : "set staff cost in config"
+              }
+              pct={data.noiProgressPct ?? null}
+              accent="bg-emerald-500"
+            />
+
+            <ProgressGauge
+              label="Owner Cash → $500K"
+              value={data.ownerDistributableCash != null ? fmtMoney(data.ownerDistributableCash) : "—"}
+              sub={
+                data.ownerDistributableCash != null
+                  ? `of ${fmtMoney(data.goals?.ownerCashGoal ?? 0)} · after debt service`
+                  : "set staff cost + debt service"
+              }
+              pct={data.ownerCashProgressPct ?? null}
+              accent="bg-terra-500"
+            />
+
+            <div className="bg-white rounded-xl border border-sand-200 p-5 shadow-card">
+              <p className="text-xs font-medium text-charcoal-500">DSCR</p>
+              <p className="mt-1 text-2xl font-bold text-charcoal-900 tracking-tight">
+                {data.dscr != null ? `${data.dscr.toFixed(2)}×` : "—"}
+              </p>
+              <p className="mt-3 text-xs text-charcoal-400">
+                {data.dscr != null
+                  ? `target > 1.5× · NOI ÷ debt service`
+                  : data.needsStaffCost
+                    ? "set staff cost in config"
+                    : "set debt service in config"}
+              </p>
+            </div>
+          </div>
+
+          {needsConfig && (
+            <button
+              onClick={onOpenConfig}
+              className="mt-3 text-xs font-medium text-terra-600 hover:text-terra-700"
+            >
+              ⚙ QuickBooks doesn&apos;t book payroll — enter annual staff cost in config to compute true NOI, owner cash & DSCR →
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================
 // Page
 // ============================================
 
@@ -746,6 +1314,10 @@ export default function DashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshingKeys, setRefreshingKeys] = useState<Set<string>>(new Set());
+  const [config, setConfig] = useState<DashboardConfig | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [financials, setFinancials] = useState<FinancialsResponse | null>(null);
+  const [financialsLoading, setFinancialsLoading] = useState(true);
 
   // Load cached data from Supabase (instant — no AppFolio API calls)
   const loadCached = useCallback(async () => {
@@ -870,6 +1442,32 @@ export default function DashboardPage() {
     loadCached();
   }, [loadCached]);
 
+  // Load dashboard config (targets, internal vendors, financial inputs)
+  useEffect(() => {
+    fetch("/api/config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((c) => c && setConfig(c))
+      .catch(() => {});
+  }, []);
+
+  // Load Section A financials (QuickBooks). Re-run when config changes so the
+  // NOI/owner-cash gauges update right after staff cost is saved.
+  const loadFinancials = useCallback(async () => {
+    setFinancialsLoading(true);
+    try {
+      const res = await fetch("/api/financials");
+      if (res.ok) setFinancials(await res.json());
+    } catch {
+      // non-critical
+    } finally {
+      setFinancialsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFinancials();
+  }, [loadFinancials, config]);
+
   return (
     <div className="px-8 py-8 max-w-5xl">
       {/* Header */}
@@ -910,9 +1508,30 @@ export default function DashboardPage() {
               <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
               {refreshing ? "Refreshing..." : "Refresh Live"}
             </button>
+            <button
+              onClick={() => setConfigOpen(true)}
+              title="Dashboard config"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-charcoal-600 bg-white border border-sand-200 rounded-lg hover:bg-sand-50 hover:border-sand-300 transition-all duration-150 shadow-sm"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
+
+      <ConfigDrawer
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        config={config}
+        onSaved={setConfig}
+      />
+
+      {/* Section A — Owner Goals (QuickBooks financials) */}
+      <FinancialsPanel
+        data={financials}
+        loading={financialsLoading}
+        onOpenConfig={() => setConfigOpen(true)}
+      />
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">

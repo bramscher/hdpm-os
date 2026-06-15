@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
     const kpiNames = [
       'delinquency', 'vacancy', 'work_orders', 'notices', 'insurance',
       'owner_retention', 'maintenance_cost', 'days_to_lease', 'lease_renewal', 'net_doors',
-      'guest_cards', 'leasing_funnel',
+      'guest_cards', 'leasing_funnel', 'management_fees',
+      'occupancy', 'bend_growth', 'lease_expirations', 'work_orders_completed',
+      'maintenance_economics',
     ];
 
     if (historyParam) {
