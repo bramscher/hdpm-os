@@ -14,12 +14,17 @@ import {
   fetchGuestCardKpi,
   fetchLeasingFunnelKpi,
   fetchManagementFeesKpi,
+  fetchOccupancyKpi,
+  fetchBendGrowthKpi,
+  fetchLeaseExpirationsKpi,
+  fetchWorkOrdersCompletedKpi,
+  fetchMaintenanceEconomicsKpi,
 } from '@/lib/appfolio-kpi';
 
 /**
  * POST /api/kpi/cron
  *
- * Daily cron job (7 AM PT / 14:00 UTC) that snapshots all 12 KPIs
+ * Daily cron job (7 AM PT / 14:00 UTC) that snapshots all KPIs
  * into kpi_snapshots for historical trend tracking.
  *
  * Protected by CRON_SECRET (same pattern as /api/sync/appfolio).
@@ -48,6 +53,11 @@ export async function POST(request: NextRequest) {
     { name: 'guest_cards', fn: fetchGuestCardKpi },
     { name: 'leasing_funnel', fn: fetchLeasingFunnelKpi },
     { name: 'management_fees', fn: fetchManagementFeesKpi },
+    { name: 'occupancy', fn: fetchOccupancyKpi },
+    { name: 'bend_growth', fn: fetchBendGrowthKpi },
+    { name: 'lease_expirations', fn: fetchLeaseExpirationsKpi },
+    { name: 'work_orders_completed', fn: fetchWorkOrdersCompletedKpi },
+    { name: 'maintenance_economics', fn: fetchMaintenanceEconomicsKpi },
   ] as const;
 
   await Promise.allSettled(

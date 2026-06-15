@@ -19,6 +19,7 @@ const NAV_ITEMS = [
     href: "/dashboard",
     icon: Activity,
     matchPrefix: "/dashboard",
+    adminOnly: true,
   },
   {
     label: "Invoices",
@@ -69,9 +70,14 @@ interface SidebarProps {
 export function Sidebar({ collapsed = false, onToggleChat, isChatOpen = false }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const isAdmin = session?.user?.isAdmin === true;
 
   // Don't show sidebar on login page
   if (pathname === "/login") return null;
+
+  const navItems = NAV_ITEMS.filter(
+    (item) => !(item as { adminOnly?: boolean }).adminOnly || isAdmin
+  );
 
   const initials = session?.user?.name
     ? session.user.name
@@ -119,7 +125,7 @@ export function Sidebar({ collapsed = false, onToggleChat, isChatOpen = false }:
       {/* Navigation */}
       <nav className="flex-1 px-2 mt-2">
         <div className="space-y-0.5">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const prefixMatch = pathname.startsWith(item.matchPrefix ?? item.href);
             const excludePrefix = "matchExclude" in item ? item.matchExclude : undefined;
             const excluded = excludePrefix ? pathname.startsWith(excludePrefix) : false;

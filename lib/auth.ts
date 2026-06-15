@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
 import AzureADProvider from "next-auth/providers/azure-ad";
+import { isAdmin } from "@/lib/admin";
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
@@ -34,12 +35,18 @@ export const authOptions: NextAuthOptions = {
       if (token.accessToken) {
         session.accessToken = token.accessToken as string;
       }
+      // Surface admin status (gates the financial dashboards)
+      if (session.user) {
+        session.user.isAdmin = token.isAdmin === true;
+      }
       return session;
     },
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token;
       }
+      // Stamp admin status from the env allowlist on every token refresh
+      token.isAdmin = isAdmin(token.email);
       return token;
     },
   },
