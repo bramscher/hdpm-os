@@ -1091,6 +1091,226 @@ function findCustomValue(
   return undefined;
 }
 
+// ============================================
+// Contact fetching for Zoom Phone sync
+// (vendors / owners / tenants, with phone + email)
+//
+// AppFolio v0 isn't consistent about how it exposes phone/email across entity
+// types, so these helpers extract defensively from several possible shapes.
+// ============================================
+
+export type ZoomContactType = 'vendor' | 'owner' | 'tenant';
+
+export interface AppFolioContact {
+  appfolioId: string;
+  type: ZoomContactType;
+  /** Display name, formatted per HDPM's spec: "V - ...", "O - ...", "T - ... - <addr>". */
+  name: string;
+  /** Raw phone as AppFolio returns it; normalized to E.164 by the sync layer. */
+  phoneRaw: string | null;
+  email: string | null;
+  /** Property address for tenants; null otherwise. */
+  propertyAddress: string | null;
+}
+
+type RawRecord = Record<string, unknown>;
+
+function asString(v: unknown): string | null {
+  if (typeof v === 'string') {
+    const t = v.trim();
+    return t.length ? t : null;
+  }
+  if (typeof v === 'number') return String(v);
+  return null;
+}
+
+/** Pull the first usable phone string from the many shapes AppFolio may use. */
+function extractPhone(raw: RawRecord): string | null {
+  // Array forms: PhoneNumbers: [{ PhoneNumber } | { Number } | string]
+  const arr = raw.PhoneNumbers ?? raw.Phones;
+  if (Array.isArray(arr)) {
+    for (const entry of arr) {
+      if (typeof entry === 'string') {
+        const s = asString(entry);
+        if (s) return s;
+      } else if (entry && typeof entry === 'object') {
+        const o = entry as RawRecord;
+        const s = asString(o.PhoneNumber) ?? asString(o.Number) ?? asString(o.Phone);
+        if (s) return s;
+      }
+    }
+  }
+  // Scalar forms, in rough priority order.
+  const scalarKeys = [
+    'MobilePhone', 'CellPhone', 'PrimaryPhone', 'Phone', 'PhoneNumber',
+    'HomePhone', 'WorkPhone', 'DayPhone', 'EveningPhone',
+  ];
+  for (const k of scalarKeys) {
+    const s = asString(raw[k]);
+    if (s) return s;
+  }
+  return null;
+}
+
+function extractEmail(raw: RawRecord): string | null {
+  const direct = asString(raw.Email) ?? asString(raw.EmailAddress) ?? asString(raw.PrimaryEmail);
+  if (direct) return direct;
+  const arr = raw.Emails ?? raw.EmailAddresses;
+  if (Array.isArray(arr)) {
+    for (const entry of arr) {
+      if (typeof entry === 'string') {
+        const s = asString(entry);
+        if (s) return s;
+      } else if (entry && typeof entry === 'object') {
+        const o = entry as RawRecord;
+        const s = asString(o.EmailAddress) ?? asString(o.Email);
+        if (s) return s;
+      }
+    }
+  }
+  return null;
+}
+
+async function fetchAllRaw(path: string): Promise<RawRecord[]> {
+  const config = getConfig();
+  if (!config) return [];
+  const { clientId, clientSecret, developerId } = config;
+
+  const all: RawRecord[] = [];
+  let pageNumber = 1;
+  const pageSize = 200;
+
+  while (true) {
+    const res = await v0Fetch<RawRecord>(
+      path,
+      {
+        'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z',
+        'page[number]': String(pageNumber),
+        'page[size]': String(pageSize),
+      },
+      clientId,
+      clientSecret,
+      developerId
+    );
+    const rows = res.data || [];
+    all.push(...rows);
+    if (rows.length < pageSize || !res.next_page_path) break;
+    pageNumber++;
+    if (pageNumber > 50) {
+      console.warn(`[AppFolio] Hit max page limit (50) on ${path}, stopping`);
+      break;
+    }
+  }
+  return all;
+}
+
+export async function fetchAppFolioVendorContacts(): Promise<AppFolioContact[]> {
+  const rows = await fetchAllRaw('/vendors');
+  const out: AppFolioContact[] = [];
+  for (const r of rows) {
+    if (r.HiddenAt) continue;
+    const id = asString(r.Id);
+    if (!id) continue;
+    const name =
+      asString(r.CompanyName) ||
+      [asString(r.FirstName), asString(r.LastName)].filter(Boolean).join(' ') ||
+      'Unknown Vendor';
+    out.push({
+      appfolioId: id,
+      type: 'vendor',
+      name: `V - ${name}`,
+      phoneRaw: extractPhone(r),
+      email: extractEmail(r),
+      propertyAddress: null,
+    });
+  }
+  console.log(`[AppFolio] Vendor contacts: ${out.length}`);
+  return out;
+}
+
+export async function fetchAppFolioOwnerContacts(): Promise<AppFolioContact[]> {
+  const rows = await fetchAllRaw('/owners');
+  const out: AppFolioContact[] = [];
+  for (const r of rows) {
+    if (r.HiddenAt) continue;
+    const id = asString(r.Id);
+    if (!id) continue;
+    const name =
+      asString(r.CompanyName) ||
+      [asString(r.FirstName), asString(r.LastName)].filter(Boolean).join(' ') ||
+      asString(r.Name) ||
+      'Unknown Owner';
+    out.push({
+      appfolioId: id,
+      type: 'owner',
+      name: `O - ${name}`,
+      phoneRaw: extractPhone(r),
+      email: extractEmail(r),
+      propertyAddress: null,
+    });
+  }
+  console.log(`[AppFolio] Owner contacts: ${out.length}`);
+  return out;
+}
+
+export async function fetchAppFolioTenantContacts(): Promise<AppFolioContact[]> {
+  const rows = await fetchAllRaw('/tenants');
+  const today = new Date().toISOString().split('T')[0];
+  const out: AppFolioContact[] = [];
+
+  for (const r of rows) {
+    if (r.HiddenAt) continue;
+    const id = asString(r.Id);
+    if (!id) continue;
+
+    // Current residents only: skip anyone whose move-out date is in the past.
+    const moveOut = asString(r.MoveOutOn);
+    if (moveOut && moveOut < today) continue;
+    const status = (asString(r.Status) || '').toLowerCase();
+    if (status === 'past' || status === 'former' || status === 'evicted') continue;
+
+    const fullName =
+      [asString(r.FirstName), asString(r.LastName)].filter(Boolean).join(' ') ||
+      asString(r.Name) ||
+      'Unknown Tenant';
+
+    // Property address from the tenant's primary address.
+    let addr: string | null = null;
+    const addresses = r.Addresses;
+    if (Array.isArray(addresses) && addresses.length) {
+      const a =
+        (addresses.find((x) => (x as RawRecord)?.IsPrimary) as RawRecord) ||
+        (addresses[0] as RawRecord);
+      addr = [asString(a.Address1), asString(a.City)].filter(Boolean).join(', ') || null;
+    }
+
+    const display = addr ? `T - ${fullName} - ${addr}` : `T - ${fullName}`;
+
+    out.push({
+      appfolioId: id,
+      type: 'tenant',
+      name: display,
+      phoneRaw: extractPhone(r),
+      email: extractEmail(r),
+      propertyAddress: addr,
+    });
+  }
+  console.log(`[AppFolio] Tenant contacts (current): ${out.length}`);
+  return out;
+}
+
+/** Fetch contacts for the requested types, in one call. */
+export async function fetchAppFolioZoomContacts(
+  types: ZoomContactType[]
+): Promise<AppFolioContact[]> {
+  const tasks: Promise<AppFolioContact[]>[] = [];
+  if (types.includes('vendor')) tasks.push(fetchAppFolioVendorContacts());
+  if (types.includes('owner')) tasks.push(fetchAppFolioOwnerContacts());
+  if (types.includes('tenant')) tasks.push(fetchAppFolioTenantContacts());
+  const results = await Promise.all(tasks);
+  return results.flat();
+}
+
 export async function fetchAppFolioPropertiesWithCustomFields(): Promise<
   AppFolioPropertyWithCustomFields[]
 > {
