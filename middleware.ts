@@ -18,9 +18,11 @@ function isAdminPath(pathname: string): boolean {
   return (
     pathname === "/dashboard" ||
     pathname.startsWith("/dashboard/") ||
+    pathname.startsWith("/admin") ||
     pathname.startsWith("/api/kpi") ||
     pathname.startsWith("/api/config") ||
-    pathname.startsWith("/api/financials")
+    pathname.startsWith("/api/financials") ||
+    pathname.startsWith("/api/zoom-sync")
   );
 }
 
