@@ -108,7 +108,7 @@ function formatListing(unit: UnitInput, rentlyEnabled: boolean, rentlyUrl: strin
     ? `
 <h2>Tour On Your Schedule</h2>
 <p>No office visit or key pickup required. Self-guided tours available <b>7 days a week</b> including evenings and weekends.</p>
-<p><b><a href="${rentlyUrl}">Schedule Your Rently Tour</a></b></p>
+<p><b><a href="${rentlyUrl}">Schedule Your Haven Codebox Tour</a></b></p>
 <p>${rentlyUrl}</p>
 `
     : '';

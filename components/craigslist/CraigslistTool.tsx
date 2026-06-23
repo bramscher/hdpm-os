@@ -81,11 +81,12 @@ export function CraigslistTool() {
   const [view, setView] = useState<View>("list");
   const [units, setUnits] = useState<VacantUnit[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetched, setFetched] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Per-unit rently state
+  // Per-unit Haven Codebox tour state (rently* names are legacy)
   const [rentlyToggles, setRentlyToggles] = useState<Record<string, boolean>>({});
   const [rentlyUrls, setRentlyUrls] = useState<Record<string, string>>({});
 
@@ -122,6 +123,10 @@ export function CraigslistTool() {
       }
     } catch {
       // Cache miss is fine — user can pull fresh
+    } finally {
+      // Done probing the cache — safe to reveal either the unit list or the
+      // "Pull from AppFolio" empty state without flashing the latter first.
+      setInitializing(false);
     }
   }, []);
 
@@ -658,8 +663,9 @@ export function CraigslistTool() {
           </div>
         )}
 
-        {/* Loading skeleton */}
-        {loading && (
+        {/* Loading skeleton — covers both the manual sync and the initial
+            cache probe so the "Pull from AppFolio" panel never flashes first */}
+        {(loading || initializing) && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="glass rounded-xl p-5 animate-pulse">
@@ -671,7 +677,7 @@ export function CraigslistTool() {
         )}
 
         {/* Initial empty state — no sync ever done */}
-        {!fetched && !loading && (
+        {!fetched && !loading && !initializing && (
           <div className="glass rounded-xl p-10 text-center">
             <Home className="h-10 w-10 text-charcoal-300 mx-auto mb-3" />
             <p className="text-charcoal-500 text-sm mb-4">
@@ -817,7 +823,9 @@ export function CraigslistTool() {
                       </div>
                     )}
 
-                    {/* Rently controls — only for units you can actually post */}
+                    {/* Haven Codebox tour controls — only for units you can
+                        actually post. Internal field names (rently*) are legacy
+                        from the previous self-tour vendor. */}
                     {isReady && (
                       <div className="flex items-center gap-3 mt-3 pt-3 border-t border-charcoal-100">
                         <button
@@ -830,7 +838,7 @@ export function CraigslistTool() {
                           ) : (
                             <ToggleLeft className="h-5 w-5 text-charcoal-400" />
                           )}
-                          Rently tours available
+                          Haven Codebox Tours
                         </button>
 
                         {rentlyOn && (
@@ -839,7 +847,7 @@ export function CraigslistTool() {
                             onChange={(e) =>
                               setRentlyUrl(unit.appfolio_unit_id, e.target.value)
                             }
-                            placeholder="https://rently.com/..."
+                            placeholder="Haven Codebox tour URL"
                             className="flex-1 h-8 text-xs bg-white/70"
                           />
                         )}
@@ -1165,16 +1173,16 @@ export function CraigslistTool() {
                   />
                 </div>
 
-                {/* Rently URL */}
+                {/* Haven Codebox Tour URL */}
                 {selectedUnit && rentlyToggles[selectedUnit.appfolio_unit_id] && (
                   <div>
                     <label className="block text-[10px] font-semibold text-charcoal-400 uppercase tracking-widest mb-1.5">
-                      Rently Tour URL
+                      Haven Codebox Tour URL
                     </label>
                     <Input
                       value={editorRentlyUrl}
                       onChange={(e) => setEditorRentlyUrl(e.target.value)}
-                      placeholder="https://rently.com/..."
+                      placeholder="Haven Codebox tour URL"
                       className="bg-white/70 text-sm"
                     />
                     <p className="text-2xs text-charcoal-400 mt-1">
