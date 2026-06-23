@@ -128,7 +128,13 @@ export function joinPropertiesUnitsTenants(
     const prop = propsById.get(u.propertyId);
     if (!prop) continue;
     if (prop.hidden) continue;
-    if (!prop.useCustomInspectionDate) continue;
+    // Classify every active unit off LastInspectedDate (the v0 API's reliable
+    // signal). We intentionally do NOT gate on "Use Custom Inspection Date":
+    // that flag is `unit[use_last_inspection_on]`, a web-app form field the v0
+    // Database API does not expose, so prop.useCustomInspectionDate is ALWAYS
+    // false. Gating on it skipped every unit and produced zero candidates.
+    // The custom-date caveat (LastInspectedDate goes stale when the box is
+    // checked) is reconciled separately by the web-app audit + CSV cross-check.
 
     const address1 = u.address1 || prop.address1;
     const city = u.city || prop.city;
@@ -243,7 +249,9 @@ export async function persistCandidates(
       zip: c.zip,
       region,
       owner_name: c.ownerName,
-      uses_custom_inspection_date: true,
+      // Honest value: false until the web-app audit populates the real
+      // unit[use_last_inspection_on] state. Was hardcoded `true` (misleading).
+      uses_custom_inspection_date: c.useCustomInspectionDate,
       last_inspection_date: c.lastInspectedDate,
       candidate_status: nextStatus,
       local_skip_reason:
