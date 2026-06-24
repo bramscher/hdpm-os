@@ -609,6 +609,19 @@ export function CraigslistTool() {
           </div>
           <div className="flex gap-2">
             <Button
+              onClick={fetchVacancies}
+              disabled={loading}
+              size="sm"
+              className="bg-terra-600 hover:bg-terra-700 text-white"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-1.5" />
+              )}
+              {loading ? "Syncing…" : "Sync from AppFolio"}
+            </Button>
+            <Button
               onClick={() => {
                 setView("history");
                 fetchHistory();
@@ -860,19 +873,6 @@ export function CraigslistTool() {
           </div>
         )}
 
-        {/* Subtle sync button — always available when data is loaded */}
-        {fetched && !loading && !showSyncFallback && (
-          <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={fetchVacancies}
-              className="text-2xs text-charcoal-400 hover:text-charcoal-600 transition-colors flex items-center gap-1"
-            >
-              <RefreshCw className="h-3 w-3" />
-              Re-sync from AppFolio
-            </button>
-          </div>
-        )}
       </div>
     );
   }
