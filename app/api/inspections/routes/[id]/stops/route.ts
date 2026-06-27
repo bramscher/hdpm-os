@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { getMultitenantId, createMeld } from '@/lib/property-meld';
 
 /**
  * PATCH /api/inspections/routes/[id]/stops
@@ -43,107 +42,19 @@ export async function PATCH(
       return NextResponse.json({ error: 'Stop not found' }, { status: 404 });
     }
 
-    // ── Start Inspection: create PM meld and set stop in_progress ──
+    // ── Start Inspection: set stop in_progress ──
     if (action === 'start') {
-      // Get inspection + property details
-      const { data: inspection, error: inspErr } = await supabase
-        .from('inspections')
-        .select(`
-          id, inspection_type, unit_name, resident_name, meld_id,
-          inspection_properties (
-            id, name, address_1, address_2, city, state, zip,
-            pm_property_id, pm_unit_id
-          )
-        `)
-        .eq('id', stop.inspection_id)
-        .single();
-
-      if (inspErr || !inspection) {
-        return NextResponse.json({ error: 'Inspection not found' }, { status: 404 });
-      }
-
-      // Supabase returns the FK join as a single object (not array) for .single()
-      const rawProp = inspection.inspection_properties as unknown;
-      const prop = (Array.isArray(rawProp) ? rawProp[0] : rawProp) as Record<string, unknown> | null;
-      const pmPropertyId = prop?.pm_property_id as number | null;
-      const pmUnitId = prop?.pm_unit_id as number | null;
-      const address = [prop?.address_1, prop?.address_2, prop?.city].filter(Boolean).join(', ');
-
-      // Don't create duplicate melds
-      if (inspection.meld_id) {
-        // Already started — just ensure stop is in_progress
-        await supabase
-          .from('route_stops')
-          .update({ status: 'in_progress', actual_arrival: now })
-          .eq('id', stop_id);
-
-        return NextResponse.json({
-          success: true,
-          stop_status: 'in_progress',
-          meld_id: inspection.meld_id,
-          already_started: true,
-        });
-      }
-
-      // Create Property Meld meld
-      let meldId: number | null = null;
-      let meldError: string | null = null;
-
-      if (pmPropertyId || pmUnitId) {
-        try {
-          const multitenantId = await getMultitenantId();
-          const inspType = inspection.inspection_type || 'biannual';
-          const resident = inspection.resident_name ? ` — ${inspection.resident_name}` : '';
-          const unit = inspection.unit_name ? ` (Unit ${inspection.unit_name})` : '';
-
-          const meld = await createMeld(multitenantId, {
-            ...(pmUnitId ? { unit: pmUnitId } : {}),
-            ...(pmPropertyId && !pmUnitId ? { property: pmPropertyId } : {}),
-            work_location: 'Interior',
-            work_type: 'PREVENTIVE_MAINTENANCE',
-            work_category: 'GENERAL',
-            brief_description: `${inspType.charAt(0).toUpperCase() + inspType.slice(1)} Inspection — ${address}${unit}`,
-            description: [
-              `Scheduled ${inspType} property inspection.`,
-              `Address: ${address}${unit}`,
-              resident ? `Resident: ${inspection.resident_name}` : null,
-              `Inspector: ${session.user.email}`,
-              `Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}`,
-            ].filter(Boolean).join('\n'),
-            priority: 'LOW',
-          });
-
-          meldId = meld.id;
-        } catch (err) {
-          console.error('Property Meld creation error:', err);
-          meldError = err instanceof Error ? err.message : 'Failed to create meld';
-        }
-      } else {
-        meldError = 'Property not linked to Property Meld (no pm_property_id/pm_unit_id)';
-      }
-
-      // If meld creation failed, keep stop as pending so user can retry
-      if (!meldId) {
-        return NextResponse.json({
-          success: false,
-          stop_status: 'pending',
-          meld_id: null,
-          meld_error: meldError,
-        });
-      }
-
-      // Meld created — transition stop to in_progress
+      // Transition stop to in_progress
       await supabase
         .from('route_stops')
         .update({ status: 'in_progress', actual_arrival: now })
         .eq('id', stop_id);
 
-      // Update inspection with meld_id
+      // Mark the inspection scheduled
       await supabase
         .from('inspections')
         .update({
           status: 'scheduled',
-          meld_id: String(meldId),
           updated_at: now,
         })
         .eq('id', stop.inspection_id);
@@ -158,8 +69,6 @@ export async function PATCH(
       return NextResponse.json({
         success: true,
         stop_status: 'in_progress',
-        meld_id: meldId,
-        meld_error: null,
       });
     }
 

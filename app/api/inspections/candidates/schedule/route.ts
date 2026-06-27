@@ -80,9 +80,9 @@ export async function POST(request: NextRequest) {
     const residentByUnit = new Map<string, string>();
     if (unitIds.length > 0) {
       // Tenants are not stored locally; the canonical resident name comes from AppFolio
-      // when we sync. For now we leave resident_name null on insert; the existing
-      // notice flow already calls Property Meld to look it up. If you want to denormalize
-      // resident names, add a column on inspection_properties during sync and read it here.
+      // when we sync. For now we leave resident_name null on insert. If you want to
+      // denormalize resident names, add a column on inspection_properties during sync
+      // and read it here.
     }
 
     // Step 3: Create one inspections row per candidate

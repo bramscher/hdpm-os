@@ -116,7 +116,7 @@ export default function Home() {
                 Inspections
               </h3>
               <p className="text-sm text-charcoal-400 leading-relaxed">
-                Manage biannual property inspections, track due dates, and sync with Property Meld.
+                Manage biannual property inspections, track due dates, and build optimized routes.
               </p>
               {inspectionStats && (
                 <div className="mt-4 flex items-center gap-4">
@@ -304,7 +304,6 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-6 text-xs text-charcoal-400">
                 <span>AppFolio API: <span className="text-green-600 font-medium">Connected</span></span>
-                <span>Property Meld: <span className="text-green-600 font-medium">Connected</span></span>
                 <span>Rentometer: <span className="text-green-600 font-medium">Active</span></span>
               </div>
             </div>

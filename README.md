@@ -1,6 +1,6 @@
 # HDPM Operations Dashboard
 
-Internal operations platform for **High Desert Property Management** (~835 doors across 467 properties, Central Oregon). Automates inspections, work order triage, invoice generation, rent comp analysis, Craigslist ad creation, and surfaces a live KPI dashboard covering portfolio health.
+Internal operations platform for **High Desert Property Management** (~835 doors across 467 properties, Central Oregon). Automates inspections, invoice generation, rent comp analysis, Craigslist ad creation, and surfaces a live KPI dashboard covering portfolio health.
 
 **Stack:** Next.js 16 / React 18 / TypeScript 5.7 / Supabase (PostgreSQL + pgvector) / Tailwind CSS 3.4 / Recharts 3 / Anthropic SDK / Vercel
 **Auth:** Microsoft Azure AD (@highdesertpm.com only)
@@ -18,14 +18,11 @@ Internal operations platform for **High Desert Property Management** (~835 doors
   - [Daily KPI Snapshots](#daily-kpi-snapshots)
 - [Inspections](#inspections)
   - [Inspection Queue](#inspection-queue)
-  - [Property Meld Sync](#property-meld-sync)
   - [CSV / XLSX Import](#csv--xlsx-import)
   - [Geocoding](#geocoding)
   - [Route Builder](#route-builder)
-  - [Automated Tenant Notices](#automated-tenant-notices)
 - [Craigslist Ad Creator](#craigslist-ad-creator)
 - [Invoice Generator](#invoice-generator)
-- [Work Order Triage](#work-order-triage)
 - [Rent Comps](#rent-comps)
   - [Comps Dashboard](#comps-dashboard)
   - [Comps Analysis Wizard](#comps-analysis-wizard)
@@ -58,7 +55,7 @@ Landing page with a time-aware greeting, live portfolio stats, and one-click ent
 
 - **Live stats strip:** total inspections, overdue count, inspections this week, active routes, dispatched stops, vacant units
 - **Quick-action cards:** Inspections, Route Builder, Invoice Generator, Rent Comps, Craigslist Ad Creator, KPI Dashboard
-- **System status bar:** connection indicators for AppFolio, Property Meld, and Rentometer
+- **System status bar:** connection indicators for AppFolio and Rentometer
 
 ---
 
@@ -108,43 +105,25 @@ A Vercel cron job runs **daily at 2:00 PM UTC** hitting `/api/kpi/cron` to captu
 
 **Path:** `/maintenance/inspections`
 
-Manages biannual property inspections across ~850 doors. The system tracks every property, schedules inspections on 6-month cycles, builds optimized driving routes, and sends legally-required tenant notices via Property Meld.
+Manages biannual property inspections across ~850 doors. The system tracks every property, schedules inspections on 6-month cycles, and builds optimized driving routes. Inspection records are loaded by importing XLSX/CSV exports and by syncing inspection candidates from AppFolio.
 
 ### Inspection Queue
 
-The main inspections page shows all properties with their inspection status, due date, assigned inspector, and notification status.
+The main inspections page shows all properties with their inspection status, due date, and assigned inspector.
 
 **Statuses:** Imported > Validated > Queued > Scheduled > In Progress > Completed
 
 **How to use:**
-1. Properties are synced from Property Meld (see below)
+1. Load inspections via XLSX/CSV import or the AppFolio candidate sync (see below)
 2. Each property gets one inspection. When completed, the next one is auto-created 6 months out
 3. Filter by status, city, assignee, or search by address
 4. Bulk update: select multiple inspections to change status, assignee, or priority at once
 5. 12-Month Summary tab shows a calendar view of inspection volume
 
 **Key rules:**
-- Inspections require **7 days minimum lead time** before the scheduled date (Oregon tenant notice law)
+- Inspections require **7 days minimum lead time** before the scheduled date (Oregon tenant notice law). Tenant notices themselves are handled manually, outside the app.
 - When an inspection is completed, the system automatically creates the next biannual inspection due 6 months later
 - Unit numbers are tracked and displayed for multi-unit properties
-
-### Property Meld Sync
-
-**How to sync:**
-1. Go to Inspections page
-2. Click **Sync from Property Meld** button
-3. The system pulls all properties and units from Property Meld, matches them against AppFolio for last-inspection dates, and creates inspection records
-
-**What the sync does:**
-- Fetches all properties and units from Property Meld API
-- Matches addresses to AppFolio units to find `lastInspectedDate` and `moveInDate`
-- Creates `inspection_properties` records (address, coordinates, PM IDs)
-- Creates one inspection per property/unit with calculated due dates
-- Sets `unit_name` on each inspection from the PM unit data
-- Backfills unit names on any existing inspections missing them
-- Skips excluded properties (HOAs, commercial)
-
-**Due date calculation:** `last_inspection_date + 6 months`, clamped to today if overdue. Falls back to `move_in_date + 6 months` if no inspection history exists.
 
 ### CSV / XLSX Import
 
@@ -156,7 +135,7 @@ Three-step wizard for bulk-loading inspection records from spreadsheets (used fo
 2. **Column mapping** — headers are auto-matched to the 10 supported fields (`address_1`, `city`, `zip`, `unit_name`, `resident_name`, `last_inspection_date`, `inspection_type`, `due_date`, `owner_name`, `priority`, `notes`). Required columns are marked with `*` and a live preview table shows the first rows.
 3. **Review & commit** — shows counts for valid / warning / error / duplicate rows with per-row issue detail. Valid and warning rows are pre-selected; errors must be resolved or deselected before committing.
 
-Each import is recorded in `import_batches` for audit, and the commit step writes through the same validation pipeline used by the Property Meld sync so unit matching stays consistent.
+Each import is recorded in `import_batches` for audit, and the commit step writes through the same validation pipeline used by the AppFolio candidate sync so unit matching stays consistent.
 
 ### Geocoding
 
@@ -190,54 +169,15 @@ Creates optimized driving routes for inspectors. Groups properties geographicall
 **Unit numbers in routes:**
 - Each stop displays the address with a prominent unit number badge (e.g. **#101**, **#A**)
 - Multi-unit buildings show all their units in sequence with 0 min drive time between them
-- Unit numbers come from Property Meld sync data
+- Unit numbers come from the imported / AppFolio inspection data
 
 **Using a route on inspection day:**
 1. Open the route from Route Builder
 2. Each stop shows address, unit number badge, drive time, due date, and service time
-3. Click **Start Inspection** — creates a Property Meld work order and begins the inspection
+3. Click **Start Inspection** — begins the inspection
 4. Click **Complete** when done, or **Skip** to return it to the queue
 5. Use **Flag Issue** to mark problems found during inspection
 6. When all stops are done, the route auto-completes
-
-### Automated Tenant Notices
-
-**Legal requirement:** Oregon law requires advance notice before property inspections. The system automates this entirely through Property Meld.
-
-**Notice schedule:**
-
-| Timing | Action | What tenant receives |
-|--------|--------|---------------------|
-| **7 days before** | Creates a Property Meld meld with tenant(s) attached | Formal inspection notice with date, address, and contact info |
-| **24 hours before** | Adds a reminder message to the meld | "Your inspection is tomorrow" reminder |
-| **2 hours before** | Adds a final message to the meld | "Inspector arriving shortly" notification |
-
-**How it works:**
-- A Vercel cron job runs **every hour** checking for scheduled inspections within the next 8 days
-- For the 7-day notice: looks up the tenant(s) on the unit via Property Meld and creates a meld with them attached (triggers PM's built-in email/text notification)
-- For 24h and 2h reminders: adds a chat message to the existing meld (triggers another PM notification)
-- Tracks which notices have been sent (`notice_7d_sent_at`, `notice_24h_sent_at`, `notice_2h_sent_at`) to prevent duplicates
-- Each notice includes the Property Meld meld ID for audit trail
-
-**Monitoring notice status:**
-- The inspections table shows a **Notices** column with a clickable status badge
-- **Gray "Pending"** — no notices sent yet
-- **Amber "1/3 Sent"** or **"2/3 Sent"** — some notices delivered
-- **Green "All Sent"** with shield icon — all 3 notices confirmed
-- Click any badge to open a detail modal showing:
-  - Exact timestamp of each sent notice (e.g. "Sent via Property Meld on Apr 2, 2026, 9:00 AM")
-  - Property Meld meld ID for audit/legal reference
-  - Legal compliance confirmation banner
-
-**Testing without notifying tenants:**
-
-| Mode | How to trigger | What happens |
-|------|---------------|-------------|
-| **Dry run** | `POST /api/inspections/notify?mode=dry_run` | Logs what would happen — no PM API calls, no DB writes |
-| **Silent** | `POST /api/inspections/notify?mode=silent` | Creates real melds in PM but `hidden_from_tenant=true` — visible in PM dashboard, tenants never see it |
-| **Live** | `POST /api/inspections/notify` (default) | Production mode — tenants are notified |
-
-The response includes an `actions` array showing exactly what was sent or would be sent.
 
 ---
 
@@ -305,23 +245,6 @@ Creates maintenance invoices from three input sources:
 - Auto-save with 2-second debounce
 - Internal notes pre-populated with full work order reference data
 - Status tracking: Draft > Submitted > Paid
-
----
-
-## Work Order Triage
-
-**Path:** `/maintenance/triage`
-
-AI-powered prioritization of open AppFolio work orders.
-
-**How it works:**
-1. Syncs open work orders from AppFolio (runs daily at 8 AM UTC or manually via **Sync Now**)
-2. Claude scores each work order on urgency, safety risk, and business impact
-3. Recurring-issue detector (`/api/triage/recurring`) flags patterns across properties — e.g. the same unit opening three HVAC tickets in 90 days
-4. Each card surfaces recommended actions, a priority ranking, and a one-click action log so follow-ups get tracked
-5. Filter by status, priority, vendor, assignee, or free-text search across properties
-
-**Status badges:** New, Assigned, Scheduled, Estimated, Waiting, Work Completed, Completed, Canceled
 
 ---
 
@@ -398,8 +321,7 @@ Configured in `vercel.json`. All times are UTC.
 
 | Schedule | Endpoint | Purpose |
 |----------|----------|---------|
-| **Every hour** | `/api/inspections/notify` | Send tenant inspection notices (7d, 24h, 2h) via Property Meld |
-| **8 AM daily (UTC)** | `/api/sync/work-orders` | Sync AppFolio work orders for triage |
+| **8 AM daily (UTC)** | `/api/sync/work-orders` | Sync AppFolio work orders |
 | **9 AM daily (UTC)** | `/api/sync/appfolio` | Full AppFolio sync: properties, vacancies, comps |
 | **2 PM daily (UTC)** | `/api/kpi/cron` | Capture daily KPI snapshots for the trends page |
 | **Jan 1 annually** | `/api/sync/hud` | HUD Fair Market Rent data refresh |
@@ -425,9 +347,7 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `APPFOLIO_CLIENT_ID` | AppFolio | v0 API client ID |
 | `APPFOLIO_CLIENT_SECRET` | AppFolio | v0 API client secret |
 | `APPFOLIO_DEVELOPER_ID` | AppFolio | Developer ID header value |
-| `PROPERTY_MELD_CLIENT_ID` | Property Meld | OAuth 2.0 client ID |
-| `PROPERTY_MELD_CLIENT_SECRET` | Property Meld | OAuth 2.0 client secret |
-| `CLAUDE_API_KEY` | Anthropic | Claude AI for listings, triage, invoice rewrites, chat |
+| `CLAUDE_API_KEY` | Anthropic | Claude AI for listings, invoice rewrites, chat |
 | `GOOGLE_PLACES_API_KEY` | Google | Server-side geocoding API key |
 | `NEXT_PUBLIC_GOOGLE_MAPS_KEY` | Google | Client-side Maps JavaScript API key |
 
@@ -435,8 +355,7 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 
 | Variable | Service | Purpose |
 |----------|---------|---------|
-| `CRON_SECRET` | Vercel | Authenticates hourly cron job requests |
-| `PROPERTY_MELD_API_URL` | Property Meld | API base URL (default: `https://api.propertymeld.com`) |
+| `CRON_SECRET` | Vercel | Authenticates cron job requests |
 | `RENTOMETER_API_KEY` | Rentometer | Rental comp market data |
 | `RENTCAST_API_KEY` | RentCast | Alternative rental data source |
 | `HUD_API_TOKEN` | HUD.gov | Fair Market Rent annual data |
@@ -452,8 +371,8 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 
 | Table | Purpose |
 |-------|---------|
-| `inspection_properties` | Physical property records with PM/AppFolio IDs, coordinates, and unit counts |
-| `inspections` | Inspection tasks with due dates, status, unit names, notice tracking, and meld IDs |
+| `inspection_properties` | Physical property records with AppFolio IDs, coordinates, and unit counts |
+| `inspections` | Inspection tasks with due dates, status, and unit names |
 | `route_plans` | Inspection routes with dates, assignees, stop counts, and time estimates |
 | `route_stops` | Individual stops within routes with ordering, status, and arrival times |
 | `import_batches` | CSV/XLSX upload audit trail for inspection imports |
@@ -462,7 +381,7 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `saved_listings` | Saved Craigslist listing drafts with generated HTML |
 | `cached_vacancies` | Cached AppFolio vacancy data for instant page load |
 | `invoices` / `invoice_line_items` | Maintenance invoices and their line items with totals and status |
-| `work_orders` | Synced AppFolio work orders with triage scores, priorities, and action history |
+| `work_orders` | Synced AppFolio work orders with priorities and action history |
 | `comps` / `comp_analyses` | Rental comps, baselines, and saved comp-analysis reports |
 | `conversations` / `conversation_messages` | AI chat history and individual messages (with sources and attachments) |
 | `knowledge_chunks` | pgvector knowledge base chunks for ORS 90 semantic search |

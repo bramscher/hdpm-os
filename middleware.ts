@@ -7,7 +7,6 @@ const PUBLIC_PREFIXES = [
   "/api/auth",
   "/api/sync",
   "/api/webhooks",
-  "/api/inspections/notify",
   "/api/kpi/cron", // Vercel cron — protected by CRON_SECRET, not session auth
 ];
 

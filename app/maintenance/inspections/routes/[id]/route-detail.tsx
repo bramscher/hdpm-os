@@ -169,7 +169,6 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
   const [showMap, setShowMap] = useState(true);
   const [completingStop, setCompletingStop] = useState<string | null>(null);
   const [startingStop, setStartingStop] = useState<string | null>(null);
-  const [meldLinks, setMeldLinks] = useState<Record<string, number>>({});
   const [stopNotes, setStopNotes] = useState<Record<string, string>>({});
   const [polyline, setPolyline] = useState<string | null>(null);
   const [addingToCalendar, setAddingToCalendar] = useState(false);
@@ -342,7 +341,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
     }
   };
 
-  // ── Start Inspection: create PM meld ──
+  // ── Start Inspection ──
   const handleStartInspection = async (stopId: string) => {
     setStartingStop(stopId);
     try {
@@ -354,14 +353,6 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start inspection");
 
-      if (data.meld_error) {
-        alert(`Meld creation failed: ${data.meld_error}\n\nThe stop remains pending — fix the issue and try again.`);
-        return;
-      }
-
-      if (data.meld_id) {
-        setMeldLinks((prev) => ({ ...prev, [stopId]: data.meld_id }));
-      }
       await fetchRoute();
     } catch (err) {
       console.error("Start inspection error:", err);
@@ -757,7 +748,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
                         {startingStop === stop.id ? (
                           <>
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            Creating Meld...
+                            Starting...
                           </>
                         ) : (
                           <>
@@ -780,12 +771,6 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
                   {/* In-progress: show complete/flag/notes */}
                   {stop.status === "in_progress" && (
                     <div className="mt-3 space-y-2">
-                      {meldLinks[stop.id] && (
-                        <div className="flex items-center gap-1.5 text-xs text-blue-600">
-                          <ExternalLink className="w-3 h-3" />
-                          Meld #{meldLinks[stop.id]} created — syncing to AppFolio
-                        </div>
-                      )}
                       <input
                         type="text"
                         placeholder="Add inspection notes..."
