@@ -17,6 +17,8 @@ import {
   MoreHorizontal,
   BarChart3,
   List,
+  Bell,
+  X as XIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +42,25 @@ interface Inspection {
   status: string;
   resident_name: string | null;
   created_at: string;
+  notice_status: string | null;
+  notice_sent_at: string | null;
+}
+
+interface DueNotice {
+  id: string;
+  target_date: string | null;
+  resident_name: string;
+  email: string | null;
+  address: string;
+  subject: string;
+  body: string;
+}
+
+interface DueNoticesResult {
+  count: number;
+  with_email: number;
+  missing_email: number;
+  notices: DueNotice[];
 }
 
 interface InspectionStats {
@@ -143,6 +164,9 @@ export function InspectionDashboard() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeProgress, setGeocodeProgress] = useState<{ completed: number; total: number } | null>(null);
+  const [sendingNotices, setSendingNotices] = useState(false);
+  const [noticeModal, setNoticeModal] = useState<DueNoticesResult | null>(null);
+  const [markingSent, setMarkingSent] = useState(false);
   const [activeTab, setActiveTab] = useState<"queue" | "summary">("queue");
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkFilter, setBulkFilter] = useState({ fromStatus: "", beforeDate: "", toStatus: "" });
@@ -275,6 +299,43 @@ export function InspectionDashboard() {
     } finally {
       setGeocoding(false);
       setGeocodeProgress(null);
+    }
+  };
+
+  // ── Tenant inspection notices: load the "due" list to bulk-send via AppFolio ──
+  // AppFolio has no send API and notices must be logged in AppFolio, so staff
+  // send these through Realm-X Assistant ("Send Bulk Email"), then mark them sent.
+  const handleSendNotices = async () => {
+    setSendingNotices(true);
+    try {
+      const res = await fetch("/api/inspections/notify");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load due notices");
+      setNoticeModal(data as DueNoticesResult);
+    } catch (err) {
+      alert(`Could not load notices: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setSendingNotices(false);
+    }
+  };
+
+  const handleMarkNoticesSent = async (ids: string[]) => {
+    if (!ids.length) return;
+    setMarkingSent(true);
+    try {
+      const res = await fetch("/api/inspections/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to mark sent");
+      setNoticeModal(null);
+      await fetchInspections();
+    } catch (err) {
+      alert(`Mark sent failed: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setMarkingSent(false);
     }
   };
 
@@ -448,6 +509,17 @@ export function InspectionDashboard() {
             Import XLSX
           </Link>
           <button
+            onClick={handleSendNotices}
+            disabled={sendingNotices}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+              "border border-charcoal-300 text-charcoal-700 hover:bg-charcoal-50 disabled:opacity-60"
+            )}
+          >
+            <Bell className={cn("w-4 h-4", sendingNotices && "animate-pulse")} />
+            {sendingNotices ? "Sending..." : "Send Notices"}
+          </button>
+          <button
             onClick={handleBatchGeocode}
             disabled={geocoding}
             className={cn(
@@ -464,6 +536,16 @@ export function InspectionDashboard() {
           </button>
         </div>
       </div>
+
+      {/* ── Tenant Notices Modal ── */}
+      {noticeModal && (
+        <NoticeModal
+          result={noticeModal}
+          marking={markingSent}
+          onClose={() => setNoticeModal(null)}
+          onMarkSent={handleMarkNoticesSent}
+        />
+      )}
 
       {/* ── Bulk Update Modal ── */}
       {showBulkModal && (
@@ -791,6 +873,7 @@ export function InspectionDashboard() {
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Priority</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600 hidden lg:table-cell">Assigned To</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Status</th>
+                  <th className="text-left px-3 py-3 font-semibold text-charcoal-600 hidden lg:table-cell">Notice</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600 hidden md:table-cell">City</th>
                   <th className="w-10 px-3 py-3"></th>
                 </tr>
@@ -873,6 +956,9 @@ export function InspectionDashboard() {
                         {formatStatus(insp.status)}
                       </span>
                     </td>
+                    <td className="px-3 py-3 hidden lg:table-cell">
+                      <NoticeBadge inspection={insp} />
+                    </td>
                     <td className="px-3 py-3 hidden md:table-cell">
                       <span className="text-charcoal-500">{insp.city || "\u2014"}</span>
                     </td>
@@ -894,6 +980,198 @@ export function InspectionDashboard() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────
+// Notice status badge
+// ────────────────────────────────────────────────
+
+function NoticeBadge({ inspection }: { inspection: Inspection }) {
+  const { status, notice_status, notice_sent_at } = inspection;
+
+  if (notice_sent_at || notice_status === "sent") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+        <CheckCircle2 className="w-3.5 h-3.5" /> Sent
+      </span>
+    );
+  }
+  if (notice_status === "skipped_no_email") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+        <AlertTriangle className="w-3.5 h-3.5" /> No email
+      </span>
+    );
+  }
+  if (notice_status === "failed") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+        <AlertTriangle className="w-3.5 h-3.5" /> Failed
+      </span>
+    );
+  }
+  if (status === "scheduled") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-charcoal-100 text-charcoal-500">
+        <Bell className="w-3.5 h-3.5" /> Pending
+      </span>
+    );
+  }
+  return <span className="text-charcoal-300">—</span>;
+}
+
+// ────────────────────────────────────────────────
+// Tenant Notices Modal — bulk-send via AppFolio Realm-X
+// ────────────────────────────────────────────────
+
+const COMPANY_PHONE = "(541) 406-6409";
+
+function longDate(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
+  });
+}
+
+// One bulk email goes to many recipients, so the body is generic per send-date.
+function genericNotice(dateStr: string): { subject: string; body: string } {
+  const d = longDate(dateStr);
+  return {
+    subject: `Notice of Routine Property Inspection — ${d}`,
+    body: [
+      "Hello,",
+      "",
+      `This is an advance notice that High Desert Property Management will conduct a routine inspection of your residence on ${d}.`,
+      "",
+      "Routine inspections occur about twice a year and help us keep the property well maintained. Our inspector will briefly walk through the unit to check its condition and note any maintenance needs. You are welcome to be present but do not need to be.",
+      "",
+      `Please make sure pets are secured and the unit is accessible on that day. If the scheduled date does not work, contact us as soon as possible at ${COMPANY_PHONE}.`,
+      "",
+      "Thank you,",
+      "High Desert Property Management",
+      COMPANY_PHONE,
+    ].join("\n"),
+  };
+}
+
+function NoticeModal({
+  result,
+  marking,
+  onClose,
+  onMarkSent,
+}: {
+  result: DueNoticesResult;
+  marking: boolean;
+  onClose: () => void;
+  onMarkSent: (ids: string[]) => void;
+}) {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copy = (key: string, text: string) => {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500);
+    });
+  };
+
+  // Group by target date so each bulk send is a single date's recipients.
+  const groups = new Map<string, DueNotice[]>();
+  for (const n of result.notices) {
+    const key = n.target_date || "no-date";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(n);
+  }
+  const sortedDates = [...groups.keys()].sort();
+  const allIds = result.notices.map((n) => n.id);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between p-6 pb-4 border-b border-charcoal-200">
+          <div>
+            <h3 className="text-base font-bold text-charcoal-900">Send Tenant Inspection Notices</h3>
+            <p className="text-xs text-charcoal-500 mt-1 max-w-md">
+              AppFolio has no send API and notices must be logged in AppFolio. Copy each date&apos;s
+              recipients + message into <b>Realm-X Assistant → Send Bulk Email</b>, then mark them sent.
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-charcoal-100 rounded-lg">
+            <XIcon className="w-4 h-4 text-charcoal-400" />
+          </button>
+        </div>
+
+        <div className="px-6 py-2 text-xs text-charcoal-500 border-b border-charcoal-100">
+          {result.count} due &bull; {result.with_email} with email
+          {result.missing_email > 0 && <span className="text-amber-600"> &bull; {result.missing_email} missing email</span>}
+        </div>
+
+        <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
+          {result.count === 0 && (
+            <p className="text-sm text-charcoal-500 py-8 text-center">No scheduled inspections are awaiting a notice.</p>
+          )}
+          {sortedDates.map((dateKey) => {
+            const items = groups.get(dateKey)!;
+            const emails = [...new Set(items.map((n) => n.email).filter(Boolean) as string[])];
+            const tmpl = dateKey !== "no-date" ? genericNotice(dateKey) : { subject: "Routine Property Inspection", body: "" };
+            return (
+              <div key={dateKey} className="border border-charcoal-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-charcoal-800">
+                    {dateKey === "no-date" ? "No date" : longDate(dateKey)}
+                  </p>
+                  <span className="text-xs text-charcoal-500">{items.length} unit{items.length !== 1 ? "s" : ""} &bull; {emails.length} email{emails.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <button
+                    onClick={() => copy(`em-${dateKey}`, emails.join(", "))}
+                    disabled={emails.length === 0}
+                    className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-terra-50 text-terra-700 hover:bg-terra-100 disabled:opacity-40"
+                  >
+                    {copied === `em-${dateKey}` ? "Copied!" : "Copy emails"}
+                  </button>
+                  <button
+                    onClick={() => copy(`sub-${dateKey}`, tmpl.subject)}
+                    className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
+                  >
+                    {copied === `sub-${dateKey}` ? "Copied!" : "Copy subject"}
+                  </button>
+                  <button
+                    onClick={() => copy(`body-${dateKey}`, tmpl.body)}
+                    className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
+                  >
+                    {copied === `body-${dateKey}` ? "Copied!" : "Copy message"}
+                  </button>
+                </div>
+                <details className="text-xs text-charcoal-500">
+                  <summary className="cursor-pointer hover:text-charcoal-700">Recipients &amp; message</summary>
+                  <p className="mt-2 break-words"><b>To:</b> {emails.join(", ") || "—"}</p>
+                  {items.some((n) => !n.email) && (
+                    <p className="mt-1 text-amber-600">
+                      No email on file: {items.filter((n) => !n.email).map((n) => n.address).join("; ")}
+                    </p>
+                  )}
+                  <pre className="mt-2 whitespace-pre-wrap font-sans bg-charcoal-50 rounded p-2 text-charcoal-600">{tmpl.body}</pre>
+                </details>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 p-6 pt-4 border-t border-charcoal-200">
+          <p className="text-xs text-charcoal-400">Mark sent only after you&apos;ve sent them in AppFolio.</p>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-charcoal-600 hover:bg-charcoal-100">Close</button>
+            <button
+              onClick={() => onMarkSent(allIds)}
+              disabled={marking || result.count === 0}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-terra-500 hover:bg-terra-600 disabled:opacity-50"
+            >
+              {marking ? "Marking…" : `Mark ${result.count} as sent`}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

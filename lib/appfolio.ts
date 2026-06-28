@@ -897,6 +897,8 @@ export interface AppFolioTenant {
   moveOutOn: string | null;
   leaseStartDate: string | null;
   leaseEndDate: string | null;
+  email: string | null;
+  phone: string | null;
   address1: string | null;
   address2: string | null;
   city: string | null;
@@ -950,6 +952,8 @@ export async function fetchAppFolioTenants(): Promise<AppFolioTenant[]> {
         moveOutOn: t.MoveOutOn || null,
         leaseStartDate: t.LeaseStartDate || null,
         leaseEndDate: t.LeaseEndDate || null,
+        email: extractEmail(t as unknown as RawRecord),
+        phone: extractPhone(t as unknown as RawRecord),
         address1: primaryAddr?.Address1 || null,
         address2: primaryAddr?.Address2 || null,
         city: primaryAddr?.City || null,

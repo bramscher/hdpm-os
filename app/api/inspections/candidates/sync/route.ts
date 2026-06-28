@@ -12,12 +12,12 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/inspections/candidates/sync
  *
- * Pulls AppFolio properties + units + tenants, classifies each unit into
- * skip_recent / defer / eligible based on LastInspectedDate, and upserts
- * one row per unit into inspection_properties.
+ * Pulls AppFolio properties + units + tenants, classifies each occupied unit
+ * into skip_recent / defer / eligible based on the move-in-anchored due date
+ * (max(move_in, last_inspection) + 6 months), and upserts one row per unit into
+ * inspection_properties.
  *
- * Auth: CRON_SECRET bearer OR @highdesertpm.com session (same pattern as
- * /api/inspections/notify).
+ * Auth: CRON_SECRET bearer OR @highdesertpm.com session.
  *
  * Query params:
  *   ?dry_run=1   — classify and return counts without persisting
