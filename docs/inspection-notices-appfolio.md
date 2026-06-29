@@ -24,29 +24,84 @@ AppFolio page. Our app's job is to compute *who is due and when* (move-in-anchor
 This is confirmed to satisfy the logging requirement (Realm-X Assistant bulk email
 is recorded on the tenant page). It's manual per batch — no API send exists.
 
-## Path to automation — needs verification
+## Chosen model (2026-06-29): Flow heads-up + exact-date via bridge
 
-### Option A: Realm-X Flows (requires Plus or Max plan)
+Two layers, both logged in AppFolio:
+
+1. **Automated heads-up — AppFolio Realm-X Flow.** Fires off the move-in / last-
+   inspection cadence and tells the tenant a routine inspection is coming up "in the
+   next few weeks" (cadence window, no exact day). Hands-off, logged in AppFolio.
+2. **Exact-date entry notice — our bulk-send bridge.** Once the route is built and
+   the inspection has a `target_date`, staff send the precise date/time notice via
+   the "Send Notices" flow above (Realm-X Assistant), also logged in AppFolio. This
+   is the notice that satisfies the legal entry-notice requirement.
+
+### Flow setup runbook (configure in AppFolio → Realm-X → Flows)
+
+Build two Flows (they together equal `max(move-in, last inspection) + 6 months`):
+
+- **Flow 1 — first inspection of a tenancy**
+  - Kickoff Trigger → *On Relative Date* → **~166 days after Move In** (≈ 6 months −
+    a 2-week heads-up; adjust the lead to taste).
+  - Audience: the unit's current tenant(s).
+  - Action: Send email (and/or text) using the heads-up copy below.
+- **Flow 2 — recurring every 6 months**
+  - Kickoff Trigger → *On Relative Date* → **~166 days after Last Inspection Date**.
+  - Audience / Action: same as Flow 1.
+
+### Heads-up message copy (paste into the Flow action)
+
+> Subject: Upcoming Routine Property Inspection
+>
+> Hello,
+>
+> This is an advance notice that High Desert Property Management conducts routine
+> inspections of your home about twice a year, and your next one is coming up in the
+> next few weeks. We'll follow up with the exact date and time before we visit.
+>
+> The inspection is a brief walkthrough to check the home's condition and note any
+> maintenance needs — you're welcome to be present but don't need to be.
+>
+> Questions? Call us at (541) 406-6409 or reply to this message.
+>
+> Thank you,
+> High Desert Property Management
+> (541) 406-6409
+
+The **exact-date** notice (with the scheduled day) is sent later by the bulk-send
+bridge — its copy lives in `lib/inspection-notify.ts` (`buildNoticeContent`).
+
+## Other automation paths (reference)
+
+### Option A: Realm-X Flows (requires Plus or Max plan) — VERIFIED with AppFolio (2026-06-29)
 Realm-X **Flows** can auto-send resident communications on a relative-date trigger.
-Before relying on it, confirm with your AppFolio rep / support:
+AppFolio support confirmed the two load-bearing questions:
 
-1. **Are Flow-sent messages recorded in the per-tenant communication history?**
-   (Confirmed for Assistant bulk email; **not documented** for Flows — this is the
-   load-bearing question for the logging requirement.)
-2. **Can a Flow's relative-date trigger anchor on the tenant move-in date**, or on
-   the unit "Last Inspection On" / "Custom Inspection Date" field? (Relative-date
-   triggers exist, but the valid anchor fields are not documented.)
-3. **Can a Flow trigger off a custom date field** we'd populate (e.g. "Next
-   Inspection Date")? (No evidence custom fields can be trigger sources — treat as
-   unlikely until confirmed.)
-4. **What plan are we on?** Flows + custom fields require **Plus or Max** (Core has
-   only Assistant + Messages).
+1. **Flow-sent messages ARE logged** — automated Flow emails appear in the
+   communication history (Text Message Inbox), and Flows keep a **Run History**
+   audit trail of when each flow fired and which residents were contacted.
+   ✅ Satisfies the "logged inside AppFolio" requirement.
+2. **Relative-date triggers can anchor on Move In and on Last Inspection Date** —
+   "# days before/after Move In" and "# days after Last Inspection Date" are both
+   selectable trigger anchors. ✅ Exactly our cadence's two anchors.
 
-Note: even on Flows, a relative-date trigger off move-in alone won't reproduce our
-exact rule (`max(move-in, last inspection) + 6 months`, reset per tenant). It would
-be an approximation unless an inspection-date anchor is available.
+Reproducing our rule `max(move-in, last inspection) + 6 months` with native Flows:
+- **Flow 1 — first inspection per tenancy:** trigger "~180 days after Move In"
+  (minus desired notice lead). Handles new tenants / never-inspected units; the
+  move-in reset is automatic because the anchor is the tenant's move-in.
+- **Flow 2 — recurring:** trigger "~180 days after Last Inspection Date." Each
+  completed inspection updates Last Inspection Date, so the next notice fires 6
+  months later. Together these two flows = max(move-in, last inspection) + 6mo.
 
-There is **no API to create or fire a Flow** — Flows are configured in the AppFolio UI.
+Caveats / open points:
+- Flows fire on a fixed offset from an AppFolio date, so the Flow notice can't
+  contain the **exact route date** our routing engine assigns (we can't write that
+  back to AppFolio via API). Decide whether the Flow notice is the "heads-up /
+  due-window" notice and the exact-date entry notice goes out separately (bulk-send
+  bridge, or the MCP connector later), or whether the cadence date itself is the
+  scheduled date.
+- Confirm the AppFolio **plan tier** (Flows require Plus/Max).
+- Flows are configured in the **AppFolio UI** — there is no API to create/fire one.
 
 ### Option B: AppFolio Realm-X ⇄ Claude connector (investigate)
 AppFolio shipped an agent-to-agent connector (`mcp.appfolio.com`, June 2026) that
