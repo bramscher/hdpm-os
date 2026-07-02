@@ -52,6 +52,9 @@ Two layers, both logged in AppFolio:
 
 ### Flow setup runbook (configure in AppFolio → Realm-X → Flows)
 
+> **Standalone version:** the full step-by-step Flow runbook also lives in
+> [`realm-x-automation.md`](./realm-x-automation.md) for quick reference.
+
 Build two Flows; together they equal `max(move-in, last inspection) + 6 months`.
 
 **Before you start**
@@ -116,7 +119,15 @@ bridge — its copy lives in `lib/inspection-notify.ts` (`buildNoticeContent`).
 
 ## Other automation paths (reference)
 
-### Option A: Realm-X Flows (requires Plus or Max plan) — VERIFIED with AppFolio (2026-06-29)
+### Option A: Realm-X Flows (requires Plus or Max plan) — ⚠️ RELATIVE-DATE TRIGGER DOES NOT EXIST (corrected 2026-07-02)
+> **Correction:** hands-on testing in the Flows UI (2026-07-02) found **no relative-date
+> / Move-In / lease-date trigger**. Inspection Flows offer only a recurring-calendar
+> scheduler (daily / weekly / monthly / quarterly / annual). The claim below that
+> "relative-date triggers can anchor on Move In and Last Inspection Date" is **not
+> reflected in the product** and should not be relied on. Move-in-anchored notices stay
+> in our app's cadence engine + the bulk-send bridge. See
+> [`realm-x-automation.md`](./realm-x-automation.md) for the verified findings.
+
 Realm-X **Flows** can auto-send resident communications on a relative-date trigger.
 AppFolio support confirmed the two load-bearing questions:
 
