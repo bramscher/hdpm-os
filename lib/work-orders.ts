@@ -37,6 +37,26 @@ export interface WorkOrder {
   synced_at: string;
   created_at: string;
   updated_at: string;
+
+  // ── Maintenance OS workflow columns (20260702_maintenance_os.sql) ──
+  // Owned by this app, never written by the AppFolio mirror sync.
+  // `stage` is our workflow source of truth; `status`/`appfolio_status`
+  // remain the AppFolio mirror. See lib/maintenance/types.ts for enums.
+  stage: string;
+  waiting_reason: string | null;
+  owner_name: string;
+  next_action_date: string | null;
+  priority_class: string | null;
+  assigned_tech: string | null;
+  origin: string;
+  is_turn: boolean;
+  verified_by: string | null;
+  verified_at: string | null;
+  tenant_ping_sent: boolean;
+  tenant_ping_sent_at: string | null;
+  preventive_scheduled: boolean | null;
+  closed_at: string | null;
+  aging_reason: string | null;
 }
 
 export interface WorkOrderFilter {
