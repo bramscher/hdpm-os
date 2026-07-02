@@ -1,0 +1,194 @@
+/*
+ * Maintenance OS theme — lifted from docs/maintenance-os/04-dashboard-mockup.html.
+ * Scoped under .maint-os so the global Desert Noir theme is untouched.
+ * The wait-type color system is a contract: one color per wait type, everywhere.
+ */
+
+.maint-os {
+  /* Brand */
+  --dk: #1f5c22;
+  --gr: #2f7d32;
+  --tint: #eef5ee;
+  --lt: #f7faf7;
+  --ink: #1a1a1a;
+  --muted: #5b625b;
+  --hair: #c7cec7;
+  --red: #b3261e;
+  --amber: #9a6a00;
+  /* Waiting-On type system */
+  --w-tenant: #2c5f8a;
+  --w-vendor: #9a6a00;
+  --w-parts: #0e6e6e;
+  --w-owner: #6a3d9a;
+  --w-weather: #5b625b;
+  --w-internal: #2f7d32;
+
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--ink);
+}
+
+/* ── Header ── */
+.maint-os .mo-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  border-bottom: 3px solid var(--gr);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.maint-os .mo-header h1 { font-size: 20px; color: var(--dk); font-weight: 700; }
+.maint-os .mo-header .sub { color: var(--muted); font-size: 13px; }
+.maint-os .mo-header .badge {
+  margin-left: auto; background: var(--tint); color: var(--dk);
+  font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 12px;
+}
+
+/* ── View nav ── */
+.maint-os nav.mo-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.maint-os nav.mo-nav button {
+  border: 1px solid var(--hair); background: var(--lt); color: var(--dk);
+  padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.maint-os nav.mo-nav button.active { background: var(--gr); color: #fff; border-color: var(--gr); }
+.maint-os nav.mo-nav button .n {
+  background: #ffffff22; border-radius: 8px; padding: 0 6px; margin-left: 4px; font-size: 11px;
+}
+.maint-os nav.mo-nav button:not(.active) .n { background: var(--tint); }
+
+/* ── Kanban board ── */
+.maint-os .cols { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; min-width: 1080px; }
+.maint-os .colwrap { overflow-x: auto; }
+.maint-os .col h3 {
+  font-size: 11px; letter-spacing: 0.4px; color: var(--dk); background: var(--tint);
+  padding: 5px 7px; border-radius: 6px 6px 0 0; border-bottom: 2px solid var(--gr);
+  font-weight: 700;
+}
+.maint-os .col .cnt { float: right; color: var(--muted); }
+.maint-os .card {
+  border: 1px solid var(--hair); border-radius: 6px; padding: 6px 7px; margin-top: 6px;
+  font-size: 11px; background: #fff; display: block; color: inherit; text-decoration: none;
+}
+.maint-os .card:hover { border-color: var(--gr); }
+.maint-os .card b { display: block; font-size: 11.5px; color: var(--ink); }
+.maint-os .card .own { color: var(--gr); font-weight: 700; }
+.maint-os .card .due { color: var(--muted); }
+.maint-os .card .due.past { color: var(--red); font-weight: 700; }
+.maint-os .p1 { border-left: 4px solid var(--red); }
+.maint-os .p2 { border-left: 4px solid var(--amber); }
+.maint-os .p3 { border-left: 4px solid var(--gr); }
+.maint-os .p4 { border-left: 4px solid var(--hair); }
+
+/* ── Tables ── */
+.maint-os table.mo-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.maint-os table.mo-table th {
+  background: var(--tint); color: var(--dk); text-align: left; padding: 8px 10px;
+  border: 1px solid var(--hair); font-size: 12px;
+}
+.maint-os table.mo-table td { padding: 7px 10px; border: 1px solid var(--hair); }
+.maint-os table.mo-table tr:nth-child(even) td { background: var(--lt); }
+.maint-os .flag { color: var(--red); font-weight: 700; }
+.maint-os .ok { color: var(--gr); font-weight: 700; }
+.maint-os .warn { color: var(--amber); font-weight: 700; }
+.maint-os .grp {
+  margin: 14px 0 6px; font-size: 13px; font-weight: 700; color: var(--dk);
+  background: var(--tint); padding: 6px 10px; border-radius: 6px;
+}
+
+/* ── KPI tiles ── */
+.maint-os .kpis {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px; margin-bottom: 14px;
+}
+.maint-os .kpi {
+  border: 1px solid var(--hair); border-radius: 8px; padding: 10px;
+  text-align: center; background: var(--lt);
+}
+.maint-os .kpi .v { font-size: 24px; font-weight: 800; color: var(--dk); }
+.maint-os .kpi .l { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.maint-os .kpi.bad .v { color: var(--red); }
+.maint-os .kpi.warn .v { color: var(--amber); }
+
+.maint-os .note {
+  font-size: 12px; color: var(--muted); margin-top: 12px;
+  border-top: 1px solid var(--hair); padding-top: 8px;
+}
+
+/* ── Aging bands ── */
+.maint-os .band {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 700;
+}
+.maint-os .b0 { background: var(--tint); color: var(--dk); }
+.maint-os .b1 { background: #fff3d6; color: var(--amber); }
+.maint-os .b2 { background: #ffe0dd; color: var(--red); }
+.maint-os .b3 { background: var(--red); color: #fff; }
+
+/* ── Wait-type badges ── */
+.maint-os .wtag {
+  display: inline-block; min-width: 74px; text-align: center; padding: 2px 8px;
+  border-radius: 4px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.4px; color: #fff;
+}
+.maint-os .wt-tenant { background: var(--w-tenant); }
+.maint-os .wt-vendor { background: var(--w-vendor); }
+.maint-os .wt-parts { background: var(--w-parts); }
+.maint-os .wt-owner { background: var(--w-owner); }
+.maint-os .wt-weather { background: var(--w-weather); }
+.maint-os .wt-internal { background: var(--w-internal); }
+.maint-os .card .wtag { margin-bottom: 3px; min-width: 0; padding: 1px 6px; font-size: 9.5px; }
+
+/* ── Chip filters ── */
+.maint-os .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.maint-os .chip {
+  border: 1.5px solid var(--hair); background: #fff; border-radius: 16px;
+  padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; color: var(--ink);
+}
+.maint-os .chip .dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
+}
+.maint-os .chip.on { border-color: var(--ink); background: var(--lt); }
+
+/* ── Days pill (urgency signal: green ≤2 · amber 3–5 · red >5) ── */
+.maint-os .days {
+  display: inline-block; min-width: 30px; text-align: center; padding: 1px 7px;
+  border-radius: 10px; font-weight: 800; font-size: 11.5px;
+}
+.maint-os .d-ok { background: var(--tint); color: var(--dk); }
+.maint-os .d-warn { background: #fff3d6; color: var(--amber); }
+.maint-os .d-late { background: #ffe0dd; color: var(--red); }
+
+/* ── Detail page ── */
+.maint-os .mo-panel {
+  border: 1px solid var(--hair); border-radius: 8px; padding: 14px; background: #fff;
+}
+.maint-os .mo-panel h2 {
+  font-size: 14px; color: var(--dk); font-weight: 700; margin-bottom: 10px;
+}
+.maint-os .mo-field-label {
+  font-size: 11px; color: var(--muted); font-weight: 700;
+  letter-spacing: 0.4px; text-transform: uppercase;
+}
+.maint-os select.mo-input,
+.maint-os input.mo-input,
+.maint-os textarea.mo-input {
+  border: 1px solid var(--hair); border-radius: 6px; padding: 6px 8px;
+  font-size: 13px; background: #fff; color: var(--ink); width: 100%;
+}
+.maint-os .mo-btn {
+  background: var(--gr); color: #fff; padding: 7px 14px; border-radius: 8px;
+  font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid var(--gr);
+}
+.maint-os .mo-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.maint-os .mo-btn.secondary { background: var(--lt); color: var(--dk); border-color: var(--hair); }
+.maint-os .mo-btn.danger { background: var(--red); border-color: var(--red); }
+
+/* Closure gate checklist */
+.maint-os .gate-item { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 4px 0; }
+.maint-os .gate-item .mark { font-weight: 800; }
+.maint-os .gate-item.pass .mark { color: var(--gr); }
+.maint-os .gate-item.fail .mark { color: var(--red); }
+
+/* Event timeline */
+.maint-os .evt { display: flex; gap: 10px; font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--tint); }
+.maint-os .evt .t { color: var(--muted); white-space: nowrap; }
+.maint-os .evt .type { font-weight: 700; color: var(--dk); white-space: nowrap; }
