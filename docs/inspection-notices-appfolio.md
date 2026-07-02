@@ -38,16 +38,45 @@ Two layers, both logged in AppFolio:
 
 ### Flow setup runbook (configure in AppFolio → Realm-X → Flows)
 
-Build two Flows (they together equal `max(move-in, last inspection) + 6 months`):
+Build two Flows; together they equal `max(move-in, last inspection) + 6 months`.
 
-- **Flow 1 — first inspection of a tenancy**
-  - Kickoff Trigger → *On Relative Date* → **~166 days after Move In** (≈ 6 months −
-    a 2-week heads-up; adjust the lead to taste).
-  - Audience: the unit's current tenant(s).
-  - Action: Send email (and/or text) using the heads-up copy below.
-- **Flow 2 — recurring every 6 months**
-  - Kickoff Trigger → *On Relative Date* → **~166 days after Last Inspection Date**.
-  - Audience / Action: same as Flow 1.
+**Before you start**
+- Confirm your plan is **Plus or Max** (Flows require it; Core has only Assistant +
+  Messages). If "Flows" isn't in the Realm-X menu, you're likely on Core.
+- Day math: 6 months ≈ **182 days**. To give ~2.5 weeks of heads-up, trigger at
+  **165 days** after the anchor. Adjust the number to change the lead time.
+
+**Flow 1 — first inspection of a new tenancy (anchor: Move In)**
+1. Go to **Realm-X → Flows** and click **Create Flow** (or **New Workflow**).
+2. Name it `Inspection heads-up — 6mo after move-in`.
+3. **Kickoff Trigger** → choose **On Relative Date**, and enable **Auto-Trigger**.
+4. In the relative-date row, set: number **165**, unit **days**, direction **after**,
+   and in the date-field dropdown pick **Move In** (the same dropdown where "Lease
+   Start" appears).
+5. **Audience / recipients:** scope to the **current tenant(s) of the unit** the
+   trigger fired for (e.g. "Residents" / "Current tenants"). Avoid past residents.
+6. **Action:** add a **Send Email** step (add **Send Text** too if you want SMS).
+   Paste the heads-up subject + body from below.
+7. (Optional) Add a **condition** so it only sends to **active/occupied** units if
+   that isn't already implied by the audience.
+8. **Activate / turn on** the Flow.
+
+**Flow 2 — recurring every 6 months (anchor: Last Inspection Date)**
+1. **Create Flow** again; name it `Inspection heads-up — 6mo after last inspection`.
+2. **Kickoff Trigger** → **On Relative Date**, **Auto-Trigger** on.
+3. Relative-date row: **165 days after** → date field **Last Inspection Date**.
+4. Audience + Action: same as Flow 1 (current tenants; Send Email with the copy).
+5. **Activate** the Flow.
+   - This recurs because each completed inspection updates Last Inspection Date, so
+     the trigger re-evaluates and fires ~165 days later. **Verify** in Run History
+     after your first inspection cycle that it re-fires for the new date.
+
+**Test & verify**
+- Use the Flow builder's **Test / Preview** (or a test resident) before activating.
+- After it runs, open **Realm-X → Flows → Run History** to confirm it fired and see
+  which residents were contacted.
+- Open a tenant's page → communication history / **Text Message Inbox** to confirm
+  the message is logged there (this is the audit record you need).
 
 ### Heads-up message copy (paste into the Flow action)
 
