@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { buildRoutePlans } from '@/lib/route-engine';
+import { computeInspectionDueDate } from '@/lib/inspection-candidates';
 import type { GeoInspection } from '@/types/routes';
 
 interface ScheduleRequest {
@@ -51,12 +52,14 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Step 1: Load eligible candidates with coordinates
+    // Step 1: Load eligible candidates with coordinates.
+    // NB: we deliberately do NOT filter on uses_custom_inspection_date — that flag
+    // is a web-app-only field the v0 API never populates (always false), so gating
+    // on it would exclude every candidate.
     let candQuery = supabase
       .from('inspection_properties')
-      .select('id, address_1, address_2, city, state, zip, latitude, longitude, name, owner_name, appfolio_property_id, appfolio_unit_id, last_inspection_date, candidate_status')
+      .select('id, address_1, address_2, city, state, zip, latitude, longitude, name, owner_name, appfolio_property_id, appfolio_unit_id, last_inspection_date, move_in_date, next_due_date, resident_name, tenant_email, candidate_status')
       .eq('candidate_status', 'eligible')
-      .eq('uses_custom_inspection_date', true)
       .not('latitude', 'is', null)
       .not('longitude', 'is', null);
 
@@ -73,22 +76,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ routes: [], scheduled_count: 0, message: 'No eligible candidates with coordinates' });
     }
 
-    // Step 2: Pull active tenants per unit so we can stamp resident_name on the inspection row
-    // and surface it in the notice + calendar event.
-    const unitIds = candidates.map((c) => c.appfolio_unit_id).filter(Boolean) as string[];
-
-    const residentByUnit = new Map<string, string>();
-    if (unitIds.length > 0) {
-      // Tenants are not stored locally; the canonical resident name comes from AppFolio
-      // when we sync. For now we leave resident_name null on insert. If you want to
-      // denormalize resident names, add a column on inspection_properties during sync
-      // and read it here.
-    }
-
-    // Step 3: Create one inspections row per candidate
+    // Step 2: Create one inspections row per candidate.
+    // The due date is anchored to move-in: max(move_in, last_inspection) + 6 months
+    // (precomputed as next_due_date during the candidate sync). Resident name and
+    // email are carried over so the tenant notice + calendar event can use them.
     const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
     const inspectionRows = candidates.map((c) => {
-      const base: Record<string, unknown> = {
+      const dueDate =
+        c.next_due_date ||
+        computeInspectionDueDate(c.move_in_date ?? null, c.last_inspection_date ?? null) ||
+        todayStr;
+
+      return {
         property_id: c.id,
         inspection_type: 'routine',
         status: 'queued',
@@ -96,19 +96,13 @@ export async function POST(request: NextRequest) {
         priority_score: 50,
         estimated_duration_minutes: 30,
         occupancy_status: 'occupied',
-      };
-
-      // due_date = last_inspection_date + 6 months, or today if never inspected
-      if (c.last_inspection_date) {
-        const due = new Date(c.last_inspection_date);
-        due.setMonth(due.getMonth() + 6);
-        base.due_date = due.toISOString().split('T')[0];
-        base.last_inspection_date = c.last_inspection_date;
-      } else {
-        base.due_date = today.toISOString().split('T')[0];
-      }
-
-      return base;
+        due_date: dueDate,
+        last_inspection_date: c.last_inspection_date ?? null,
+        move_in_date: c.move_in_date ?? null,
+        resident_name: c.resident_name ?? null,
+        notice_email: c.tenant_email ?? null,
+        notice_status: c.tenant_email ? 'pending' : 'skipped_no_email',
+      } as Record<string, unknown>;
     });
 
     const { data: insertedInspections, error: insErr } = await supabase

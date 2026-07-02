@@ -1,12 +1,16 @@
 /**
  * Inspection candidate pipeline — pure logic + Supabase persistence.
  *
- * Pulls AppFolio properties (with the "Use Custom Inspection Date" custom field),
- * units (LastInspectedDate), and tenants (active residents) and classifies each
- * unit into one of:
- *   - skip_recent  : last inspection < 90 days ago
- *   - defer        : last inspection 90 days – 6 months ago
- *   - eligible     : last inspection > 6 months ago, or never
+ * Pulls AppFolio properties, units (LastInspectedDate), and tenants (active
+ * residents, with move-in dates + contact email). Routine inspections run twice
+ * a year — every 6 months — and the clock is anchored to the current tenant's
+ * MOVE-IN date so it resets for every new tenant. The next due date is
+ *   max(move_in, last_inspection) + 6 months.
+ *
+ * Each occupied unit is classified into one of:
+ *   - skip_recent : recently inspected, not due for a while
+ *   - defer       : occupied but not due yet (or vacant — no tenant to inspect)
+ *   - eligible    : due within the scheduling horizon, or overdue
  *
  * Eligible candidates get scheduled into proximity-grouped daily routes by the
  * existing route-engine. "Skip" is local-only — we never write back to AppFolio.
@@ -23,11 +27,21 @@ import {
 } from '@/lib/appfolio';
 
 // ============================================
-// Classification windows
+// Cadence: 6 months, anchored to move-in
 // ============================================
 
+/** Routine inspections run twice a year — every 6 months. */
+export const INSPECTION_INTERVAL_MONTHS = 6;
+
+/**
+ * How far ahead of the due date a unit becomes "eligible" (i.e. ready to put on
+ * a route). Wide enough to schedule and still give the tenant the required
+ * advance notice before the route date.
+ */
+const DUE_HORIZON_DAYS = 45;
+
+/** A just-inspected unit (within this window) is surfaced as skip_recent, not defer. */
 const SKIP_RECENT_DAYS = 90;
-const DEFER_DAYS = 182; // ~6 months
 
 export type CandidateStatus =
   | 'skip_recent'
@@ -36,25 +50,86 @@ export type CandidateStatus =
   | 'scheduled'
   | 'dismissed';
 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+function parseDate(value: string | null): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function toISODate(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+function addMonths(d: Date, months: number): Date {
+  const out = new Date(d);
+  out.setMonth(out.getMonth() + months);
+  return out;
+}
+
+/**
+ * The date the 6-month clock counts from: the LATER of the current tenant's
+ * move-in date and the last real inspection. Move-in resets the clock for every
+ * new tenant; a genuine mid-lease inspection pushes the next one out.
+ */
+export function computeAnchorDate(
+  moveInDate: string | null,
+  lastInspectedDate: string | null
+): string | null {
+  const moveIn = parseDate(moveInDate);
+  const inspected = parseDate(lastInspectedDate);
+  if (moveIn && inspected) return toISODate(moveIn > inspected ? moveIn : inspected);
+  if (moveIn) return toISODate(moveIn);
+  if (inspected) return toISODate(inspected);
+  return null;
+}
+
+/** Next inspection due date = anchor + 6 months (null when there is no anchor). */
+export function computeInspectionDueDate(
+  moveInDate: string | null,
+  lastInspectedDate: string | null
+): string | null {
+  const anchor = computeAnchorDate(moveInDate, lastInspectedDate);
+  if (!anchor) return null;
+  return toISODate(addMonths(new Date(anchor), INSPECTION_INTERVAL_MONTHS));
+}
+
 export interface ClassifyInput {
+  moveInDate: string | null;
   lastInspectedDate: string | null;
+  hasActiveTenant: boolean;
   today: Date;
 }
 
+/**
+ * Classify a unit for the inspection pipeline. Only occupied units are ever
+ * eligible ("once a tenant is in"). Eligibility is driven by the move-in-anchored
+ * due date, not raw inspection age.
+ */
 export function classifyCandidate({
+  moveInDate,
   lastInspectedDate,
+  hasActiveTenant,
   today,
 }: ClassifyInput): 'skip_recent' | 'defer' | 'eligible' {
-  if (!lastInspectedDate) return 'eligible';
-  const inspected = new Date(lastInspectedDate);
-  if (Number.isNaN(inspected.getTime())) return 'eligible';
+  // Vacant unit — no tenant to inspect around, hold until one moves in.
+  if (!hasActiveTenant) return 'defer';
 
-  const ageMs = today.getTime() - inspected.getTime();
-  const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+  const due = computeInspectionDueDate(moveInDate, lastInspectedDate);
+  // Occupied but no anchor at all (no move-in, never inspected) — inspect now.
+  if (!due) return 'eligible';
 
-  if (ageDays < SKIP_RECENT_DAYS) return 'skip_recent';
-  if (ageDays < DEFER_DAYS) return 'defer';
-  return 'eligible';
+  const dueDays = Math.floor((new Date(due).getTime() - today.getTime()) / MS_PER_DAY);
+  if (dueDays <= DUE_HORIZON_DAYS) return 'eligible'; // due soon or overdue
+
+  // Not due yet. Flag freshly-inspected units distinctly from merely-deferred ones.
+  const inspected = parseDate(lastInspectedDate);
+  if (inspected) {
+    const ageDays = Math.floor((today.getTime() - inspected.getTime()) / MS_PER_DAY);
+    if (ageDays < SKIP_RECENT_DAYS) return 'skip_recent';
+  }
+  return 'defer';
 }
 
 // ============================================
@@ -99,7 +174,12 @@ export interface JoinedCandidateRecord {
   state: string;
   zip: string;
   lastInspectedDate: string | null;
+  moveInDate: string | null;
+  nextDueDate: string | null;
   residentNames: string[];
+  residentName: string | null;
+  tenantEmail: string | null;
+  hasActiveTenant: boolean;
   classification: 'skip_recent' | 'defer' | 'eligible';
 }
 
@@ -146,6 +226,24 @@ export function joinPropertiesUnitsTenants(
       .map((t) => `${t.firstName} ${t.lastName}`.trim())
       .filter((s) => s.length > 0);
 
+    // The clock starts on the most recent move-in among active tenants, so a new
+    // tenant (or added occupant) resets it. Fall back to lease start when MoveInOn
+    // is absent.
+    const moveInDate = tenantsForUnit.reduce<string | null>((latest, t) => {
+      const d = t.moveInOn || t.leaseStartDate;
+      if (!d) return latest;
+      return !latest || d > latest ? d : latest;
+    }, null);
+
+    // Prefer the primary tenant for the notice contact; otherwise the first with an email.
+    const primary = tenantsForUnit.find((t) => t.isPrimary) ?? tenantsForUnit[0] ?? null;
+    const withEmail = tenantsForUnit.find((t) => t.email);
+    const contact = primary?.email ? primary : withEmail ?? primary;
+    const residentName = contact
+      ? `${contact.firstName} ${contact.lastName}`.trim() || null
+      : residentNames[0] || null;
+    const tenantEmail = contact?.email ?? withEmail?.email ?? null;
+
     records.push({
       appfolioPropertyId: prop.appfolioPropertyId,
       appfolioUnitId: u.id,
@@ -159,9 +257,16 @@ export function joinPropertiesUnitsTenants(
       state: u.state || prop.state || 'OR',
       zip,
       lastInspectedDate: u.lastInspectedDate,
+      moveInDate,
+      nextDueDate: computeInspectionDueDate(moveInDate, u.lastInspectedDate),
       residentNames,
+      residentName,
+      tenantEmail,
+      hasActiveTenant: tenantsForUnit.length > 0,
       classification: classifyCandidate({
+        moveInDate,
         lastInspectedDate: u.lastInspectedDate,
+        hasActiveTenant: tenantsForUnit.length > 0,
         today,
       }),
     });
@@ -253,11 +358,17 @@ export async function persistCandidates(
       // unit[use_last_inspection_on] state. Was hardcoded `true` (misleading).
       uses_custom_inspection_date: c.useCustomInspectionDate,
       last_inspection_date: c.lastInspectedDate,
+      move_in_date: c.moveInDate,
+      next_due_date: c.nextDueDate,
+      resident_name: c.residentName,
+      tenant_email: c.tenantEmail,
       candidate_status: nextStatus,
       local_skip_reason:
         c.classification === 'skip_recent'
           ? `Inspected within ${SKIP_RECENT_DAYS} days (${c.lastInspectedDate})`
-          : null,
+          : !c.hasActiveTenant
+            ? 'Vacant — no active tenant'
+            : null,
       local_skip_set_at:
         c.classification === 'skip_recent' ? syncTimestamp : null,
       last_appfolio_sync_at: syncTimestamp,

@@ -323,6 +323,7 @@ Configured in `vercel.json`. All times are UTC.
 |----------|----------|---------|
 | **8 AM daily (UTC)** | `/api/sync/work-orders` | Sync AppFolio work orders |
 | **9 AM daily (UTC)** | `/api/sync/appfolio` | Full AppFolio sync: properties, vacancies, comps |
+| **9:30 AM daily (UTC)** | `/api/inspections/candidates/sync` | Refresh inspection candidates from AppFolio (move-in-anchored cadence) |
 | **2 PM daily (UTC)** | `/api/kpi/cron` | Capture daily KPI snapshots for the trends page |
 | **Jan 1 annually** | `/api/sync/hud` | HUD Fair Market Rent data refresh |
 
