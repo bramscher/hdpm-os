@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchHudFmrBaselines } from '@/lib/hud';
 import { bulkUpsertBaselines } from '@/lib/comps';
 
+// Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
+export async function GET(request: NextRequest) {
+  return POST(request);
+}
+
 /**
  * POST /api/sync/hud
  *

@@ -1,7 +1,11 @@
 {
   "crons": [
     {
-      "path": "/api/sync/work-orders",
+      "path": "/api/sync/work-orders?days=1",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/sync/work-orders?days=7",
       "schedule": "0 8 * * *"
     },
     {
@@ -23,6 +27,14 @@
     {
       "path": "/api/sync/zoom-contacts",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/maintenance/cron/tripwires",
+      "schedule": "0 13 * * 1-5"
+    },
+    {
+      "path": "/api/maintenance/cron/unbilled-report",
+      "schedule": "0 14 * * 1"
     }
   ]
 }
