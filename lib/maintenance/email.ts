@@ -1,29 +1,20 @@
 /**
  * Maintenance OS — Resend wrapper for exception digests.
  *
+ * Recipients come from the admin-managed maint_digest_recipient table
+ * (see lib/maintenance/recipients.ts); the MAINT_DIGEST_RECIPIENTS env var
+ * is only a fallback.
+ *
  * Env:
- *   RESEND_API_KEY           — required to send (silently skipped when absent)
- *   MAINT_DIGEST_RECIPIENTS  — JSON map of owner name → email, e.g.
- *                              {"Cheryl":"cheryl@highdesertpm.com", ...}
- *   MAINT_DIGEST_FROM        — optional From, default below
+ *   RESEND_API_KEY    — required to send (silently skipped when absent)
+ *   MAINT_DIGEST_FROM — optional From, default below
  */
 
 import { Resend } from 'resend';
 import type { Digest } from './digest';
+import { getActiveRecipients } from './recipients';
 
 const DEFAULT_FROM = 'HDMS Maintenance <maintenance@highdesertpm.com>';
-
-export function getDigestRecipients(): Record<string, string> {
-  const raw = process.env.MAINT_DIGEST_RECIPIENTS;
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed !== null ? parsed : {};
-  } catch {
-    console.error('[Digest] MAINT_DIGEST_RECIPIENTS is not valid JSON');
-    return {};
-  }
-}
 
 export interface SendResult {
   owner: string;
@@ -38,10 +29,10 @@ export async function sendDigestEmail(owner: string, digest: Digest): Promise<Se
     return { owner, sent: false, reason: 'RESEND_API_KEY not configured' };
   }
 
-  const recipients = getDigestRecipients();
+  const recipients = await getActiveRecipients();
   const to = recipients[owner];
   if (!to) {
-    return { owner, sent: false, reason: `No recipient configured for "${owner}"` };
+    return { owner, sent: false, reason: `"${owner}" not opted in (Exceptions view → Digest recipients)` };
   }
 
   try {
