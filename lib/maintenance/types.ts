@@ -206,6 +206,15 @@ export interface TripwireException {
   ageDays?: number;
 }
 
+/** Rule-7 documentation status per work order. */
+export interface WoDocs {
+  photoCount: number;
+  hasTime: boolean;
+  hasMaterials: boolean;
+  scopeChanges: number;
+  approvedDecisions: number;
+}
+
 /**
  * All data the 12 tripwire rules need, loaded once per run.
  * Rules themselves are pure: (snapshot) => TripwireException[].
@@ -220,6 +229,10 @@ export interface TripwireSnapshot {
   turns: Turn[];
   /** work_order_id values that have at least one non-void invoice linked */
   invoicedWorkOrderIds: Set<string>;
+  /** Rule 6/7 inputs, keyed by work_order_id (open WOs only) */
+  docsByWorkOrder: Map<string, WoDocs>;
+  /** work_order_ids with a failed_access event in the last 24h (rule 5) */
+  recentFailedAccessWoIds: Set<string>;
 }
 
 // ============================================
