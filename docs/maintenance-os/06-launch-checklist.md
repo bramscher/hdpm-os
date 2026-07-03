@@ -18,16 +18,16 @@ Everything below the "Done" line is built, unit-tested (98/98), and verified aga
 
 ## 🔲 Action items (in order)
 
-### 1. Decide: grandfather-close the historical backlog
-The live tripwire run found **634 old AppFolio-completed WOs stuck in VERIFY**
-(they predate the system — nobody will retroactively add photos/time/materials)
-and **280 in NEW** (the expected one-time triage backlog). Until cleared, the
-Exceptions view is too noisy for Cheryl's daily sweep.
-
-- [ ] Pick a cutoff date (suggested: completed before **2026-07-01**)
-- [ ] Ask Claude Code for the one-time grandfather SQL (bulk `stage='CLOSED'`,
-      actor `system:backfill`, gate bypassed by design) — **do not** hand-close
-      634 items through the UI
+### 1. ✅ Grandfather-close the historical backlog — DONE 2026-07-03
+Cutoff **2026-07-01** approved by Craig. 2,326 WOs that AppFolio completed
+before launch were moved VERIFY→CLOSED in our Supabase mirror (AppFolio
+untouched), each with a `system:backfill` audit event; `closed_at` preserved
+from the AppFolio completion date. Kept in VERIFY for the real gate: 29
+completed on/after 7/1 + 18 with no completion date. Also fixed a Supabase
+1000-row read cap that was truncating tripwire counts.
+Live exceptions after: **328** (281 = Cheryl's one-time NEW triage backlog,
+47 = kept VERIFY items), 0 rule errors. SQL kept for the record:
+`supabase/migrations/20260703_grandfather_verify_backlog.sql` (already executed).
 
 ### 2. Resend (email digests)
 Everything else works without this; digests silently skip until it's done.
