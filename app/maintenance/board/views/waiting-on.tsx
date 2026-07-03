@@ -59,7 +59,7 @@ export default function WaitingOn({ board }: { board: BoardData }) {
             <th>Days</th>
             <th>Next action</th>
             <th>By</th>
-            <th>Owner</th>
+            <th>HDPM Owner</th>
           </tr>
         </thead>
         <tbody>
@@ -98,7 +98,8 @@ export default function WaitingOn({ board }: { board: BoardData }) {
       <p className="note">
         One table, same seven columns for every wait type — click a chip to filter. Type badge
         color is constant everywhere; the Days pill is the urgency signal (green ≤2 · amber 3–5 ·
-        red &gt;5, red = chase by phone today). Every row has a next action, a date, and one owner.
+        red &gt;5, red = chase by phone today). Every row has a next action, a date, and one HDPM
+        owner (the accountable team member — the OWNER wait-type badge means the property owner).
         Nothing waits silently.
       </p>
     </section>

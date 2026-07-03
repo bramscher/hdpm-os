@@ -126,7 +126,7 @@ export function validateTransition(
   // ── Open WOs always have ONE named owner and a next-action date ──
   if (targetStage !== 'CLOSED') {
     if (!next.owner_name) {
-      errors.push('Every open work order needs a named owner');
+      errors.push('Every open work order needs a named HDPM owner (accountable team member)');
     }
     if (!next.next_action_date) {
       errors.push('Every open work order needs a next_action_date');

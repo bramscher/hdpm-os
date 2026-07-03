@@ -33,7 +33,7 @@ export function WoCard({ wo }: { wo: MaintWorkOrder }) {
         {wo.description.length > 96 ? `${wo.description.slice(0, 96)}…` : wo.description} —{' '}
         {woWhere(wo)}
       </b>
-      <span className="own">{wo.owner_name || '⚠ no owner'}</span>
+      <span className="own">{wo.owner_name || '⚠ no HDPM owner'}</span>
       {' · '}
       <span className={pastDue ? 'due past' : 'due'}>
         {pastDue ? `due ${fmtDate(wo.next_action_date)} ⚠` : `act ${fmtDate(wo.next_action_date)}`}

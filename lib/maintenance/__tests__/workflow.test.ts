@@ -125,7 +125,7 @@ describe('WAITING_ON invariants', () => {
 describe('owner + next-action-date invariants', () => {
   it('open WO cannot drop its owner', () => {
     const errors = validateTransition(base, { owner_name: null });
-    expect(errors.some((e) => e.includes('named owner'))).toBe(true);
+    expect(errors.some((e) => e.includes('named HDPM owner'))).toBe(true);
   });
 
   it('open WO cannot drop its next_action_date', () => {

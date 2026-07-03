@@ -50,7 +50,7 @@ function DigestRecipientsPanel() {
   return (
     <div className="mo-panel" style={{ marginBottom: 14 }}>
       <h2 style={{ cursor: 'pointer' }} onClick={() => setOpen(!open)}>
-        Digest recipients (daily 6AM email per owner) {open ? '▾' : '▸'}
+        Digest recipients (daily 6AM email per HDPM owner) {open ? '▾' : '▸'}
       </h2>
       {open && (
         <>
@@ -140,7 +140,7 @@ export default function Exceptions({ data }: { data: ExceptionsData | null }) {
               <th>Tripwire</th>
               <th>Item</th>
               <th>Fix required today</th>
-              <th>Owner</th>
+              <th>HDPM Owner</th>
             </tr>
           </thead>
           <tbody>
@@ -171,7 +171,7 @@ export default function Exceptions({ data }: { data: ExceptionsData | null }) {
       )}
 
       <p className="note">
-        The daily sweep ends when this view reads ZERO — every exception gets an owner and a date,
+        The daily sweep ends when this view reads ZERO — every exception gets an HDPM owner and a date,
         or gets escalated. Tripwires #1 and #9 await the Haven.AI integration.
       </p>
     </section>

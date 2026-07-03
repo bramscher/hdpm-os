@@ -141,7 +141,7 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
       <p className="note" style={{ marginTop: 0 }}>
         AppFolio is the system of record: status, scheduling, and vendor assignment are edited{' '}
         <b>there</b> — this board follows within 15 minutes. This page owns what AppFolio
-        can&apos;t track: the accountable owner, next-action date, priority class, and the
+        can&apos;t track: the accountable HDPM owner, next-action date, priority class, and the
         closure gate.
       </p>
 
@@ -190,7 +190,7 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
               </select>
             </label>
             <label>
-              <span className="mo-field-label">Owner (ONE person)</span>
+              <span className="mo-field-label">HDPM Owner (ONE team member)</span>
               <select
                 className="mo-input"
                 value={wo.owner_name || ''}
@@ -535,7 +535,7 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
       {wo.stage === 'WAITING_ON' && wo.waiting_reason && (
         <p className="note">
           <WaitBadge reason={wo.waiting_reason} /> Every WAIT has a reason, a next action date, and
-          one owner — a WAIT tag without a date is a violation by definition.
+          one HDPM owner — a WAIT tag without a date is a violation by definition.
         </p>
       )}
     </div>

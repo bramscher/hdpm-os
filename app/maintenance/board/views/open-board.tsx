@@ -42,7 +42,7 @@ export default function OpenBoard({
           tone={board.kpis.aging30Plus > 0 ? 'warn' : undefined}
         />
         <KpiTile value={board.kpis.p1ThisWeek} label="P1 this week" />
-        <KpiTile value={`${board.kpis.ownerAndDateCoverage}%`} label="Have owner + date" />
+        <KpiTile value={`${board.kpis.ownerAndDateCoverage}%`} label="Have HDPM owner + date" />
       </div>
 
       <div className="colwrap">
@@ -72,7 +72,8 @@ export default function OpenBoard({
       </div>
 
       <p className="note">
-        Card = one work order: what/where, ONE owner, next-action date. Red date = past due =
+        Card = one work order: what/where, ONE HDPM owner (accountable team member), next-action
+        date. Red date = past due =
         automatic Exception. Left edge color = priority (red P1, amber P2, green P3, gray P4).
       </p>
     </section>

@@ -78,7 +78,7 @@ export function buildDigest(
     <a href="${boardUrl}" style="background:${GR};color:#fff;padding:9px 16px;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;">Open the Exceptions view</a>
   </p>
   <p style="font-size:12px;color:${MUTED};border-top:1px solid ${HAIR};padding-top:8px;margin-top:16px;">
-    The daily sweep ends when the Exceptions view reads ZERO — every exception gets an owner and a date, or gets escalated.
+    The daily sweep ends when the Exceptions view reads ZERO — every exception gets an HDPM owner and a date, or gets escalated.
   </p>
 </div>`;
 

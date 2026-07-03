@@ -66,7 +66,7 @@ export function tripwire2(snapshot: TripwireSnapshot): TripwireException[] {
       item: `[${wo.stage}] ${woLabel(wo)}`,
       fixRequired: wo.owner_name
         ? 'Triage today: set priority + dispatch decision'
-        : 'Assign an owner today',
+        : 'Assign an HDPM owner today',
       owner: wo.owner_name || 'Cheryl',
       workOrderId: wo.id,
       ageDays: businessDaysBetween(

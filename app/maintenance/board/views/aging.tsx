@@ -35,7 +35,7 @@ export default function Aging({ board }: { board: BoardData }) {
             <th>Days</th>
             <th>Stage</th>
             <th>Why it&apos;s old (written reason required)</th>
-            <th>Owner</th>
+            <th>HDPM Owner</th>
           </tr>
         </thead>
         <tbody>
