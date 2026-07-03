@@ -246,8 +246,9 @@ export async function bulkUpsertWorkOrders(
     string,
     { id: string; stage: Stage; appfolio_status: string | null }
   >();
-  for (let i = 0; i < appfolioIds.length; i += 500) {
-    const batch = appfolioIds.slice(i, i + 500);
+  // 200 per lookup — id lists ride in the URL, and 500 UUIDs overflow it
+  for (let i = 0; i < appfolioIds.length; i += 200) {
+    const batch = appfolioIds.slice(i, i + 200);
     const { data, error } = await supabase
       .from('work_orders')
       .select('id, appfolio_id, stage, appfolio_status')

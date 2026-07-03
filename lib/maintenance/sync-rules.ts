@@ -130,12 +130,27 @@ export interface InitialWorkflow {
 }
 
 /**
+ * The Maintenance OS launch date. Work AppFolio completed BEFORE this predates
+ * the six-condition closure gate — nobody will retroactively add photos/time/
+ * materials — so it lands directly in CLOSED (grandfathered), exactly like the
+ * one-time 20260703 backfill. Work completed on/after it goes to VERIFY and
+ * must earn CLOSED through the gate.
+ */
+export const LAUNCH_CUTOFF = '2026-07-01';
+
+/**
  * Workflow defaults for a work order first seen by the sync — stage from
- * mappedStageFor(); CLOSED only for AppFolio-closed history (grandfathered,
- * predates the gate).
+ * mappedStageFor(); CLOSED for AppFolio-closed history and for work completed
+ * before LAUNCH_CUTOFF (grandfathered, predates the gate).
  */
 export function initialWorkflowFor(wo: AppFolioWorkOrder, today: Date): InitialWorkflow {
-  const { stage, waiting_reason } = mappedStageFor(wo);
+  let { stage, waiting_reason } = mappedStageFor(wo);
+
+  // Standing grandfather rule: pre-launch completed history skips the gate.
+  if (stage === 'VERIFY' && wo.completedDate && wo.completedDate < LAUNCH_CUTOFF) {
+    stage = 'CLOSED';
+    waiting_reason = null;
+  }
 
   return {
     stage,

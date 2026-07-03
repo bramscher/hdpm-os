@@ -156,6 +156,16 @@ describe('initialWorkflowFor', () => {
     expect(wf.closed_at).toBeNull();
   });
 
+  it('standing grandfather: completed BEFORE launch cutoff → CLOSED on insert', () => {
+    const wf = initialWorkflowFor(
+      afWo({ status: 'done', appfolioStatus: 'Completed', completedDate: '2026-05-14T00:00:00Z' }),
+      NOW
+    );
+    expect(wf.stage).toBe('CLOSED');
+    expect(wf.closed_at).toBe('2026-05-14T00:00:00Z');
+    expect(wf.next_action_date).toBeNull();
+  });
+
   it('closed → CLOSED, grandfathered with closed_at and no next action', () => {
     const wf = initialWorkflowFor(
       afWo({ status: 'closed', appfolioStatus: 'Canceled', canceledDate: '2026-06-30T00:00:00Z' }),
