@@ -83,7 +83,11 @@ export interface TransitionContext {
 }
 
 export interface TransitionOptions {
-  /** Sync automation: allows any→VERIFY and any→CLOSED (cancel), skips gate. */
+  /**
+   * Sync automation: transitions follow the AppFolio status mapping rather
+   * than the user-facing stage graph, and skip the gate/doc/soft rules.
+   * Hard invariants (WAITING_ON reason, owner + date on open WOs) still apply.
+   */
   systemOverride?: boolean;
 }
 
@@ -102,12 +106,10 @@ export function validateTransition(
   const targetStage = next.stage;
   const stageChanging = patch.stage !== undefined && patch.stage !== current.stage;
 
-  // ── Stage graph ──
-  if (stageChanging) {
+  // ── Stage graph (system moves follow the AppFolio mapping instead) ──
+  if (stageChanging && !opts.systemOverride) {
     const allowed = ALLOWED_TRANSITIONS[current.stage] ?? [];
-    const overrideOk =
-      opts.systemOverride && (targetStage === 'VERIFY' || targetStage === 'CLOSED');
-    if (!allowed.includes(targetStage) && !overrideOk) {
+    if (!allowed.includes(targetStage)) {
       errors.push(`Transition ${current.stage} → ${targetStage} is not allowed`);
     }
   }

@@ -3,6 +3,7 @@ import type { AppFolioWorkOrder } from '@/lib/appfolio';
 import {
   buildMirrorRow,
   initialWorkflowFor,
+  mappedStageFor,
   seedPriorityClass,
   stageAutomationFor,
 } from '../sync-rules';
@@ -90,6 +91,40 @@ describe('seedPriorityClass', () => {
   });
 });
 
+describe('mappedStageFor — HDPM AppFolio status vocabulary', () => {
+  it('maps every live status (verified against instance data 2026-07-03)', () => {
+    const cases: [string, string, string | null][] = [
+      ['New', 'NEW', null],
+      ['Assigned', 'TRIAGED', null],
+      ['Scheduled', 'SCHEDULED', null],
+      ['Estimate Requested', 'WAITING_ON', 'VENDOR'],
+      ['Estimated', 'WAITING_ON', 'OWNER'],
+      ['Waiting', 'WAITING_ON', 'INTERNAL'],
+    ];
+    for (const [appfolioStatus, stage, reason] of cases) {
+      const m = mappedStageFor(afWo({ appfolioStatus }));
+      expect(m.stage, appfolioStatus).toBe(stage);
+      expect(m.waiting_reason, appfolioStatus).toBe(reason);
+    }
+  });
+
+  it('Assigned with a visit date → SCHEDULED (a concrete date beats the coarse status)', () => {
+    const m = mappedStageFor(
+      afWo({ appfolioStatus: 'Assigned', scheduledStart: '2026-07-05T09:00:00Z' })
+    );
+    expect(m.stage).toBe('SCHEDULED');
+  });
+
+  it('done/closed statuses win over the text status', () => {
+    expect(mappedStageFor(afWo({ status: 'done', appfolioStatus: 'Completed' })).stage).toBe('VERIFY');
+    expect(mappedStageFor(afWo({ status: 'closed', appfolioStatus: 'Canceled' })).stage).toBe('CLOSED');
+  });
+
+  it('unknown status falls back to NEW', () => {
+    expect(mappedStageFor(afWo({ appfolioStatus: 'Some Future Status' })).stage).toBe('NEW');
+  });
+});
+
 describe('initialWorkflowFor', () => {
   it('open → NEW with Cheryl + next business day', () => {
     const wf = initialWorkflowFor(afWo(), NOW);
@@ -138,6 +173,35 @@ describe('initialWorkflowFor', () => {
 describe('stageAutomationFor', () => {
   it('does nothing for an ordinary open WO', () => {
     expect(stageAutomationFor('TRIAGED', afWo(), NOW)).toBeNull();
+  });
+
+  it('early catch-up: NEW follows AppFolio Assigned → TRIAGED', () => {
+    const auto = stageAutomationFor('NEW', afWo({ appfolioStatus: 'Assigned' }), NOW);
+    expect(auto?.stage).toBe('TRIAGED');
+  });
+
+  it('early catch-up: NEW follows Estimate Requested → WAITING_ON/VENDOR', () => {
+    const auto = stageAutomationFor('NEW', afWo({ appfolioStatus: 'Estimate Requested' }), NOW);
+    expect(auto?.stage).toBe('WAITING_ON');
+    expect(auto?.waiting_reason).toBe('VENDOR');
+  });
+
+  it('early catch-up: TRIAGED follows Scheduled → SCHEDULED', () => {
+    const auto = stageAutomationFor(
+      'TRIAGED',
+      afWo({ appfolioStatus: 'Scheduled', scheduledStart: '2026-07-05T09:00:00Z' }),
+      NOW
+    );
+    expect(auto?.stage).toBe('SCHEDULED');
+  });
+
+  it('never moves backward (TRIAGED does not return to NEW)', () => {
+    expect(stageAutomationFor('TRIAGED', afWo({ appfolioStatus: 'New' }), NOW)).toBeNull();
+  });
+
+  it('never touches IN_PROGRESS+ or human-managed WAITING_ON', () => {
+    expect(stageAutomationFor('IN_PROGRESS', afWo({ appfolioStatus: 'Assigned' }), NOW)).toBeNull();
+    expect(stageAutomationFor('WAITING_ON', afWo({ appfolioStatus: 'Scheduled' }), NOW)).toBeNull();
   });
 
   it('never touches an already-CLOSED row', () => {

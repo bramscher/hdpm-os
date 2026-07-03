@@ -301,7 +301,8 @@ export async function bulkUpsertWorkOrders(
     writtenCount += batch.length;
   }
 
-  // 4. Sync-driven stage automation (canceled → CLOSED, completed → VERIFY)
+  // 4. Sync-driven stage automation (cancel → CLOSED, completed → VERIFY,
+  //    early-stage catch-up to AppFolio's own status)
   for (const wo of existingOrders) {
     const row = existing.get(wo.appfolioId)!;
     const auto = stageAutomationFor(row.stage, wo, now);
@@ -309,9 +310,11 @@ export async function bulkUpsertWorkOrders(
     try {
       await updateWorkOrderWorkflow(
         row.id,
-        auto.stage === 'CLOSED'
-          ? { stage: auto.stage, closed_at: auto.closed_at }
-          : { stage: auto.stage },
+        {
+          stage: auto.stage,
+          ...(auto.closed_at ? { closed_at: auto.closed_at } : {}),
+          ...(auto.waiting_reason ? { waiting_reason: auto.waiting_reason } : {}),
+        },
         'system:sync',
         { systemOverride: true }
       );
@@ -389,15 +392,17 @@ export async function upsertSingleWorkOrder(
     }
     console.log(`[Webhook] Updated work order ${order.appfolioId}`);
 
-    // Stage automation (canceled → CLOSED, completed → VERIFY)
+    // Stage automation (cancel → CLOSED, completed → VERIFY, early catch-up)
     const auto = stageAutomationFor(existing.stage as Stage, order, now);
     if (auto) {
       try {
         await updateWorkOrderWorkflow(
           existing.id,
-          auto.stage === 'CLOSED'
-            ? { stage: auto.stage, closed_at: auto.closed_at }
-            : { stage: auto.stage },
+          {
+            stage: auto.stage,
+            ...(auto.closed_at ? { closed_at: auto.closed_at } : {}),
+            ...(auto.waiting_reason ? { waiting_reason: auto.waiting_reason } : {}),
+          },
           'system:sync',
           { systemOverride: true }
         );

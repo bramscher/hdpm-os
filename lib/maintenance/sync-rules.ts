@@ -11,7 +11,7 @@
  */
 
 import type { AppFolioWorkOrder } from '@/lib/appfolio';
-import type { PriorityClass, Stage } from './types';
+import type { PriorityClass, Stage, WaitingReason } from './types';
 import { STAGE_ORDER } from './workflow';
 import { nextBusinessDay, toDateString } from './business-days';
 
@@ -87,8 +87,39 @@ export function seedPriorityClass(priority: string | null): PriorityClass | null
   return null;
 }
 
+/**
+ * Map an AppFolio status to our lifecycle stage (HDPM instance vocabulary,
+ * confirmed against live data 2026-07-03: New / Assigned / Scheduled /
+ * Estimate Requested / Estimated / Waiting / Work Completed / Completed /
+ * Canceled).
+ *
+ *  - Assigned          → TRIAGED (vendor/tech picked; SCHEDULED if a visit date exists)
+ *  - Estimate Requested→ WAITING_ON VENDOR (chasing a bid)
+ *  - Estimated         → WAITING_ON OWNER (bid in hand, decision pending)
+ *  - Waiting           → WAITING_ON INTERNAL (placeholder; Cheryl sets the real reason)
+ */
+export function mappedStageFor(wo: AppFolioWorkOrder): {
+  stage: Stage;
+  waiting_reason: WaitingReason | null;
+} {
+  if (wo.status === 'closed') return { stage: 'CLOSED', waiting_reason: null };
+  if (wo.status === 'done') return { stage: 'VERIFY', waiting_reason: null };
+
+  const s = (wo.appfolioStatus || '').toLowerCase().trim();
+  if (s === 'estimate requested') return { stage: 'WAITING_ON', waiting_reason: 'VENDOR' };
+  if (s === 'estimated') return { stage: 'WAITING_ON', waiting_reason: 'OWNER' };
+  if (s === 'waiting') return { stage: 'WAITING_ON', waiting_reason: 'INTERNAL' };
+  if (s === 'scheduled') return { stage: 'SCHEDULED', waiting_reason: null };
+  if (s === 'assigned') {
+    return { stage: wo.scheduledStart ? 'SCHEDULED' : 'TRIAGED', waiting_reason: null };
+  }
+  // 'new' or anything unrecognized: a concrete visit date beats a coarse status
+  return { stage: wo.scheduledStart ? 'SCHEDULED' : 'NEW', waiting_reason: null };
+}
+
 export interface InitialWorkflow {
   stage: Stage;
+  waiting_reason: WaitingReason | null;
   owner_name: string;
   next_action_date: string | null;
   priority_class: PriorityClass | null;
@@ -97,30 +128,22 @@ export interface InitialWorkflow {
 }
 
 /**
- * Workflow defaults for a work order first seen by the sync.
- * Mirrors the migration backfill: closed→CLOSED (grandfathered — predates
- * the gate), done→VERIFY, open+scheduled→SCHEDULED, else NEW.
+ * Workflow defaults for a work order first seen by the sync — stage from
+ * mappedStageFor(); CLOSED only for AppFolio-closed history (grandfathered,
+ * predates the gate).
  */
 export function initialWorkflowFor(wo: AppFolioWorkOrder, today: Date): InitialWorkflow {
-  let stage: Stage = 'NEW';
-  let closed_at: string | null = null;
-
-  if (wo.status === 'closed') {
-    stage = 'CLOSED';
-    closed_at = wo.completedDate || wo.canceledDate || today.toISOString();
-  } else if (wo.status === 'done') {
-    stage = 'VERIFY';
-  } else if (wo.scheduledStart) {
-    stage = 'SCHEDULED';
-  }
+  const { stage, waiting_reason } = mappedStageFor(wo);
 
   return {
     stage,
+    waiting_reason,
     owner_name: 'Cheryl',
     next_action_date: stage === 'CLOSED' ? null : toDateString(nextBusinessDay(today)),
     priority_class: seedPriorityClass(wo.priority),
     origin: 'appfolio',
-    closed_at,
+    closed_at:
+      stage === 'CLOSED' ? wo.completedDate || wo.canceledDate || today.toISOString() : null,
   };
 }
 
@@ -130,6 +153,7 @@ export function initialWorkflowFor(wo: AppFolioWorkOrder, today: Date): InitialW
 
 export interface StageAutomation {
   stage: Stage;
+  waiting_reason?: WaitingReason;
   closed_at?: string;
   reason: string;
 }
@@ -143,6 +167,11 @@ export interface StageAutomation {
  *     AppFolio without cancellation, while our stage is still before
  *     VERIFY → advance to VERIFY. It does NOT close it: CLOSED is only
  *     reachable through the six-condition gate.
+ *  3. Early-stage catch-up: while our stage is still NEW or TRIAGED (i.e.
+ *     nobody has driven it here yet), follow AppFolio's own status forward —
+ *     Assigned→TRIAGED, Scheduled→SCHEDULED, estimate/waiting→WAITING_ON.
+ *     Never backward, and never once the WO is IN_PROGRESS or beyond
+ *     (from there, this app's workflow is the driver).
  *
  * Returns null when no automation applies.
  */
@@ -167,6 +196,22 @@ export function stageAutomationFor(
       stage: 'VERIFY',
       reason: `AppFolio status "${wo.appfolioStatus}" — awaiting verification + closure gate`,
     };
+  }
+
+  // Early-stage catch-up (rule 3)
+  if (currentStage === 'NEW' || currentStage === 'TRIAGED') {
+    const mapped = mappedStageFor(wo);
+    if (
+      mapped.stage !== 'CLOSED' &&
+      mapped.stage !== 'VERIFY' &&
+      STAGE_ORDER[mapped.stage] > STAGE_ORDER[currentStage]
+    ) {
+      return {
+        stage: mapped.stage,
+        ...(mapped.waiting_reason ? { waiting_reason: mapped.waiting_reason } : {}),
+        reason: `AppFolio status "${wo.appfolioStatus}"`,
+      };
+    }
   }
 
   return null;
