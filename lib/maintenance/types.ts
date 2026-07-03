@@ -76,6 +76,7 @@ export const EVENT_TYPES = [
   'invoice',
   'exception',
   'sync_update',
+  'ai_triage',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

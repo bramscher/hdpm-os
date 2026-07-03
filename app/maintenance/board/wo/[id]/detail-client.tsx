@@ -13,6 +13,7 @@ import { ALLOWED_TRANSITIONS, CLOSURE_CONDITION_LABELS } from '@/lib/maintenance
 import type { Stage } from '@/lib/maintenance/types';
 import { fmtDate, woWhere } from '../../board-types';
 import { WaitBadge } from '../../components/shared';
+import AiTriagePanel from './ai-triage-panel';
 
 interface DetailPayload {
   workOrder: MaintWorkOrder;
@@ -157,6 +158,8 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
           </ul>
         </div>
       )}
+
+      <AiTriagePanel workOrderId={workOrderId} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         {/* ── Workflow controls ── */}

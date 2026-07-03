@@ -613,6 +613,15 @@ interface V0WorkOrder {
   LastUpdatedAt?: string;
   /** Deep link to the WO page in the AppFolio web app (service_requests/…/work_orders/…) */
   Link?: string;
+  // Rich detail fields (not mirrored — fetched live for AI triage)
+  TenantRemarks?: string;
+  EntryInstructions?: string;
+  PreferredTimes?: string;
+  TenantAvailability?: string;
+  VendorInstructions?: string;
+  WorkOrderIssue?: string;
+  SmartMaintenanceUrgency?: string;
+  Type?: string;
 }
 
 export type WorkOrderStatus = 'open' | 'closed' | 'done';
@@ -753,6 +762,32 @@ export async function fetchAppFolioWorkOrders(
     createdAt: wo.CreatedAt || null,
     link: wo.Link || null,
   }));
+}
+
+// ============================================
+// Public: Fetch full raw work-order detail by AppFolio ID
+// (filters[Id] is supported by the v0 API — single-row response with the
+// rich fields we don't mirror: TenantRemarks, EntryInstructions, etc.
+// Used by AI triage at generation time.)
+// ============================================
+
+export async function fetchWorkOrderDetails(appfolioId: string): Promise<V0WorkOrder | null> {
+  const config = getConfig();
+  if (!config) return null;
+
+  try {
+    const res = await v0Fetch<V0WorkOrder>(
+      '/work_orders',
+      { 'filters[Id]': appfolioId },
+      config.clientId,
+      config.clientSecret,
+      config.developerId
+    );
+    return res.data?.[0] ?? null;
+  } catch (err) {
+    console.error(`[AppFolio] Error fetching work order detail ${appfolioId}:`, err);
+    return null;
+  }
 }
 
 // ============================================
