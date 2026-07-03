@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { requireStaffSession } from '@/lib/maintenance/api-auth';
+import { fetchAllRows } from '@/lib/maintenance/tripwire-engine';
 import type { MaintWorkOrder, Turn, VendorAssignment } from '@/lib/maintenance/types';
 
 /**
@@ -23,12 +24,11 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-    const [openRes, closedRes, turnsRes, assignmentsRes] = await Promise.all([
-      supabase
-        .from('work_orders')
-        .select('*')
-        .neq('stage', 'CLOSED')
-        .order('next_action_date', { ascending: true, nullsFirst: true }),
+    const [openRaw, closedRes, turnsRes, assignmentsRes] = await Promise.all([
+      fetchAllRows(
+        () => supabase.from('work_orders').select('*').neq('stage', 'CLOSED'),
+        'work_orders'
+      ),
       supabase
         .from('work_orders')
         .select('*')
@@ -43,11 +43,13 @@ export async function GET() {
         .is('declined_at', null),
     ]);
 
-    for (const res of [openRes, closedRes, turnsRes, assignmentsRes]) {
+    for (const res of [closedRes, turnsRes, assignmentsRes]) {
       if (res.error) throw new Error(res.error.message);
     }
 
-    const open = (openRes.data ?? []) as MaintWorkOrder[];
+    const open = (openRaw as MaintWorkOrder[]).sort((a, b) =>
+      (a.next_action_date ?? '').localeCompare(b.next_action_date ?? '')
+    );
     const closedThisWeek = (closedRes.data ?? []) as MaintWorkOrder[];
     const turns = (turnsRes.data ?? []) as Turn[];
     const assignments = (assignmentsRes.data ?? []) as VendorAssignment[];

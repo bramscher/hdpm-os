@@ -22,28 +22,58 @@ import type {
 } from './types';
 import { TRIPWIRE_REGISTRY } from './tripwires';
 
+/**
+ * Page through a PostgREST query — Supabase caps single reads at 1000 rows,
+ * which silently truncates snapshots as volume grows. The builder is a
+ * factory because a query object can't be reused across .range() calls.
+ */
+export async function fetchAllRows<T>(
+  makeQuery: () => PromiseLike<{ data: T[] | null; error: { message: string } | null }> & {
+    order: (col: string) => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }> };
+  },
+  label: string
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await makeQuery().order('id').range(from, from + 999);
+    if (error) throw new Error(`${label} load failed: ${error.message}`);
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < 1000) break;
+  }
+  return rows;
+}
+
 export async function loadTripwireSnapshot(): Promise<TripwireSnapshot> {
   const supabase = getSupabaseAdmin();
   const now = new Date();
 
-  const [openRes, assignRes, vendorRes, approvalRes, recRes, turnRes] = await Promise.all([
-    supabase.from('work_orders').select('*').neq('stage', 'CLOSED'),
-    supabase.from('vendor_assignment').select('*'),
-    supabase.from('vendor').select('*'),
-    supabase.from('approval').select('*').is('decided_at', null),
-    supabase
-      .from('recommendation')
-      .select('*')
-      .is('resolved_wo_id', null)
-      .is('dismissed_reason', null),
-    supabase.from('turn').select('*'),
-  ]);
+  const [openWorkOrdersRaw, assignments, vendors, approvals, recommendations, turnRes] =
+    await Promise.all([
+      fetchAllRows(
+        () => supabase.from('work_orders').select('*').neq('stage', 'CLOSED'),
+        'work_orders'
+      ),
+      fetchAllRows(() => supabase.from('vendor_assignment').select('*'), 'vendor_assignment'),
+      fetchAllRows(() => supabase.from('vendor').select('*'), 'vendor'),
+      fetchAllRows(
+        () => supabase.from('approval').select('*').is('decided_at', null),
+        'approval'
+      ),
+      fetchAllRows(
+        () =>
+          supabase
+            .from('recommendation')
+            .select('*')
+            .is('resolved_wo_id', null)
+            .is('dismissed_reason', null),
+        'recommendation'
+      ),
+      supabase.from('turn').select('*'),
+    ]);
 
-  for (const res of [openRes, assignRes, vendorRes, approvalRes, recRes, turnRes]) {
-    if (res.error) throw new Error(`Snapshot load failed: ${res.error.message}`);
-  }
+  if (turnRes.error) throw new Error(`Snapshot load failed: ${turnRes.error.message}`);
 
-  const openWorkOrders = (openRes.data ?? []) as MaintWorkOrder[];
+  const openWorkOrders = openWorkOrdersRaw as MaintWorkOrder[];
   const openIds = openWorkOrders.map((wo) => wo.id);
 
   // Invoice linkage (rule 8) + line-item docs (rule 7) for open WOs.
@@ -121,10 +151,10 @@ export async function loadTripwireSnapshot(): Promise<TripwireSnapshot> {
   return {
     now,
     openWorkOrders,
-    assignments: (assignRes.data ?? []) as VendorAssignment[],
-    vendors: (vendorRes.data ?? []) as Vendor[],
-    approvals: (approvalRes.data ?? []) as Approval[],
-    recommendations: (recRes.data ?? []) as Recommendation[],
+    assignments: assignments as VendorAssignment[],
+    vendors: vendors as Vendor[],
+    approvals: approvals as Approval[],
+    recommendations: recommendations as Recommendation[],
     turns: (turnRes.data ?? []) as Turn[],
     invoicedWorkOrderIds,
     docsByWorkOrder,
