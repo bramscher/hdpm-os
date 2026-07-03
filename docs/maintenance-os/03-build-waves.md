@@ -2,13 +2,21 @@
 
 37 capabilities assessed against the stack (Claude + Supabase + Next.js + AppFolio API): 5 HAVE (incl. route optimization, already live for inspections), 19 EASY, 8 MODERATE, 2 HARD (offline mobile, two-way SMS threading), 3 DON'T BUILD (resident portal, accounting/ledgers, inspection app — AppFolio/QBO own those).
 
-## Blocking unknown — resolve FIRST
+## Blocking unknown — RESOLVED 2026-07-03
 
-**AppFolio API write scope.** Reads proven in this codebase. Verify against our instance: WO create? status update? file attach? Outcomes:
-- Tier 1 (writes work): hdpm-chat is a true front-end; AppFolio auto-current.
-- Tier 2 (read-only): hdpm-chat drives workflow; Cheryl's 15-min daily pass carries changes into AppFolio (proven tolerable).
-- Tier 3 (read-only + volume): browser-automation writeback or AppFolio Stack partnership.
-Even Tier 2 does not kill the build. But architecture (sync design, event sourcing) depends on the tier — do not commit before verifying.
+**AppFolio API write scope: Tier 1 exists, priced at $1.00/unit/month (~$850/mo
+at 850 doors, ~$18K/yr at the 1,500-door goal).** Confirmed from the Database
+API docs (v14): Create/Update Work Order, Create Work Order Attachment,
+Create/Update Work Order Note, Create/Update Bill + attachments, Create/Update
+Vendor, and more (POST/PATCH on most entities).
+
+**Decision (Craig, 2026-07-03): defer purchase — run Wave 1 as Tier 2.**
+Manual labor displaced by writes today is ~8–13 hrs/mo (~$300–500), well under
+the fee. Cheryl's daily pass carries changes into AppFolio; `wo_event` logs
+every stage change + invoice, so the Sep 4 decision can use the measured
+monthly touch count instead of a guess. Revisit when: Wave 2 automation ships
+(magic links / Haven auto-intake), invoice volume >~150/mo, or AppFolio
+discounts/bundles it (negotiating lever: the Jobber alternative).
 
 ## Wave 1 — safe to build regardless of the Sep 4 decision
 
