@@ -29,6 +29,7 @@ function afWo(overrides: Partial<AppFolioWorkOrder> = {}): AppFolioWorkOrder {
     canceledDate: null,
     permissionToEnter: false,
     createdAt: '2026-07-01T00:00:00Z',
+    link: 'https://highdesertpm.appfolio.com/maintenance/service_requests/1/work_orders/1',
     ...overrides,
   };
 }
@@ -195,13 +196,43 @@ describe('stageAutomationFor', () => {
     expect(auto?.stage).toBe('SCHEDULED');
   });
 
-  it('never moves backward (TRIAGED does not return to NEW)', () => {
-    expect(stageAutomationFor('TRIAGED', afWo({ appfolioStatus: 'New' }), NOW)).toBeNull();
+  it('without a status change, never moves backward (TRIAGED stays despite "New")', () => {
+    expect(stageAutomationFor('TRIAGED', afWo({ appfolioStatus: 'New' }), NOW, 'New')).toBeNull();
   });
 
-  it('never touches IN_PROGRESS+ or human-managed WAITING_ON', () => {
-    expect(stageAutomationFor('IN_PROGRESS', afWo({ appfolioStatus: 'Assigned' }), NOW)).toBeNull();
-    expect(stageAutomationFor('WAITING_ON', afWo({ appfolioStatus: 'Scheduled' }), NOW)).toBeNull();
+  it('without a status change, WAITING_ON is left alone (local reason not clobbered)', () => {
+    expect(
+      stageAutomationFor('WAITING_ON', afWo({ appfolioStatus: 'Scheduled' }), NOW, 'Scheduled')
+    ).toBeNull();
+  });
+
+  it('an AppFolio status CHANGE moves any pre-completion stage, both directions', () => {
+    // Waiting → Scheduled in AppFolio: our WAITING_ON follows to SCHEDULED
+    const fwd = stageAutomationFor(
+      'WAITING_ON',
+      afWo({ appfolioStatus: 'Scheduled', scheduledStart: '2026-07-05T09:00:00Z' }),
+      NOW,
+      'Waiting'
+    );
+    expect(fwd?.stage).toBe('SCHEDULED');
+    // Scheduled → Estimate Requested in AppFolio: SCHEDULED moves to WAITING/VENDOR
+    const back = stageAutomationFor(
+      'SCHEDULED',
+      afWo({ appfolioStatus: 'Estimate Requested' }),
+      NOW,
+      'Scheduled'
+    );
+    expect(back?.stage).toBe('WAITING_ON');
+    expect(back?.waiting_reason).toBe('VENDOR');
+  });
+
+  it('never touches app-owned stages (IN_PROGRESS and beyond)', () => {
+    expect(
+      stageAutomationFor('IN_PROGRESS', afWo({ appfolioStatus: 'Assigned' }), NOW, 'New')
+    ).toBeNull();
+    expect(
+      stageAutomationFor('BILL', afWo({ appfolioStatus: 'Scheduled' }), NOW, 'Assigned')
+    ).toBeNull();
   });
 
   it('never touches an already-CLOSED row', () => {

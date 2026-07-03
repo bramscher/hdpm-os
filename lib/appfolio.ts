@@ -611,6 +611,8 @@ interface V0WorkOrder {
   PermissionToEnter?: boolean;
   CreatedAt?: string;
   LastUpdatedAt?: string;
+  /** Deep link to the WO page in the AppFolio web app (service_requests/…/work_orders/…) */
+  Link?: string;
 }
 
 export type WorkOrderStatus = 'open' | 'closed' | 'done';
@@ -633,6 +635,8 @@ export interface AppFolioWorkOrder {
   canceledDate: string | null;
   permissionToEnter: boolean;
   createdAt: string | null;
+  /** AppFolio web-app URL for this WO — the dashboard's "edit it in AppFolio" jump-off */
+  link: string | null;
 }
 
 // ============================================
@@ -747,6 +751,7 @@ export async function fetchAppFolioWorkOrders(
     canceledDate: wo.CanceledOn || null,
     permissionToEnter: wo.PermissionToEnter || false,
     createdAt: wo.CreatedAt || null,
+    link: wo.Link || null,
   }));
 }
 
@@ -804,6 +809,7 @@ export async function fetchWorkOrderById(
       canceledDate: match.CanceledOn || null,
       permissionToEnter: match.PermissionToEnter || false,
       createdAt: match.CreatedAt || null,
+      link: match.Link || null,
     };
   } catch (err) {
     console.error(`[AppFolio] Error fetching work order ${entityId}:`, err);

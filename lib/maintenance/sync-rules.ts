@@ -38,6 +38,7 @@ export interface MirrorRow {
   completed_date: string | null;
   canceled_date: string | null;
   permission_to_enter: boolean;
+  appfolio_link: string | null;
   synced_at: string;
 }
 
@@ -69,6 +70,7 @@ export function buildMirrorRow(
     completed_date: wo.completedDate,
     canceled_date: wo.canceledDate,
     permission_to_enter: wo.permissionToEnter,
+    appfolio_link: wo.link,
     synced_at: syncedAt.toISOString(),
   };
 }
@@ -167,18 +169,25 @@ export interface StageAutomation {
  *     AppFolio without cancellation, while our stage is still before
  *     VERIFY → advance to VERIFY. It does NOT close it: CLOSED is only
  *     reachable through the six-condition gate.
- *  3. Early-stage catch-up: while our stage is still NEW or TRIAGED (i.e.
- *     nobody has driven it here yet), follow AppFolio's own status forward —
- *     Assigned→TRIAGED, Scheduled→SCHEDULED, estimate/waiting→WAITING_ON.
- *     Never backward, and never once the WO is IN_PROGRESS or beyond
- *     (from there, this app's workflow is the driver).
+ *  3. AppFolio drives the pre-completion pipeline: for any stage AppFolio can
+ *     express (NEW / TRIAGED / SCHEDULED / WAITING_ON), an AppFolio status
+ *     CHANGE moves our stage to match — in either direction. AppFolio is the
+ *     system of record; staff edit those states there (deep link on the card)
+ *     and this board follows. Two protections:
+ *       - without a detected status change, forward-only catch-up applies
+ *         from NEW/TRIAGED (so a locally set WAITING_ON reason isn't clobbered
+ *         by an unchanged stale status)
+ *       - IN_PROGRESS and VERIFY→BILL→CLOSED are app-owned (AppFolio has no
+ *         equivalent); only cancel/complete can move a WO out of them.
  *
  * Returns null when no automation applies.
  */
 export function stageAutomationFor(
   currentStage: Stage,
   wo: AppFolioWorkOrder,
-  now: Date
+  now: Date,
+  /** appfolio_status as of the previous sync — enables change detection */
+  prevAppfolioStatus?: string | null
 ): StageAutomation | null {
   if (currentStage === 'CLOSED') return null;
 
@@ -198,20 +207,32 @@ export function stageAutomationFor(
     };
   }
 
-  // Early-stage catch-up (rule 3)
-  if (currentStage === 'NEW' || currentStage === 'TRIAGED') {
-    const mapped = mappedStageFor(wo);
-    if (
-      mapped.stage !== 'CLOSED' &&
-      mapped.stage !== 'VERIFY' &&
-      STAGE_ORDER[mapped.stage] > STAGE_ORDER[currentStage]
-    ) {
-      return {
-        stage: mapped.stage,
-        ...(mapped.waiting_reason ? { waiting_reason: mapped.waiting_reason } : {}),
-        reason: `AppFolio status "${wo.appfolioStatus}"`,
-      };
-    }
+  // Rule 3 applies only to the AppFolio-expressible stages.
+  const appfolioOwnedStages: Stage[] = ['NEW', 'TRIAGED', 'SCHEDULED', 'WAITING_ON'];
+  if (!appfolioOwnedStages.includes(currentStage)) return null;
+
+  const mapped = mappedStageFor(wo);
+  if (mapped.stage === 'CLOSED' || mapped.stage === 'VERIFY' || mapped.stage === currentStage) {
+    return null;
+  }
+
+  const statusChanged =
+    prevAppfolioStatus !== undefined &&
+    prevAppfolioStatus !== null &&
+    prevAppfolioStatus !== wo.appfolioStatus;
+
+  // A real AppFolio status change wins in any direction; otherwise only
+  // forward catch-up from the untriaged stages.
+  const forwardCatchUp =
+    (currentStage === 'NEW' || currentStage === 'TRIAGED') &&
+    STAGE_ORDER[mapped.stage] > STAGE_ORDER[currentStage];
+
+  if (statusChanged || forwardCatchUp) {
+    return {
+      stage: mapped.stage,
+      ...(mapped.waiting_reason ? { waiting_reason: mapped.waiting_reason } : {}),
+      reason: `AppFolio status "${wo.appfolioStatus}"${statusChanged ? ` (was "${prevAppfolioStatus}")` : ''}`,
+    };
   }
 
   return null;

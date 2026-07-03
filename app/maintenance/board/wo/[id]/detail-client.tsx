@@ -122,10 +122,28 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
         <span className="sub">
           AppFolio: {wo.appfolio_status || wo.status} · synced {new Date(wo.synced_at).toLocaleString()}
         </span>
+        {wo.appfolio_link && (
+          <a
+            href={wo.appfolio_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mo-btn"
+            style={{ textDecoration: 'none' }}
+          >
+            Open in AppFolio ↗
+          </a>
+        )}
         <Link href="/maintenance/board" className="badge">
           ← Back to board
         </Link>
       </header>
+
+      <p className="note" style={{ marginTop: 0 }}>
+        AppFolio is the system of record: status, scheduling, and vendor assignment are edited{' '}
+        <b>there</b> — this board follows within 15 minutes. This page owns what AppFolio
+        can&apos;t track: the accountable owner, next-action date, priority class, and the
+        closure gate.
+      </p>
 
       <p style={{ fontSize: 14, marginBottom: 14 }}>{wo.description}</p>
 

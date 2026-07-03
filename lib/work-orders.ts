@@ -42,6 +42,7 @@ export interface WorkOrder {
   completed_date: string | null;
   canceled_date: string | null;
   permission_to_enter: boolean;
+  appfolio_link: string | null;
   synced_at: string;
   created_at: string;
   updated_at: string;
@@ -239,20 +240,27 @@ export async function bulkUpsertWorkOrders(
   const supabase = getSupabaseAdmin();
   const now = new Date();
 
-  // 1. Which of these already exist? (id + stage for automation)
+  // 1. Which of these already exist? (id + stage + prior status for automation)
   const appfolioIds = orders.map((o) => o.appfolioId);
-  const existing = new Map<string, { id: string; stage: Stage }>();
+  const existing = new Map<
+    string,
+    { id: string; stage: Stage; appfolio_status: string | null }
+  >();
   for (let i = 0; i < appfolioIds.length; i += 500) {
     const batch = appfolioIds.slice(i, i + 500);
     const { data, error } = await supabase
       .from('work_orders')
-      .select('id, appfolio_id, stage')
+      .select('id, appfolio_id, stage, appfolio_status')
       .in('appfolio_id', batch);
     if (error) {
       throw new Error(`Failed to look up existing work orders: ${error.message}`);
     }
     for (const row of data ?? []) {
-      existing.set(row.appfolio_id, { id: row.id, stage: row.stage as Stage });
+      existing.set(row.appfolio_id, {
+        id: row.id,
+        stage: row.stage as Stage,
+        appfolio_status: row.appfolio_status,
+      });
     }
   }
 
@@ -305,7 +313,7 @@ export async function bulkUpsertWorkOrders(
   //    early-stage catch-up to AppFolio's own status)
   for (const wo of existingOrders) {
     const row = existing.get(wo.appfolioId)!;
-    const auto = stageAutomationFor(row.stage, wo, now);
+    const auto = stageAutomationFor(row.stage, wo, now, row.appfolio_status);
     if (!auto) continue;
     try {
       await updateWorkOrderWorkflow(
@@ -392,8 +400,14 @@ export async function upsertSingleWorkOrder(
     }
     console.log(`[Webhook] Updated work order ${order.appfolioId}`);
 
-    // Stage automation (cancel → CLOSED, completed → VERIFY, early catch-up)
-    const auto = stageAutomationFor(existing.stage as Stage, order, now);
+    // Stage automation (cancel → CLOSED, completed → VERIFY, AppFolio-driven
+    // pre-completion moves)
+    const auto = stageAutomationFor(
+      existing.stage as Stage,
+      order,
+      now,
+      existing.appfolio_status
+    );
     if (auto) {
       try {
         await updateWorkOrderWorkflow(
