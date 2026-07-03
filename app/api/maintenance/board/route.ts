@@ -75,13 +75,16 @@ export async function GET() {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
     const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
+    // Age math uses AppFolio's CreatedAt (catch-up syncs insert old history
+    // with fresh row timestamps), falling back to our row insert time.
+    const createdAt = (wo: MaintWorkOrder) => wo.appfolio_created_at ?? wo.created_at;
     const kpis = {
       open: open.length,
       pastDue: open.filter((wo) => wo.next_action_date && wo.next_action_date < today).length,
-      aging30Plus: open.filter((wo) => wo.created_at < thirtyDaysAgo).length,
+      aging30Plus: open.filter((wo) => createdAt(wo) < thirtyDaysAgo).length,
       p1ThisWeek: open
         .concat(closedThisWeek)
-        .filter((wo) => wo.priority_class === 'P1' && wo.created_at >= sevenDaysAgo).length,
+        .filter((wo) => wo.priority_class === 'P1' && createdAt(wo) >= sevenDaysAgo).length,
       ownerAndDateCoverage:
         open.length === 0
           ? 100

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { MaintWorkOrder } from '@/lib/maintenance/types';
 import type { BoardData, ExceptionsData } from '../board-types';
-import { daysSince, fmtDate, woWhere } from '../board-types';
+import { daysSince, fmtDate, woCreatedAt, woWhere } from '../board-types';
 
 function woLink(wo: MaintWorkOrder) {
   return (
@@ -39,9 +39,12 @@ export default function MondayReview({
 
   const p1s = board.open
     .concat(board.closedThisWeek)
-    .filter((wo) => wo.priority_class === 'P1' && wo.created_at >= sevenDaysAgo);
+    .filter((wo) => wo.priority_class === 'P1' && woCreatedAt(wo) >= sevenDaysAgo);
 
-  const aged30 = board.open.filter((wo) => (daysSince(wo.created_at, now) ?? 0) > 30);
+  const aged30 = board.open
+    .map((wo) => ({ wo, age: daysSince(woCreatedAt(wo), now) ?? 0 }))
+    .filter(({ age }) => age > 30)
+    .sort((a, b) => b.age - a.age);
 
   const vendorWait5 = board.open.filter(
     (wo) =>
@@ -84,15 +87,32 @@ export default function MondayReview({
             <td>5–12</td>
             <td>30+ bucket (every item, blocker aloud)</td>
             <td>
-              {joinNodes(
-                aged30.map((wo) => (
-                  <span key={wo.id}>
-                    {woLink(wo)}{' '}
-                    <span className={wo.aging_reason ? '' : 'flag'}>
-                      ({wo.aging_reason || '⚠ reason missing'})
+              {aged30.length > 12 ? (
+                <>
+                  <b className={aged30.length > 5 ? 'flag' : ''}>{aged30.length} items over 30 days</b>{' '}
+                  ({aged30.filter(({ wo }) => !wo.aging_reason).length} missing a written reason) —
+                  oldest:{' '}
+                  {joinNodes(
+                    aged30.slice(0, 8).map(({ wo, age }) => (
+                      <span key={wo.id}>
+                        {woLink(wo)} <span style={{ color: 'var(--muted)' }}>({age}d)</span>
+                      </span>
+                    ))
+                  )}
+                  {' … '}
+                  <Link href="/maintenance/board?view=aging">full list on the Aging view →</Link>
+                </>
+              ) : (
+                joinNodes(
+                  aged30.map(({ wo, age }) => (
+                    <span key={wo.id}>
+                      {woLink(wo)} <span style={{ color: 'var(--muted)' }}>({age}d)</span>{' '}
+                      <span className={wo.aging_reason ? '' : 'flag'}>
+                        ({wo.aging_reason || '⚠ reason missing'})
+                      </span>
                     </span>
-                  </span>
-                ))
+                  ))
+                )
               )}
             </td>
           </tr>

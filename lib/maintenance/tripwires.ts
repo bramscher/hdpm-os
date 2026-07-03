@@ -55,7 +55,8 @@ export function tripwire1(_snapshot: TripwireSnapshot): TripwireException[] {
 export function tripwire2(snapshot: TripwireSnapshot): TripwireException[] {
   return snapshot.openWorkOrders
     .filter((wo) => {
-      const created = new Date(wo.created_at);
+      // AppFolio's CreatedAt, not our row timestamp (catch-up syncs insert old rows fresh)
+      const created = new Date(wo.appfolio_created_at ?? wo.created_at);
       const age = businessDaysBetween(created, snapshot.now);
       return (wo.stage === 'NEW' && age > 1) || !wo.owner_name;
     })
@@ -68,7 +69,10 @@ export function tripwire2(snapshot: TripwireSnapshot): TripwireException[] {
         : 'Assign an owner today',
       owner: wo.owner_name || 'Cheryl',
       workOrderId: wo.id,
-      ageDays: businessDaysBetween(new Date(wo.created_at), snapshot.now),
+      ageDays: businessDaysBetween(
+        new Date(wo.appfolio_created_at ?? wo.created_at),
+        snapshot.now
+      ),
     }));
 }
 

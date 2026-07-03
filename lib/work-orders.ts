@@ -43,6 +43,8 @@ export interface WorkOrder {
   canceled_date: string | null;
   permission_to_enter: boolean;
   appfolio_link: string | null;
+  /** AppFolio's own CreatedAt — use for all age math (created_at = row insert time) */
+  appfolio_created_at: string | null;
   synced_at: string;
   created_at: string;
   updated_at: string;

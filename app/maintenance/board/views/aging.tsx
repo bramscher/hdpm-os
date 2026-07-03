@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import type { BoardData } from '../board-types';
-import { agingBand, daysSince, woWhere } from '../board-types';
+import { agingBand, daysSince, woCreatedAt, woWhere } from '../board-types';
 import { KpiTile } from '../components/shared';
 
 const BAND_LABELS = ['0–7 days', '8–14 days', '15–30 days', '30+ days'] as const;
 
 export default function Aging({ board }: { board: BoardData }) {
   const now = new Date();
-  const withAge = board.open.map((wo) => ({ wo, age: daysSince(wo.created_at, now) ?? 0 }));
+  const withAge = board.open.map((wo) => ({ wo, age: daysSince(woCreatedAt(wo), now) ?? 0 }));
   const bands: number[] = [0, 0, 0, 0];
   for (const { age } of withAge) bands[agingBand(age)]++;
 

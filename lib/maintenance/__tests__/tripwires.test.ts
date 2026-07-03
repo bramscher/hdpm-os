@@ -132,6 +132,17 @@ describe('tripwire 2 — unassigned > 1 business day', () => {
     expect(tripwire2(s)).toHaveLength(0);
   });
 
+  it('uses AppFolio CreatedAt, not our row timestamp (catch-up sync inserts old rows fresh)', () => {
+    const backfilled = wo({
+      stage: 'NEW',
+      created_at: '2026-07-02T08:00:00Z', // row inserted today by a wide sync…
+      appfolio_created_at: '2026-06-20T08:00:00Z', // …but AppFolio created it weeks ago
+    });
+    const ex = tripwire2(snapshot({ openWorkOrders: [backfilled] }));
+    expect(ex).toHaveLength(1);
+    expect(ex[0].ageDays).toBeGreaterThan(5);
+  });
+
   it('fires for any open WO with no owner', () => {
     const s = snapshot({
       openWorkOrders: [wo({ stage: 'SCHEDULED', owner_name: '' as unknown as string })],

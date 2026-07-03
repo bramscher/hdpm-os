@@ -51,6 +51,15 @@ export function woWhere(wo: MaintWorkOrder): string {
   return wo.unit_name ? `${wo.property_name} #${wo.unit_name}` : wo.property_name;
 }
 
+/**
+ * When the work order was actually created — AppFolio's CreatedAt, falling
+ * back to our row insert time. Never use created_at directly for age math:
+ * catch-up syncs insert years-old history with a fresh row timestamp.
+ */
+export function woCreatedAt(wo: MaintWorkOrder): string {
+  return wo.appfolio_created_at ?? wo.created_at;
+}
+
 export function daysSince(iso: string | null | undefined, now = new Date()): number | null {
   if (!iso) return null;
   return Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000));
