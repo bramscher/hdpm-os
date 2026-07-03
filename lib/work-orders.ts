@@ -7,6 +7,14 @@
 
 import { getSupabaseAdmin } from './supabase';
 import type { AppFolioWorkOrder } from './appfolio';
+import {
+  buildMirrorRow,
+  initialWorkflowFor,
+  stageAutomationFor,
+} from './maintenance/sync-rules';
+import { recordEvents, type NewEvent } from './maintenance/events';
+import { updateWorkOrderWorkflow } from './maintenance/workflow-db';
+import type { Stage } from './maintenance/types';
 
 // ============================================
 // Types
@@ -37,6 +45,26 @@ export interface WorkOrder {
   synced_at: string;
   created_at: string;
   updated_at: string;
+
+  // ── Maintenance OS workflow columns (20260702_maintenance_os.sql) ──
+  // Owned by this app, never written by the AppFolio mirror sync.
+  // `stage` is our workflow source of truth; `status`/`appfolio_status`
+  // remain the AppFolio mirror. See lib/maintenance/types.ts for enums.
+  stage: string;
+  waiting_reason: string | null;
+  owner_name: string;
+  next_action_date: string | null;
+  priority_class: string | null;
+  assigned_tech: string | null;
+  origin: string;
+  is_turn: boolean;
+  verified_by: string | null;
+  verified_at: string | null;
+  tenant_ping_sent: boolean;
+  tenant_ping_sent_at: string | null;
+  preventive_scheduled: boolean | null;
+  closed_at: string | null;
+  aging_reason: string | null;
 }
 
 export interface WorkOrderFilter {
@@ -188,11 +216,19 @@ export async function getWorkOrderStats(
 
 /**
  * Sync work orders from AppFolio into the work_orders table.
- * Uses delete-then-insert strategy keyed on appfolio_id.
+ *
+ * Maintenance OS contract: the sync owns ONLY the AppFolio mirror columns
+ * (see buildMirrorRow). Workflow columns (stage, owner_name, next_action_date,
+ * …) are owned by this app and are never written on existing rows — row ids
+ * are stable, so FKs (hdms_invoices, wo_event, turn, …) survive every sync.
+ *
+ *  - New appfolio_ids  → insert mirror + initial workflow defaults + `created` event
+ *  - Existing          → upsert mirror columns only (onConflict: appfolio_id)
+ *  - Stage automation  → canceled → CLOSED; completed → VERIFY (never further)
  *
  * @param orders - Work orders fetched from AppFolio
  * @param propertyMap - Map of AppFolio propertyId → { name, address }
- * @returns Number of rows inserted
+ * @returns Number of rows written (inserted + updated)
  */
 export async function bulkUpsertWorkOrders(
   orders: AppFolioWorkOrder[],
@@ -201,65 +237,93 @@ export async function bulkUpsertWorkOrders(
   if (orders.length === 0) return 0;
 
   const supabase = getSupabaseAdmin();
+  const now = new Date();
 
-  // Build rows to insert
-  const rows = orders.map((wo) => {
-    const prop = wo.propertyId ? propertyMap.get(wo.propertyId) : null;
-    return {
-      appfolio_id: wo.appfolioId,
-      property_id: wo.propertyId,
-      property_name: prop?.name || 'Unknown Property',
-      property_address: prop?.address || null,
-      unit_id: wo.unitId,
-      wo_number: wo.woNumber,
-      description: wo.description || 'No description',
-      status: wo.status,
-      appfolio_status: wo.appfolioStatus,
-      priority: wo.priority,
-      assigned_to: wo.assignedTo,
-      vendor_id: wo.vendorId,
-      vendor_name: wo.vendorName,
-      scheduled_start: wo.scheduledStart,
-      scheduled_end: wo.scheduledEnd,
-      completed_date: wo.completedDate,
-      canceled_date: wo.canceledDate,
-      permission_to_enter: wo.permissionToEnter,
-      synced_at: new Date().toISOString(),
-    };
-  });
-
-  // Delete all existing synced work orders, then insert fresh
-  const appfolioIds = rows.map((r) => r.appfolio_id);
-
-  // Batch delete in chunks of 500 to avoid query size limits
+  // 1. Which of these already exist? (id + stage for automation)
+  const appfolioIds = orders.map((o) => o.appfolioId);
+  const existing = new Map<string, { id: string; stage: Stage }>();
   for (let i = 0; i < appfolioIds.length; i += 500) {
     const batch = appfolioIds.slice(i, i + 500);
-    const { error: delError } = await supabase
+    const { data, error } = await supabase
       .from('work_orders')
-      .delete()
+      .select('id, appfolio_id, stage')
       .in('appfolio_id', batch);
-
-    if (delError) {
-      console.error('Error deleting work orders batch:', delError);
+    if (error) {
+      throw new Error(`Failed to look up existing work orders: ${error.message}`);
+    }
+    for (const row of data ?? []) {
+      existing.set(row.appfolio_id, { id: row.id, stage: row.stage as Stage });
     }
   }
 
-  // Insert in chunks of 500
-  let insertedCount = 0;
-  for (let i = 0; i < rows.length; i += 500) {
-    const batch = rows.slice(i, i + 500);
-    const { error: insError } = await supabase
+  const mirrorRowFor = (wo: AppFolioWorkOrder) =>
+    buildMirrorRow(wo, wo.propertyId ? propertyMap.get(wo.propertyId) : null, now);
+
+  // 2. Insert brand-new WOs with workflow defaults + `created` events
+  const newOrders = orders.filter((o) => !existing.has(o.appfolioId));
+  let writtenCount = 0;
+  for (let i = 0; i < newOrders.length; i += 500) {
+    const batch = newOrders.slice(i, i + 500);
+    const rows = batch.map((wo) => ({ ...mirrorRowFor(wo), ...initialWorkflowFor(wo, now) }));
+    const { data: inserted, error: insError } = await supabase
       .from('work_orders')
-      .insert(batch);
+      .insert(rows)
+      .select('id, appfolio_id');
 
     if (insError) {
       console.error('Error inserting work orders batch:', insError);
       throw new Error(`Failed to insert work orders: ${insError.message}`);
     }
-    insertedCount += batch.length;
+    writtenCount += batch.length;
+
+    const events: NewEvent[] = (inserted ?? []).map((row) => ({
+      work_order_id: row.id,
+      event_type: 'created',
+      payload: { appfolio_id: row.appfolio_id, source: 'sync' },
+      actor: 'system:sync',
+    }));
+    await recordEvents(events);
   }
 
-  return insertedCount;
+  // 3. Update existing WOs — mirror columns ONLY, workflow untouched
+  const existingOrders = orders.filter((o) => existing.has(o.appfolioId));
+  for (let i = 0; i < existingOrders.length; i += 500) {
+    const batch = existingOrders.slice(i, i + 500);
+    const rows = batch.map(mirrorRowFor);
+    const { error: upError } = await supabase
+      .from('work_orders')
+      .upsert(rows, { onConflict: 'appfolio_id' });
+
+    if (upError) {
+      console.error('Error updating work orders batch:', upError);
+      throw new Error(`Failed to update work orders: ${upError.message}`);
+    }
+    writtenCount += batch.length;
+  }
+
+  // 4. Sync-driven stage automation (canceled → CLOSED, completed → VERIFY)
+  for (const wo of existingOrders) {
+    const row = existing.get(wo.appfolioId)!;
+    const auto = stageAutomationFor(row.stage, wo, now);
+    if (!auto) continue;
+    try {
+      await updateWorkOrderWorkflow(
+        row.id,
+        auto.stage === 'CLOSED'
+          ? { stage: auto.stage, closed_at: auto.closed_at }
+          : { stage: auto.stage },
+        'system:sync',
+        { systemOverride: true }
+      );
+    } catch (err) {
+      console.error(
+        `[Sync] Stage automation failed for ${wo.appfolioId} (${auto.reason}):`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  return writtenCount;
 }
 
 // ============================================
@@ -292,8 +356,8 @@ export async function getWorkOrderByAppfolioId(
 
 /**
  * Upsert a single work order from a webhook notification.
- * If the work order exists (by appfolio_id), update it.
- * If not, insert a new row.
+ * Same contract as bulkUpsertWorkOrders: mirror columns only on update,
+ * workflow defaults + `created` event on insert, then stage automation.
  */
 export async function upsertSingleWorkOrder(
   order: AppFolioWorkOrder,
@@ -301,34 +365,19 @@ export async function upsertSingleWorkOrder(
   propertyAddress: string | null
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
+  const now = new Date();
 
-  const row = {
-    appfolio_id: order.appfolioId,
-    property_id: order.propertyId,
-    property_name: propertyName,
-    property_address: propertyAddress,
-    unit_id: order.unitId,
-    wo_number: order.woNumber,
-    description: order.description || 'No description',
-    status: order.status,
-    appfolio_status: order.appfolioStatus,
-    priority: order.priority,
-    assigned_to: order.assignedTo,
-    vendor_id: order.vendorId,
-    vendor_name: order.vendorName,
-    scheduled_start: order.scheduledStart,
-    scheduled_end: order.scheduledEnd,
-    completed_date: order.completedDate,
-    canceled_date: order.canceledDate,
-    permission_to_enter: order.permissionToEnter,
-    synced_at: new Date().toISOString(),
-  };
+  const row = buildMirrorRow(
+    order,
+    { name: propertyName, address: propertyAddress },
+    now
+  );
 
   // Check if exists
   const existing = await getWorkOrderByAppfolioId(order.appfolioId);
 
   if (existing) {
-    // Update
+    // Update mirror columns only — workflow fields untouched
     const { error } = await supabase
       .from('work_orders')
       .update(row)
@@ -339,15 +388,47 @@ export async function upsertSingleWorkOrder(
       throw new Error(`Failed to update work order: ${error.message}`);
     }
     console.log(`[Webhook] Updated work order ${order.appfolioId}`);
+
+    // Stage automation (canceled → CLOSED, completed → VERIFY)
+    const auto = stageAutomationFor(existing.stage as Stage, order, now);
+    if (auto) {
+      try {
+        await updateWorkOrderWorkflow(
+          existing.id,
+          auto.stage === 'CLOSED'
+            ? { stage: auto.stage, closed_at: auto.closed_at }
+            : { stage: auto.stage },
+          'system:sync',
+          { systemOverride: true }
+        );
+      } catch (err) {
+        console.error(
+          `[Webhook] Stage automation failed for ${order.appfolioId} (${auto.reason}):`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
   } else {
-    // Insert
-    const { error } = await supabase
+    // Insert with workflow defaults + `created` event
+    const { data: inserted, error } = await supabase
       .from('work_orders')
-      .insert(row);
+      .insert({ ...row, ...initialWorkflowFor(order, now) })
+      .select('id')
+      .single();
 
     if (error) {
       console.error('[Webhook] Error inserting work order:', error);
       throw new Error(`Failed to insert work order: ${error.message}`);
+    }
+    if (inserted) {
+      await recordEvents([
+        {
+          work_order_id: inserted.id,
+          event_type: 'created',
+          payload: { appfolio_id: order.appfolioId, source: 'webhook' },
+          actor: 'system:sync',
+        },
+      ]);
     }
     console.log(`[Webhook] Inserted new work order ${order.appfolioId}`);
   }

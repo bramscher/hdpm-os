@@ -1,0 +1,122 @@
+import { describe, it, expect } from 'vitest';
+import type { Vendor, VendorAssignment } from '../types';
+import { computeVendorScores, docsComplianceScore } from '../vendors';
+
+const NOW = new Date('2026-07-02T12:00:00Z');
+
+function vendor(overrides: Partial<Vendor> = {}): Vendor {
+  return {
+    id: 'v1',
+    appfolio_vendor_id: 'afv1',
+    name: 'Fine Line Maintenance',
+    trades: ['general'],
+    service_area: 'Bend',
+    license_number: null,
+    license_expiry: null,
+    license_required_trades: null,
+    insurance_carrier: 'SAIF',
+    insurance_expiry: '2027-02-01',
+    w9_on_file: true,
+    hourly_rate: 85,
+    minimum_charge: 85,
+    emergency_available: false,
+    preferred: true,
+    demoted: false,
+    property_restrictions: null,
+    active: true,
+    notes: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+function assignment(overrides: Partial<VendorAssignment> = {}): VendorAssignment {
+  return {
+    id: 'a1',
+    work_order_id: 'wo1',
+    vendor_id: 'v1',
+    sent_at: '2026-06-20T10:00:00Z',
+    accepted_at: '2026-06-20T12:00:00Z', // 2h accept
+    declined_at: null,
+    scheduled_at: null,
+    completed_at: '2026-06-22T12:00:00Z', // 2d after acceptance
+    callback: false,
+    created_by: null,
+    created_at: '2026-06-20T10:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('docsComplianceScore', () => {
+  it('full compliance without license requirement = 1', () => {
+    expect(docsComplianceScore(vendor(), NOW)).toBe(1);
+  });
+
+  it('expired insurance halves a two-check vendor', () => {
+    expect(docsComplianceScore(vendor({ insurance_expiry: '2026-06-01' }), NOW)).toBe(0.5);
+  });
+
+  it('license required and missing lowers compliance', () => {
+    const v = vendor({ license_required_trades: ['electrical'], license_number: null });
+    expect(docsComplianceScore(v, NOW)).toBeCloseTo(2 / 3);
+  });
+
+  it('license required and valid counts', () => {
+    const v = vendor({
+      license_required_trades: ['electrical'],
+      license_number: 'CCB-12345',
+      license_expiry: '2027-05-01',
+    });
+    expect(docsComplianceScore(v, NOW)).toBe(1);
+  });
+});
+
+describe('computeVendorScores', () => {
+  it('fast accept + fast completion + no callbacks + full docs ≈ 1.0', () => {
+    const [perf] = computeVendorScores([vendor()], [assignment()], NOW);
+    expect(perf.score).toBeCloseTo(1.0, 2);
+    expect(perf.avgAcceptHours).toBeCloseTo(2);
+    expect(perf.avgCompletionDays).toBeCloseTo(2);
+  });
+
+  it('slow accept (3 days) zeroes the accept component', () => {
+    const slow = assignment({ accepted_at: '2026-06-23T10:00:00Z' }); // 72h
+    const [perf] = computeVendorScores([vendor()], [slow], NOW);
+    expect(perf.score).toBeCloseTo(0.7, 2); // lost the 0.3 accept weight
+  });
+
+  it('callbacks reduce the score', () => {
+    const cb = assignment({ callback: true });
+    const [perf] = computeVendorScores([vendor()], [cb], NOW);
+    expect(perf.callbackRate).toBe(1);
+    expect(perf.score).toBeCloseTo(0.75, 2); // lost the 0.25 callback weight
+  });
+
+  it('assignments older than 90 days are ignored', () => {
+    const old = assignment({ sent_at: '2026-01-01T10:00:00Z' });
+    const [perf] = computeVendorScores([vendor()], [old], NOW);
+    expect(perf.assignments90d).toBe(0);
+    expect(perf.avgAcceptHours).toBeNull(); // neutral 0.5s apply
+  });
+
+  it('no data yields the neutral score (0.3*0.5 + 0.25*0.5 + 0.25 + 0.2*docs)', () => {
+    const [perf] = computeVendorScores([vendor()], [], NOW);
+    expect(perf.score).toBeCloseTo(0.3 * 0.5 + 0.25 * 0.5 + 0.25 + 0.2 * 1, 3);
+  });
+
+  it('demoted forces score 0 and bottom rank', () => {
+    const good = vendor();
+    const demoted = vendor({ id: 'v2', name: 'Cascade Roofing', demoted: true });
+    const scores = computeVendorScores([demoted, good], [assignment()], NOW);
+    expect(scores[0].name).toBe('Fine Line Maintenance');
+    expect(scores[1].score).toBe(0);
+  });
+
+  it('sorts by score descending', () => {
+    const fast = vendor();
+    const slow = vendor({ id: 'v2', name: 'Slowpoke Plumbing', w9_on_file: false });
+    const scores = computeVendorScores([slow, fast], [assignment()], NOW);
+    expect(scores[0].vendorId).toBe('v1');
+  });
+});

@@ -18,6 +18,15 @@ export async function POST(request: NextRequest) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  return handleSync(request);
+}
+
+// Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
+export async function GET(request: NextRequest) {
+  return POST(request);
+}
+
+async function handleSync(request: NextRequest) {
 
   if (new URL(request.url).searchParams.get('dryRun') === '1') {
     const preview = await previewZoomSync({ types: ALL_CONTACT_TYPES });

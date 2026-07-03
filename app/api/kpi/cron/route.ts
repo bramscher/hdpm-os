@@ -34,6 +34,15 @@ export async function POST(request: NextRequest) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  return runSnapshot();
+}
+
+// Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
+export async function GET(request: NextRequest) {
+  return POST(request);
+}
+
+async function runSnapshot() {
 
   console.log('[KPI Cron] Starting daily snapshot...');
   const supabase = getSupabaseAdmin();

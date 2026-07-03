@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { fetchAppFolioWorkOrders, fetchAllPropertiesPublic, fetchAllVendors } from '@/lib/appfolio';
 import { bulkUpsertWorkOrders } from '@/lib/work-orders';
+import { syncVendors } from '@/lib/maintenance/vendors';
 
 // Allow up to 300 seconds for the sync function (Vercel Pro supports up to 300s).
 // AppFolio v0 API is slow (~20s per page of 200 work orders), so we need headroom.
@@ -10,25 +11,27 @@ export const maxDuration = 300;
 /**
  * GET /api/sync/work-orders
  *
- * Health check — test AppFolio work order API connectivity.
+ * Vercel Cron sends GET, so GET delegates to POST (same auth: CRON_SECRET
+ * bearer or staff session). Pass ?test=1 for the old connectivity check.
  */
-export async function GET() {
-  try {
-    console.log('[Sync] GET — testing AppFolio work orders API...');
-
-    // Only fetch last 7 days for the test endpoint (fast)
-    const workOrders = await fetchAppFolioWorkOrders(7);
-
-    return NextResponse.json({
-      message: 'AppFolio work orders API test',
-      count: workOrders.length,
-      sample: workOrders.slice(0, 3),
-    });
-  } catch (error) {
-    console.error('[Sync] GET work orders test error:', error);
-    const message = error instanceof Error ? error.message : 'API test failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  if (url.searchParams.get('test') === '1') {
+    try {
+      console.log('[Sync] GET — testing AppFolio work orders API...');
+      const workOrders = await fetchAppFolioWorkOrders(7);
+      return NextResponse.json({
+        message: 'AppFolio work orders API test',
+        count: workOrders.length,
+        sample: workOrders.slice(0, 3),
+      });
+    } catch (error) {
+      console.error('[Sync] GET work orders test error:', error);
+      const message = error instanceof Error ? error.message : 'API test failed';
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
   }
+  return POST(request);
 }
 
 /**
@@ -64,8 +67,10 @@ export async function POST(request: NextRequest) {
       `[Sync] Starting work orders sync (${isCron ? 'cron' : 'manual'}, last ${days} days)...`
     );
 
-    // Step 1: Fetch vendors for vendor name resolution
+    // Step 1: Fetch vendors for vendor name resolution + mirror into the
+    // vendor table (Maintenance OS profiles; name/id only, manual fields survive)
     const vendorMap = await fetchAllVendors();
+    const vendorsSynced = await syncVendors(vendorMap);
 
     // Step 2: Fetch work orders from AppFolio (with vendor names)
     const workOrders = await fetchAppFolioWorkOrders(days, vendorMap);
@@ -100,6 +105,7 @@ export async function POST(request: NextRequest) {
       synced: count,
       total_fetched: workOrders.length,
       properties_mapped: propertyMap.size,
+      vendors_synced: vendorsSynced,
       days,
     });
   } catch (error) {

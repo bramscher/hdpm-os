@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HDMS Dashboard v1 — Mockup</title>
+<style>
+  :root{--dk:#1f5c22;--gr:#2f7d32;--tint:#eef5ee;--lt:#f7faf7;--ink:#1a1a1a;--muted:#5b625b;--hair:#c7cec7;--red:#b3261e;--amber:#9a6a00;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;}
+  body{background:#fff;color:var(--ink);padding:18px 22px;}
+  header{display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--gr);padding-bottom:10px;margin-bottom:14px;flex-wrap:wrap;}
+  header h1{font-size:20px;color:var(--dk);}
+  header .sub{color:var(--muted);font-size:13px;}
+  header .badge{margin-left:auto;background:var(--tint);color:var(--dk);font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;}
+  nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
+  nav button{border:1px solid var(--hair);background:var(--lt);color:var(--dk);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  nav button.active{background:var(--gr);color:#fff;border-color:var(--gr);}
+  nav button .n{background:#fff2;border-radius:8px;padding:0 6px;margin-left:4px;font-size:11px;}
+  nav button:not(.active) .n{background:var(--tint);}
+  .view{display:none;}
+  .view.active{display:block;}
+  .cols{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;min-width:1080px;}
+  .colwrap{overflow-x:auto;}
+  .col h3{font-size:11px;letter-spacing:.4px;color:var(--dk);background:var(--tint);padding:5px 7px;border-radius:6px 6px 0 0;border-bottom:2px solid var(--gr);}
+  .col .cnt{float:right;color:var(--muted);}
+  .card{border:1px solid var(--hair);border-radius:6px;padding:6px 7px;margin-top:6px;font-size:11px;background:#fff;}
+  .card b{display:block;font-size:11.5px;color:var(--ink);}
+  .card .own{color:var(--gr);font-weight:700;}
+  .card .due{color:var(--muted);}
+  .card .due.past{color:var(--red);font-weight:700;}
+  .p1{border-left:4px solid var(--red);} .p2{border-left:4px solid var(--amber);} .p3{border-left:4px solid var(--gr);} .p4{border-left:4px solid var(--hair);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{background:var(--tint);color:var(--dk);text-align:left;padding:8px 10px;border:1px solid var(--hair);font-size:12px;}
+  td{padding:7px 10px;border:1px solid var(--hair);}
+  tr:nth-child(even) td{background:var(--lt);}
+  .flag{color:var(--red);font-weight:700;} .ok{color:var(--gr);font-weight:700;} .warn{color:var(--amber);font-weight:700;}
+  .grp{margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--dk);background:var(--tint);padding:6px 10px;border-radius:6px;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
+  .kpi{border:1px solid var(--hair);border-radius:8px;padding:10px;text-align:center;background:var(--lt);}
+  .kpi .v{font-size:24px;font-weight:800;color:var(--dk);} .kpi .l{font-size:11px;color:var(--muted);margin-top:2px;}
+  .kpi.bad .v{color:var(--red);} .kpi.warn .v{color:var(--amber);}
+  .note{font-size:12px;color:var(--muted);margin-top:12px;border-top:1px solid var(--hair);padding-top:8px;}
+  .band{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;}
+  .b0{background:var(--tint);color:var(--dk);} .b1{background:#fff3d6;color:var(--amber);} .b2{background:#ffe0dd;color:var(--red);} .b3{background:var(--red);color:#fff;}
+  /* Waiting-On type system: one color per wait type, used everywhere */
+  :root{--w-tenant:#2c5f8a;--w-vendor:#9a6a00;--w-parts:#0e6e6e;--w-owner:#6a3d9a;--w-weather:#5b625b;--w-internal:#2f7d32;}
+  .wtag{display:inline-block;min-width:74px;text-align:center;padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:800;letter-spacing:.4px;color:#fff;}
+  .wt-tenant{background:var(--w-tenant);} .wt-vendor{background:var(--w-vendor);} .wt-parts{background:var(--w-parts);}
+  .wt-owner{background:var(--w-owner);} .wt-weather{background:var(--w-weather);} .wt-internal{background:var(--w-internal);}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .chip{border:1.5px solid var(--hair);background:#fff;border-radius:16px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;color:var(--ink);}
+  .chip .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;}
+  .chip.on{border-color:var(--ink);background:var(--lt);}
+  #waittbl td:first-child{white-space:nowrap;}
+  .card .wtag{margin-bottom:3px;min-width:0;padding:1px 6px;font-size:9.5px;}
+  .days{display:inline-block;min-width:30px;text-align:center;padding:1px 7px;border-radius:10px;font-weight:800;font-size:11.5px;}
+  .d-ok{background:var(--tint);color:var(--dk);} .d-warn{background:#fff3d6;color:var(--amber);} .d-late{background:#ffe0dd;color:var(--red);}
+</style>
+</head>
+<body>
+<header>
+  <h1>HDMS Maintenance — Live Board</h1>
+  <span class="sub">Dashboard v1 mockup · sample data · updated 7:42 AM daily sweep</span>
+  <span class="badge">HIGH DESERT PROPERTY MANAGEMENT</span>
+</header>
+<nav id="nav">
+  <button data-v="open" class="active">Open Board <span class="n">18</span></button>
+  <button data-v="wait">Waiting-On <span class="n">5</span></button>
+  <button data-v="vendor">Vendor Scoreboard</button>
+  <button data-v="aging">Aging</button>
+  <button data-v="exc">Exceptions <span class="n">3</span></button>
+  <button data-v="turn">Turnover <span class="n">3</span></button>
+  <button data-v="mon">Monday Review</button>
+</nav>
+
+<section class="view active" id="open">
+  <div class="kpis">
+    <div class="kpi"><div class="v">18</div><div class="l">Open work orders</div></div>
+    <div class="kpi bad"><div class="v">3</div><div class="l">Exceptions (fix today)</div></div>
+    <div class="kpi warn"><div class="v">2</div><div class="l">30+ days old</div></div>
+    <div class="kpi"><div class="v">1</div><div class="l">P1 this week</div></div>
+    <div class="kpi"><div class="v">100%</div><div class="l">Have owner + date</div></div>
+  </div>
+  <div class="colwrap"><div class="cols">
+    <div class="col"><h3>NEW <span class="cnt">2</span></h3>
+      <div class="card p2"><b>Fridge not cooling — 61250 Brosterhous #4</b><span class="own">Cheryl</span> · <span class="due">act 7/2</span></div>
+      <div class="card p3"><b>Screen door off track — 20630 Couch Market</b><span class="own">Cheryl</span> · <span class="due">act 7/2</span></div>
+    </div>
+    <div class="col"><h3>TRIAGED <span class="cnt">2</span></h3>
+      <div class="card p3"><b>GFCI trips in garage — 2117 NE Lotus</b><span class="own">Cheryl</span> · <span class="due">sched by 7/3</span></div>
+      <div class="card p4"><b>Gutter cleaning — Fall Creek 4-plex</b><span class="own">Cheryl</span> · <span class="due">sched by 7/8</span></div>
+    </div>
+    <div class="col"><h3>SCHEDULED <span class="cnt">3</span></h3>
+      <div class="card p2"><b>Water heater pilot — 1533 SW Juniper</b><span class="own">Alberto</span> · <span class="due">7/3 9:00</span></div>
+      <div class="card p3"><b>Caulk tub surround — 63020 OB Riley #12</b><span class="own">Alberto</span> · <span class="due">7/6</span></div>
+      <div class="card p3"><b>Fence panel — 425 SE Roosevelt</b><span class="own">Fine Line</span> · <span class="due">7/7</span></div>
+    </div>
+    <div class="col"><h3>IN PROGRESS <span class="cnt">2</span></h3>
+      <div class="card p1"><b>Sewage backup — 1810 NW Hartford (day 2)</b><span class="own">Roto-Rooter</span> · <span class="due">update 12:00</span></div>
+      <div class="card p3"><b>Interior paint — 61250 Brosterhous #7 turn</b><span class="own">Alberto</span> · <span class="due">done 7/6</span></div>
+    </div>
+    <div class="col"><h3>WAITING ON <span class="cnt">5</span></h3>
+      <div class="card p2"><span class="wtag wt-parts">PARTS</span><b>Furnace board — 936 NW Ogden</b><span class="own">Cheryl</span> · <span class="due">ETA 7/7</span></div>
+      <div class="card p3"><span class="wtag wt-owner">OWNER</span><b>Window replacement — Couch Market</b><span class="own">Jen</span> · <span class="due past">due 6/26 ⚠</span></div>
+      <div class="card p3"><span class="wtag wt-tenant">TENANT</span><b>Access — 2117 NE Lotus</b><span class="own">Cheryl</span> · <span class="due">call 7/2</span></div>
+      <div class="card p3"><span class="wtag wt-vendor">VENDOR</span><b>Roofer bid — Fall Creek</b><span class="own">Cheryl</span> · <span class="due past">day 6 ⚠</span></div>
+      <div class="card p4"><span class="wtag wt-weather">WEATHER</span><b>Exterior paint — 425 SE Roosevelt</b><span class="own">Cheryl</span> · <span class="due">7/14</span></div>
+    </div>
+    <div class="col"><h3>VERIFY <span class="cnt">2</span></h3>
+      <div class="card p3"><b>Disposal replace — 63020 OB Riley #3</b><span class="own">Alberto</span> · <span class="due">7/3</span></div>
+      <div class="card p3"><b>Smoke detectors x3 — Brosterhous #2 (inspection)</b><span class="own">Brody</span> · <span class="due">7/3</span></div>
+    </div>
+    <div class="col"><h3>BILL <span class="cnt">2</span></h3>
+      <div class="card p3"><b>Toilet rebuild — 1533 SW Juniper</b><span class="own">Alberto</span> · <span class="due">7/3</span></div>
+      <div class="card p3"><b>Re-key — 20630 Couch Market</b><span class="own">Brody</span> · <span class="due past">day 7 ⚠</span></div>
+    </div>
+    <div class="col"><h3>CLOSED (wk) <span class="cnt">11</span></h3>
+      <div class="card p3"><b>10 closed clean</b><span class="ok">✓ tenant confirmed</span></div>
+      <div class="card p2"><b>1 negative tenant reply</b><span class="flag">→ follow-up WO created</span></div>
+    </div>
+  </div></div>
+  <p class="note">Card = one work order: what/where, ONE owner, next-action date. Red date = past due = automatic Exception. Left edge color = priority (red P1, amber P2, green P3, gray P4).</p>
+</section>
+
+<section class="view" id="wait">
+  <div class="chips" id="wchips">
+    <button class="chip on" data-t="all"><span class="dot" style="background:var(--ink)"></span>All <b>5</b></button>
+    <button class="chip" data-t="vendor"><span class="dot" style="background:var(--w-vendor)"></span>Vendor <b>1</b></button>
+    <button class="chip" data-t="owner"><span class="dot" style="background:var(--w-owner)"></span>Owner <b>1</b></button>
+    <button class="chip" data-t="parts"><span class="dot" style="background:var(--w-parts)"></span>Parts <b>1</b></button>
+    <button class="chip" data-t="tenant"><span class="dot" style="background:var(--w-tenant)"></span>Tenant <b>1</b></button>
+    <button class="chip" data-t="weather"><span class="dot" style="background:var(--w-weather)"></span>Weather <b>1</b></button>
+    <button class="chip" data-t="internal"><span class="dot" style="background:var(--w-internal)"></span>Internal <b>0</b></button>
+  </div>
+  <table id="waittbl">
+    <tr><th>Type</th><th>Work order</th><th>Waiting for</th><th>Days</th><th>Next action</th><th>By</th><th>Owner</th></tr>
+    <tr data-t="vendor"><td><span class="wtag wt-vendor">VENDOR</span></td><td>Roofer bid — Fall Creek 4-plex</td><td>Cascade Roofing bid</td><td><span class="days d-late">6</span></td><td>Phone call today; no bid by 7/3 → roofer #2</td><td>7/2</td><td>Cheryl</td></tr>
+    <tr data-t="owner"><td><span class="wtag wt-owner">OWNER</span></td><td>Window replacement — Couch Market</td><td>R. Simmons decision</td><td><span class="days d-late">6</span></td><td>Jen calls with photos + delay risk</td><td>7/2</td><td>Jen</td></tr>
+    <tr data-t="parts"><td><span class="wtag wt-parts">PARTS</span></td><td>Furnace control board — 936 NW Ogden</td><td>Board (Johnstone)</td><td><span class="days d-warn">3</span></td><td>Confirm arrival AM; schedule Alberto 7/8</td><td>7/7</td><td>Cheryl</td></tr>
+    <tr data-t="tenant"><td><span class="wtag wt-tenant">TENANT</span></td><td>Access — 2117 NE Lotus</td><td>Entry access (2nd attempt)</td><td><span class="days d-warn">4</span></td><td>Call; posted notice if no reply by 7/3</td><td>7/2</td><td>Cheryl</td></tr>
+    <tr data-t="weather"><td><span class="wtag wt-weather">WEATHER</span></td><td>Exterior paint — 425 SE Roosevelt</td><td>Dry window</td><td><span class="days d-ok">2</span></td><td>Re-check forecast</td><td>7/14</td><td>Cheryl</td></tr>
+  </table>
+  <p class="note">One table, same seven columns for every wait type — click a chip to filter. Type badge color is constant everywhere; the Days pill is the urgency signal (green ≤2 · amber 3–5 · red >5, red = chase by phone today). Every row has a next action, a date, and one owner. Nothing waits silently.</p>
+</section>
+
+<section class="view" id="vendor">
+  <table>
+    <tr><th>Vendor / Tech</th><th>Open</th><th>Avg days open</th><th>Overdue</th><th>Accept time</th><th>Callback rate</th><th>Insurance</th><th>Rank</th></tr>
+    <tr><td><b>HDMS — Alberto</b></td><td>6</td><td>4.2</td><td>0</td><td>—</td><td class="ok">2%</td><td>—</td><td class="ok">Dispatch 1st</td></tr>
+    <tr><td><b>HDMS — Brody (small maint.)</b></td><td>3</td><td>3.1</td><td class="warn">1</td><td>—</td><td class="ok">0%</td><td>—</td><td class="ok">Dispatch 1st</td></tr>
+    <tr><td>Fine Line Maintenance</td><td>4</td><td>6.8</td><td>0</td><td class="ok">4 hrs</td><td class="ok">3%</td><td class="ok">exp 2/2027</td><td class="ok">Preferred #1</td></tr>
+    <tr><td>Roto-Rooter Bend</td><td>1</td><td>1.5</td><td>0</td><td class="ok">1 hr</td><td class="ok">—</td><td class="ok">exp 11/2026</td><td class="ok">Emergency #1</td></tr>
+    <tr><td>Cascade Roofing</td><td>1</td><td class="flag">12.0</td><td class="flag">1</td><td class="flag">3 days</td><td>—</td><td class="warn">exp 8/2026 ⚠</td><td class="warn">Review Monday</td></tr>
+    <tr><td>Deschutes Electric</td><td>0</td><td>2.9 (90d)</td><td>0</td><td class="ok">6 hrs</td><td class="ok">0%</td><td class="ok">exp 5/2027</td><td class="ok">Preferred #1 (elec)</td></tr>
+  </table>
+  <p class="note">Backed by vendor profiles: trade, service area, licensing, insurance, rates, minimums, emergency availability, property restrictions. The ranking drives dispatch — repeat offenders demote themselves at Monday review. This replaces what Lula's network would have provided.</p>
+</section>
+
+<section class="view" id="aging">
+  <div class="kpis">
+    <div class="kpi"><div class="v">11</div><div class="l"><span class="band b0">0–7 days</span></div></div>
+    <div class="kpi"><div class="v">4</div><div class="l"><span class="band b1">8–14 days</span></div></div>
+    <div class="kpi warn"><div class="v">1</div><div class="l"><span class="band b2">15–30 days</span></div></div>
+    <div class="kpi bad"><div class="v">2</div><div class="l"><span class="band b3">30+ days</span></div></div>
+  </div>
+  <table>
+    <tr><th>Work order</th><th>Days</th><th>Stage</th><th>Why it's old (written reason required)</th><th>Owner</th></tr>
+    <tr><td>Window replacement — Couch Market</td><td class="flag">34</td><td>WAIT-OWNER</td><td>Owner deciding vinyl vs. wood; 3rd follow-up today</td><td>Jen</td></tr>
+    <tr><td>Roof repair — Fall Creek 4-plex</td><td class="flag">31</td><td>WAIT-VENDOR</td><td>Two roofers declined (small job); trying #3, then reprice as HDMS + laborer</td><td>Cheryl</td></tr>
+    <tr><td>Exterior paint — 425 SE Roosevelt</td><td class="warn">18</td><td>WAIT-WEATHER</td><td>Legitimate — rain; scheduled window 7/14</td><td>Cheryl</td></tr>
+  </table>
+  <p class="note">Target: 30+ bucket under 5, each with a written reason said aloud on Monday.</p>
+</section>
+
+<section class="view" id="exc">
+  <table>
+    <tr><th>Tripwire</th><th>Item</th><th>Fix required today</th><th>Owner</th></tr>
+    <tr><td class="flag">#3 Past-due next action</td><td>[WAIT-OWNER] Window replacement — due 6/26</td><td>Jen calls owner; new date logged</td><td>Jen</td></tr>
+    <tr><td class="flag">#4 Vendor unaccepted &gt; 24h</td><td>Cascade Roofing — bid request day 6</td><td>Phone call; reassign if no commitment</td><td>Cheryl</td></tr>
+    <tr><td class="flag">#8 Verified, unbilled &gt; 5d</td><td>Re-key — Couch Market (day 7)</td><td>Brody generates invoice in hdpm-chat today</td><td>Brody</td></tr>
+  </table>
+  <p class="note">The daily sweep ends when this view reads ZERO — every exception gets an owner and a date, or gets escalated. Phase-1 definition of done: five consecutive business days at zero.</p>
+</section>
+
+<section class="view" id="turn">
+  <table>
+    <tr><th>Unit</th><th>Days vacant</th><th>Target ready</th><th>Current blocker</th><th>Assigned</th><th>Budget / actual</th></tr>
+    <tr><td>61250 Brosterhous #7</td><td>9</td><td class="ok">7/8 on track</td><td>Paint in progress (final coat 7/6)</td><td>Alberto</td><td>$2,400 / $1,910</td></tr>
+    <tr><td>63020 OB Riley #9</td><td class="warn">17</td><td class="warn">7/15 at risk</td><td>Flooring vendor scheduling — confirm 7/3</td><td>Cheryl</td><td>$4,100 / $2,350</td></tr>
+    <tr><td>425 SE Roosevelt (house)</td><td class="flag">26</td><td class="flag">7/20 slipping</td><td>Owner deciding carpet vs. LVP since 6/24 ⚠</td><td>Jen → owner</td><td>$6,800 / $3,120</td></tr>
+  </table>
+  <p class="note">Vacancy is rent lost daily — every turn shows its single current blocker and who owns it. Leasing sees target-ready dates from this view.</p>
+</section>
+
+<section class="view" id="mon">
+  <div class="grp">Monday, July 6 — 30 minutes, this page only</div>
+  <table>
+    <tr><th>Min</th><th>Agenda</th><th>Today's items</th></tr>
+    <tr><td>0–5</td><td>P1s last week</td><td>Sewage backup Hartford — dispatched 40 min after call ✓; tenant updated twice daily ✓</td></tr>
+    <tr><td>5–12</td><td>30+ bucket (every item, blocker aloud)</td><td>Couch Market window (owner), Fall Creek roof (vendor #3)</td></tr>
+    <tr><td>12–18</td><td>Waiting-on-vendor &gt; 5 days</td><td>Cascade Roofing — decide: last chance or reassign + demote</td></tr>
+    <tr><td>18–23</td><td>Verify + unbilled</td><td>2 in Verify (clear by 7/3); 1 unbilled day-7 (Brody today)</td></tr>
+    <tr><td>23–28</td><td>Turnover</td><td>OB Riley #9 flooring confirm; Roosevelt owner decision — Jen escalates</td></tr>
+    <tr><td>28–30</td><td>One improvement (rotating)</td><td>Alberto: standard truck stock list would kill ~2 parts-runs/week</td></tr>
+  </table>
+  <p class="note">The dashboard IS the meeting. No slides, no prep, no status emails.</p>
+</section>
+
+<script>
+  const nav=document.getElementById('nav');
+  nav.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    nav.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById(b.dataset.v).classList.add('active');});
+  const chips=document.getElementById('wchips');
+  chips.addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c)return;
+    chips.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');
+    const t=c.dataset.t;
+    document.querySelectorAll('#waittbl tr[data-t]').forEach(r=>{
+      r.style.display=(t==='all'||r.dataset.t===t)?'':'none';});});
+</script>
+</body>
+</html>

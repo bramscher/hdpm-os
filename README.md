@@ -361,6 +361,9 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `RENTCAST_API_KEY` | RentCast | Alternative rental data source |
 | `HUD_API_TOKEN` | HUD.gov | Fair Market Rent annual data |
 | `OPENAI_API_KEY` | OpenAI | Embeddings for knowledge base + fallback AI |
+| `RESEND_API_KEY` | Resend | Maintenance OS tripwire digest emails (skipped when absent) |
+| `MAINT_DIGEST_RECIPIENTS` | Maintenance OS | Fallback JSON map of owner → email. Normally unnecessary — admins manage opt-ins in the app (Maintenance → Exceptions → Digest recipients, backed by `maint_digest_recipient`) |
+| `MAINT_DIGEST_FROM` | Maintenance OS | From address for digests (default `HDMS Maintenance <maintenance@highdesertpm.com>`) |
 
 ---
 
