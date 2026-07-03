@@ -32,9 +32,13 @@ Exceptions view is too noisy for Cheryl's daily sweep.
 ### 2. Resend (email digests)
 Everything else works without this; digests silently skip until it's done.
 
-- [ ] Create a Resend account / API key (resend.com)
-- [ ] Verify the `highdesertpm.com` sending domain in Resend (DNS records)
-- [ ] Add `RESEND_API_KEY` to Vercel env vars
+- [x] Create a Resend account / API key (resend.com) — done 2026-07-02, key tested valid
+      (account: cab@wellifi.com)
+- [ ] Verify the `highdesertpm.com` sending domain in Resend — **blocks all digest
+      sends**: resend.com/domains → Add Domain → add the DKIM/SPF DNS records →
+      Verify. Tested 2026-07-02: sends from maintenance@highdesertpm.com return
+      403 until this is done
+- [ ] Confirm `RESEND_API_KEY` is in Vercel env vars (it's in local .env.local)
 - [ ] (Optional) `MAINT_DIGEST_FROM` if you don't want the default
       `HDMS Maintenance <maintenance@highdesertpm.com>`
 
