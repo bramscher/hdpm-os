@@ -30,7 +30,7 @@ export function WoCard({ wo }: { wo: MaintWorkOrder }) {
         <WaitBadge reason={wo.waiting_reason} small />
       )}
       <b>
-        {wo.description.length > 64 ? `${wo.description.slice(0, 64)}…` : wo.description} —{' '}
+        {wo.description.length > 96 ? `${wo.description.slice(0, 96)}…` : wo.description} —{' '}
         {woWhere(wo)}
       </b>
       <span className="own">{wo.owner_name || '⚠ no owner'}</span>
