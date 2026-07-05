@@ -186,6 +186,20 @@ export interface Turn {
   updated_at: string;
 }
 
+/** ai_triage_proposal row (Session B — batch triage proposals). */
+export interface TriageProposal {
+  work_order_id: string;
+  triage: Record<string, unknown>;
+  proposed_priority_class: PriorityClass | null;
+  proposed_next_action_date: string | null;
+  proposed_owner_name: string | null;
+  proposed_stage: Stage | null;
+  status: 'pending' | 'applied' | 'skipped';
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
 // ============================================
 // Tripwires
 // ============================================

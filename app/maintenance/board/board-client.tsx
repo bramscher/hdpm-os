@@ -10,9 +10,11 @@ import Aging from './views/aging';
 import Exceptions from './views/exceptions';
 import Turnover from './views/turnover';
 import MondayReview from './views/monday-review';
+import TriageReview from './views/triage-review';
 
 const VIEWS = [
   { key: 'open', label: 'Open Board' },
+  { key: 'triage', label: '✦ Triage Review' },
   { key: 'wait', label: 'Waiting-On' },
   { key: 'vendor', label: 'Vendor Scoreboard' },
   { key: 'aging', label: 'Aging' },
@@ -106,6 +108,7 @@ export default function BoardClient() {
       {board && (
         <>
           {view === 'open' && <OpenBoard board={board} exceptions={exceptions} />}
+          {view === 'triage' && <TriageReview onChanged={load} />}
           {view === 'wait' && <WaitingOn board={board} />}
           {view === 'vendor' && <VendorScoreboard scoreboard={scoreboard} onRefresh={load} />}
           {view === 'aging' && <Aging board={board} />}
