@@ -1,6 +1,6 @@
 # HDPM Operations Dashboard
 
-Internal operations platform for **High Desert Property Management** (~835 doors across 467 properties, Central Oregon). Automates inspections, invoice generation, rent comp analysis, Craigslist ad creation, and surfaces a live KPI dashboard covering portfolio health.
+Internal operations platform for **High Desert Property Management** (~835 doors across 467 properties, Central Oregon). Runs the **Maintenance OS** (live work-order board, 12 crack-proofing tripwires, AI triage, vendor scoreboard), and automates inspections, invoice generation, rent comp analysis, Craigslist ad creation, plus a live KPI dashboard covering portfolio health.
 
 **Stack:** Next.js 16 / React 18 / TypeScript 5.7 / Supabase (PostgreSQL + pgvector) / Tailwind CSS 3.4 / Recharts 3 / Anthropic SDK / Vercel
 **Auth:** Microsoft Azure AD (@highdesertpm.com only)
@@ -12,6 +12,17 @@ Internal operations platform for **High Desert Property Management** (~835 doors
 
 - [Getting Started](#getting-started)
 - [Home (Quick Actions)](#home-quick-actions)
+- [Maintenance OS (Live Board)](#maintenance-os-live-board)
+  - [Open Board](#open-board)
+  - [✦ Triage Review](#-triage-review)
+  - [Waiting-On](#waiting-on)
+  - [Vendor Scoreboard](#vendor-scoreboard)
+  - [Aging](#aging)
+  - [Exceptions](#exceptions)
+  - [Turnover](#turnover)
+  - [Monday Review](#monday-review)
+  - [Work Order Detail](#work-order-detail)
+  - [Tripwires & Email Digests](#tripwires--email-digests)
 - [KPI Dashboard](#kpi-dashboard)
   - [KPI Cards](#kpi-cards)
   - [KPI Trends](#kpi-trends)
@@ -56,6 +67,110 @@ Landing page with a time-aware greeting, live portfolio stats, and one-click ent
 - **Live stats strip:** total inspections, overdue count, inspections this week, active routes, dispatched stops, vacant units
 - **Quick-action cards:** Inspections, Route Builder, Invoice Generator, Rent Comps, Craigslist Ad Creator, KPI Dashboard
 - **System status bar:** connection indicators for AppFolio and Rentometer
+
+---
+
+## Maintenance OS (Live Board)
+
+**Path:** `/maintenance/board` · **Sidebar:** Maintenance (wrench icon) · **Spec:** `docs/maintenance-os/`
+
+The maintenance command center: every work order moves through an 8-stage lifecycle (`NEW → TRIAGED → SCHEDULED → IN PROGRESS → WAITING ON → VERIFY → BILL → CLOSED`) with one accountable **HDPM owner** and a **next-action date** at all times. **AppFolio stays the system of record** — status, scheduling, and vendor assignment are edited *there* (every card has an "Open in AppFolio ↗" link); the board mirrors AppFolio within 15 minutes and adds the accountability layer AppFolio can't track: owners, dates, priorities, the closure gate, and 12 automated tripwires.
+
+Seven tabs plus the Triage Review — each deep-linkable via `?view=`.
+
+### Open Board
+
+Kanban of all open work orders, one column per stage.
+
+- Card = what/where · HDPM owner · next-action date (red = past due = automatic exception)
+- Left-edge color = priority: red P1 (emergency) · amber P2 (urgent) · green P3 (routine) · gray P4 (planned)
+- Header tiles: open count, exceptions to fix today, 30+ days old, P1s this week, owner+date coverage
+- Click any card to open its [Work Order Detail](#work-order-detail); scroll sideways for more columns
+
+### ✦ Triage Review
+
+Batch AI triage — clear the backlog by reviewing instead of typing.
+
+- **Generate proposals** runs Claude across untriaged WOs (~24s / ~4¢ each, pausable, resumes where it left off)
+- Each row: AI summary + risk flags + recommended next action, with proposed **priority / date / HDPM owner** as editable dropdowns
+- **Apply** (one tap), edit-then-apply, or **Skip** — nothing changes a work order until you act
+- **Apply all untouched** bulk-applies; any row you edited is excluded and stays for individual review
+- Every apply lands in the WO timeline under your name, exactly like manual triage
+
+### Waiting-On
+
+One table for everything blocked, filterable by wait type.
+
+- Chip filters: Tenant / Vendor / Parts / Owner / Weather / Internal — badge colors are consistent everywhere
+- Days pill = urgency: green ≤2 · amber 3–5 · red >5 (red = chase by phone today)
+- Every row has a next action, a date, and one HDPM owner — nothing waits silently
+- Note: the purple OWNER badge means the *property* owner; "HDPM Owner" is the accountable team member
+
+### Vendor Scoreboard
+
+Rankings with teeth, from day one.
+
+- **History (all-time):** jobs closed · median → p90 cycle time · % taking >30 days — seeded from 8,000+ historical closed WOs
+- **Days open (med/avg):** current open backlog age per vendor — red flag when the median passes 21 days
+- **90-day columns** (accept time, callbacks) build up from live assignments and take over as the operative signal
+- **Edit** any row to maintain the profile: trades, license/insurance + expiry, W-9, rates, preferred/emergency flags, and the **demoted** switch (forces bottom rank — set it at Monday review)
+
+### Aging
+
+Where old work orders explain themselves.
+
+- Buckets: 0–7 / 8–14 / 15–30 / **30+** days (real AppFolio ages, not sync dates)
+- Every 15+ day item needs a **written reason** ("why it's old") — set it on the WO detail page; missing reasons flag red
+- Target from the ops plan: 30+ bucket under 5, each reason said aloud on Monday
+
+### Exceptions
+
+Cheryl's daily sweep — the day is done when this reads ZERO.
+
+- Live run of the 12 tripwire rules: every row = one broken invariant + the fix required today + who owns it
+- Rows link straight to the offending work order
+- Admins: the **Digest recipients** panel at the top controls who gets the 6 AM weekday email (enter email, tick enabled — takes effect next morning, no deploy)
+- Phase-1 definition of done: five consecutive business days at zero
+
+### Turnover
+
+Vacant-unit turns — vacancy is rent lost daily.
+
+- Days vacant · target-ready date (on track / at risk / slipping) · single current blocker · assignee · budget vs actual
+- Flag a WO as a turn from its detail page ("This is a turn" checkbox), then set vacated/target/budget there
+
+### Monday Review
+
+The 30-minute ops meeting agenda, generated live — no slides, no prep.
+
+- 0–5 min: P1s last week · 5–12: the 30+ bucket (summarized with the 8 oldest when long) · 12–18: vendor waits >5d (last chance or reassign+demote) · 18–23: verify + unbilled · 23–28: turns · 28–30: one improvement
+- Every line links to the work order it came from
+
+### Work Order Detail
+
+Click any card. The left panel is the workflow; the right panel is the closure gate.
+
+- **✦ AI Next Action:** generate a summary, priority recommendation with escalate-if conditions, risk flags, blocker, next step, a copy-paste draft message, and an AppFolio checklist (~4¢, cached until you regenerate)
+- **Workflow controls:** stage dropdown (only legal moves shown), HDPM owner, next-action date, P1–P4, tech, wait reason, "why it's old"
+- **Closure gate:** live six-condition checklist — verification, invoice linked, recommendations resolved, tenant ping sent, incidents documented, preventive scheduled. CLOSED is unreachable until all six pass (the Close button enables itself)
+- **Failed access:** log what happened + a new date — the WO auto-returns to SCHEDULED (tripwire #5)
+- **Timeline:** append-only history of every change, who made it, and when — including sync and tripwire activity
+- **Open in AppFolio ↗** for anything AppFolio owns (status, scheduling, vendor)
+
+### Tripwires & Email Digests
+
+Twelve if-then rules run every weekday at 6 AM PT; each person gets **one email listing only their items** (nothing on a clean day). Highlights:
+
+| # | Fires when | Owner |
+|---|-----------|-------|
+| 2 | WO unassigned/untriaged > 1 business day | Cheryl |
+| 3 | Next-action date blank or past | WO's owner |
+| 4 | Vendor hasn't accepted in 24h | Cheryl |
+| 7 | In VERIFY without photos + time + materials | Tech |
+| 8 | Verified > 5 days, no invoice | Penny (plus a Monday report) |
+| 11 | Approval or **AppFolio estimate** pending > 3 business days | Jen |
+
+(#1 and #9 await the Haven.AI integration. Full rule table: `docs/maintenance-os/02-functional-spec.md` §5.)
 
 ---
 
@@ -321,13 +436,17 @@ Configured in `vercel.json`. All times are UTC.
 
 | Schedule | Endpoint | Purpose |
 |----------|----------|---------|
-| **8 AM daily (UTC)** | `/api/sync/work-orders` | Sync AppFolio work orders |
-| **9 AM daily (UTC)** | `/api/sync/appfolio` | Full AppFolio sync: properties, vacancies, comps |
-| **9:30 AM daily (UTC)** | `/api/inspections/candidates/sync` | Refresh inspection candidates from AppFolio (move-in-anchored cadence) |
-| **2 PM daily (UTC)** | `/api/kpi/cron` | Capture daily KPI snapshots for the trends page |
+| **Every 15 min** | `/api/sync/work-orders?days=1` | AppFolio work-order mirror delta (+ vendor roster) |
+| **8 AM daily** | `/api/sync/work-orders?days=7` | Work-order deep pass (webhook safety net) |
+| **9 AM daily** | `/api/sync/appfolio` | Full AppFolio sync: properties, vacancies, comps |
+| **9:30 AM daily** | `/api/inspections/candidates/sync` | Refresh inspection candidates (move-in-anchored cadence) |
+| **11 AM daily** | `/api/sync/zoom-contacts` | AppFolio → Zoom Phone contact sync |
+| **1 PM Mon–Fri** | `/api/maintenance/cron/tripwires` | Run the 12 tripwires; email per-owner exception digests (6 AM PT) |
+| **2 PM daily** | `/api/kpi/cron` | Capture daily KPI snapshots for the trends page |
+| **2 PM Monday** | `/api/maintenance/cron/unbilled-report` | Verified-but-unbilled weekly report → Penny |
 | **Jan 1 annually** | `/api/sync/hud` | HUD Fair Market Rent data refresh |
 
-Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted from Azure AD middleware. AppFolio also pushes updates in real time through `/api/webhooks/appfolio` and `/api/webhooks/appfolio-leads`.
+Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted from Azure AD middleware (Vercel cron sends GET; every cron route's GET delegates to its authenticated POST). AppFolio also pushes updates in real time through `/api/webhooks/appfolio` and `/api/webhooks/appfolio-leads`.
 
 ---
 
@@ -384,9 +503,14 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `kpi_snapshots` | Daily-captured KPI values backing the dashboard sparklines and trends charts |
 | `saved_listings` | Saved Craigslist listing drafts with generated HTML |
 | `cached_vacancies` | Cached AppFolio vacancy data for instant page load |
-| `invoices` / `invoice_line_items` | Maintenance invoices and their line items with totals and status |
-| `work_orders` | Synced AppFolio work orders with priorities and action history |
-| `comps` / `comp_analyses` | Rental comps, baselines, and saved comp-analysis reports |
+| `hdms_invoices` | Maintenance invoices (JSONB line items, PDF storage, WO link) |
+| `work_orders` | AppFolio work-order mirror **plus** Maintenance OS workflow columns (stage, HDPM owner, next-action date, P1–P4, verify/closure fields) |
+| `wo_event` | Append-only work-order audit trail (trigger-enforced) — every stage change, note, exception, sync update |
+| `vendor` / `vendor_assignment` | Vendor profiles (license, insurance, rates, demote flag) + acceptance/performance tracking |
+| `approval` / `recommendation` / `turn` | Owner/PM approvals · tech field recommendations · turnover board data |
+| `ai_triage_proposal` | Batch AI triage proposals awaiting human review (pending/applied/skipped) |
+| `maint_digest_recipient` | Digest opt-ins (person → email + enabled), managed from the Exceptions view |
+| `rental_comps` / `market_baselines` | Rental comps, baselines, and saved comp-analysis reports |
 | `conversations` / `conversation_messages` | AI chat history and individual messages (with sources and attachments) |
 | `knowledge_chunks` | pgvector knowledge base chunks for ORS 90 semantic search |
 
