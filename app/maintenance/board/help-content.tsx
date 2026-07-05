@@ -53,10 +53,12 @@ export const HELP_GUIDES: Record<string, HelpGuide> = {
   },
   aging: {
     title: 'Aging',
-    intro: 'Where old work orders explain themselves. Ages use real AppFolio creation dates.',
+    intro: 'Where old work orders explain themselves. Ages use real AppFolio creation dates. Edit directly in the table — no need to open each work order.',
     bullets: [
       <>Buckets: 0–7 / 8–14 / 15–30 / <b>30+</b> days. The 30+ bucket is the Monday review&apos;s main course.</>,
-      <>Every item over 15 days needs a <b>written reason</b> (&quot;why it&apos;s old&quot;) — set it on the work order&apos;s detail page. Missing reasons flag <span className="flag">red</span>.</>,
+      <><b>Sweep-edit inline:</b> type the &quot;why it&apos;s old&quot; reason and Tab to the next row; change dates and owners right in the table. Every save is logged to the work order&apos;s timeline.</>,
+      <>A <span className="flag">red-bordered</span> reason box = missing reason. For date/priority catch-up in bulk, use ✦ Triage Review with the full-pool toggle instead.</>,
+      <>AppFolio-owned changes (reschedule a visit, reassign a vendor) still happen in AppFolio — open the work order → Open in AppFolio ↗.</>,
       <>Ops target: 30+ bucket under 5 items, each with a reason said aloud on Monday.</>,
     ],
   },

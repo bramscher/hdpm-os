@@ -113,7 +113,7 @@ export default function BoardClient() {
           {view === 'triage' && <TriageReview onChanged={load} />}
           {view === 'wait' && <WaitingOn board={board} />}
           {view === 'vendor' && <VendorScoreboard scoreboard={scoreboard} onRefresh={load} />}
-          {view === 'aging' && <Aging board={board} />}
+          {view === 'aging' && <Aging board={board} onChanged={load} />}
           {view === 'exceptions' && <Exceptions data={exceptions} />}
           {view === 'turnover' && <Turnover board={board} />}
           {view === 'monday' && <MondayReview board={board} exceptions={exceptions} />}
