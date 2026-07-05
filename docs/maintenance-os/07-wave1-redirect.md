@@ -62,7 +62,19 @@ the full re-date sweep (SCHEDULED+WAITING_ON, ~426, ≈$17).
 
 **Acceptance:** Cheryl can clear the NEW backlog in one sitting; nothing auto-applies without her action; proposals survive page reloads.
 
-## Session C — Vendor Scoreboard backfill from grandfathered WOs
+## Session C — Vendor Scoreboard backfill *(SHIPPED 2026-07-05, commit `a54da42`)*
+
+**Shipped:** "History (all-time)" column (n · median → p90 cycle · %>30d) from
+8,362 closed vendor WOs; "Days open" now uses AppFolio's real created date and
+shows the median (fixing a row-insert-time bug). Deviation: "overdue-at-close
+rate" isn't derivable (no promised dates in history) → %>30d substitutes.
+**Acceptance:** Firkus = 57 open @ 90d median vs peers 11–14d (reconciles with
+the analysis). Key insight the history adds: Firkus *closes* work at a normal
+16d median — the problem is accepted-but-unworked backlog, not slow execution.
+Also surfaced: Blue Stone Gardens (33d med, 52% >30d), Chet's Electric (51d
+open median).
+
+### Original brief (for reference)
 
 **Why:** Scoreboard performance metrics start empty (rolling 90d on new assignments), but the 2,326 grandfathered WOs carry vendor + created/completed dates — enough to surface the Firkus problem (95d median) in week one instead of month three.
 
