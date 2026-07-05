@@ -34,11 +34,8 @@ Everything else works without this; digests silently skip until it's done.
 
 - [x] Create a Resend account / API key (resend.com) — done 2026-07-02, key tested valid
       (account: cab@wellifi.com)
-- [ ] Verify the `highdesertpm.com` sending domain in Resend — **blocks all digest
-      sends**: resend.com/domains → Add Domain → add the DKIM/SPF DNS records →
-      Verify. Tested 2026-07-02: sends from maintenance@highdesertpm.com return
-      403 until this is done
-- [ ] Confirm `RESEND_API_KEY` is in Vercel env vars (it's in local .env.local)
+- [x] Verify the `highdesertpm.com` sending domain in Resend — done 2026-07-05
+- [x] Confirm `RESEND_API_KEY` is in Vercel env vars — done 2026-07-05
 - [ ] (Optional) `MAINT_DIGEST_FROM` if you don't want the default
       `HDMS Maintenance <maintenance@highdesertpm.com>`
 
