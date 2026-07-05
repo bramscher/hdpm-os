@@ -644,6 +644,8 @@ export interface AppFolioWorkOrder {
   canceledDate: string | null;
   permissionToEnter: boolean;
   createdAt: string | null;
+  /** AppFolio's own LastUpdatedAt — seed clock for time-in-status math */
+  lastUpdatedAt: string | null;
   /** AppFolio web-app URL for this WO — the dashboard's "edit it in AppFolio" jump-off */
   link: string | null;
 }
@@ -760,6 +762,7 @@ export async function fetchAppFolioWorkOrders(
     canceledDate: wo.CanceledOn || null,
     permissionToEnter: wo.PermissionToEnter || false,
     createdAt: wo.CreatedAt || null,
+    lastUpdatedAt: wo.LastUpdatedAt || null,
     link: wo.Link || null,
   }));
 }
@@ -844,6 +847,7 @@ export async function fetchWorkOrderById(
       canceledDate: match.CanceledOn || null,
       permissionToEnter: match.PermissionToEnter || false,
       createdAt: match.CreatedAt || null,
+      lastUpdatedAt: match.LastUpdatedAt || null,
       link: match.Link || null,
     };
   } catch (err) {

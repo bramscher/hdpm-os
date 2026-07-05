@@ -234,6 +234,12 @@ export interface TripwireSnapshot {
   docsByWorkOrder: Map<string, WoDocs>;
   /** work_order_ids with a failed_access event in the last 24h (rule 5) */
   recentFailedAccessWoIds: Set<string>;
+  /**
+   * When each open WO entered its CURRENT appfolio_status (rule 11 estimate
+   * clocks): latest sync_update event matching the current status; callers
+   * fall back to appfolio_last_updated_at, then appfolio_created_at.
+   */
+  statusSince: Map<string, string>;
 }
 
 // ============================================

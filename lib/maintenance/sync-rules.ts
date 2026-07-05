@@ -40,6 +40,7 @@ export interface MirrorRow {
   permission_to_enter: boolean;
   appfolio_link: string | null;
   appfolio_created_at: string | null;
+  appfolio_last_updated_at: string | null;
   synced_at: string;
 }
 
@@ -73,6 +74,7 @@ export function buildMirrorRow(
     permission_to_enter: wo.permissionToEnter,
     appfolio_link: wo.link,
     appfolio_created_at: wo.createdAt,
+    appfolio_last_updated_at: wo.lastUpdatedAt,
     synced_at: syncedAt.toISOString(),
   };
 }

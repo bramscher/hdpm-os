@@ -45,6 +45,8 @@ export interface WorkOrder {
   appfolio_link: string | null;
   /** AppFolio's own CreatedAt — use for all age math (created_at = row insert time) */
   appfolio_created_at: string | null;
+  /** AppFolio's own LastUpdatedAt — seed clock for time-in-status */
+  appfolio_last_updated_at: string | null;
   synced_at: string;
   created_at: string;
   updated_at: string;
@@ -312,6 +314,25 @@ export async function bulkUpsertWorkOrders(
     writtenCount += batch.length;
   }
 
+  // 3b. Record AppFolio status transitions (exact time-in-status clocks for
+  //     tripwire #11's estimate-stuck detection and future state-age rules)
+  const statusChangeEvents: NewEvent[] = existingOrders
+    .filter((wo) => {
+      const prev = existing.get(wo.appfolioId)!.appfolio_status;
+      return prev !== null && prev !== wo.appfolioStatus;
+    })
+    .map((wo) => ({
+      work_order_id: existing.get(wo.appfolioId)!.id,
+      event_type: 'sync_update' as const,
+      payload: {
+        field: 'appfolio_status',
+        from: existing.get(wo.appfolioId)!.appfolio_status,
+        to: wo.appfolioStatus,
+      },
+      actor: 'system:sync',
+    }));
+  await recordEvents(statusChangeEvents);
+
   // 4. Sync-driven stage automation (cancel → CLOSED, completed → VERIFY,
   //    early-stage catch-up to AppFolio's own status)
   for (const wo of existingOrders) {
@@ -402,6 +423,22 @@ export async function upsertSingleWorkOrder(
       throw new Error(`Failed to update work order: ${error.message}`);
     }
     console.log(`[Webhook] Updated work order ${order.appfolioId}`);
+
+    // Status-transition event (exact time-in-status clock, tripwire #11)
+    if (existing.appfolio_status && existing.appfolio_status !== order.appfolioStatus) {
+      await recordEvents([
+        {
+          work_order_id: existing.id,
+          event_type: 'sync_update',
+          payload: {
+            field: 'appfolio_status',
+            from: existing.appfolio_status,
+            to: order.appfolioStatus,
+          },
+          actor: 'system:sync',
+        },
+      ]);
+    }
 
     // Stage automation (cancel → CLOSED, completed → VERIFY, AppFolio-driven
     // pre-completion moves)

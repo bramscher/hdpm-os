@@ -97,9 +97,11 @@ export async function loadTripwireSnapshot(): Promise<TripwireSnapshot> {
     }
   }
 
-  // Event-derived docs (rules 5/6/7) for open WOs.
+  // Event-derived docs (rules 5/6/7) + status-entry clocks (rule 11) for open WOs.
   const docsByWorkOrder = new Map<string, WoDocs>();
   const recentFailedAccessWoIds = new Set<string>();
+  const statusSince = new Map<string, string>();
+  const currentStatusById = new Map(openWorkOrders.map((wo) => [wo.id, wo.appfolio_status]));
   const dayAgo = new Date(now.getTime() - 24 * 3600_000).toISOString();
   for (let i = 0; i < openIds.length; i += 200) {
     const batch = openIds.slice(i, i + 200);
@@ -107,9 +109,18 @@ export async function loadTripwireSnapshot(): Promise<TripwireSnapshot> {
       .from('wo_event')
       .select('work_order_id, event_type, payload, created_at')
       .in('work_order_id', batch)
-      .in('event_type', ['photo', 'scope_change', 'approval_decision', 'failed_access']);
+      .in('event_type', ['photo', 'scope_change', 'approval_decision', 'failed_access', 'sync_update'])
+      .order('created_at', { ascending: true });
     if (error) throw new Error(`Snapshot event load failed: ${error.message}`);
     for (const e of data ?? []) {
+      if (e.event_type === 'sync_update') {
+        // Ascending order → last matching write wins = latest entry into the current status
+        const p = (e.payload ?? {}) as Record<string, unknown>;
+        if (p.field === 'appfolio_status' && p.to === currentStatusById.get(e.work_order_id)) {
+          statusSince.set(e.work_order_id, e.created_at);
+        }
+        continue;
+      }
       const docs = docsByWorkOrder.get(e.work_order_id) ?? {
         photoCount: 0,
         hasTime: false,
@@ -159,6 +170,7 @@ export async function loadTripwireSnapshot(): Promise<TripwireSnapshot> {
     invoicedWorkOrderIds,
     docsByWorkOrder,
     recentFailedAccessWoIds,
+    statusSince,
   };
 }
 

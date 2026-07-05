@@ -87,6 +87,7 @@ function snapshot(overrides: Partial<TripwireSnapshot> = {}): TripwireSnapshot {
     invoicedWorkOrderIds: new Set(),
     docsByWorkOrder: new Map(),
     recentFailedAccessWoIds: new Set(),
+    statusSince: new Map(),
     ...overrides,
   };
 }
@@ -402,6 +403,79 @@ describe('tripwire 11 — approval pending > 3 business days', () => {
       ],
     });
     expect(tripwire11(s)).toHaveLength(0);
+  });
+
+  // ── AppFolio-side estimate states (Session A extension) ──
+
+  it('fires for a WO stuck in Estimate Requested > 3 business days (exact sync_update clock)', () => {
+    const stuck = wo({ appfolio_status: 'Estimate Requested', stage: 'WAITING_ON', waiting_reason: 'VENDOR' });
+    const s = snapshot({
+      openWorkOrders: [stuck],
+      statusSince: new Map([[stuck.id, '2026-06-25T10:00:00Z']]), // Thu 6/25 → 5 business days by 7/2
+    });
+    const ex = tripwire11(s);
+    expect(ex).toHaveLength(1);
+    expect(ex[0].owner).toBe('Jen');
+    expect(ex[0].item).toContain('Estimate Requested 5d');
+    expect(ex[0].item).toContain('vendor bid outstanding');
+  });
+
+  it('fires for Estimated using the appfolio_last_updated_at fallback', () => {
+    const stuck = wo({
+      appfolio_status: 'Estimated',
+      stage: 'WAITING_ON',
+      waiting_reason: 'OWNER',
+      appfolio_last_updated_at: '2026-06-20T10:00:00Z',
+    });
+    const ex = tripwire11(snapshot({ openWorkOrders: [stuck] }));
+    expect(ex).toHaveLength(1);
+    expect(ex[0].item).toContain('bid in hand, decision pending');
+    expect(ex[0].ageDays).toBeGreaterThan(3);
+  });
+
+  it('exact sync_update clock beats the LastUpdatedAt fallback', () => {
+    const stuck = wo({
+      appfolio_status: 'Estimated',
+      appfolio_last_updated_at: '2026-02-01T10:00:00Z', // ancient — would say ~100d
+      stage: 'WAITING_ON',
+      waiting_reason: 'OWNER',
+    });
+    const s = snapshot({
+      openWorkOrders: [stuck],
+      statusSince: new Map([[stuck.id, '2026-07-01T10:00:00Z']]), // entered yesterday
+    });
+    expect(tripwire11(s)).toHaveLength(0); // 1 business day — not stuck
+  });
+
+  it('does not fire within 3 business days or for non-estimate statuses', () => {
+    const fresh = wo({
+      appfolio_status: 'Estimate Requested',
+      appfolio_last_updated_at: '2026-06-30T10:00:00Z', // 2 business days
+      stage: 'WAITING_ON',
+      waiting_reason: 'VENDOR',
+    });
+    const assigned = wo({
+      appfolio_status: 'Assigned',
+      appfolio_last_updated_at: '2026-01-01T10:00:00Z', // old but not an estimate state
+      stage: 'TRIAGED',
+    });
+    expect(tripwire11(snapshot({ openWorkOrders: [fresh, assigned] }))).toHaveLength(0);
+  });
+
+  it('does not double-flag a WO already covered by an in-app approval record', () => {
+    const stuck = wo({
+      appfolio_status: 'Estimated',
+      appfolio_last_updated_at: '2026-06-20T10:00:00Z',
+      stage: 'WAITING_ON',
+      waiting_reason: 'OWNER',
+    });
+    const s = snapshot({
+      openWorkOrders: [stuck],
+      approvals: [approval({ work_order_id: stuck.id })], // pending 5 business days
+    });
+    const ex = tripwire11(s);
+    expect(ex).toHaveLength(1); // approval-record row only
+    expect(ex[0].item).toContain('OWNER approval');
   });
 });
 

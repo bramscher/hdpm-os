@@ -29,6 +29,7 @@ function afWo(overrides: Partial<AppFolioWorkOrder> = {}): AppFolioWorkOrder {
     canceledDate: null,
     permissionToEnter: false,
     createdAt: '2026-07-01T00:00:00Z',
+    lastUpdatedAt: '2026-07-01T12:00:00Z',
     link: 'https://highdesertpm.appfolio.com/maintenance/service_requests/1/work_orders/1',
     ...overrides,
   };

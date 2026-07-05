@@ -239,9 +239,39 @@ export function tripwire10(snapshot: TripwireSnapshot): TripwireException[] {
 }
 
 // ── #11: owner approval pending > 3 business days ──
+// Two sources feed the same tripwire:
+//   a) in-app approval records (the original trigger)
+//   b) AppFolio-side estimate states: a WO sitting in "Estimate Requested"
+//      (chasing a vendor bid) or "Estimated" (bid in hand, decision pending)
+//      for > 3 business days. The v0 API exposes NO estimate date/amount
+//      fields (verified 2026-07-05 — report-export columns are web-app-only),
+//      so time-in-status is the clock: exact sync_update events where we have
+//      them, else AppFolio's LastUpdatedAt, else its CreatedAt.
+
+/** AppFolio estimate statuses → what's being waited on. */
+const ESTIMATE_STATUSES: Record<string, { waitingOn: string; fix: string }> = {
+  'estimate requested': {
+    waitingOn: 'vendor bid outstanding',
+    fix: 'Chase the vendor for the bid today; no response → next vendor',
+  },
+  estimated: {
+    waitingOn: 'bid in hand, decision pending',
+    fix: 'Get the approval decision today (owner/PM) and move the job',
+  },
+};
+
+/** When the WO entered its current status — best available clock. */
+export function statusSinceFor(wo: MaintWorkOrder, snapshot: TripwireSnapshot): Date {
+  const since =
+    snapshot.statusSince.get(wo.id) ?? wo.appfolio_last_updated_at ?? wo.appfolio_created_at ?? wo.created_at;
+  return new Date(since);
+}
+
 export function tripwire11(snapshot: TripwireSnapshot): TripwireException[] {
   const woById = new Map(snapshot.openWorkOrders.map((wo) => [wo.id, wo]));
-  return snapshot.approvals
+
+  // Source a: in-app approval records
+  const fromApprovals: TripwireException[] = snapshot.approvals
     .filter(
       (a) =>
         !a.decided_at &&
@@ -260,6 +290,31 @@ export function tripwire11(snapshot: TripwireSnapshot): TripwireException[] {
         ageDays: days,
       };
     });
+  const approvalWoIds = new Set(fromApprovals.map((e) => e.workOrderId));
+
+  // Source b: AppFolio estimate states
+  const fromEstimates: TripwireException[] = snapshot.openWorkOrders
+    .filter((wo) => {
+      if (approvalWoIds.has(wo.id)) return false; // already flagged via an approval record
+      const est = ESTIMATE_STATUSES[(wo.appfolio_status || '').toLowerCase().trim()];
+      if (!est) return false;
+      return businessDaysBetween(statusSinceFor(wo, snapshot), snapshot.now) > 3;
+    })
+    .map((wo) => {
+      const est = ESTIMATE_STATUSES[(wo.appfolio_status || '').toLowerCase().trim()]!;
+      const days = businessDaysBetween(statusSinceFor(wo, snapshot), snapshot.now);
+      return {
+        tripwire: 11 as const,
+        label: TRIPWIRE_LABELS[11],
+        item: `[${wo.appfolio_status} ${days}d] ${woLabel(wo)} (${est.waitingOn})`,
+        fixRequired: est.fix,
+        owner: 'Jen',
+        workOrderId: wo.id,
+        ageDays: days,
+      };
+    });
+
+  return [...fromApprovals, ...fromEstimates];
 }
 
 // ── #12: turn with no next action ──
