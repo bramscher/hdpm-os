@@ -167,6 +167,34 @@ describe('initialWorkflowFor', () => {
     expect(wf.next_action_date).toBeNull();
   });
 
+  it('grandfather falls back to LastUpdatedAt when CompletedOn is missing (2013 zombies)', () => {
+    const wf = initialWorkflowFor(
+      afWo({
+        status: 'done',
+        appfolioStatus: 'Completed',
+        completedDate: null,
+        lastUpdatedAt: '2025-11-15T00:00:00Z',
+        createdAt: '2013-02-21T00:00:00Z',
+      }),
+      NOW
+    );
+    expect(wf.stage).toBe('CLOSED');
+    expect(wf.closed_at).toBe('2025-11-15T00:00:00Z');
+  });
+
+  it('completed post-launch with no CompletedOn still goes to VERIFY (the gate decides)', () => {
+    const wf = initialWorkflowFor(
+      afWo({
+        status: 'done',
+        appfolioStatus: 'Completed',
+        completedDate: null,
+        lastUpdatedAt: '2026-07-02T00:00:00Z',
+      }),
+      NOW
+    );
+    expect(wf.stage).toBe('VERIFY');
+  });
+
   it('closed → CLOSED, grandfathered with closed_at and no next action', () => {
     const wf = initialWorkflowFor(
       afWo({ status: 'closed', appfolioStatus: 'Canceled', canceledDate: '2026-06-30T00:00:00Z' }),

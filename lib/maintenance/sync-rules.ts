@@ -151,7 +151,10 @@ export function initialWorkflowFor(wo: AppFolioWorkOrder, today: Date): InitialW
   let { stage, waiting_reason } = mappedStageFor(wo);
 
   // Standing grandfather rule: pre-launch completed history skips the gate.
-  if (stage === 'VERIFY' && wo.completedDate && wo.completedDate < LAUNCH_CUTOFF) {
+  // Ancient AppFolio records (2013–2014) can be "Completed" with no CompletedOn
+  // field, so fall back to LastUpdatedAt, then CreatedAt, when dating them.
+  const finishedOn = wo.completedDate ?? wo.lastUpdatedAt ?? wo.createdAt;
+  if (stage === 'VERIFY' && finishedOn && finishedOn < LAUNCH_CUTOFF) {
     stage = 'CLOSED';
     waiting_reason = null;
   }
@@ -164,7 +167,9 @@ export function initialWorkflowFor(wo: AppFolioWorkOrder, today: Date): InitialW
     priority_class: seedPriorityClass(wo.priority),
     origin: 'appfolio',
     closed_at:
-      stage === 'CLOSED' ? wo.completedDate || wo.canceledDate || today.toISOString() : null,
+      stage === 'CLOSED'
+        ? wo.completedDate || wo.canceledDate || wo.lastUpdatedAt || today.toISOString()
+        : null,
   };
 }
 
