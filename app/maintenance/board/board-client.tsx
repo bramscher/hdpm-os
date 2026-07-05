@@ -11,6 +11,7 @@ import Exceptions from './views/exceptions';
 import Turnover from './views/turnover';
 import MondayReview from './views/monday-review';
 import TriageReview from './views/triage-review';
+import InfoHelp from './components/info-help';
 
 const VIEWS = [
   { key: 'open', label: 'Open Board' },
@@ -99,6 +100,7 @@ export default function BoardClient() {
         <button onClick={load} title="Refresh" style={{ marginLeft: 'auto' }}>
           ⟳
         </button>
+        <InfoHelp viewKey={view} />
       </nav>
 
       {error && <p className="note flag">{error}</p>}

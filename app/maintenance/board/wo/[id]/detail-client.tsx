@@ -14,6 +14,7 @@ import type { Stage } from '@/lib/maintenance/types';
 import { fmtDate, woWhere } from '../../board-types';
 import { WaitBadge } from '../../components/shared';
 import AiTriagePanel from './ai-triage-panel';
+import InfoHelp from '../../components/info-help';
 
 interface DetailPayload {
   workOrder: MaintWorkOrder;
@@ -137,6 +138,7 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
         <Link href="/maintenance/board" className="badge">
           ← Back to board
         </Link>
+        <InfoHelp viewKey="detail" />
       </header>
 
       <p className="note" style={{ marginTop: 0 }}>

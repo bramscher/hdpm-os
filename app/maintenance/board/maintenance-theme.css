@@ -192,3 +192,21 @@
 .maint-os .evt { display: flex; gap: 10px; font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--tint); }
 .maint-os .evt .t { color: var(--muted); white-space: nowrap; }
 .maint-os .evt .type { font-weight: 700; color: var(--dk); white-space: nowrap; }
+
+/* ⓘ contextual help */
+.maint-os .mo-info-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1.5px solid var(--gr); background: var(--tint); color: var(--dk);
+  font-size: 12px; font-weight: 800; font-style: italic; font-family: Georgia, serif;
+  cursor: pointer; flex-shrink: 0;
+}
+.maint-os .mo-info-btn:hover { background: var(--gr); color: #fff; }
+/* Panel drops below the bar it lives in (nav or header must be position:relative) */
+.maint-os nav.mo-nav, .maint-os .mo-header { position: relative; }
+.maint-os .mo-help {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+  width: min(680px, 92vw); text-align: left; font-weight: 400;
+  border-left: 4px solid var(--gr); background: var(--lt);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
