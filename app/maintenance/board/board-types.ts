@@ -43,6 +43,9 @@ export interface ScoreboardRow {
   open: number;
   overdue: number;
   avgDaysOpen: number | null;
+  medianDaysOpen: number | null;
+  /** All-time cycle-time stats from closed WOs (null = no usable history) */
+  history: { n: number; medianDays: number; p90Days: number; pctOver30: number } | null;
 }
 
 // ── Shared display helpers ──

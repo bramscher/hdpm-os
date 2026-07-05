@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { Vendor, VendorAssignment } from '../types';
-import { computeVendorScores, docsComplianceScore } from '../vendors';
+import {
+  computeVendorHistory,
+  computeVendorScores,
+  docsComplianceScore,
+  medianOf,
+  p90Of,
+} from '../vendors';
 
 const NOW = new Date('2026-07-02T12:00:00Z');
 
@@ -118,5 +124,57 @@ describe('computeVendorScores', () => {
     const slow = vendor({ id: 'v2', name: 'Slowpoke Plumbing', w9_on_file: false });
     const scores = computeVendorScores([slow, fast], [assignment()], NOW);
     expect(scores[0].vendorId).toBe('v1');
+  });
+});
+
+describe('medianOf / p90Of', () => {
+  it('median: odd, even, empty', () => {
+    expect(medianOf([3, 1, 2])).toBe(2);
+    expect(medianOf([1, 2, 3, 4])).toBe(2.5);
+    expect(medianOf([])).toBeNull();
+  });
+  it('p90 nearest-rank', () => {
+    expect(p90Of([...Array(10).keys()].map((i) => i + 1))).toBe(9); // 1..10 → 9
+    expect(p90Of([5])).toBe(5);
+    expect(p90Of([])).toBeNull();
+  });
+});
+
+describe('computeVendorHistory (Session C)', () => {
+  const row = (vendor_id: string | null, created: string | null, completed: string | null) => ({
+    vendor_id,
+    appfolio_created_at: created,
+    completed_date: completed,
+  });
+
+  it('computes per-vendor median/p90/pctOver30', () => {
+    const rows = [
+      // slow vendor: 90, 100, 110 days
+      row('slow', '2026-01-01', '2026-04-01'),
+      row('slow', '2026-01-01', '2026-04-11'),
+      row('slow', '2026-01-01', '2026-04-21'),
+      // fast vendor: 5, 10 days
+      row('fast', '2026-06-01', '2026-06-06'),
+      row('fast', '2026-06-01', '2026-06-11'),
+    ];
+    const h = computeVendorHistory(rows);
+    expect(h.get('slow')!.n).toBe(3);
+    expect(h.get('slow')!.medianDays).toBe(100);
+    expect(h.get('slow')!.pctOver30).toBe(100);
+    expect(h.get('fast')!.medianDays).toBe(8); // (5+10)/2 rounded
+    expect(h.get('fast')!.pctOver30).toBe(0);
+  });
+
+  it('excludes null vendor, null dates, and negative durations', () => {
+    const rows = [
+      row(null, '2026-01-01', '2026-02-01'),
+      row('v', null, '2026-02-01'),
+      row('v', '2026-01-01', null),
+      row('v', '2026-03-01', '2026-02-01'), // negative — data noise
+      row('v', '2026-01-01', '2026-01-11'), // the one valid row
+    ];
+    const h = computeVendorHistory(rows);
+    expect(h.get('v')!.n).toBe(1);
+    expect(h.get('v')!.medianDays).toBe(10);
   });
 });

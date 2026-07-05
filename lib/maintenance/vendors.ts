@@ -77,6 +77,78 @@ export async function updateVendor(id: string, fields: Partial<Vendor>): Promise
 }
 
 // ============================================
+// Distribution helpers (pure)
+// ============================================
+
+/** Median of a numeric array. Returns null when empty. */
+export function medianOf(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** 90th percentile (nearest-rank). Returns null when empty. */
+export function p90Of(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.9) - 1)];
+}
+
+// ============================================
+// Historical cycle-time stats (Session C) — pure
+//
+// Seeds the scoreboard from the closed-WO mirror (incl. grandfathered rows)
+// so vendor rankings mean something on day one, before the rolling-90d
+// assignment metrics accumulate. Cycle time = AppFolio created → completed,
+// calendar days. Rows lacking either date (or with negative durations from
+// data noise) are excluded.
+//
+// Note: the redirect brief asked for "overdue-at-close rate", but historical
+// rows carry no promised dates — %-of-jobs-over-30-days is the substitute.
+// ============================================
+
+export interface VendorHistory {
+  n: number;
+  medianDays: number;
+  p90Days: number;
+  pctOver30: number;
+}
+
+export interface HistoryRow {
+  vendor_id: string | null;
+  appfolio_created_at: string | null;
+  completed_date: string | null;
+}
+
+/** Per-AppFolio-vendor-id cycle-time stats from closed WOs. Pure. */
+export function computeVendorHistory(rows: HistoryRow[]): Map<string, VendorHistory> {
+  const cycleDaysByVendor = new Map<string, number[]>();
+
+  for (const row of rows) {
+    if (!row.vendor_id || !row.appfolio_created_at || !row.completed_date) continue;
+    const days =
+      (new Date(row.completed_date).getTime() - new Date(row.appfolio_created_at).getTime()) /
+      86_400_000;
+    if (days < 0) continue; // data noise
+    const list = cycleDaysByVendor.get(row.vendor_id) ?? [];
+    list.push(days);
+    cycleDaysByVendor.set(row.vendor_id, list);
+  }
+
+  const result = new Map<string, VendorHistory>();
+  for (const [vendorId, days] of cycleDaysByVendor) {
+    result.set(vendorId, {
+      n: days.length,
+      medianDays: Math.round(medianOf(days)!),
+      p90Days: Math.round(p90Of(days)!),
+      pctOver30: Math.round((days.filter((d) => d > 30).length / days.length) * 100),
+    });
+  }
+  return result;
+}
+
+// ============================================
 // Ranking (pure) — rolling 90 days
 // score = 0.3*acceptSpeed + 0.25*completionSpeed + 0.25*(1-callbackRate) + 0.2*docsCompliance
 // (seed formula from docs/maintenance-os/05-data-model.md; tune at Monday reviews)

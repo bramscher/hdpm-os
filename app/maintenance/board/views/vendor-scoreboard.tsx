@@ -170,10 +170,11 @@ export default function VendorScoreboard({
           <tr>
             <th>Vendor / Tech</th>
             <th>Open</th>
-            <th>Avg days open</th>
+            <th>Days open (med / avg)</th>
             <th>Overdue</th>
-            <th>Accept time</th>
-            <th>Callback rate</th>
+            <th>History (all-time)</th>
+            <th>Accept time (90d)</th>
+            <th>Callback (90d)</th>
             <th>Insurance</th>
             <th>Score</th>
             <th>Rank</th>
@@ -197,10 +198,17 @@ export default function VendorScoreboard({
                   )}
                 </td>
                 <td>{row.open}</td>
-                <td className={row.avgDaysOpen && row.avgDaysOpen > 10 ? 'flag' : ''}>
-                  {row.avgDaysOpen === null ? '—' : row.avgDaysOpen.toFixed(1)}
+                <td className={row.medianDaysOpen !== null && row.medianDaysOpen > 21 ? 'flag' : ''}>
+                  {row.medianDaysOpen === null
+                    ? '—'
+                    : `${Math.round(row.medianDaysOpen)}d / ${Math.round(row.avgDaysOpen ?? 0)}d`}
                 </td>
                 <td className={row.overdue > 0 ? 'flag' : ''}>{row.overdue}</td>
+                <td className={row.history && row.history.medianDays > 21 ? 'flag' : ''}>
+                  {row.history
+                    ? `${row.history.n} jobs · med ${row.history.medianDays}d → p90 ${row.history.p90Days}d · ${row.history.pctOver30}% >30d`
+                    : '—'}
+                </td>
                 <td className={row.avgAcceptHours !== null && row.avgAcceptHours > 24 ? 'flag' : 'ok'}>
                   {acceptTime(row.avgAcceptHours)}
                 </td>
@@ -224,7 +232,7 @@ export default function VendorScoreboard({
           })}
           {scoreboard.length === 0 && (
             <tr>
-              <td colSpan={10} style={{ color: 'var(--muted)' }}>
+              <td colSpan={11} style={{ color: 'var(--muted)' }}>
                 No vendors yet — the AppFolio sync seeds the roster; profiles are filled in here.
               </td>
             </tr>
@@ -232,9 +240,11 @@ export default function VendorScoreboard({
         </tbody>
       </table>
       <p className="note">
-        Backed by vendor profiles: trade, service area, licensing, insurance, rates, minimums,
-        emergency availability, property restrictions. The ranking drives dispatch — repeat
-        offenders demote themselves at Monday review.
+        Two windows: <b>History (all-time)</b> is seeded from the closed-WO mirror (created →
+        completed cycle time; jobs missing either date are excluded) so rankings mean something
+        on day one. <b>Accept time / callback (90d)</b> build up from live assignments and take
+        over as the operative signal. Red flag = median over 21 days. The ranking drives
+        dispatch — repeat offenders demote themselves at Monday review.
       </p>
     </section>
   );
