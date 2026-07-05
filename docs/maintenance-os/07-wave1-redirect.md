@@ -40,7 +40,18 @@ business days** pending (≈34 calendar days — reconciles with the analysis's
 35-day median), max 144d; 5 new unit tests for the business-day logic,
 fallback ordering, and dedup; mirror-only upserts unchanged (no clobber).
 
-## Session B — Batch AI triage (kill the 280-WO manual pass)
+## Session B — Batch AI triage *(SHIPPED 2026-07-05, commit `a558894`)*
+
+**Shipped:** "✦ Triage Review" board tab. Proposals stored in
+`ai_triage_proposal` (migration `20260705_ai_triage_proposal.sql`); AI
+classifies, code derives the numbers (SLA-runway dates, owner rules);
+applies/skips are Cheryl's, audited as normal wo_events. Batch is resumable
+(chunks of 8, ~24s/WO measured, ≈4¢/WO). Live-verified: 10/10 NEW-pool
+proposals, one applied end-to-end. Pool note: the status remap (7/3) shrank
+NEW to ~11 — the UI's default pool is NEW+TRIAGED (~165), with a toggle for
+the full re-date sweep (SCHEDULED+WAITING_ON, ~426, ≈$17).
+
+### Original brief (for reference)
 
 **Why:** Adoption step 5 (`06` §5) asks Cheryl to hand-triage ~280 NEW WOs. The per-WO "AI Next Action" panel already exists (`app/api/maintenance/work-orders/[id]/ai-triage/route.ts`, commit `79b0507`) — batch it so Cheryl reviews instead of enters.
 
