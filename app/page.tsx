@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
   FileText,
@@ -17,6 +18,9 @@ import {
   Car,
   Megaphone,
   Home as HomeIcon,
+  Wrench,
+  Activity,
+  Phone,
 } from "lucide-react";
 
 function getGreeting() {
@@ -47,12 +51,28 @@ interface RouteStats {
   total_stops: number;
 }
 
+interface BoardKpis {
+  open: number;
+  pastDue: number;
+  aging30Plus: number;
+  p1ThisWeek: number;
+}
+
 export default function Home() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.isAdmin === true;
   const [inspectionStats, setInspectionStats] = useState<InspectionStats | null>(null);
   const [routeStats, setRouteStats] = useState<RouteStats | null>(null);
   const [vacancyCount, setVacancyCount] = useState<number | null>(null);
+  const [boardKpis, setBoardKpis] = useState<BoardKpis | null>(null);
 
   useEffect(() => {
+    // Fetch maintenance board KPIs
+    fetch("/api/maintenance/board")
+      .then((r) => r.json())
+      .then((data) => setBoardKpis(data.kpis ?? null))
+      .catch(() => {});
+
     // Fetch inspection stats
     fetch("/api/inspections/stats")
       .then((r) => r.json())
@@ -96,6 +116,60 @@ export default function Home() {
             Your automation tools are ready.
           </p>
         </div>
+
+        {/* Maintenance OS — flagship */}
+        <Link
+          href="/maintenance/board"
+          className="group mb-5 block relative overflow-hidden rounded-xl border border-terra-200 bg-gradient-to-br from-terra-500 to-terra-700 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5"
+        >
+          <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-bl-[120px] -mr-6 -mt-6" />
+          <div className="relative">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center">
+                  <Wrench className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-white/70 uppercase tracking-widest">
+                    Maintenance OS
+                  </p>
+                  <h3 className="text-lg font-semibold text-white">Work Order Board</h3>
+                </div>
+              </div>
+              <ArrowUpRight className="w-5 h-5 text-white/60 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
+            </div>
+            <p className="text-sm text-white/80 leading-relaxed max-w-2xl">
+              Triage, assign, and drive every AppFolio work order to completion — with tripwires,
+              vendor scoreboards, and aging alerts.
+            </p>
+            {boardKpis && (
+              <div className="mt-5 flex flex-wrap items-center gap-6">
+                <div className="flex items-center gap-2 text-white">
+                  <span className="text-xl font-bold">{boardKpis.open}</span>
+                  <span className="text-xs text-white/70">open</span>
+                </div>
+                {boardKpis.pastDue > 0 && (
+                  <div className="flex items-center gap-1.5 text-sm text-white font-medium">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>{boardKpis.pastDue} past due</span>
+                  </div>
+                )}
+                {boardKpis.aging30Plus > 0 && (
+                  <div className="flex items-center gap-1.5 text-sm text-white/80">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{boardKpis.aging30Plus} aging 30+ days</span>
+                  </div>
+                )}
+                {boardKpis.p1ThisWeek > 0 && (
+                  <div className="flex items-center gap-1.5 text-sm text-white/80">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>{boardKpis.p1ThisWeek} P1 this week</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </Link>
 
         {/* Tool Cards */}
         <div className="grid lg:grid-cols-2 gap-5 stagger-children">
@@ -292,6 +366,70 @@ export default function Home() {
               </div>
             </div>
           </Link>
+
+          {/* KPI Dashboard (admin) */}
+          {isAdmin && (
+            <Link
+              href="/dashboard"
+              className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-terra-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
+              <div className="relative">
+                <div className="flex items-start justify-between mb-5">
+                  <div className="w-11 h-11 bg-terra-100 rounded-xl flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-terra-600" />
+                  </div>
+                  <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-terra-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
+                </div>
+                <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
+                  KPI Dashboard
+                </h3>
+                <p className="text-sm text-charcoal-400 leading-relaxed">
+                  Track owner goals, delinquency, vacancy, work order cycle time, and maintenance economics.
+                </p>
+                <div className="mt-4 flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
+                    <TrendingUp className="w-3 h-3" />
+                    <span>Business metrics</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
+                    <BarChart3 className="w-3 h-3" />
+                    <span>Trends</span>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          )}
+
+          {/* Zoom Sync (admin) */}
+          {isAdmin && (
+            <Link
+              href="/admin/zoom-sync"
+              className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
+              <div className="relative">
+                <div className="flex items-start justify-between mb-5">
+                  <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <Phone className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-blue-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
+                </div>
+                <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
+                  Zoom Sync
+                </h3>
+                <p className="text-sm text-charcoal-400 leading-relaxed">
+                  Sync AppFolio tenant and vendor contacts into Zoom Phone for click-to-call and caller ID.
+                </p>
+                <div className="mt-4 flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
+                    <Phone className="w-3 h-3" />
+                    <span>Contact sync</span>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          )}
         </div>
 
         {/* Quick Stats / Status */}
