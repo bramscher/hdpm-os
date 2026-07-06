@@ -122,7 +122,8 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
           {woWhere(wo)}
         </h1>
         <span className="sub">
-          AppFolio: {wo.appfolio_status || wo.status} · synced {new Date(wo.synced_at).toLocaleString()}
+          Created {(wo.appfolio_created_at ?? wo.created_at).slice(0, 10)} · AppFolio:{' '}
+          {wo.appfolio_status || wo.status} · synced {new Date(wo.synced_at).toLocaleString()}
         </span>
         {wo.appfolio_link && (
           <a

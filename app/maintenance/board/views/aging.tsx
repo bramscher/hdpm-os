@@ -63,6 +63,7 @@ export default function Aging({ board, onChanged }: { board: BoardData; onChange
         <thead>
           <tr>
             <th>Work order</th>
+            <th>Created</th>
             <th>Days</th>
             <th>Stage</th>
             <th style={{ minWidth: 280 }}>Why it&apos;s old (type + Tab to save)</th>
@@ -77,6 +78,9 @@ export default function Aging({ board, onChanged }: { board: BoardData; onChange
                 <Link href={`/maintenance/board/wo/${wo.id}`}>
                   {wo.description.slice(0, 60)} — {woWhere(wo)}
                 </Link>
+              </td>
+              <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>
+                {woCreatedAt(wo).slice(0, 10)}
               </td>
               <td className={age > 30 ? 'flag' : 'warn'}>{age}</td>
               <td>
@@ -128,7 +132,7 @@ export default function Aging({ board, onChanged }: { board: BoardData; onChange
           ))}
           {old.length === 0 && (
             <tr>
-              <td colSpan={6} style={{ color: 'var(--muted)' }}>
+              <td colSpan={7} style={{ color: 'var(--muted)' }}>
                 Nothing over 14 days old.
               </td>
             </tr>
