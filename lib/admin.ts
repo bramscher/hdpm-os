@@ -1,5 +1,5 @@
 /**
- * Admin identity for hdpm-chat.
+ * Admin identity for HDPM-OS.
  *
  * Admins are an env allowlist: ADMIN_EMAILS = comma/space/newline-separated
  * @highdesertpm.com addresses. Admin status gates the financial dashboards

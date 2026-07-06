@@ -202,7 +202,7 @@ export function tripwire8(snapshot: TripwireSnapshot): TripwireException[] {
         tripwire: 8 as const,
         label: TRIPWIRE_LABELS[8],
         item: `${woLabel(wo)} (day ${days})`,
-        fixRequired: 'Generate the invoice in hdpm-chat today',
+        fixRequired: 'Generate the invoice in HDPM-OS today',
         owner: wo.assigned_tech || wo.owner_name || 'Penny',
         workOrderId: wo.id,
         ageDays: days,

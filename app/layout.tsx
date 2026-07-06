@@ -6,8 +6,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { AppShell } from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "HDPM Automation Dashboard",
-  description: "High Desert Property Management internal automation tools",
+  title: "HDPM-OS",
+  description: "The operating system for High Desert Property Management",
 };
 
 export default function RootLayout({

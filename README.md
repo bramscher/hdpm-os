@@ -1,6 +1,6 @@
-# HDPM Operations Dashboard
+# HDPM-OS
 
-Internal operations platform for **High Desert Property Management** (~835 doors across 467 properties, Central Oregon). Runs the **Maintenance OS** (live work-order board, 12 crack-proofing tripwires, AI triage, vendor scoreboard), and automates inspections, invoice generation, rent comp analysis, Craigslist ad creation, plus a live KPI dashboard covering portfolio health.
+The operating system for **High Desert Property Management** (~835 doors across 467 properties, Central Oregon). Runs the **Maintenance OS** (live work-order board, 12 crack-proofing tripwires, AI triage, vendor scoreboard), and automates inspections, invoice generation, rent comp analysis, Craigslist ad creation, plus a live KPI dashboard covering portfolio health.
 
 **Stack:** Next.js 16 / React 18 / TypeScript 5.7 / Supabase (PostgreSQL + pgvector) / Tailwind CSS 3.4 / Recharts 3 / Anthropic SDK / Vercel
 **Auth:** Microsoft Azure AD (@highdesertpm.com only)
