@@ -57,7 +57,9 @@ export default function Turnover({ board }: { board: BoardData }) {
           {rows.length === 0 && (
             <tr>
               <td colSpan={6} style={{ color: 'var(--muted)' }}>
-                No active turns. Flag a work order as a turn from its detail page.
+                Turn tracking isn&apos;t wired up yet — vacated dates, target-ready, blockers
+                and budgets aren&apos;t captured anywhere, so this view stays empty for now.
+                (Coming in a later wave.)
               </td>
             </tr>
           )}

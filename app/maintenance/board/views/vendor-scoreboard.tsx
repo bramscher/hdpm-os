@@ -21,6 +21,13 @@ function rankLabel(row: ScoreboardRow, index: number): { text: string; cls: stri
   if (!row.vendor.appfolio_vendor_id && row.name.startsWith('HDMS')) {
     return { text: 'Dispatch 1st', cls: 'ok' };
   }
+  // No 90-day assignment data yet → no numeric rank (a manual preferred/emergency
+  // flag still shows, but there's no measured position to report).
+  if (row.score === null) {
+    if (row.vendor.preferred) return { text: 'Preferred', cls: 'ok' };
+    if (row.vendor.emergency_available) return { text: 'Emergency', cls: 'ok' };
+    return { text: '—', cls: '' };
+  }
   if (row.vendor.preferred) return { text: `Preferred #${index + 1}`, cls: 'ok' };
   if (row.vendor.emergency_available) return { text: 'Emergency', cls: 'ok' };
   return { text: `#${index + 1}`, cls: '' };
@@ -326,7 +333,7 @@ export default function VendorScoreboard({
                 <td className={row.callbackRate > 0.05 ? 'warn' : 'ok'}>
                   {row.assignments90d === 0 ? '—' : `${Math.round(row.callbackRate * 100)}%`}
                 </td>
-                <td>{row.score.toFixed(2)}</td>
+                <td>{row.score === null ? '—' : row.score.toFixed(2)}</td>
                 <td className={rank.cls}>{rank.text}</td>
                 <td>
                   {row.vendor.appfolio_vendor_id ? (

@@ -36,9 +36,9 @@ export interface ScoreboardRow {
   avgAcceptHours: number | null;
   avgCompletionDays: number | null;
   callbackRate: number;
-  docsCompliance: number;
   demoted: boolean;
-  score: number;
+  /** null = no 90-day assignment data yet (rendered as '—'). */
+  score: number | null;
   vendor: Vendor;
   open: number;
   overdue: number;

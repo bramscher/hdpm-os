@@ -150,8 +150,12 @@ export function computeVendorHistory(rows: HistoryRow[]): Map<string, VendorHist
 
 // ============================================
 // Ranking (pure) — rolling 90 days
-// score = 0.3*acceptSpeed + 0.25*completionSpeed + 0.25*(1-callbackRate) + 0.2*docsCompliance
-// (seed formula from docs/maintenance-os/05-data-model.md; tune at Monday reviews)
+// score = 0.4*acceptSpeed + 0.3*completionSpeed + 0.3*(1-callbackRate)
+// Weights renormalized after dropping the docs-compliance term: insurance/W-9/
+// license are AppFolio-owned and no longer stored here, so a docs term would be
+// permanently 0. `score` is null when a vendor has no 90-day assignment data —
+// there's nothing to measure yet, so the scoreboard shows '—' rather than a fake
+// neutral value. (seed formula from docs/maintenance-os/05-data-model.md.)
 // ============================================
 
 export interface VendorPerformance {
@@ -161,9 +165,9 @@ export interface VendorPerformance {
   avgAcceptHours: number | null;
   avgCompletionDays: number | null;
   callbackRate: number;
-  docsCompliance: number;
   demoted: boolean;
-  score: number;
+  /** null = no 90-day assignment data yet (render as '—', not a neutral number). */
+  score: number | null;
 }
 
 const NINETY_DAYS_MS = 90 * 86_400_000;
@@ -184,26 +188,10 @@ function completionSpeedScore(days: number | null): number {
   return 1 - (days - 3) / 11;
 }
 
-/** Profile-based docs compliance: insurance unexpired, W-9, license valid where required. */
-export function docsComplianceScore(vendor: Vendor, now: Date): number {
-  const checks: boolean[] = [];
-  const today = now.toISOString().slice(0, 10);
-
-  checks.push(!!vendor.insurance_expiry && vendor.insurance_expiry >= today);
-  checks.push(vendor.w9_on_file);
-  const licenseRequired = (vendor.license_required_trades?.length ?? 0) > 0;
-  if (licenseRequired) {
-    checks.push(
-      !!vendor.license_number && !!vendor.license_expiry && vendor.license_expiry >= today
-    );
-  }
-
-  return checks.filter(Boolean).length / checks.length;
-}
-
 /**
  * Compute 90-day performance + ranking score per vendor. Pure.
  * `demoted` (Monday-review override) forces score 0 — bottom of every list.
+ * A vendor with no 90-day assignments gets `score: null` (no data to rank yet).
  */
 export function computeVendorScores(
   vendors: Vendor[],
@@ -241,14 +229,19 @@ export function computeVendorScores(
       const callbackRate =
         completed.length > 0 ? completed.filter((a) => a.callback).length / completed.length : 0;
 
-      const docsCompliance = docsComplianceScore(vendor, now);
-
+      // No assignments in the window → nothing to measure yet. Return null so the
+      // UI shows '—' instead of a misleading neutral score. Demotion is a manual
+      // override that still forces 0 (absolute bottom).
       const score = vendor.demoted
         ? 0
-        : 0.3 * acceptSpeedScore(avgAcceptHours) +
-          0.25 * completionSpeedScore(avgCompletionDays) +
-          0.25 * (1 - callbackRate) +
-          0.2 * docsCompliance;
+        : recent.length === 0
+          ? null
+          : Math.round(
+              (0.4 * acceptSpeedScore(avgAcceptHours) +
+                0.3 * completionSpeedScore(avgCompletionDays) +
+                0.3 * (1 - callbackRate)) *
+                1000
+            ) / 1000;
 
       return {
         vendorId: vendor.id,
@@ -257,10 +250,15 @@ export function computeVendorScores(
         avgAcceptHours,
         avgCompletionDays,
         callbackRate,
-        docsCompliance,
         demoted: vendor.demoted,
-        score: Math.round(score * 1000) / 1000,
+        score,
       };
     })
-    .sort((a, b) => b.score - a.score);
+    // Highest score first; vendors with no data (null) sink to the bottom.
+    .sort((a, b) => {
+      if (a.score === null && b.score === null) return a.name.localeCompare(b.name);
+      if (a.score === null) return 1;
+      if (b.score === null) return -1;
+      return b.score - a.score;
+    });
 }

@@ -380,21 +380,15 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
         setLineItems(items);
 
         // Try to extract individual materials from the description via AI
-        console.log("[InvoiceForm] Legacy/API path — description length:", workOrder.description?.length);
         if (workOrder.description && workOrder.description.trim().length > 10) {
-          console.log("[InvoiceForm] Calling extract-materials API...");
           setExtractingMaterials(true);
           fetch("/api/invoices/extract-materials", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ description: workOrder.description }),
           })
-            .then((res) => {
-              console.log("[InvoiceForm] extract-materials status:", res.status);
-              return res.json();
-            })
+            .then((res) => res.json())
             .then((data) => {
-              console.log("[InvoiceForm] extract-materials result:", JSON.stringify(data));
               if (data.error) {
                 console.error("[InvoiceForm] extract-materials ERROR:", data.error);
               }
@@ -422,11 +416,8 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
                       flatFeeKey: "",
                     })
                   );
-                  console.log("[InvoiceForm] Setting", materialLines.length, "material lines, labor:", data.laborDescription?.substring(0, 60));
                   return [...nonMaterialLines, ...materialLines];
                 });
-              } else {
-                console.log("[InvoiceForm] No materials found by AI");
               }
             })
             .catch((err) => {

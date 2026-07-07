@@ -931,12 +931,19 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           {/* Invoices Tab                   */}
           {/* ============================== */}
           {activeTab === "invoices" && (
-            <InvoiceList
-              invoices={invoices}
-              onRefresh={fetchInvoices}
-              onEdit={handleEditInvoice}
-              isLoading={isLoadingInvoices}
-            />
+            <>
+              <div className="bg-white rounded-xl border border-sand-200 shadow-card px-4 py-2.5 text-sm text-charcoal-600 mb-4">
+                These invoice PDFs are generated and stored here in HDPM-OS. They are
+                <strong> not</strong> pushed to AppFolio automatically — download each PDF and
+                upload it to the AppFolio work order yourself, then mark it attached.
+              </div>
+              <InvoiceList
+                invoices={invoices}
+                onRefresh={fetchInvoices}
+                onEdit={handleEditInvoice}
+                isLoading={isLoadingInvoices}
+              />
+            </>
           )}
         </div>
       )}

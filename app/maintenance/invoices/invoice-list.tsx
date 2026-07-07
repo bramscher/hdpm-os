@@ -413,7 +413,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, isLoading }: InvoiceL
                         size="sm"
                         onClick={() => handleStatusChange(invoice, "attached")}
                         disabled={actionLoading !== null}
-                        title="Mark as Attached in AppFolio"
+                        title="Mark as attached — after you've uploaded this PDF to AppFolio yourself (this only updates the local status; it does not upload to AppFolio)"
                         className="text-terra-600 hover:text-terra-700 hover:bg-terra-50 h-8 w-8 p-0"
                       >
                         {actionLoading === `status-${invoice.id}` ? (

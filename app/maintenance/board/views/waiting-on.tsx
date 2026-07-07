@@ -58,7 +58,7 @@ export default function WaitingOn({ board }: { board: BoardData }) {
             <th>Waiting for</th>
             <th>Days</th>
             <th>Next action</th>
-            <th>By</th>
+            <th>Due by</th>
             <th>HDPM Owner</th>
           </tr>
         </thead>

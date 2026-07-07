@@ -3,7 +3,6 @@ import type { Vendor, VendorAssignment } from '../types';
 import {
   computeVendorHistory,
   computeVendorScores,
-  docsComplianceScore,
   medianOf,
   p90Of,
 } from '../vendors';
@@ -54,32 +53,8 @@ function assignment(overrides: Partial<VendorAssignment> = {}): VendorAssignment
   };
 }
 
-describe('docsComplianceScore', () => {
-  it('full compliance without license requirement = 1', () => {
-    expect(docsComplianceScore(vendor(), NOW)).toBe(1);
-  });
-
-  it('expired insurance halves a two-check vendor', () => {
-    expect(docsComplianceScore(vendor({ insurance_expiry: '2026-06-01' }), NOW)).toBe(0.5);
-  });
-
-  it('license required and missing lowers compliance', () => {
-    const v = vendor({ license_required_trades: ['electrical'], license_number: null });
-    expect(docsComplianceScore(v, NOW)).toBeCloseTo(2 / 3);
-  });
-
-  it('license required and valid counts', () => {
-    const v = vendor({
-      license_required_trades: ['electrical'],
-      license_number: 'CCB-12345',
-      license_expiry: '2027-05-01',
-    });
-    expect(docsComplianceScore(v, NOW)).toBe(1);
-  });
-});
-
 describe('computeVendorScores', () => {
-  it('fast accept + fast completion + no callbacks + full docs ≈ 1.0', () => {
+  it('fast accept + fast completion + no callbacks ≈ 1.0', () => {
     const [perf] = computeVendorScores([vendor()], [assignment()], NOW);
     expect(perf.score).toBeCloseTo(1.0, 2);
     expect(perf.avgAcceptHours).toBeCloseTo(2);
@@ -89,29 +64,30 @@ describe('computeVendorScores', () => {
   it('slow accept (3 days) zeroes the accept component', () => {
     const slow = assignment({ accepted_at: '2026-06-23T10:00:00Z' }); // 72h
     const [perf] = computeVendorScores([vendor()], [slow], NOW);
-    expect(perf.score).toBeCloseTo(0.7, 2); // lost the 0.3 accept weight
+    expect(perf.score).toBeCloseTo(0.6, 2); // lost the 0.4 accept weight
   });
 
   it('callbacks reduce the score', () => {
     const cb = assignment({ callback: true });
     const [perf] = computeVendorScores([vendor()], [cb], NOW);
     expect(perf.callbackRate).toBe(1);
-    expect(perf.score).toBeCloseTo(0.75, 2); // lost the 0.25 callback weight
+    expect(perf.score).toBeCloseTo(0.7, 2); // lost the 0.3 callback weight
   });
 
-  it('assignments older than 90 days are ignored', () => {
+  it('assignments older than 90 days are ignored → null score', () => {
     const old = assignment({ sent_at: '2026-01-01T10:00:00Z' });
     const [perf] = computeVendorScores([vendor()], [old], NOW);
     expect(perf.assignments90d).toBe(0);
-    expect(perf.avgAcceptHours).toBeNull(); // neutral 0.5s apply
+    expect(perf.avgAcceptHours).toBeNull();
+    expect(perf.score).toBeNull();
   });
 
-  it('no data yields the neutral score (0.3*0.5 + 0.25*0.5 + 0.25 + 0.2*docs)', () => {
+  it('no assignment data yields a null score (nothing to measure yet)', () => {
     const [perf] = computeVendorScores([vendor()], [], NOW);
-    expect(perf.score).toBeCloseTo(0.3 * 0.5 + 0.25 * 0.5 + 0.25 + 0.2 * 1, 3);
+    expect(perf.score).toBeNull();
   });
 
-  it('demoted forces score 0 and bottom rank', () => {
+  it('demoted forces score 0 even with no data, and sorts below scored vendors', () => {
     const good = vendor();
     const demoted = vendor({ id: 'v2', name: 'Cascade Roofing', demoted: true });
     const scores = computeVendorScores([demoted, good], [assignment()], NOW);
@@ -119,11 +95,12 @@ describe('computeVendorScores', () => {
     expect(scores[1].score).toBe(0);
   });
 
-  it('sorts by score descending', () => {
-    const fast = vendor();
-    const slow = vendor({ id: 'v2', name: 'Slowpoke Plumbing', w9_on_file: false });
-    const scores = computeVendorScores([slow, fast], [assignment()], NOW);
-    expect(scores[0].vendorId).toBe('v1');
+  it('null-score vendors (no data) sort to the bottom, below a real score', () => {
+    const scored = vendor();
+    const noData = vendor({ id: 'v2', name: 'Slowpoke Plumbing' });
+    const scores = computeVendorScores([noData, scored], [assignment()], NOW);
+    expect(scores[0].vendorId).toBe('v1'); // has assignment → real score
+    expect(scores[1].score).toBeNull(); // no assignment → null, sinks last
   });
 });
 
