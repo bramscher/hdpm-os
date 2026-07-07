@@ -3,17 +3,16 @@ import { requireStaffSession } from '@/lib/maintenance/api-auth';
 import { updateVendor } from '@/lib/maintenance/vendors';
 import type { Vendor } from '@/lib/maintenance/types';
 
-/** Profile fields Cheryl can edit (sync owns appfolio_vendor_id; name is sync-refreshed too). */
+/**
+ * Profile fields Cheryl can edit (sync owns appfolio_vendor_id; name is sync-refreshed too).
+ * Insurance / license / W-9 are intentionally NOT here: AppFolio is the system of
+ * record for those and we don't store a divergent copy — the scoreboard links out
+ * to the AppFolio vendor record to view/edit them instead.
+ */
 const PATCHABLE = [
   'name',
   'trades',
   'service_area',
-  'license_number',
-  'license_expiry',
-  'license_required_trades',
-  'insurance_carrier',
-  'insurance_expiry',
-  'w9_on_file',
   'hourly_rate',
   'minimum_charge',
   'emergency_available',

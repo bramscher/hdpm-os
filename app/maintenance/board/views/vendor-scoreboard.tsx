@@ -1,8 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ScoreboardRow } from '../board-types';
-import { fmtDate } from '../board-types';
+
+// AppFolio is the system of record for vendor insurance/license/W-9. We don't
+// store or edit those here — we link out to the vendor record instead.
+const APPFOLIO_WEB_BASE = 'https://highdesertpm.appfolio.com';
+const vendorAppfolioUrl = (appfolioVendorId: string) =>
+  `${APPFOLIO_WEB_BASE}/vendors/${appfolioVendorId}`;
 
 function acceptTime(hours: number | null): string {
   if (hours === null) return '—';
@@ -32,12 +38,6 @@ function VendorEditPanel({
   const [fields, setFields] = useState({
     trades: (v.trades ?? []).join(', '),
     service_area: v.service_area ?? '',
-    license_number: v.license_number ?? '',
-    license_expiry: v.license_expiry ?? '',
-    license_required_trades: (v.license_required_trades ?? []).join(', '),
-    insurance_carrier: v.insurance_carrier ?? '',
-    insurance_expiry: v.insurance_expiry ?? '',
-    w9_on_file: v.w9_on_file,
     hourly_rate: v.hourly_rate?.toString() ?? '',
     minimum_charge: v.minimum_charge?.toString() ?? '',
     emergency_available: v.emergency_available,
@@ -65,12 +65,6 @@ function VendorEditPanel({
         body: JSON.stringify({
           trades: csv(fields.trades),
           service_area: fields.service_area || null,
-          license_number: fields.license_number || null,
-          license_expiry: fields.license_expiry || null,
-          license_required_trades: csv(fields.license_required_trades),
-          insurance_carrier: fields.insurance_carrier || null,
-          insurance_expiry: fields.insurance_expiry || null,
-          w9_on_file: fields.w9_on_file,
           hourly_rate: fields.hourly_rate ? Number(fields.hourly_rate) : null,
           minimum_charge: fields.minimum_charge ? Number(fields.minimum_charge) : null,
           emergency_available: fields.emergency_available,
@@ -116,17 +110,28 @@ function VendorEditPanel({
         {text('Trades (comma-sep)', 'trades')}
         {text('Service area', 'service_area')}
         {text('Hourly rate', 'hourly_rate', 'number')}
-        {text('License #', 'license_number')}
-        {text('License expiry', 'license_expiry', 'date')}
-        {text('License-required trades', 'license_required_trades')}
-        {text('Insurance carrier', 'insurance_carrier')}
-        {text('Insurance expiry', 'insurance_expiry', 'date')}
         {text('Minimum charge', 'minimum_charge', 'number')}
         {text('Property restrictions', 'property_restrictions')}
         {text('Notes', 'notes')}
       </div>
+      <p className="note" style={{ marginTop: 10 }}>
+        Insurance, license &amp; W-9 are managed in AppFolio (the system of record) —
+        {v.appfolio_vendor_id ? (
+          <>
+            {' '}
+            <a
+              href={vendorAppfolioUrl(v.appfolio_vendor_id)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              open this vendor in AppFolio ↗
+            </a>
+          </>
+        ) : (
+          ' this vendor has no linked AppFolio record.'
+        )}
+      </p>
       <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-        {check('W-9 on file', 'w9_on_file')}
         {check('Emergency available', 'emergency_available')}
         {check('Preferred', 'preferred')}
         {check('Demoted (Monday review)', 'demoted')}
@@ -144,6 +149,33 @@ function VendorEditPanel({
   );
 }
 
+type SortKey =
+  | 'name'
+  | 'open'
+  | 'medianDaysOpen'
+  | 'overdue'
+  | 'history'
+  | 'avgAcceptHours'
+  | 'callbackRate'
+  | 'score'
+  | 'rank';
+
+const COLUMNS: { key: SortKey | null; label: string }[] = [
+  { key: 'name', label: 'Vendor / Tech' },
+  { key: 'open', label: 'Open' },
+  { key: 'medianDaysOpen', label: 'Days open (med / avg)' },
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'history', label: 'History (all-time)' },
+  { key: 'avgAcceptHours', label: 'Accept time (90d)' },
+  { key: 'callbackRate', label: 'Callback (90d)' },
+  { key: 'score', label: 'Score' },
+  { key: 'rank', label: 'Rank' },
+  { key: null, label: 'Docs / AppFolio' },
+  { key: null, label: '' },
+];
+
+const SORT_KEYS = new Set(COLUMNS.map((c) => c.key).filter(Boolean) as SortKey[]);
+
 export default function VendorScoreboard({
   scoreboard,
   onRefresh,
@@ -153,6 +185,81 @@ export default function VendorScoreboard({
 }) {
   const [editing, setEditing] = useState<ScoreboardRow | null>(null);
   const onEdit = (row: ScoreboardRow) => setEditing(row);
+
+  // Sort state lives in the URL (?sort=<col>&dir=asc|desc) so it survives a refresh.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const sortKey = searchParams.get('sort');
+  const sort =
+    sortKey && SORT_KEYS.has(sortKey as SortKey)
+      ? { key: sortKey as SortKey, dir: searchParams.get('dir') === 'desc' ? 'desc' : 'asc' }
+      : null;
+
+  // Rank is pinned to the server's score-sorted order so it stays meaningful
+  // regardless of how the table is re-sorted for display below.
+  const rankIndex = useMemo(() => {
+    const m = new Map<string, number>();
+    scoreboard.forEach((r, i) => m.set(r.vendorId, i));
+    return m;
+  }, [scoreboard]);
+
+  const sorted = useMemo(() => {
+    if (!sort) return scoreboard;
+    const value = (row: ScoreboardRow): number | string | null => {
+      switch (sort.key) {
+        case 'name':
+          return row.name.toLowerCase();
+        case 'open':
+          return row.open;
+        case 'medianDaysOpen':
+          return row.medianDaysOpen;
+        case 'overdue':
+          return row.overdue;
+        case 'history':
+          return row.history ? row.history.medianDays : null;
+        case 'avgAcceptHours':
+          return row.avgAcceptHours;
+        case 'callbackRate':
+          return row.assignments90d === 0 ? null : row.callbackRate;
+        case 'score':
+          return row.score;
+        case 'rank':
+          return rankIndex.get(row.vendorId) ?? 0;
+      }
+    };
+    return [...scoreboard].sort((a, b) => {
+      const av = value(a);
+      const bv = value(b);
+      // Missing values (no data / not on file) always sink to the bottom.
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      const cmp =
+        typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+      return sort.dir === 'asc' ? cmp : -cmp;
+    });
+  }, [scoreboard, sort, rankIndex]);
+
+  // Click cycles: asc → desc → unsorted (back to rank order), persisted to the URL.
+  const toggleSort = (key: SortKey) => {
+    const next: { key: SortKey; dir: 'asc' | 'desc' } | null =
+      !sort || sort.key !== key
+        ? { key, dir: 'asc' }
+        : sort.dir === 'asc'
+          ? { key, dir: 'desc' }
+          : null;
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (next) {
+      params.set('sort', next.key);
+      params.set('dir', next.dir);
+    } else {
+      params.delete('sort');
+      params.delete('dir');
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   return (
     <section>
@@ -168,24 +275,28 @@ export default function VendorScoreboard({
       <table className="mo-table">
         <thead>
           <tr>
-            <th>Vendor / Tech</th>
-            <th>Open</th>
-            <th>Days open (med / avg)</th>
-            <th>Overdue</th>
-            <th>History (all-time)</th>
-            <th>Accept time (90d)</th>
-            <th>Callback (90d)</th>
-            <th>Insurance</th>
-            <th>Score</th>
-            <th>Rank</th>
-            <th />
+            {COLUMNS.map((col, idx) =>
+              col.key ? (
+                <th
+                  key={col.key}
+                  onClick={() => toggleSort(col.key!)}
+                  style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                  title="Click to sort"
+                >
+                  {col.label}
+                  <span style={{ opacity: sort?.key === col.key ? 1 : 0.3, marginLeft: 4 }}>
+                    {sort?.key === col.key ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
+                  </span>
+                </th>
+              ) : (
+                <th key={`static-${idx}`}>{col.label}</th>
+              )
+            )}
           </tr>
         </thead>
         <tbody>
-          {scoreboard.map((row, i) => {
-            const rank = rankLabel(row, i);
-            const insuranceExpired =
-              row.vendor.insurance_expiry && row.vendor.insurance_expiry < new Date().toISOString().slice(0, 10);
+          {sorted.map((row) => {
+            const rank = rankLabel(row, rankIndex.get(row.vendorId) ?? 0);
             return (
               <tr key={row.vendorId}>
                 <td>
@@ -215,13 +326,24 @@ export default function VendorScoreboard({
                 <td className={row.callbackRate > 0.05 ? 'warn' : 'ok'}>
                   {row.assignments90d === 0 ? '—' : `${Math.round(row.callbackRate * 100)}%`}
                 </td>
-                <td className={insuranceExpired ? 'flag' : row.vendor.insurance_expiry ? 'ok' : 'warn'}>
-                  {row.vendor.insurance_expiry
-                    ? `exp ${fmtDate(row.vendor.insurance_expiry)}/${row.vendor.insurance_expiry.slice(0, 4)}${insuranceExpired ? ' ⚠' : ''}`
-                    : 'not on file'}
-                </td>
                 <td>{row.score.toFixed(2)}</td>
                 <td className={rank.cls}>{rank.text}</td>
+                <td>
+                  {row.vendor.appfolio_vendor_id ? (
+                    <a
+                      href={vendorAppfolioUrl(row.vendor.appfolio_vendor_id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mo-btn secondary"
+                      style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
+                      title="Insurance, license & W-9 live in AppFolio — view / edit there"
+                    >
+                      AppFolio ↗
+                    </a>
+                  ) : (
+                    <span style={{ color: 'var(--muted)' }}>—</span>
+                  )}
+                </td>
                 <td>
                   <button className="mo-btn secondary" onClick={() => onEdit(row)}>
                     Edit
