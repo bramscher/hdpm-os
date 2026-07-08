@@ -229,6 +229,8 @@ export function BillableReport() {
       perWorkDay: workDays > 0 ? metricTotal / workDays : 0,
       perWeek: weeks > 0 ? metricTotal / weeks : 0,
       perMonth: months > 0 ? metricTotal / months : 0,
+      // Forecast: current daily run-rate extrapolated to a full year (= perMonth × 12).
+      annualized: calDays > 0 ? (metricTotal / calDays) * 365.25 : 0,
       byMonth: months_sorted,
     };
   }, [billable, period, earliest, metric, customStart, customEnd]);
@@ -248,6 +250,7 @@ export function BillableReport() {
       ["Avg / work day", report.perWorkDay.toFixed(2)],
       ["Avg / week", report.perWeek.toFixed(2)],
       ["Avg / month", report.perMonth.toFixed(2)],
+      ["Annualized (projected)", report.annualized.toFixed(2)],
     ];
     const all = [headers, ...rows, ...summary];
     const csv = all
@@ -358,21 +361,33 @@ export function BillableReport() {
           <p className="text-[11px] text-charcoal-400 -mb-2">
             Averages based on <span className="font-semibold text-terra-600">{metricLabel}</span> billable
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: "Avg / Work Day", value: report.perWorkDay, sub: `${report.workDays} business day${report.workDays !== 1 ? "s" : ""}` },
-              { label: "Avg / Week", value: report.perWeek, sub: `${(report.calDays / 7).toFixed(1)} weeks` },
-              { label: "Avg / Month", value: report.perMonth, sub: `${(report.calDays / AVG_DAYS_PER_MONTH).toFixed(1)} months` },
+              { label: "Avg / Work Day", value: report.perWorkDay, sub: `over ${report.workDays} business day${report.workDays !== 1 ? "s" : ""}`, forecast: false },
+              { label: "Avg / Week", value: report.perWeek, sub: `over ${(report.calDays / 7).toFixed(1)} weeks`, forecast: false },
+              { label: "Avg / Month", value: report.perMonth, sub: `over ${(report.calDays / AVG_DAYS_PER_MONTH).toFixed(1)} months`, forecast: false },
+              { label: "Annualized", value: report.annualized, sub: "projected / year at this pace", forecast: true },
             ].map((card) => (
-              <div key={card.label} className="bg-white rounded-xl border border-sand-200 shadow-card p-5">
+              <div
+                key={card.label}
+                className={`rounded-xl p-5 shadow-card ${
+                  card.forecast
+                    ? "bg-terra-50/70 border border-dashed border-terra-300"
+                    : "bg-white border border-sand-200"
+                }`}
+              >
                 <div className="flex items-center gap-1.5 mb-1">
-                  <TrendingUp className="h-3.5 w-3.5 text-terra-500" />
-                  <p className="text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">
+                  <TrendingUp className={`h-3.5 w-3.5 ${card.forecast ? "text-terra-600" : "text-terra-500"}`} />
+                  <p className={`text-[11px] font-semibold uppercase tracking-wider ${card.forecast ? "text-terra-700" : "text-charcoal-400"}`}>
                     {card.label}
                   </p>
                 </div>
-                <p className="text-3xl font-bold text-charcoal-900">{formatCurrencyShort(card.value)}</p>
-                <p className="text-[10px] text-charcoal-300 mt-1">over {card.sub}</p>
+                <p className={`text-3xl font-bold ${card.forecast ? "text-terra-700" : "text-charcoal-900"}`}>
+                  {formatCurrencyShort(card.value)}
+                </p>
+                <p className={`text-[10px] mt-1 ${card.forecast ? "text-terra-500" : "text-charcoal-300"}`}>
+                  {card.sub}
+                </p>
               </div>
             ))}
           </div>
@@ -450,7 +465,8 @@ export function BillableReport() {
 
           <p className="text-[10px] text-charcoal-300 text-center">
             Billables counted on completed date (falling back to created date). Void invoices excluded.
-            Per-work-day average uses Mon–Fri business days.
+            Per-work-day average uses Mon–Fri business days. Annualized is a forecast — the current
+            daily run-rate extrapolated to a full year, not booked revenue.
           </p>
         </>
       )}
