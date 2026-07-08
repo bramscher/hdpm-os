@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { createInvoice, getInvoices } from '@/lib/invoices';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
@@ -12,7 +12,12 @@ export async function GET() {
       );
     }
 
-    const invoices = await getInvoices();
+    // The billable report needs the full set, not just the default page.
+    const { searchParams } = new URL(request.url);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 5000);
+    const offset = parseInt(searchParams.get('offset') || '0', 10) || 0;
+
+    const invoices = await getInvoices(limit, offset);
     return NextResponse.json({ invoices });
   } catch (error) {
     console.error('Get invoices error:', error);
