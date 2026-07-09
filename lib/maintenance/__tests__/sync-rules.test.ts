@@ -56,24 +56,31 @@ const WORKFLOW_COLUMNS = [
 
 describe('buildMirrorRow', () => {
   it('never contains workflow columns (the load-bearing guarantee)', () => {
-    const row = buildMirrorRow(afWo(), { name: 'P', address: 'A' }, NOW);
+    const row = buildMirrorRow(afWo(), { name: 'P', address: 'A' }, { name: 'U' }, NOW);
     for (const col of WORKFLOW_COLUMNS) {
       expect(row).not.toHaveProperty(col);
     }
   });
 
   it('maps all mirror fields', () => {
-    const row = buildMirrorRow(afWo(), { name: 'Brosterhous', address: '61250 Brosterhous' }, NOW);
+    const row = buildMirrorRow(
+      afWo(),
+      { name: 'Brosterhous', address: '61250 Brosterhous' },
+      { name: 'RC 603 - #20' },
+      NOW
+    );
     expect(row.appfolio_id).toBe('wo-123');
     expect(row.property_name).toBe('Brosterhous');
+    expect(row.unit_name).toBe('RC 603 - #20');
     expect(row.status).toBe('open');
     expect(row.appfolio_status).toBe('Open');
     expect(row.synced_at).toBe(NOW.toISOString());
   });
 
-  it('falls back to Unknown Property', () => {
-    const row = buildMirrorRow(afWo(), null, NOW);
+  it('falls back to Unknown Property and null unit', () => {
+    const row = buildMirrorRow(afWo(), null, null, NOW);
     expect(row.property_name).toBe('Unknown Property');
+    expect(row.unit_name).toBeNull();
   });
 });
 

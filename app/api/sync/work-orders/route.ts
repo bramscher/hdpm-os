@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { fetchAppFolioWorkOrders, fetchAllPropertiesPublic, fetchAllVendors } from '@/lib/appfolio';
+import {
+  fetchAppFolioWorkOrders,
+  fetchAllPropertiesPublic,
+  fetchAllUnitsPublic,
+  fetchAllVendors,
+} from '@/lib/appfolio';
 import { bulkUpsertWorkOrders } from '@/lib/work-orders';
 import { syncVendors } from '@/lib/maintenance/vendors';
 
@@ -95,8 +100,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Step 3b: Fetch all units to build a unitId → { name } map (the v0 WO
+    // payload carries only UnitId, so unit_name is otherwise never populated).
+    const units = await fetchAllUnitsPublic();
+    const unitMap = new Map<string, { name: string | null }>();
+    for (const u of units) {
+      unitMap.set(u.id, { name: u.name });
+    }
+
     // Step 4: Bulk upsert into work_orders table
-    const count = await bulkUpsertWorkOrders(workOrders, propertyMap);
+    const count = await bulkUpsertWorkOrders(workOrders, propertyMap, unitMap);
 
     console.log(`[Sync] Work orders sync complete: ${count} work orders upserted`);
 
@@ -105,6 +118,7 @@ export async function POST(request: NextRequest) {
       synced: count,
       total_fetched: workOrders.length,
       properties_mapped: propertyMap.size,
+      units_mapped: unitMap.size,
       vendors_synced: vendorsSynced,
       days,
     });

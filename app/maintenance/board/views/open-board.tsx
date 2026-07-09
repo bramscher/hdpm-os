@@ -5,6 +5,7 @@ import type { MaintWorkOrder } from '@/lib/maintenance/types';
 import type { BoardData, ExceptionsData } from '../board-types';
 import { KpiTile, WoCard } from '../components/shared';
 import OpenBoardGrouped from './open-board-grouped';
+import OpenBoardVendor from './open-board-vendor';
 
 const COLUMNS: { stage: MaintWorkOrder['stage']; title: string }[] = [
   { stage: 'NEW', title: 'NEW' },
@@ -23,7 +24,7 @@ export default function OpenBoard({
   board: BoardData;
   exceptions: ExceptionsData | null;
 }) {
-  const [mode, setMode] = useState<'grouped' | 'kanban'>('grouped');
+  const [mode, setMode] = useState<'grouped' | 'vendor' | 'kanban'>('grouped');
 
   return (
     <section>
@@ -54,6 +55,14 @@ export default function OpenBoard({
         </button>
         <button
           role="tab"
+          aria-selected={mode === 'vendor'}
+          className={mode === 'vendor' ? 'on' : ''}
+          onClick={() => setMode('vendor')}
+        >
+          By Vendor
+        </button>
+        <button
+          role="tab"
           aria-selected={mode === 'kanban'}
           className={mode === 'kanban' ? 'on' : ''}
           onClick={() => setMode('kanban')}
@@ -62,7 +71,9 @@ export default function OpenBoard({
         </button>
       </div>
 
-      {mode === 'grouped' ? <OpenBoardGrouped board={board} /> : <KanbanBody board={board} />}
+      {mode === 'grouped' && <OpenBoardGrouped board={board} />}
+      {mode === 'vendor' && <OpenBoardVendor board={board} />}
+      {mode === 'kanban' && <KanbanBody board={board} />}
     </section>
   );
 }

@@ -89,9 +89,13 @@ async function handleWorkOrderUpdate(entityId: string): Promise<void> {
 
   // Check if we already have this work order (reuse existing property info)
   const existing = await getWorkOrderByAppfolioId(entityId);
+  let unitName: string | null = null;
   if (existing) {
     propertyName = existing.property_name;
     propertyAddress = existing.property_address;
+    // Preserve the unit name the full sync resolved — the webhook payload has
+    // only UnitId, so re-deriving it here would null it out on every update.
+    unitName = existing.unit_name;
   }
 
   // If it's a new work order or property was unknown, look up from AppFolio
@@ -104,7 +108,7 @@ async function handleWorkOrderUpdate(entityId: string): Promise<void> {
   }
 
   // 3. Upsert into our work_orders table
-  await upsertSingleWorkOrder(wo, propertyName, propertyAddress);
+  await upsertSingleWorkOrder(wo, propertyName, propertyAddress, unitName);
 
   console.log(
     `[Webhook] Work order ${entityId} synced: ${wo.appfolioStatus} — ${wo.description.substring(0, 60)}`

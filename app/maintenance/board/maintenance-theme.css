@@ -133,6 +133,12 @@
   font-weight: 800; letter-spacing: 0.4px; padding: 1px 6px; border-radius: 4px;
   margin-bottom: 3px; margin-right: 4px;
 }
+.maint-os .wonum {
+  display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #fff; color: var(--muted); border: 1px solid var(--hair);
+  font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px;
+  margin-bottom: 3px; margin-right: 4px;
+}
 
 /* ── KPI tiles ── */
 .maint-os .kpis {

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { BoardData } from '../board-types';
-import { groupOpenByProperty } from '../board-types';
+import { groupOpenByProperty, unitGroupLabel } from '../board-types';
 import { WoCard } from '../components/shared';
 
 /**
@@ -71,7 +71,7 @@ export default function OpenBoardGrouped({ board }: { board: BoardData }) {
                 {g.units.map((u) => (
                   <div className="unitgrp" key={u.unitKey}>
                     <div className="unitgrp-head">
-                      {u.unitName ? `Unit ${u.unitName}` : g.propertyName}
+                      {unitGroupLabel(u.unitName, u.wos)}
                       {u.isTurn && <span className="turn"> (turn)</span>} —{' '}
                       {u.wos.length} WO{u.wos.length === 1 ? '' : 's'}
                     </div>

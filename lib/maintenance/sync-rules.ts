@@ -25,6 +25,7 @@ export interface MirrorRow {
   property_name: string;
   property_address: string | null;
   unit_id: string | null;
+  unit_name: string | null;
   wo_number: string | null;
   description: string;
   status: 'open' | 'closed' | 'done';
@@ -51,6 +52,7 @@ export interface MirrorRow {
 export function buildMirrorRow(
   wo: AppFolioWorkOrder,
   prop: { name: string; address: string | null } | null | undefined,
+  unit: { name: string | null } | null | undefined,
   syncedAt: Date
 ): MirrorRow {
   return {
@@ -59,6 +61,7 @@ export function buildMirrorRow(
     property_name: prop?.name || 'Unknown Property',
     property_address: prop?.address || null,
     unit_id: wo.unitId,
+    unit_name: unit?.name ?? null,
     wo_number: wo.woNumber,
     description: wo.description || 'No description',
     status: wo.status,

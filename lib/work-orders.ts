@@ -237,7 +237,8 @@ export async function getWorkOrderStats(
  */
 export async function bulkUpsertWorkOrders(
   orders: AppFolioWorkOrder[],
-  propertyMap: Map<string, { name: string; address: string }>
+  propertyMap: Map<string, { name: string; address: string }>,
+  unitMap: Map<string, { name: string | null }> = new Map()
 ): Promise<number> {
   if (orders.length === 0) return 0;
 
@@ -270,7 +271,12 @@ export async function bulkUpsertWorkOrders(
   }
 
   const mirrorRowFor = (wo: AppFolioWorkOrder) =>
-    buildMirrorRow(wo, wo.propertyId ? propertyMap.get(wo.propertyId) : null, now);
+    buildMirrorRow(
+      wo,
+      wo.propertyId ? propertyMap.get(wo.propertyId) : null,
+      wo.unitId ? unitMap.get(wo.unitId) : null,
+      now
+    );
 
   // 2. Insert brand-new WOs with workflow defaults + `created` events
   const newOrders = orders.filter((o) => !existing.has(o.appfolioId));
@@ -397,7 +403,8 @@ export async function getWorkOrderByAppfolioId(
 export async function upsertSingleWorkOrder(
   order: AppFolioWorkOrder,
   propertyName: string,
-  propertyAddress: string | null
+  propertyAddress: string | null,
+  unitName: string | null = null
 ): Promise<void> {
   const supabase = getSupabaseAdmin();
   const now = new Date();
@@ -405,6 +412,7 @@ export async function upsertSingleWorkOrder(
   const row = buildMirrorRow(
     order,
     { name: propertyName, address: propertyAddress },
+    { name: unitName },
     now
   );
 

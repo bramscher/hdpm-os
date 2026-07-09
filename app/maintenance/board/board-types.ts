@@ -51,7 +51,9 @@ export interface ScoreboardRow {
 // ── Shared display helpers ──
 
 export function woWhere(wo: MaintWorkOrder): string {
-  return wo.unit_name ? `${wo.property_name} #${wo.unit_name}` : wo.property_name;
+  // AppFolio unit names already carry their own designator (e.g. "RC 603 - #20"),
+  // so join with " · " rather than a "#" that would double up.
+  return wo.unit_name ? `${wo.property_name} · ${wo.unit_name}` : wo.property_name;
 }
 
 /**
@@ -130,6 +132,29 @@ function isPastDue(wo: MaintWorkOrder, today: string): boolean {
   return !!wo.next_action_date && wo.next_action_date < today;
 }
 
+/** Lifecycle stage, then next-action date. Shared by the grouped views. */
+function byStageThenDate(a: MaintWorkOrder, b: MaintWorkOrder): number {
+  const s = (STAGE_ORDER[a.stage] ?? 99) - (STAGE_ORDER[b.stage] ?? 99);
+  if (s !== 0) return s;
+  return (a.next_action_date ?? '9999').localeCompare(b.next_action_date ?? '9999');
+}
+
+/**
+ * Human label for a unit group. AppFolio often leaves unit_name null even
+ * when a property has several distinct units, so fall back to the WO ticket
+ * number(s) — the per-vendor WOs of one turn share a ticket (e.g. 42248-1..5).
+ */
+export function unitGroupLabel(unitName: string | null, wos: MaintWorkOrder[]): string {
+  // AppFolio unit names are already self-descriptive (e.g. "RC 603 - #20"),
+  // so show them as-is rather than prefixing a redundant "Unit".
+  if (unitName) return unitName;
+  const tickets = [...new Set(wos.map((w) => (w.wo_number ?? '').split('-')[0]).filter(Boolean))];
+  if (tickets.length === 1) return `WO #${tickets[0]}`;
+  if (tickets.length > 1 && tickets.length <= 3) return `WO ${tickets.map((t) => `#${t}`).join(', ')}`;
+  if (tickets.length > 3) return `${tickets.length} tickets`;
+  return 'Unspecified unit';
+}
+
 /**
  * Shape the flat open-WO list into ordered Property → Unit → WO groups so a
  * turn's scattered per-vendor work orders collapse into one place. Pure — safe
@@ -178,12 +203,6 @@ export function groupOpenByProperty(open: MaintWorkOrder[]): PropertyGroup[] {
     }
   }
 
-  const byStageThenDate = (a: MaintWorkOrder, b: MaintWorkOrder) => {
-    const s = (STAGE_ORDER[a.stage] ?? 99) - (STAGE_ORDER[b.stage] ?? 99);
-    if (s !== 0) return s;
-    return (a.next_action_date ?? '9999').localeCompare(b.next_action_date ?? '9999');
-  };
-
   const result = [...props.values()].map((prop) => {
     const units = [...prop.unitMap.values()]
       .map((u) => ({ ...u, wos: [...u.wos].sort(byStageThenDate) }))
@@ -203,5 +222,58 @@ export function groupOpenByProperty(open: MaintWorkOrder[]): PropertyGroup[] {
       b.pastDue - a.pastDue ||
       b.total - a.total ||
       a.propertyName.localeCompare(b.propertyName),
+  );
+}
+
+export interface VendorGroup {
+  vendorKey: string;
+  vendorName: string;
+  assigned: boolean;
+  wos: MaintWorkOrder[];
+  total: number;
+  pastDue: number;
+  p1: number;
+}
+
+/**
+ * Collapse the open board into one group per assigned vendor — every work order
+ * a vendor is on, in one place. Unassigned WOs sort to the bottom under a
+ * dedicated bucket. Sort: past-due desc, total desc, name; WOs by stage/date.
+ */
+export function groupOpenByVendor(open: MaintWorkOrder[]): VendorGroup[] {
+  const today = todayStr();
+  const map = new Map<string, VendorGroup>();
+
+  for (const wo of open) {
+    const assigned = !!(wo.vendor_id || wo.vendor_name);
+    const key = wo.vendor_id || wo.vendor_name || '—unassigned—';
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        vendorKey: key,
+        vendorName: wo.vendor_name || '— Unassigned —',
+        assigned,
+        wos: [],
+        total: 0,
+        pastDue: 0,
+        p1: 0,
+      };
+      map.set(key, g);
+    }
+    g.wos.push(wo);
+    g.total += 1;
+    if (isPastDue(wo, today)) g.pastDue += 1;
+    if (wo.priority_class === 'P1') g.p1 += 1;
+  }
+
+  for (const g of map.values()) g.wos.sort(byStageThenDate);
+
+  return [...map.values()].sort(
+    (a, b) =>
+      // Unassigned bucket always last.
+      Number(b.assigned) - Number(a.assigned) ||
+      b.pastDue - a.pastDue ||
+      b.total - a.total ||
+      a.vendorName.localeCompare(b.vendorName),
   );
 }

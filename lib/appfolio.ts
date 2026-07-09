@@ -247,6 +247,70 @@ async function fetchUnitsForProperty(
   return res.data || [];
 }
 
+/**
+ * Every unit across the portfolio, paginated. The v0 work-order endpoint only
+ * carries UnitId, so the WO sync needs this to resolve unit_id → unit name.
+ */
+async function fetchAllUnits(
+  clientId: string,
+  clientSecret: string,
+  developerId: string
+): Promise<V0Unit[]> {
+  const allUnits: V0Unit[] = [];
+  let pageNumber = 1;
+  const pageSize = 1000;
+
+  while (true) {
+    const res = await v0Fetch<V0Unit>(
+      '/units',
+      {
+        'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z',
+        'page[number]': String(pageNumber),
+        'page[size]': String(pageSize),
+      },
+      clientId,
+      clientSecret,
+      developerId
+    );
+
+    const units = res.data || [];
+    allUnits.push(...units);
+
+    if (units.length < pageSize || !res.next_page_path) break;
+    pageNumber++;
+    // Safety: max 20 pages (20,000 units)
+    if (pageNumber > 20) {
+      console.warn('[AppFolio] Hit max unit page limit (20), stopping pagination');
+      break;
+    }
+  }
+
+  return allUnits;
+}
+
+/** A single unit resolved for the WO mirror: id → human name + street address. */
+export interface UnitLite {
+  id: string;
+  name: string | null;
+  address: string | null;
+}
+
+/**
+ * Public unit fetch for the work-order sync. Returns a lightweight shape so the
+ * sync can build a unitId → { name, address } map (unit_name is otherwise null,
+ * because the v0 WO payload carries only UnitId).
+ */
+export async function fetchAllUnitsPublic(): Promise<UnitLite[]> {
+  const config = getConfig();
+  if (!config) return [];
+  const units = await fetchAllUnits(config.clientId, config.clientSecret, config.developerId);
+  return units.map((u) => ({
+    id: u.Id,
+    name: u.Name || null,
+    address: [u.Address1, u.Address2].filter(Boolean).join(' ') || null,
+  }));
+}
+
 // ============================================
 // Public: Fetch & Map to Comps
 // ============================================

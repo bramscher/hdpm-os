@@ -43,6 +43,7 @@ export function WoCard({ wo, showStage }: { wo: MaintWorkOrder; showStage?: bool
   return (
     <Link href={`/maintenance/board/wo/${wo.id}`} className={`card ${edge}`}>
       {showStage && <span className="stagechip">{STAGE_SHORT[wo.stage] ?? wo.stage}</span>}
+      {wo.wo_number && <span className="wonum">#{wo.wo_number}</span>}
       {wo.stage === 'WAITING_ON' && wo.waiting_reason && (
         <WaitBadge reason={wo.waiting_reason} small />
       )}
