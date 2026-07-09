@@ -135,24 +135,19 @@ describe('mappedStageFor — HDPM AppFolio status vocabulary', () => {
 });
 
 describe('initialWorkflowFor', () => {
-  it('open → NEW with Cheryl + next business day', () => {
+  it('open with no scheduled visit → NEW, Cheryl, blank next-action date (needs date)', () => {
     const wf = initialWorkflowFor(afWo(), NOW);
     expect(wf.stage).toBe('NEW');
     expect(wf.owner_name).toBe('Cheryl');
-    expect(wf.next_action_date).toBe('2026-07-03'); // Friday
+    expect(wf.next_action_date).toBeNull(); // no AppFolio date → blank, not a placeholder
     expect(wf.origin).toBe('appfolio');
     expect(wf.closed_at).toBeNull();
   });
 
-  it('Friday rolls the next-action date to Monday', () => {
-    const friday = new Date('2026-07-03T18:00:00Z');
-    const wf = initialWorkflowFor(afWo(), friday);
-    expect(wf.next_action_date).toBe('2026-07-06'); // Monday
-  });
-
-  it('open + scheduled_start → SCHEDULED', () => {
+  it('open + scheduled_start → SCHEDULED, next-action date = the scheduled visit', () => {
     const wf = initialWorkflowFor(afWo({ scheduledStart: '2026-07-05T09:00:00Z' }), NOW);
     expect(wf.stage).toBe('SCHEDULED');
+    expect(wf.next_action_date).toBe('2026-07-05');
   });
 
   it('done → VERIFY (completed in AppFolio still needs our gate)', () => {

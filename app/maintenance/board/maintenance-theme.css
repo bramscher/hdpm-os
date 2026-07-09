@@ -74,6 +74,7 @@
 .maint-os .card .own { color: var(--gr); font-weight: 700; }
 .maint-os .card .due { color: var(--muted); }
 .maint-os .card .due.past { color: var(--red); font-weight: 700; }
+.maint-os .card .due.needsdate { color: var(--amber); font-weight: 700; }
 .maint-os .p1 { border-left: 4px solid var(--red); }
 .maint-os .p2 { border-left: 4px solid var(--amber); }
 .maint-os .p3 { border-left: 4px solid var(--gr); }

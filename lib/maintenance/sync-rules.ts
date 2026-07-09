@@ -13,7 +13,7 @@
 import type { AppFolioWorkOrder } from '@/lib/appfolio';
 import type { PriorityClass, Stage, WaitingReason } from './types';
 import { STAGE_ORDER } from './workflow';
-import { nextBusinessDay, toDateString } from './business-days';
+import { toDateString } from './business-days';
 
 // ============================================
 // Mirror columns (AppFolio-owned)
@@ -166,7 +166,12 @@ export function initialWorkflowFor(wo: AppFolioWorkOrder, today: Date): InitialW
     stage,
     waiting_reason,
     owner_name: 'Cheryl',
-    next_action_date: stage === 'CLOSED' ? null : toDateString(nextBusinessDay(today)),
+    // next_action_date is HDPM's "next touch" date, not an AppFolio due date.
+    // Seed it from the real scheduled visit when AppFolio has one; otherwise
+    // leave it blank ("needs date") rather than inventing a placeholder that
+    // reads as past-due the moment it's synced.
+    next_action_date:
+      stage === 'CLOSED' ? null : wo.scheduledStart ? toDateString(new Date(wo.scheduledStart)) : null,
     priority_class: seedPriorityClass(wo.priority),
     origin: 'appfolio',
     closed_at:

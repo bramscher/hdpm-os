@@ -53,9 +53,13 @@ export function WoCard({ wo, showStage }: { wo: MaintWorkOrder; showStage?: bool
       </b>
       <span className="own">{wo.owner_name || '⚠ no HDPM owner'}</span>
       {' · '}
-      <span className={pastDue ? 'due past' : 'due'}>
-        {pastDue ? `due ${fmtDate(wo.next_action_date)} ⚠` : `act ${fmtDate(wo.next_action_date)}`}
-      </span>
+      {wo.next_action_date ? (
+        <span className={pastDue ? 'due past' : 'due'}>
+          {pastDue ? `due ${fmtDate(wo.next_action_date)} ⚠` : `act ${fmtDate(wo.next_action_date)}`}
+        </span>
+      ) : (
+        <span className="due needsdate">needs date</span>
+      )}
     </Link>
   );
 }
