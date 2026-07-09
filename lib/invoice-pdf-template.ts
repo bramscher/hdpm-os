@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { HdmsInvoice, LineItem } from './invoices';
+import { HdmsInvoice, LineItem, TECHNICIAN_INITIALS, normalizeTechnician } from './invoices';
 import { HDPM_LOGO_BASE64 } from './hdpm-logo';
 
 // ============================================
@@ -235,7 +235,10 @@ export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
       if (type === 'labor') doc.setTextColor(BLUE_LABEL);
       else if (type === 'materials') doc.setTextColor(AMBER_LABEL);
       else doc.setTextColor(MID);
-      doc.text(capitalize(type), COL_TYPE_X, y);
+      // Labor lines carry the tech's initials (e.g. "Labor BB"); full names stay internal.
+      const tech = type === 'labor' ? normalizeTechnician(item.technician) : '';
+      const typeLabel = tech ? `${capitalize(type)} ${TECHNICIAN_INITIALS[tech]}` : capitalize(type);
+      doc.text(typeLabel, COL_TYPE_X, y);
 
       // Description (wrapped)
       doc.setFont('helvetica', 'normal');

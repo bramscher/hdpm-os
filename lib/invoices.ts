@@ -9,9 +9,29 @@ export interface LineItem {
   description: string;
   account?: string;        // GL account code from work order (e.g. "6500: Keys, Locks...")
   type?: 'labor' | 'materials' | 'other';  // categorization for the line item
+  technician?: string;     // tech who performed this labor (e.g. "Brody" | "Alberto"); labor lines only
   qty?: number;            // quantity (hours for labor, count for materials)
   unit_price?: number;     // per-unit price (hourly rate for labor, per-item for materials)
   amount: number;          // extended amount (qty × unit_price, or manual entry)
+}
+
+/** The two HDMS technicians labor can be attributed to. */
+export const TECHNICIANS = ['Brody', 'Alberto'] as const;
+export type Technician = (typeof TECHNICIANS)[number];
+
+/** Initials shown on the customer-facing invoice/PDF (full names are reserved for internal reporting). */
+export const TECHNICIAN_INITIALS: Record<Technician, string> = {
+  Brody: 'BB',
+  Alberto: 'AF',
+};
+
+/** Normalize an arbitrary assigned-tech string (name, email, casing) to a known technician, or "" if unknown. */
+export function normalizeTechnician(raw: string | null | undefined): Technician | '' {
+  if (!raw) return '';
+  const s = raw.toLowerCase();
+  if (s.includes('brody')) return 'Brody';
+  if (s.includes('alberto')) return 'Alberto';
+  return '';
 }
 
 export interface HdmsInvoice {

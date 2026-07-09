@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { ArrowLeft, Save, FileDown, Loader2, Trash2, Wrench, Package, Check, Sparkles, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { WorkOrderRow, HdmsInvoice, LineItem } from "@/lib/invoices";
+import { WorkOrderRow, HdmsInvoice, LineItem, TECHNICIANS, normalizeTechnician } from "@/lib/invoices";
 
 interface InvoiceFormProps {
   workOrder: WorkOrderRow | null;
@@ -38,6 +38,7 @@ interface FormLineItem {
   qty: string;
   rate: string;
   rateType: RateType;
+  technician?: string; // "Brody" | "Alberto" — attributes labor to a tech (labor lines only)
   // Materials-specific
   flatFeeKey: string;
 }
@@ -47,7 +48,7 @@ function newLineItemId(): string {
   return `li_${nextLineItemId++}`;
 }
 
-function blankLineItem(type: LineItemType = "labor"): FormLineItem {
+function blankLineItem(type: LineItemType = "labor", technician = ""): FormLineItem {
   return {
     id: newLineItemId(),
     type,
@@ -57,6 +58,7 @@ function blankLineItem(type: LineItemType = "labor"): FormLineItem {
     qty: "",
     rate: type === "labor" ? STANDARD_RATE.toFixed(2) : "",
     rateType: "standard",
+    technician: type === "labor" ? technician : "",
     flatFeeKey: "",
   };
 }
@@ -158,6 +160,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
             qty: li.qty ? String(li.qty) : "",
             rate: li.unit_price ? li.unit_price.toFixed(2) : ((li.type || "labor") === "labor" ? STANDARD_RATE.toFixed(2) : ""),
             rateType: "standard" as RateType,
+            technician: (li.type || "labor") === "labor" ? normalizeTechnician(li.technician) : "",
             flatFeeKey: "",
           }))
         );
@@ -212,6 +215,9 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
       setWoReference(workOrder.wo_number);
       setCompletedDate(workOrder.completed_date);
 
+      // Default the labor tech from the work order's assigned tech (editable per line).
+      const defaultTech = normalizeTechnician(workOrder.assigned_to || workOrder.technician);
+
       // Load line items from scanned PDF — full WO text goes into the labor
       // description so the user can reference it while editing.  The 2-row
       // textarea keeps the UI compact; PDF only prints what the user leaves.
@@ -238,6 +244,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
             qty: "",
             rate: STANDARD_RATE.toFixed(2),
             rateType: "standard",
+            technician: defaultTech,
             flatFeeKey: "",
           },
         ];
@@ -329,6 +336,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
             qty: "",
             rate: type === "labor" ? STANDARD_RATE.toFixed(2) : "",
             rateType: "standard" as RateType,
+            technician: type === "labor" ? defaultTech : "",
             flatFeeKey: "",
           };
         });
@@ -362,6 +370,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
           qty: "",
           rate: STANDARD_RATE.toFixed(2),
           rateType: "standard",
+          technician: defaultTech,
           flatFeeKey: "",
         });
         items.push({
@@ -631,6 +640,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
         description: li.description.trim(),
         account: li.account.trim() || undefined,
         type: li.type,
+        technician: li.type === "labor" ? li.technician || undefined : undefined,
         qty: parseFloat(li.qty) || undefined,
         unit_price: parseFloat(li.rate) || undefined,
         amount: parseFloat(li.amount) || 0,
@@ -1043,6 +1053,27 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
 
                   {/* Description */}
                   <div className="relative">
+                    {/* Tech attribution for labor — initials print on the invoice (BB/AF) */}
+                    {isLabor && (
+                      <select
+                        value={li.technician || ""}
+                        onChange={(e) => updateLineItem(li.id, "technician", e.target.value)}
+                        disabled={isLoading}
+                        className={`w-full h-7 text-[10px] font-medium rounded-lg border px-2 mb-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-terra-600/30 ${
+                          li.technician
+                            ? "border-blue-200/60 bg-blue-50/40 text-blue-700"
+                            : "border-amber-300/60 bg-amber-50/40 text-amber-700"
+                        }`}
+                        title="Which tech performed this labor"
+                      >
+                        <option value="">Tech… (unassigned)</option>
+                        {TECHNICIANS.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     {/* Flat fee dropdown for materials */}
                     {isMaterials && FLAT_FEE_JOBS.length > 0 && (
                       <select

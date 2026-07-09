@@ -4,7 +4,27 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Loader2, RefreshCw, TrendingUp, Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { HdmsInvoice } from "@/lib/invoices";
+import { HdmsInvoice, TECHNICIANS, normalizeTechnician } from "@/lib/invoices";
+
+// Labor-by-tech buckets: the two named techs plus an Unassigned catch-all.
+const TECH_BUCKETS = [...TECHNICIANS, "Unassigned"] as const;
+type TechBucket = (typeof TECH_BUCKETS)[number];
+
+/** Split an invoice's labor across techs using its line items, falling back to Unassigned. */
+function laborByTech(inv: HdmsInvoice): Record<TechBucket, number> {
+  const out: Record<TechBucket, number> = { Brody: 0, Alberto: 0, Unassigned: 0 };
+  const laborLines = (inv.line_items || []).filter((li) => (li.type || "labor") === "labor");
+  if (laborLines.length > 0) {
+    for (const li of laborLines) {
+      const tech = normalizeTechnician(li.technician);
+      out[tech || "Unassigned"] += li.amount || 0;
+    }
+  } else {
+    // Legacy invoice with no line items — its labor total can't be attributed.
+    out.Unassigned += inv.labor_amount || 0;
+  }
+  return out;
+}
 
 // ============================================
 // Helpers
@@ -193,6 +213,7 @@ export function BillableReport() {
     let labor = 0;
     let materials = 0;
     const byMonth = new Map<string, { total: number; count: number }>();
+    const byTech: Record<TechBucket, number> = { Brody: 0, Alberto: 0, Unassigned: 0 };
 
     for (const { inv, date } of inRange) {
       const amt = amountFor(inv, metric);
@@ -200,6 +221,10 @@ export function BillableReport() {
       total += inv.total_amount || 0;
       labor += inv.labor_amount || 0;
       materials += inv.materials_amount || 0;
+      const split = laborByTech(inv);
+      byTech.Brody += split.Brody;
+      byTech.Alberto += split.Alberto;
+      byTech.Unassigned += split.Unassigned;
       const key = monthKey(date);
       const bucket = byMonth.get(key) || { total: 0, count: 0 };
       bucket.total += amt;
@@ -224,6 +249,7 @@ export function BillableReport() {
       total,
       labor,
       materials,
+      byTech,
       calDays,
       workDays,
       perWorkDay: workDays > 0 ? metricTotal / workDays : 0,
@@ -251,6 +277,9 @@ export function BillableReport() {
       ["Avg / week", report.perWeek.toFixed(2)],
       ["Avg / month", report.perMonth.toFixed(2)],
       ["Annualized (projected)", report.annualized.toFixed(2)],
+      [],
+      ["Labor by tech", ""],
+      ...TECH_BUCKETS.map((t) => [t, report.byTech[t].toFixed(2)]),
     ];
     const all = [headers, ...rows, ...summary];
     const csv = all
@@ -411,6 +440,44 @@ export function BillableReport() {
               <p className="text-xl font-semibold text-amber-600">{formatCurrency(report.materials)}</p>
             </div>
           </div>
+
+          {/* Labor by tech — full names here; invoices print initials (BB / AF) */}
+          {report.labor > 0 && (
+            <div className="bg-white rounded-xl border border-sand-200 shadow-card overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-sand-200">
+                <span className="text-sm font-semibold text-charcoal-700">Labor Billable by Tech</span>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {TECH_BUCKETS.filter((t) => t !== "Unassigned" || report.byTech[t] > 0).map((t) => {
+                  const value = report.byTech[t];
+                  const pct = report.labor > 0 ? (value / report.labor) * 100 : 0;
+                  const isUnassigned = t === "Unassigned";
+                  return (
+                    <div key={t} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-medium ${isUnassigned ? "text-charcoal-400" : "text-charcoal-800"}`}>
+                          {t}
+                          {isUnassigned && (
+                            <span className="ml-1.5 text-[10px] text-charcoal-300">(no tech on invoice)</span>
+                          )}
+                        </span>
+                        <span className="text-xs font-semibold text-charcoal-800">
+                          {formatCurrency(value)}
+                          <span className="ml-2 text-[10px] font-normal text-charcoal-400">{pct.toFixed(0)}%</span>
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-charcoal-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${isUnassigned ? "bg-charcoal-300" : "bg-blue-400"}`}
+                          style={{ width: `${Math.max(pct > 0 ? 3 : 0, pct)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Monthly breakdown */}
           <div className="bg-white rounded-xl border border-sand-200 shadow-card overflow-hidden">
