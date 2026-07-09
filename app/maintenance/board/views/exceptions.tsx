@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import type { ExceptionsData } from '../board-types';
+import type { TripwireException } from '@/lib/maintenance/types';
 
 interface Recipient {
   person: string;
@@ -107,9 +108,43 @@ function DigestRecipientsPanel() {
   );
 }
 
+interface RuleGroup {
+  tripwire: number;
+  label: string;
+  items: TripwireException[];
+}
+
 export default function Exceptions({ data }: { data: ExceptionsData | null }) {
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin === true;
+
+  // Group exceptions by tripwire rule, biggest backlog first.
+  const groups = useMemo<RuleGroup[]>(() => {
+    const byRule = new Map<number, RuleGroup>();
+    for (const ex of data?.exceptions ?? []) {
+      let g = byRule.get(ex.tripwire);
+      if (!g) {
+        g = { tripwire: ex.tripwire, label: ex.label, items: [] };
+        byRule.set(ex.tripwire, g);
+      }
+      g.items.push(ex);
+    }
+    return [...byRule.values()].sort(
+      (a, b) => b.items.length - a.items.length || a.tripwire - b.tripwire,
+    );
+  }, [data]);
+
+  // Collapsed by default so the by-rule counts read as a summary first.
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const toggle = (tw: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(tw)) next.delete(tw);
+      else next.add(tw);
+      return next;
+    });
+  const expandAll = () => setExpanded(new Set(groups.map((g) => g.tripwire)));
+  const collapseAll = () => setExpanded(new Set());
 
   if (!data) {
     return (
@@ -134,34 +169,72 @@ export default function Exceptions({ data }: { data: ExceptionsData | null }) {
           </div>
         </div>
       ) : (
-        <table className="mo-table">
-          <thead>
-            <tr>
-              <th>Tripwire</th>
-              <th>Item</th>
-              <th>Fix required today</th>
-              <th>HDPM Owner</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.exceptions.map((ex, i) => (
-              <tr key={i}>
-                <td className="flag" style={{ whiteSpace: 'nowrap' }}>
-                  {ex.label}
-                </td>
-                <td>
-                  {ex.workOrderId ? (
-                    <Link href={`/maintenance/board/wo/${ex.workOrderId}`}>{ex.item}</Link>
-                  ) : (
-                    ex.item
-                  )}
-                </td>
-                <td>{ex.fixRequired}</td>
-                <td>{ex.owner}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          <div className="grouptools">
+            <button className="mo-btn secondary" onClick={expandAll}>
+              Expand all
+            </button>
+            <button className="mo-btn secondary" onClick={collapseAll}>
+              Collapse all
+            </button>
+            <span className="note" style={{ border: 'none', padding: 0, margin: 0 }}>
+              {data.exceptions.length} exception{data.exceptions.length === 1 ? '' : 's'} ·{' '}
+              {groups.length} rule{groups.length === 1 ? '' : 's'} tripped
+            </span>
+          </div>
+
+          {groups.map((g) => {
+            const open = expanded.has(g.tripwire);
+            const owners = new Set(g.items.map((ex) => ex.owner));
+            return (
+              <div className="propgrp" key={g.tripwire}>
+                <button
+                  className="propgrp-head"
+                  aria-expanded={open}
+                  onClick={() => toggle(g.tripwire)}
+                >
+                  <span className="chev">{open ? '▾' : '▸'}</span>
+                  <span className="pname flag">{g.label}</span>
+                  <span className="pmeta">
+                    {g.items.length} item{g.items.length === 1 ? '' : 's'}
+                    {owners.size === 1 && <> · owner {[...owners][0]}</>}
+                  </span>
+                </button>
+
+                {open && (
+                  <div className="propgrp-body">
+                    <table className="mo-table">
+                      <thead>
+                        <tr>
+                          <th>Item</th>
+                          <th>Fix required today</th>
+                          <th>HDPM Owner</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.items.map((ex, i) => (
+                          <tr key={ex.workOrderId ?? i}>
+                            <td>
+                              {ex.workOrderId ? (
+                                <Link href={`/maintenance/board/wo/${ex.workOrderId}`}>
+                                  {ex.item}
+                                </Link>
+                              ) : (
+                                ex.item
+                              )}
+                            </td>
+                            <td>{ex.fixRequired}</td>
+                            <td>{ex.owner}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </>
       )}
 
       {data.ruleErrors.length > 0 && (
@@ -172,7 +245,8 @@ export default function Exceptions({ data }: { data: ExceptionsData | null }) {
 
       <p className="note">
         The daily sweep ends when this view reads ZERO — every exception gets an HDPM owner and a date,
-        or gets escalated. Tripwires #1 and #9 await the Haven.AI integration.
+        or gets escalated. Expand a rule to work its items. Tripwires #1 and #9 await the Haven.AI
+        integration.
       </p>
     </section>
   );
