@@ -140,19 +140,23 @@ function byStageThenDate(a: MaintWorkOrder, b: MaintWorkOrder): number {
 }
 
 /**
- * Human label for a unit group. AppFolio often leaves unit_name null even
- * when a property has several distinct units, so fall back to the WO ticket
- * number(s) — the per-vendor WOs of one turn share a ticket (e.g. 42248-1..5).
+ * Human label for a unit group.
+ *  - unit_name present  → the AppFolio name as-is (e.g. "RC 603 - #20").
+ *  - no unit at all     → "Property-level" (a WO filed against the property).
+ *  - unit_id but no name → WO ticket fallback (rare: hidden/sold units that the
+ *    /units endpoint no longer returns), so distinct units stay distinguishable.
  */
 export function unitGroupLabel(unitName: string | null, wos: MaintWorkOrder[]): string {
   // AppFolio unit names are already self-descriptive (e.g. "RC 603 - #20"),
   // so show them as-is rather than prefixing a redundant "Unit".
   if (unitName) return unitName;
+  // Genuinely property-level work (no unit on the AppFolio WO).
+  if (!wos.some((w) => w.unit_id)) return 'Property-level';
   const tickets = [...new Set(wos.map((w) => (w.wo_number ?? '').split('-')[0]).filter(Boolean))];
   if (tickets.length === 1) return `WO #${tickets[0]}`;
   if (tickets.length > 1 && tickets.length <= 3) return `WO ${tickets.map((t) => `#${t}`).join(', ')}`;
   if (tickets.length > 3) return `${tickets.length} tickets`;
-  return 'Unspecified unit';
+  return 'Property-level';
 }
 
 /**
