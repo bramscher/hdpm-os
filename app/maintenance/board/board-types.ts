@@ -92,3 +92,116 @@ export function agingBand(days: number): 0 | 1 | 2 | 3 {
   if (days > 7) return 1;
   return 0;
 }
+
+// ── Property-centric grouping (By Property view) ──
+
+/** Lifecycle order — drives WO sort within a unit and the kanban columns. */
+export const STAGE_ORDER: Record<string, number> = {
+  NEW: 0,
+  TRIAGED: 1,
+  SCHEDULED: 2,
+  IN_PROGRESS: 3,
+  WAITING_ON: 4,
+  VERIFY: 5,
+  BILL: 6,
+  CLOSED: 7,
+};
+
+export interface UnitGroup {
+  unitKey: string;
+  unitName: string | null;
+  isTurn: boolean;
+  wos: MaintWorkOrder[];
+  pastDue: number;
+}
+
+export interface PropertyGroup {
+  propKey: string;
+  propertyName: string;
+  propertyAddress: string | null;
+  units: UnitGroup[];
+  total: number;
+  pastDue: number;
+  p1: number;
+  hasTurn: boolean;
+}
+
+function isPastDue(wo: MaintWorkOrder, today: string): boolean {
+  return !!wo.next_action_date && wo.next_action_date < today;
+}
+
+/**
+ * Shape the flat open-WO list into ordered Property → Unit → WO groups so a
+ * turn's scattered per-vendor work orders collapse into one place. Pure — safe
+ * to call in render. Sort: properties by past-due desc, then total desc, name;
+ * units by turn, then past-due, then name; WOs by lifecycle stage, then date.
+ */
+export function groupOpenByProperty(open: MaintWorkOrder[]): PropertyGroup[] {
+  const today = todayStr();
+  const props = new Map<string, PropertyGroup & { unitMap: Map<string, UnitGroup> }>();
+
+  for (const wo of open) {
+    const propKey = wo.property_id || wo.property_name || '—';
+    let prop = props.get(propKey);
+    if (!prop) {
+      prop = {
+        propKey,
+        propertyName: wo.property_name || '— No property —',
+        propertyAddress: wo.property_address,
+        units: [],
+        total: 0,
+        pastDue: 0,
+        p1: 0,
+        hasTurn: false,
+        unitMap: new Map(),
+      };
+      props.set(propKey, prop);
+    }
+
+    const unitKey = wo.unit_id || wo.unit_name || '—';
+    let unit = prop.unitMap.get(unitKey);
+    if (!unit) {
+      unit = { unitKey, unitName: wo.unit_name, isTurn: false, wos: [], pastDue: 0 };
+      prop.unitMap.set(unitKey, unit);
+    }
+
+    unit.wos.push(wo);
+    prop.total += 1;
+    if (isPastDue(wo, today)) {
+      unit.pastDue += 1;
+      prop.pastDue += 1;
+    }
+    if (wo.priority_class === 'P1') prop.p1 += 1;
+    if (wo.is_turn) {
+      unit.isTurn = true;
+      prop.hasTurn = true;
+    }
+  }
+
+  const byStageThenDate = (a: MaintWorkOrder, b: MaintWorkOrder) => {
+    const s = (STAGE_ORDER[a.stage] ?? 99) - (STAGE_ORDER[b.stage] ?? 99);
+    if (s !== 0) return s;
+    return (a.next_action_date ?? '9999').localeCompare(b.next_action_date ?? '9999');
+  };
+
+  const result = [...props.values()].map((prop) => {
+    const units = [...prop.unitMap.values()]
+      .map((u) => ({ ...u, wos: [...u.wos].sort(byStageThenDate) }))
+      .sort(
+        (a, b) =>
+          Number(b.isTurn) - Number(a.isTurn) ||
+          b.pastDue - a.pastDue ||
+          (a.unitName ?? '').localeCompare(b.unitName ?? ''),
+      );
+    const { unitMap, ...rest } = prop;
+    void unitMap;
+    return { ...rest, units };
+  });
+
+  return result.sort(
+    (a, b) =>
+      b.pastDue - a.pastDue ||
+      b.total - a.total ||
+      a.propertyName.localeCompare(b.propertyName),
+  );
+}

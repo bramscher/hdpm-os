@@ -20,12 +20,29 @@ export function DaysPill({ days }: { days: number }) {
   return <span className={daysPillClass(days)}>{days}</span>;
 }
 
-/** One work order card: what/where, ONE owner, next-action date. */
-export function WoCard({ wo }: { wo: MaintWorkOrder }) {
+/** Short stage label for the stage chip (kanban shows stage as its column instead). */
+const STAGE_SHORT: Record<string, string> = {
+  NEW: 'NEW',
+  TRIAGED: 'TRIAGE',
+  SCHEDULED: 'SCHED',
+  IN_PROGRESS: 'IN PROG',
+  WAITING_ON: 'WAITING',
+  VERIFY: 'VERIFY',
+  BILL: 'BILL',
+  CLOSED: 'CLOSED',
+};
+
+/**
+ * One work order card: what/where, ONE owner, next-action date.
+ * `showStage` prepends a stage chip — used outside the kanban (By Property view)
+ * where stage is no longer implied by a column. Default off = kanban unchanged.
+ */
+export function WoCard({ wo, showStage }: { wo: MaintWorkOrder; showStage?: boolean }) {
   const pastDue = !!wo.next_action_date && wo.next_action_date < todayStr();
   const edge = wo.priority_class ? wo.priority_class.toLowerCase() : 'p4';
   return (
     <Link href={`/maintenance/board/wo/${wo.id}`} className={`card ${edge}`}>
+      {showStage && <span className="stagechip">{STAGE_SHORT[wo.stage] ?? wo.stage}</span>}
       {wo.stage === 'WAITING_ON' && wo.waiting_reason && (
         <WaitBadge reason={wo.waiting_reason} small />
       )}

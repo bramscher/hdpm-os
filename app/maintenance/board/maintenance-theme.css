@@ -95,6 +95,45 @@
   background: var(--tint); padding: 6px 10px; border-radius: 6px;
 }
 
+/* ── Board layout toggle (Kanban / By Property) ── */
+.maint-os .mo-seg { display: inline-flex; gap: 4px; margin-bottom: 12px; }
+.maint-os .mo-seg button {
+  border: 1px solid var(--hair); background: var(--lt); color: var(--dk);
+  padding: 6px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.maint-os .mo-seg button:first-child { border-radius: 8px 0 0 8px; }
+.maint-os .mo-seg button:last-child { border-radius: 0 8px 8px 0; }
+.maint-os .mo-seg button.on { background: var(--gr); color: #fff; border-color: var(--gr); }
+
+/* ── By Property groups ── */
+.maint-os .grouptools { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.maint-os .grouptools .mo-btn { padding: 5px 10px; font-size: 12px; }
+.maint-os .grouptools .note { margin-left: auto; }
+.maint-os .propgrp { margin-bottom: 8px; }
+.maint-os .propgrp-head {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+  background: var(--tint); color: var(--dk); border: 1px solid var(--hair);
+  border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer;
+}
+.maint-os .propgrp-head:hover { border-color: var(--gr); }
+.maint-os .propgrp-head .chev { color: var(--gr); font-weight: 800; width: 12px; }
+.maint-os .propgrp-head .pname { font-weight: 800; }
+.maint-os .propgrp-head .pmeta { color: var(--muted); font-weight: 600; }
+.maint-os .propgrp-head .turn { color: var(--dk); font-weight: 700; }
+.maint-os .propgrp-body { padding: 4px 0 6px 14px; }
+.maint-os .unitgrp { margin: 6px 0 10px; }
+.maint-os .unitgrp-head {
+  font-size: 11.5px; font-weight: 700; color: var(--muted); letter-spacing: 0.3px;
+  text-transform: uppercase; padding: 4px 0 2px;
+}
+.maint-os .unitgrp-head .turn { color: var(--gr); }
+.maint-os .unitgrp .card { max-width: 640px; }
+.maint-os .stagechip {
+  display: inline-block; background: var(--tint); color: var(--dk); font-size: 9.5px;
+  font-weight: 800; letter-spacing: 0.4px; padding: 1px 6px; border-radius: 4px;
+  margin-bottom: 3px; margin-right: 4px;
+}
+
 /* ── KPI tiles ── */
 .maint-os .kpis {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

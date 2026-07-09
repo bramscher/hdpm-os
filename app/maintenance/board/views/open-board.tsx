@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import type { MaintWorkOrder } from '@/lib/maintenance/types';
 import type { BoardData, ExceptionsData } from '../board-types';
 import { KpiTile, WoCard } from '../components/shared';
+import OpenBoardGrouped from './open-board-grouped';
 
 const COLUMNS: { stage: MaintWorkOrder['stage']; title: string }[] = [
   { stage: 'NEW', title: 'NEW' },
@@ -21,11 +23,7 @@ export default function OpenBoard({
   board: BoardData;
   exceptions: ExceptionsData | null;
 }) {
-  const byStage = new Map<string, MaintWorkOrder[]>();
-  for (const col of COLUMNS) byStage.set(col.stage, []);
-  for (const wo of board.open) {
-    byStage.get(wo.stage)?.push(wo);
-  }
+  const [mode, setMode] = useState<'grouped' | 'kanban'>('grouped');
 
   return (
     <section>
@@ -45,6 +43,39 @@ export default function OpenBoard({
         <KpiTile value={`${board.kpis.ownerAndDateCoverage}%`} label="Have HDPM owner + date" />
       </div>
 
+      <div className="mo-seg" role="tablist" aria-label="Board layout">
+        <button
+          role="tab"
+          aria-selected={mode === 'grouped'}
+          className={mode === 'grouped' ? 'on' : ''}
+          onClick={() => setMode('grouped')}
+        >
+          By Property
+        </button>
+        <button
+          role="tab"
+          aria-selected={mode === 'kanban'}
+          className={mode === 'kanban' ? 'on' : ''}
+          onClick={() => setMode('kanban')}
+        >
+          Kanban
+        </button>
+      </div>
+
+      {mode === 'grouped' ? <OpenBoardGrouped board={board} /> : <KanbanBody board={board} />}
+    </section>
+  );
+}
+
+function KanbanBody({ board }: { board: BoardData }) {
+  const byStage = new Map<string, MaintWorkOrder[]>();
+  for (const col of COLUMNS) byStage.set(col.stage, []);
+  for (const wo of board.open) {
+    byStage.get(wo.stage)?.push(wo);
+  }
+
+  return (
+    <>
       <div className="colwrap">
         <div className="cols">
           {COLUMNS.map((col) => {
@@ -76,6 +107,6 @@ export default function OpenBoard({
         date. Red date = past due =
         automatic Exception. Left edge color = priority (red P1, amber P2, green P3, gray P4).
       </p>
-    </section>
+    </>
   );
 }
