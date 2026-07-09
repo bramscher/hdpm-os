@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import type { BoardData, ExceptionsData, ScoreboardRow } from './board-types';
+import type { BoardData, ExceptionsData, ScoreboardRow, WoSortKey } from './board-types';
+import { filterWorkOrders, sortWorkOrders, WO_SORT_OPTIONS } from './board-types';
 import OpenBoard from './views/open-board';
 import WaitingOn from './views/waiting-on';
 import VendorScoreboard from './views/vendor-scoreboard';
@@ -26,6 +27,9 @@ const VIEWS = [
 
 type ViewKey = (typeof VIEWS)[number]['key'];
 
+/** Views whose content is the open-WO list — the search/sort toolbar drives these. */
+const WO_LIST_VIEWS = new Set<ViewKey>(['open', 'wait', 'aging', 'turnover', 'monday']);
+
 export default function BoardClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,6 +40,8 @@ export default function BoardClient() {
   const [scoreboard, setScoreboard] = useState<ScoreboardRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
+  const [sortKey, setSortKey] = useState<WoSortKey>('default');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,12 +71,26 @@ export default function BoardClient() {
     router.replace(`/maintenance/board?view=${key}`, { scroll: false });
   };
 
+  // Apply the search + sort to the open-WO list, then hand the derived board to
+  // every WO-list view so one toolbar drives them all.
+  const filteredBoard = useMemo<BoardData | null>(() => {
+    if (!board) return null;
+    const open = sortWorkOrders(filterWorkOrders(board.open, query), sortKey);
+    const closedThisWeek = filterWorkOrders(board.closedThisWeek, query);
+    return { ...board, open, closedThisWeek };
+  }, [board, query, sortKey]);
+
+  const activeBoard = filteredBoard ?? board;
+  const showToolbar = WO_LIST_VIEWS.has(view);
+  const searching = query.trim().length > 0;
+
   const counts: Partial<Record<ViewKey, number>> = {
-    open: board?.kpis.open,
-    wait: board?.open.filter((wo) => wo.stage === 'WAITING_ON').length,
+    open: activeBoard?.open.length,
+    wait: activeBoard?.open.filter((wo) => wo.stage === 'WAITING_ON').length,
     exceptions: exceptions?.exceptions.length,
-    turnover: board
-      ? board.turns.filter((t) => board.open.some((wo) => wo.id === t.work_order_id)).length
+    turnover: activeBoard
+      ? activeBoard.turns.filter((t) => activeBoard.open.some((wo) => wo.id === t.work_order_id))
+          .length
       : undefined,
   };
 
@@ -103,20 +123,51 @@ export default function BoardClient() {
         <InfoHelp viewKey={view} />
       </nav>
 
+      {showToolbar && board && (
+        <div className="mo-toolbar">
+          <input
+            className="mo-input mo-search"
+            type="search"
+            placeholder="Search property, unit, vendor, WO #, description…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search work orders"
+          />
+          <label className="mo-sort">
+            Sort:
+            <select value={sortKey} onChange={(e) => setSortKey(e.target.value as WoSortKey)}>
+              {WO_SORT_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {searching && activeBoard && (
+            <span className="note" style={{ border: 'none', padding: 0, margin: 0 }}>
+              {activeBoard.open.length} of {board.open.length} open match
+              <button className="mo-btn secondary" style={{ marginLeft: 8 }} onClick={() => setQuery('')}>
+                Clear
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+
       {error && <p className="note flag">{error}</p>}
 
       {!board && loading && <p className="note">Loading the board…</p>}
 
-      {board && (
+      {board && activeBoard && (
         <>
-          {view === 'open' && <OpenBoard board={board} exceptions={exceptions} />}
+          {view === 'open' && <OpenBoard board={activeBoard} exceptions={exceptions} />}
           {view === 'triage' && <TriageReview onChanged={load} />}
-          {view === 'wait' && <WaitingOn board={board} />}
+          {view === 'wait' && <WaitingOn board={activeBoard} />}
           {view === 'vendor' && <VendorScoreboard scoreboard={scoreboard} onRefresh={load} />}
-          {view === 'aging' && <Aging board={board} onChanged={load} />}
+          {view === 'aging' && <Aging board={activeBoard} onChanged={load} />}
           {view === 'exceptions' && <Exceptions data={exceptions} />}
-          {view === 'turnover' && <Turnover board={board} />}
-          {view === 'monday' && <MondayReview board={board} exceptions={exceptions} />}
+          {view === 'turnover' && <Turnover board={activeBoard} />}
+          {view === 'monday' && <MondayReview board={activeBoard} exceptions={exceptions} />}
         </>
       )}
     </div>

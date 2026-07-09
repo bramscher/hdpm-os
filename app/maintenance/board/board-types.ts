@@ -95,6 +95,90 @@ export function agingBand(days: number): 0 | 1 | 2 | 3 {
   return 0;
 }
 
+// ── Board-wide search + sort (shared by every open-WO view) ──
+
+/** Sort keys offered in the board toolbar. 'default' keeps API order. */
+export type WoSortKey =
+  | 'default'
+  | 'property'
+  | 'vendor'
+  | 'priority'
+  | 'date'
+  | 'age'
+  | 'stage';
+
+export const WO_SORT_OPTIONS: { key: WoSortKey; label: string }[] = [
+  { key: 'default', label: 'Default order' },
+  { key: 'property', label: 'Property / unit' },
+  { key: 'vendor', label: 'Vendor' },
+  { key: 'priority', label: 'Priority (P1→P4)' },
+  { key: 'date', label: 'Next-action date' },
+  { key: 'age', label: 'Age (oldest first)' },
+  { key: 'stage', label: 'Stage' },
+];
+
+/** Every text field a board search should look through. */
+function woHaystack(wo: MaintWorkOrder): string {
+  return [
+    wo.property_name,
+    wo.unit_name,
+    wo.vendor_name,
+    wo.description,
+    wo.wo_number,
+    wo.owner_name,
+    wo.assigned_tech,
+    wo.stage,
+    wo.priority_class,
+    wo.property_address,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+/**
+ * Filter WOs by a free-text query. Space-separated terms are ANDed, so
+ * "reindeer p1" matches Reindeer-Canyon P1s. Empty query returns the input.
+ */
+export function filterWorkOrders(wos: MaintWorkOrder[], query: string): MaintWorkOrder[] {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return wos;
+  return wos.filter((wo) => {
+    const hay = woHaystack(wo);
+    return terms.every((t) => hay.includes(t));
+  });
+}
+
+const PRIORITY_RANK: Record<string, number> = { P1: 0, P2: 1, P3: 2, P4: 3 };
+
+/** Stable sort of WOs by the chosen key (non-mutating). */
+export function sortWorkOrders(wos: MaintWorkOrder[], key: WoSortKey): MaintWorkOrder[] {
+  if (key === 'default') return wos;
+  const byProp = (a: MaintWorkOrder, b: MaintWorkOrder) =>
+    a.property_name.localeCompare(b.property_name) ||
+    (a.unit_name ?? '').localeCompare(b.unit_name ?? '');
+  const cmp: Record<Exclude<WoSortKey, 'default'>, (a: MaintWorkOrder, b: MaintWorkOrder) => number> = {
+    property: byProp,
+    vendor: (a, b) =>
+      // Unassigned sinks to the bottom.
+      Number(!!b.vendor_name) - Number(!!a.vendor_name) ||
+      (a.vendor_name ?? '').localeCompare(b.vendor_name ?? '') ||
+      byProp(a, b),
+    priority: (a, b) =>
+      (PRIORITY_RANK[a.priority_class ?? ''] ?? 9) - (PRIORITY_RANK[b.priority_class ?? ''] ?? 9) ||
+      byProp(a, b),
+    date: (a, b) =>
+      // Real dates ascending, "needs date" (null) last.
+      (a.next_action_date ?? '9999-99-99').localeCompare(b.next_action_date ?? '9999-99-99') ||
+      byProp(a, b),
+    age: (a, b) => woCreatedAt(a).localeCompare(woCreatedAt(b)) || byProp(a, b),
+    stage: (a, b) =>
+      (STAGE_ORDER[a.stage] ?? 99) - (STAGE_ORDER[b.stage] ?? 99) ||
+      (a.next_action_date ?? '9999').localeCompare(b.next_action_date ?? '9999'),
+  };
+  return [...wos].sort(cmp[key]);
+}
+
 // ── Property-centric grouping (By Property view) ──
 
 /** Lifecycle order — drives WO sort within a unit and the kanban columns. */

@@ -228,6 +228,21 @@
 .maint-os .mo-btn.secondary { background: var(--lt); color: var(--dk); border-color: var(--hair); }
 .maint-os .mo-btn.danger { background: var(--red); border-color: var(--red); }
 
+/* ── Board search + sort toolbar ── */
+.maint-os .mo-toolbar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.maint-os .mo-toolbar .mo-search { width: auto; flex: 1 1 320px; max-width: 460px; }
+.maint-os .mo-toolbar .mo-sort {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap;
+}
+.maint-os .mo-toolbar .mo-sort select {
+  border: 1px solid var(--hair); border-radius: 6px; padding: 6px 8px;
+  font-size: 13px; background: #fff; color: var(--ink);
+}
+.maint-os .mo-toolbar .mo-btn { padding: 4px 10px; font-size: 12px; }
+
 /* Closure gate checklist */
 .maint-os .gate-item { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 4px 0; }
 .maint-os .gate-item .mark { font-weight: 800; }
