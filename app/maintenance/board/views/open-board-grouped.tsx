@@ -71,7 +71,7 @@ export default function OpenBoardGrouped({ board }: { board: BoardData }) {
                 {g.units.map((u) => (
                   <div className="unitgrp" key={u.unitKey}>
                     <div className="unitgrp-head">
-                      {u.unitName ? `#${u.unitName}` : 'Property-level'}
+                      {u.unitName ? `Unit ${u.unitName}` : g.propertyName}
                       {u.isTurn && <span className="turn"> (turn)</span>} —{' '}
                       {u.wos.length} WO{u.wos.length === 1 ? '' : 's'}
                     </div>
