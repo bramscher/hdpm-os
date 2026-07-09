@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { BoardData } from '../board-types';
-import { groupOpenByProperty, unitGroupLabel } from '../board-types';
+import { groupOpenByProperty, propertyIsMultiUnit, unitGroupLabel } from '../board-types';
 import { WoCard } from '../components/shared';
 
 /**
@@ -49,6 +49,7 @@ export default function OpenBoardGrouped({ board }: { board: BoardData }) {
 
       {groups.map((g) => {
         const open = expanded.has(g.propKey);
+        const multiUnit = propertyIsMultiUnit(g.units);
         return (
           <div className="propgrp" key={g.propKey}>
             <button
@@ -71,7 +72,7 @@ export default function OpenBoardGrouped({ board }: { board: BoardData }) {
                 {g.units.map((u) => (
                   <div className="unitgrp" key={u.unitKey}>
                     <div className="unitgrp-head">
-                      {unitGroupLabel(u.unitName, u.wos)}
+                      {unitGroupLabel(u.unitName, u.wos, g.propertyName, multiUnit)}
                       {u.isTurn && <span className="turn"> (turn)</span>} —{' '}
                       {u.wos.length} WO{u.wos.length === 1 ? '' : 's'}
                     </div>
