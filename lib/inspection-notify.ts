@@ -24,6 +24,10 @@ export interface NoticeInspectionRow {
   unit_name: string | null;
   resident_name: string | null;
   notice_email: string | null;
+  notice_status: string | null;
+  notice_attempts: number | null;
+  notice_channel: string | null;
+  notice_error: string | null;
   inspection_properties: {
     address_1: string | null;
     address_2: string | null;
@@ -35,6 +39,9 @@ export interface NoticeInspectionRow {
   } | null;
 }
 
+/** How a notice was (or will be) delivered. All channels log inside AppFolio. */
+export type NoticeChannel = 'manual' | 'realmx_mcp' | 'email';
+
 export interface DueNotice {
   id: string;
   target_date: string | null;
@@ -43,6 +50,11 @@ export interface DueNotice {
   address: string;
   subject: string;
   body: string;
+  /** Current dispatch state so senders/UI can show progress + retry failures. */
+  status: string | null;
+  attempts: number;
+  channel: string | null;
+  error: string | null;
 }
 
 export interface DueNoticesResult {
@@ -105,26 +117,51 @@ export function buildNoticeContent(insp: NoticeInspectionRow): { subject: string
  * Scheduled inspections that still need a tenant notice: future target date,
  * not yet marked sent. Returns ready-to-send content + recipient email.
  */
+/** Postgres "column does not exist" — the dispatch migration isn't applied yet. */
+function isMissingColumn(err: { code?: string; message?: string } | null): boolean {
+  return err?.code === '42703' || /column .* does not exist/i.test(err?.message ?? '');
+}
+
+// Rich dispatch columns land with 20260709_inspection_notice_dispatch.sql. Until
+// that migration is applied we fall back to the legacy select so the live notice
+// feature never breaks on a missing column.
+const RICH_NOTICE_COLS =
+  `id, target_date, inspection_type, unit_name, resident_name, notice_email,
+   notice_status, notice_attempts, notice_channel, notice_error,
+   inspection_properties ( address_1, address_2, city, state, zip, resident_name, tenant_email )`;
+const LEGACY_NOTICE_COLS =
+  `id, target_date, inspection_type, unit_name, resident_name, notice_email,
+   notice_status,
+   inspection_properties ( address_1, address_2, city, state, zip, resident_name, tenant_email )`;
+
 export async function getDueNotices(
   supabase: SupabaseClient,
-  options: { today?: Date; limit?: number } = {}
+  options: { today?: Date; limit?: number; dispatchableOnly?: boolean } = {}
 ): Promise<DueNoticesResult> {
   const today = options.today ?? new Date();
   const todayStr = today.toISOString().split('T')[0];
   const limit = options.limit ?? 1000;
 
-  const { data, error } = await supabase
-    .from('inspections')
-    .select(
-      `id, target_date, inspection_type, unit_name, resident_name, notice_email,
-       inspection_properties ( address_1, address_2, city, state, zip, resident_name, tenant_email )`
-    )
-    .eq('status', 'scheduled')
-    .is('notice_sent_at', null)
-    .not('target_date', 'is', null)
-    .gte('target_date', todayStr)
-    .order('target_date', { ascending: true })
-    .limit(limit);
+  const runQuery = (cols: string) => {
+    let q = supabase
+      .from('inspections')
+      .select(cols)
+      .eq('status', 'scheduled')
+      .is('notice_sent_at', null)
+      .not('target_date', 'is', null)
+      .gte('target_date', todayStr)
+      .order('target_date', { ascending: true })
+      .limit(limit);
+    // A machine sender (Realm-X routine) only wants notices it can actually send:
+    // an email on file, not already handed off. Missing-email ones stay for staff.
+    if (options.dispatchableOnly) q = q.not('notice_email', 'is', null);
+    return q;
+  };
+
+  let { data, error } = await runQuery(RICH_NOTICE_COLS);
+  if (error && isMissingColumn(error)) {
+    ({ data, error } = await runQuery(LEGACY_NOTICE_COLS));
+  }
 
   if (error) throw new Error(`Failed to load due notices: ${error.message}`);
 
@@ -145,6 +182,10 @@ export async function getDueNotices(
       address: addressOf(insp),
       subject,
       body,
+      status: insp.notice_status ?? 'pending',
+      attempts: insp.notice_attempts ?? 0,
+      channel: insp.notice_channel ?? null,
+      error: insp.notice_error ?? null,
     };
   });
 
@@ -156,17 +197,107 @@ export async function getDueNotices(
   };
 }
 
-/** Mark notices as sent after staff bulk-send them through AppFolio Realm-X. */
+export type NoticeResultStatus = 'sent' | 'failed' | 'skipped';
+
+export interface NoticeResult {
+  id: string;
+  status: NoticeResultStatus;
+  channel?: NoticeChannel;
+  message_id?: string | null;
+  error?: string | null;
+}
+
+export interface RecordResultsSummary {
+  sent: number;
+  failed: number;
+  skipped: number;
+}
+
+/**
+ * Record the outcome of one dispatch pass. Sender-agnostic: the manual bridge
+ * reports channel 'manual', the Realm-X routine reports 'realmx_mcp'. Failures
+ * keep notice_sent_at null so the notice stays in the dispatch queue for retry.
+ * Every touch bumps notice_attempts and stamps notice_last_attempt_at.
+ */
+export async function recordNoticeResults(
+  supabase: SupabaseClient,
+  results: NoticeResult[]
+): Promise<RecordResultsSummary> {
+  const summary: RecordResultsSummary = { sent: 0, failed: 0, skipped: 0 };
+  if (!results.length) return summary;
+
+  // One read for current attempt counts so we can increment per row. Tolerate
+  // the pre-migration state where notice_attempts doesn't exist yet.
+  const ids = results.map((r) => r.id);
+  const attemptsById = new Map<string, number>();
+  const { data: current, error: readErr } = await supabase
+    .from('inspections')
+    .select('id, notice_attempts')
+    .in('id', ids);
+  if (!readErr) {
+    for (const r of current ?? []) {
+      attemptsById.set(r.id as string, (r.notice_attempts as number) ?? 0);
+    }
+  }
+
+  const now = new Date().toISOString();
+  for (const r of results) {
+    const attempts = (attemptsById.get(r.id) ?? 0) + 1;
+
+    // Columns that predate the dispatch migration — always safe to write.
+    const legacy: Record<string, unknown> = {};
+    // Rich dispatch columns — only present after 20260709 migration.
+    const rich: Record<string, unknown> = {
+      notice_attempts: attempts,
+      notice_last_attempt_at: now,
+      notice_channel: r.channel ?? 'manual',
+    };
+
+    if (r.status === 'sent') {
+      legacy.notice_status = 'sent';
+      legacy.notice_sent_at = now;
+      legacy.notice_message_id = r.message_id ?? null;
+      rich.notice_error = null;
+    } else if (r.status === 'failed') {
+      // Pre-migration there's no 'failed' bucket; leave the legacy status as-is
+      // (still pending) so it stays in the queue, and only note the error richly.
+      rich.notice_status = 'failed';
+      rich.notice_error = r.error ?? 'unknown error';
+    } else {
+      legacy.notice_status = 'skipped_no_email';
+      rich.notice_error = r.error ?? null;
+    }
+
+    let { error } = await supabase
+      .from('inspections')
+      .update({ ...legacy, ...rich })
+      .eq('id', r.id);
+    if (error && isMissingColumn(error)) {
+      // Dispatch migration not applied yet — persist the legacy fields only.
+      // A 'failed' result has no legacy field (no pre-migration 'failed' state),
+      // so it simply stays pending in the queue for the next pass.
+      error = Object.keys(legacy).length
+        ? (await supabase.from('inspections').update(legacy).eq('id', r.id)).error
+        : null;
+    }
+    if (error) {
+      console.error(`[inspection-notify] record result failed for ${r.id}:`, error.message);
+      continue;
+    }
+    summary[r.status] += 1;
+  }
+
+  return summary;
+}
+
+/** Back-compat: staff bulk-sent via AppFolio Realm-X and marked them sent. */
 export async function markNoticesSent(
   supabase: SupabaseClient,
   ids: string[]
 ): Promise<{ updated: number }> {
-  if (!ids.length) return { updated: 0 };
-  const { data, error } = await supabase
-    .from('inspections')
-    .update({ notice_status: 'sent', notice_sent_at: new Date().toISOString() })
-    .in('id', ids)
-    .select('id');
-  if (error) throw new Error(`Failed to mark notices sent: ${error.message}`);
-  return { updated: data?.length ?? 0 };
+  const summary = await recordNoticeResults(
+    supabase,
+    ids.map((id) => ({ id, status: 'sent' as const, channel: 'manual' as const }))
+  );
+  return { updated: summary.sent };
 }

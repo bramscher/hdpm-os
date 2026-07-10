@@ -54,6 +54,10 @@ interface DueNotice {
   address: string;
   subject: string;
   body: string;
+  status?: string | null;
+  attempts?: number;
+  channel?: string | null;
+  error?: string | null;
 }
 
 interface DueNoticesResult {
@@ -1104,6 +1108,14 @@ function NoticeModal({
         <div className="px-6 py-2 text-xs text-charcoal-500 border-b border-charcoal-100">
           {result.count} due &bull; {result.with_email} with email
           {result.missing_email > 0 && <span className="text-amber-600"> &bull; {result.missing_email} missing email</span>}
+          {result.notices.some((n) => n.status === "failed") && (
+            <span className="text-red-600"> &bull; {result.notices.filter((n) => n.status === "failed").length} failed (will retry)</span>
+          )}
+        </div>
+
+        <div className="px-6 py-2 text-[11px] text-charcoal-500 bg-charcoal-50 border-b border-charcoal-100">
+          Automated send via the AppFolio Realm-X connector is wired and waiting on
+          connector activation; until then, send through Realm-X below and mark sent.
         </div>
 
         <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
@@ -1120,7 +1132,12 @@ function NoticeModal({
                   <p className="text-sm font-semibold text-charcoal-800">
                     {dateKey === "no-date" ? "No date" : longDate(dateKey)}
                   </p>
-                  <span className="text-xs text-charcoal-500">{items.length} unit{items.length !== 1 ? "s" : ""} &bull; {emails.length} email{emails.length !== 1 ? "s" : ""}</span>
+                  <span className="text-xs text-charcoal-500">
+                    {items.length} unit{items.length !== 1 ? "s" : ""} &bull; {emails.length} email{emails.length !== 1 ? "s" : ""}
+                    {items.some((n) => n.status === "failed") && (
+                      <span className="text-red-600"> &bull; {items.filter((n) => n.status === "failed").length} retry</span>
+                    )}
+                  </span>
                 </div>
                 <div className="flex flex-wrap gap-2 mb-2">
                   <button

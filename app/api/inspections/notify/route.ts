@@ -1,31 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { getDueNotices, markNoticesSent } from '@/lib/inspection-notify';
+import {
+  getDueNotices,
+  recordNoticeResults,
+  type NoticeResult,
+} from '@/lib/inspection-notify';
 
 /**
- * Tenant inspection notices — AppFolio bulk-send bridge.
+ * Tenant inspection notices — dispatch queue + result recording.
  *
- * AppFolio has no API to send messages, and notices must be logged inside
- * AppFolio, so we don't send email ourselves. Instead:
- *   GET  — returns the "due this period" list (recipients + ready-to-paste notice)
- *          that staff send via Realm-X Assistant "Send Bulk Email".
- *   POST { ids } — marks those inspections notified once they've been sent in AppFolio.
+ * All notices must be LOGGED INSIDE AppFolio. Three senders can drive this queue,
+ * all logging in AppFolio:
+ *   - Manual bridge (today): staff copy-paste into Realm-X Assistant, then POST
+ *     { ids } to mark them sent (channel 'manual').
+ *   - Realm-X MCP routine (once the connector is authenticated): a scheduled
+ *     Claude routine GETs ?dispatchable=1, sends each via the Realm-X MCP, then
+ *     POSTs { results } with channel 'realmx_mcp' + message_id / error.
  *
- * Auth: @highdesertpm.com session (staff-driven; no cron).
+ *   GET  ?dispatchable=1  — due notices with an email (machine-sendable).
+ *   GET                   — all due notices incl. missing-email (staff view).
+ *   POST { ids }          — mark sent, channel 'manual' (back-compat).
+ *   POST { results }      — record per-notice outcomes (sent | failed | skipped).
+ *
+ * Auth: @highdesertpm.com session OR CRON_SECRET bearer (for the headless routine).
  */
-async function requireStaff() {
+async function authorize(request: NextRequest): Promise<boolean> {
+  const authHeader = request.headers.get('authorization');
+  if (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+    return true;
+  }
   const session = await getServerSession();
   return Boolean(session?.user?.email?.endsWith('@highdesertpm.com'));
 }
 
-export async function GET() {
-  if (!(await requireStaff())) {
+export async function GET(request: NextRequest) {
+  if (!(await authorize(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
+    const dispatchableOnly = new URL(request.url).searchParams.get('dispatchable') === '1';
     const supabase = getSupabaseAdmin();
-    const result = await getDueNotices(supabase);
+    const result = await getDueNotices(supabase, { dispatchableOnly });
     return NextResponse.json(result);
   } catch (err) {
     console.error('[inspections/notify] GET error:', err);
@@ -37,22 +53,39 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) {
+  if (!(await authorize(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
     const body = await request.json().catch(() => ({}));
+    const supabase = getSupabaseAdmin();
+
+    // Rich form: per-notice results from a sender (Realm-X routine or email).
+    if (Array.isArray(body?.results)) {
+      const results = (body.results as NoticeResult[]).filter(
+        (r) => r && typeof r.id === 'string' && ['sent', 'failed', 'skipped'].includes(r.status)
+      );
+      if (!results.length) {
+        return NextResponse.json({ error: 'results[] had no valid entries' }, { status: 400 });
+      }
+      const summary = await recordNoticeResults(supabase, results);
+      return NextResponse.json(summary);
+    }
+
+    // Back-compat: mark a set of ids sent via the manual bridge.
     const ids: string[] = Array.isArray(body?.ids) ? body.ids : [];
     if (!ids.length) {
-      return NextResponse.json({ error: 'ids[] required' }, { status: 400 });
+      return NextResponse.json({ error: 'ids[] or results[] required' }, { status: 400 });
     }
-    const supabase = getSupabaseAdmin();
-    const { updated } = await markNoticesSent(supabase, ids);
-    return NextResponse.json({ marked_sent: updated });
+    const summary = await recordNoticeResults(
+      supabase,
+      ids.map((id) => ({ id, status: 'sent' as const, channel: 'manual' as const }))
+    );
+    return NextResponse.json({ marked_sent: summary.sent, ...summary });
   } catch (err) {
     console.error('[inspections/notify] POST error:', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to mark notices sent' },
+      { error: err instanceof Error ? err.message : 'Failed to record notice results' },
       { status: 500 }
     );
   }
