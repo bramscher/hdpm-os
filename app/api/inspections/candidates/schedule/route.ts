@@ -80,15 +80,44 @@ export async function POST(request: NextRequest) {
     // The due date is anchored to move-in: max(move_in, last_inspection) + 6 months
     // (precomputed as next_due_date during the candidate sync). Resident name and
     // email are carried over so the tenant notice + calendar event can use them.
+    //
+    // Reuse before insert: the completion cascade pre-creates the next routine
+    // inspection ('imported'), so a candidate may already have a pending row —
+    // adopt it into this schedule run instead of creating a duplicate.
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    const inspectionRows = candidates.map((c) => {
+
+    const { data: pendingRows } = await supabase
+      .from('inspections')
+      .select('id, property_id, due_date, priority, status, route_plan_id')
+      .in('property_id', candidates.map((c) => c.id))
+      .not('status', 'in', '(completed,canceled)');
+    const pendingByProperty = new Map(
+      (pendingRows ?? []).map((r) => [r.property_id as string, r])
+    );
+
+    /** Unrouted queue statuses — safe to adopt into a new route. */
+    const ADOPTABLE = new Set(['imported', 'validated', 'queued']);
+
+    const toInsert: Record<string, unknown>[] = [];
+    const adopted: { id: string; property_id: string; due_date: string; priority: string; status: string }[] = [];
+    let skippedInFlight = 0;
+    for (const c of candidates) {
+      const existing = pendingByProperty.get(c.id);
+      if (existing) {
+        if (existing.route_plan_id || !ADOPTABLE.has(existing.status)) {
+          // Already attached to an active route — leave it alone entirely.
+          skippedInFlight++;
+          continue;
+        }
+        adopted.push(existing as (typeof adopted)[number]);
+        continue;
+      }
       const dueDate =
         c.next_due_date ||
         computeInspectionDueDate(c.move_in_date ?? null, c.last_inspection_date ?? null) ||
         todayStr;
-
-      return {
+      toInsert.push({
         property_id: c.id,
         inspection_type: 'routine',
         status: 'queued',
@@ -102,17 +131,33 @@ export async function POST(request: NextRequest) {
         resident_name: c.resident_name ?? null,
         notice_email: c.tenant_email ?? null,
         notice_status: c.tenant_email ? 'pending' : 'skipped_no_email',
-      } as Record<string, unknown>;
-    });
+      });
+    }
 
-    const { data: insertedInspections, error: insErr } = await supabase
-      .from('inspections')
-      .insert(inspectionRows)
-      .select('id, property_id, due_date, priority, status');
+    // Flip adopted rows into the queue for this run.
+    if (adopted.length > 0) {
+      await supabase
+        .from('inspections')
+        .update({ status: 'queued', updated_at: new Date().toISOString() })
+        .in('id', adopted.map((a) => a.id));
+    }
 
-    if (insErr || !insertedInspections) {
-      console.error('[candidates/schedule] insert inspections error:', insErr);
-      return NextResponse.json({ error: insErr?.message || 'Failed to create inspections' }, { status: 500 });
+    let insertedRows: typeof adopted = [];
+    if (toInsert.length > 0) {
+      const { data, error: insErr } = await supabase
+        .from('inspections')
+        .insert(toInsert)
+        .select('id, property_id, due_date, priority, status');
+      if (insErr || !data) {
+        console.error('[candidates/schedule] insert inspections error:', insErr);
+        return NextResponse.json({ error: insErr?.message || 'Failed to create inspections' }, { status: 500 });
+      }
+      insertedRows = data as typeof adopted;
+    }
+
+    const insertedInspections = [...insertedRows, ...adopted];
+    if (insertedInspections.length === 0) {
+      return NextResponse.json({ routes: [], scheduled_count: 0, message: 'Nothing to schedule' });
     }
 
     // Step 4: Map inserted inspections into GeoInspection records for the route engine
@@ -148,11 +193,20 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.routes.length === 0) {
-      // Rollback the inspections we just created — no routes were producible
-      await supabase
-        .from('inspections')
-        .delete()
-        .in('id', insertedInspections.map((i) => i.id));
+      // Rollback: delete only the rows we just created; adopted pre-existing
+      // rows go back to their prior status instead of being deleted.
+      if (insertedRows.length > 0) {
+        await supabase
+          .from('inspections')
+          .delete()
+          .in('id', insertedRows.map((i) => i.id));
+      }
+      for (const a of adopted) {
+        await supabase
+          .from('inspections')
+          .update({ status: a.status, updated_at: new Date().toISOString() })
+          .eq('id', a.id);
+      }
       return NextResponse.json({
         routes: [],
         scheduled_count: 0,
@@ -231,6 +285,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       routes: createdRoutes,
       scheduled_count: scheduledInspectionIds.length,
+      adopted_count: adopted.length,
+      skipped_in_flight: skippedInFlight,
       excluded_count: result.excluded.length,
       excluded: result.excluded,
     });

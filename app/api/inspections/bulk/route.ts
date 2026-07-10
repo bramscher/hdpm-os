@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { completeInspectionCascade } from '@/lib/inspection-complete';
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,6 +33,11 @@ export async function POST(request: NextRequest) {
     const updates: Record<string, string> = {};
     if (action === 'status') {
       updates.status = value;
+      if (value === 'completed') {
+        // Match the route-stop completion path — record who/when.
+        updates.completed_at = new Date().toISOString();
+        updates.completed_by = session.user.email;
+      }
     } else if (action === 'assign') {
       updates.assigned_to = value;
     } else {
@@ -39,6 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     let updatedCount = 0;
+    let updatedIds: string[] = [];
 
     if (ids && Array.isArray(ids) && ids.length > 0) {
       // Mode 1: Update by specific IDs
@@ -54,6 +61,7 @@ export async function POST(request: NextRequest) {
       }
 
       updatedCount = data?.length || 0;
+      updatedIds = data?.map((r: { id: string }) => r.id) || [];
     } else if (filter && typeof filter === 'object') {
       // Mode 2: Update by filter criteria
       let query = supabase.from('inspections').update(updates);
@@ -93,69 +101,28 @@ export async function POST(request: NextRequest) {
       }
 
       updatedCount = data?.length || 0;
+      updatedIds = data?.map((r: { id: string }) => r.id) || [];
     } else {
       return NextResponse.json({ error: 'Either ids or filter is required' }, { status: 400 });
     }
 
-    // If status changed to "completed", auto-create next inspection (6 months out)
+    // Completion cascade over EXACTLY the rows this request updated (the old
+    // filter path re-queried all completed inspections and could cascade for
+    // unrelated history): property cadence write-back + next inspection +6mo.
     let nextCreated = 0;
-    if (action === 'status' && value === 'completed') {
-      // Get the completed inspections to find their property_ids
-      let completedIds: string[] = [];
-      if (ids && Array.isArray(ids)) {
-        completedIds = ids;
-      } else if (filter) {
-        // Re-query to get the IDs that were just updated
-        let q = supabase.from('inspections').select('id, property_id').eq('status', 'completed');
-        if (filter.before_date) q = q.lte('due_date', filter.before_date);
-        const { data: completed } = await q;
-        completedIds = completed?.map((c: { id: string }) => c.id) || [];
-      }
-
-      if (completedIds.length > 0) {
-        // Get the completed inspections' property_ids
-        const { data: completedInsps } = await supabase
-          .from('inspections')
-          .select('id, property_id')
-          .in('id', completedIds);
-
-        if (completedInsps) {
-          const today = new Date();
-          const sixMonthsOut = new Date(today);
-          sixMonthsOut.setMonth(sixMonthsOut.getMonth() + 6);
-          const nextDueDate = sixMonthsOut.toISOString().split('T')[0];
-
-          for (const insp of completedInsps) {
-            // Check if a future inspection already exists for this property
-            const { data: existing } = await supabase
-              .from('inspections')
-              .select('id')
-              .eq('property_id', insp.property_id)
-              .neq('status', 'completed')
-              .neq('status', 'canceled')
-              .limit(1);
-
-            if (!existing || existing.length === 0) {
-              // No pending inspection exists — create the next one
-              const { error: createErr } = await supabase
-                .from('inspections')
-                .insert({
-                  property_id: insp.property_id,
-                  inspection_type: 'biannual',
-                  status: 'imported',
-                  due_date: nextDueDate,
-                });
-              if (!createErr) nextCreated++;
-            }
-          }
-        }
-      }
+    if (action === 'status' && value === 'completed' && updatedIds.length > 0) {
+      const cascade = await completeInspectionCascade(
+        supabase,
+        updatedIds,
+        new Date().toISOString().slice(0, 10)
+      );
+      nextCreated = cascade.next_created;
     }
 
     return NextResponse.json({
       updated: updatedCount,
       next_inspections_created: nextCreated,
-      message: `${updatedCount} inspections updated${nextCreated > 0 ? `, ${nextCreated} next inspections created (due ${new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]})` : ''}`,
+      message: `${updatedCount} inspections updated${nextCreated > 0 ? `, ${nextCreated} next inspections created` : ''}`,
     });
   } catch (error) {
     console.error('Bulk inspections error:', error);

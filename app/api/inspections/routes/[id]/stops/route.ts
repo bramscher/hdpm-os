@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { completeInspectionCascade } from '@/lib/inspection-complete';
 
 /**
  * PATCH /api/inspections/routes/[id]/stops
@@ -154,38 +155,15 @@ export async function PATCH(
         .eq('id', routePlanId);
     }
 
-    // Auto-create next inspection when completed (6 months out)
+    // Completion cascade: property cadence write-back + next inspection (+6mo)
     let nextInspectionCreated = false;
-    if (action === 'complete') {
-      // Get the property_id from the inspection
-      const { data: completedInsp } = await supabase
-        .from('inspections')
-        .select('property_id')
-        .eq('id', stop.inspection_id)
-        .single();
-
-      if (completedInsp) {
-        // Check if a future inspection already exists
-        const { data: existing } = await supabase
-          .from('inspections')
-          .select('id')
-          .eq('property_id', completedInsp.property_id)
-          .neq('status', 'completed')
-          .neq('status', 'canceled')
-          .limit(1);
-
-        if (!existing || existing.length === 0) {
-          const sixMonths = new Date();
-          sixMonths.setMonth(sixMonths.getMonth() + 6);
-          await supabase.from('inspections').insert({
-            property_id: completedInsp.property_id,
-            inspection_type: 'biannual',
-            status: 'imported',
-            due_date: sixMonths.toISOString().split('T')[0],
-          });
-          nextInspectionCreated = true;
-        }
-      }
+    if (action === 'complete' || action === 'flag_issue') {
+      const cascade = await completeInspectionCascade(
+        supabase,
+        [stop.inspection_id],
+        now.slice(0, 10)
+      );
+      nextInspectionCreated = cascade.next_created > 0;
     }
 
     return NextResponse.json({

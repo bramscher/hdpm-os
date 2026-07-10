@@ -298,6 +298,7 @@ interface InspectionPropertyRow {
   zip: string;
   appfolio_unit_id: string | null;
   candidate_status: string | null;
+  last_inspection_date: string | null;
 }
 
 function normalizeAddrKey(r: { address_1: string; address_2: string | null; city: string; zip: string }): string {
@@ -312,7 +313,7 @@ export async function persistCandidates(
   // Load existing rows once for matching: by appfolio_unit_id and by normalized address
   const { data: existing, error: loadErr } = await supabase
     .from('inspection_properties')
-    .select('id, address_1, address_2, city, zip, appfolio_unit_id, candidate_status');
+    .select('id, address_1, address_2, city, zip, appfolio_unit_id, candidate_status, last_inspection_date');
 
   if (loadErr) {
     throw new Error(`Failed to load inspection_properties: ${loadErr.message}`);
@@ -337,11 +338,32 @@ export async function persistCandidates(
       : byAddr.get(normalizeAddrKey({ address_1: c.address1, address_2: c.address2, city: c.city, zip: c.zip }));
     const match = matchByUnit || matchByAddr;
 
-    // Preserve a 'scheduled' status — don't downgrade to skip_recent / defer / eligible
-    // while a route is in flight. The schedule action flips back when complete.
-    const nextStatus = match?.candidate_status === 'scheduled'
-      ? 'scheduled'
+    // Our completions aren't written back to AppFolio, so its LastInspectedDate
+    // can lag the local one — never regress the local date, and recompute the
+    // cadence (classification + next due) from the effective (newest) date.
+    const localInspected = match?.last_inspection_date ?? null;
+    const usesLocalDate =
+      !!localInspected && (!c.lastInspectedDate || localInspected > c.lastInspectedDate);
+    const effectiveInspected = usesLocalDate ? localInspected : c.lastInspectedDate;
+    const effectiveClassification = usesLocalDate
+      ? classifyCandidate({
+          moveInDate: c.moveInDate,
+          lastInspectedDate: effectiveInspected,
+          hasActiveTenant: c.hasActiveTenant,
+          today: new Date(syncTimestamp),
+        })
       : c.classification;
+    const effectiveNextDue = usesLocalDate
+      ? computeInspectionDueDate(c.moveInDate, effectiveInspected)
+      : c.nextDueDate;
+
+    // Preserve terminal statuses: 'scheduled' while a route is in flight
+    // (completion flips it back via completeInspectionCascade), 'dismissed'
+    // until manually restored — a sync must not resurrect dismissed units.
+    const nextStatus =
+      match?.candidate_status === 'scheduled' || match?.candidate_status === 'dismissed'
+        ? match.candidate_status
+        : effectiveClassification;
 
     const baseFields = {
       appfolio_property_id: c.appfolioPropertyId,
@@ -357,20 +379,20 @@ export async function persistCandidates(
       // Honest value: false until the web-app audit populates the real
       // unit[use_last_inspection_on] state. Was hardcoded `true` (misleading).
       uses_custom_inspection_date: c.useCustomInspectionDate,
-      last_inspection_date: c.lastInspectedDate,
+      last_inspection_date: effectiveInspected,
       move_in_date: c.moveInDate,
-      next_due_date: c.nextDueDate,
+      next_due_date: effectiveNextDue,
       resident_name: c.residentName,
       tenant_email: c.tenantEmail,
       candidate_status: nextStatus,
       local_skip_reason:
-        c.classification === 'skip_recent'
-          ? `Inspected within ${SKIP_RECENT_DAYS} days (${c.lastInspectedDate})`
+        effectiveClassification === 'skip_recent'
+          ? `Inspected within ${SKIP_RECENT_DAYS} days (${effectiveInspected})`
           : !c.hasActiveTenant
             ? 'Vacant — no active tenant'
             : null,
       local_skip_set_at:
-        c.classification === 'skip_recent' ? syncTimestamp : null,
+        effectiveClassification === 'skip_recent' ? syncTimestamp : null,
       last_appfolio_sync_at: syncTimestamp,
     };
 
