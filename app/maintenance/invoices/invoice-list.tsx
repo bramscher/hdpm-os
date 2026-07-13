@@ -19,10 +19,15 @@ import {
   ArrowUpDown,
   BarChart3,
   Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { HdmsInvoice } from "@/lib/invoices";
+
+// How many invoice cards to show per page.
+const PAGE_SIZE = 25;
 
 interface InvoiceListProps {
   invoices: HdmsInvoice[];
@@ -273,6 +278,25 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
     return sorted;
   }, [invoices, search, dateFrom, dateTo, sortField, sortDir]);
 
+  // ── Pagination over the filtered/sorted list ──────────
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+
+  // Snap back to page 1 whenever the filter/sort inputs change.
+  useEffect(() => {
+    setPage(1);
+  }, [search, dateFrom, dateTo, sortField, sortDir]);
+
+  // Keep the page in range if the underlying list shrinks (e.g. after a delete).
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
+  const paginated = useMemo(
+    () => visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [visible, page]
+  );
+
   // Drop any selected IDs that are no longer present (e.g. after delete/refresh).
   useEffect(() => {
     setSelectedIds((prev) => {
@@ -410,7 +434,10 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
 
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-charcoal-900">Recent Invoices</h3>
+          <h3 className="text-lg font-semibold text-charcoal-900">
+            All Invoices
+            <span className="ml-2 text-sm font-normal text-charcoal-400">({invoices.length})</span>
+          </h3>
           <Button
             variant="ghost"
             size="sm"
@@ -526,8 +553,9 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
             No invoices match your search or date range.
           </div>
         ) : (
+        <>
         <div className="space-y-3">
-          {visible.map((invoice) => {
+          {paginated.map((invoice) => {
             const statusStyle = STATUS_STYLES[invoice.status] || STATUS_STYLES.draft;
             const isVoid = invoice.status === "void";
             const isConfirmingDelete = deleteConfirm === invoice.id;
@@ -761,6 +789,39 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
             );
           })}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 px-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="text-charcoal-500 hover:text-charcoal-700 text-xs h-8"
+            >
+              <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+              Prev
+            </Button>
+            <span className="text-xs text-charcoal-500">
+              Page {page} of {totalPages}
+              <span className="text-charcoal-300 ml-2">
+                ({(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, visible.length)} of {visible.length})
+              </span>
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="text-charcoal-500 hover:text-charcoal-700 text-xs h-8"
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5 ml-1" />
+            </Button>
+          </div>
+        )}
+        </>
         )}
       </div>
     </>

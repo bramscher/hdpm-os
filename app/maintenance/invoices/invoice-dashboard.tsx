@@ -200,7 +200,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const fetchInvoices = useCallback(async () => {
     setIsLoadingInvoices(true);
     try {
-      const res = await fetch("/api/invoices");
+      // Pull the full set (API caps at 5000); the list paginates client-side.
+      const res = await fetch("/api/invoices?limit=5000");
       const data = await res.json();
       if (res.ok) {
         setInvoices(data.invoices);
