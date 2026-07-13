@@ -18,6 +18,7 @@ import {
   ArrowDown,
   ArrowUpDown,
   BarChart3,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -215,6 +216,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
 
   // ── Selection / filter / sort state ──────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
@@ -226,8 +228,24 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
     const to = parseDateInput(dateTo);
     const fromMs = from ? from.getTime() : null;
     const toMs = to ? to.getTime() : null;
+    const q = search.trim().toLowerCase();
 
     const filtered = invoices.filter((inv) => {
+      // Text search across invoice code, property, address, WO ref, description.
+      if (q) {
+        const haystack = [
+          inv.invoice_code,
+          inv.property_name,
+          inv.property_address,
+          inv.wo_reference,
+          inv.description,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+
       if (fromMs === null && toMs === null) return true;
       const d = invoiceDate(inv);
       if (!d) return false;
@@ -253,7 +271,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [invoices, dateFrom, dateTo, sortField, sortDir]);
+  }, [invoices, search, dateFrom, dateTo, sortField, sortDir]);
 
   // Drop any selected IDs that are no longer present (e.g. after delete/refresh).
   useEffect(() => {
@@ -407,6 +425,28 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
 
         {/* Selection / filter / sort toolbar */}
         <div className="bg-white rounded-xl border border-sand-200 shadow-card px-4 py-3 mb-4 space-y-3">
+          {/* Text search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-charcoal-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search invoice #, property, address, WO#..."
+              className="w-full h-9 pl-8 pr-8 text-xs bg-white border border-sand-200 rounded-lg text-charcoal-700 focus:outline-none focus:ring-1 focus:ring-terra-300"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                title="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-charcoal-400 hover:text-charcoal-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[10px] font-medium text-charcoal-400 uppercase mr-1">Sort:</span>
@@ -464,8 +504,8 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
               </button>
               <span className="text-[11px] text-charcoal-400">
                 {selectedIds.size} selected
-                {hasDateFilter && (
-                  <span className="text-charcoal-300"> · {visible.length} in range</span>
+                {(hasDateFilter || search.trim()) && (
+                  <span className="text-charcoal-300"> · {visible.length} shown</span>
                 )}
               </span>
             </div>
@@ -483,7 +523,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
 
         {visible.length === 0 ? (
           <div className="bg-white rounded-xl border border-sand-200 shadow-card px-4 py-10 text-center text-charcoal-400 text-xs">
-            No invoices match the current date range.
+            No invoices match your search or date range.
           </div>
         ) : (
         <div className="space-y-3">
