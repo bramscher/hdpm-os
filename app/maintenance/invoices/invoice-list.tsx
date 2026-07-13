@@ -32,7 +32,7 @@ interface InvoiceListProps {
 }
 
 // ── Sort + date helpers ──────────
-type SortField = "date" | "amount" | "property";
+type SortField = "date" | "number" | "amount" | "property";
 
 /** The date an invoice is filtered/sorted on: completed date, falling back to created. */
 function invoiceDate(inv: HdmsInvoice): Date | null {
@@ -239,7 +239,9 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
 
     const sorted = [...filtered].sort((a, b) => {
       let cmp = 0;
-      if (sortField === "amount") {
+      if (sortField === "number") {
+        cmp = (a.invoice_number || 0) - (b.invoice_number || 0);
+      } else if (sortField === "amount") {
         cmp = (a.total_amount || 0) - (b.total_amount || 0);
       } else if (sortField === "property") {
         cmp = (a.property_name || "").localeCompare(b.property_name || "");
@@ -409,6 +411,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[10px] font-medium text-charcoal-400 uppercase mr-1">Sort:</span>
               <SortButton field="date" label="Date" />
+              <SortButton field="number" label="Invoice #" />
               <SortButton field="amount" label="Amount" />
               <SortButton field="property" label="Property" />
             </div>
