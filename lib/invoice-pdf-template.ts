@@ -219,8 +219,10 @@ export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
     for (const item of lineItems) {
       const amount = Number(item.amount) || 0;
       const type = item.type || 'other';
+      // Appliances are billed as materials on the owner-facing invoice; only the
+      // marked-up `amount` is ever printed — cost/markup_pct stay internal.
       if (type === 'labor') laborSubtotal += amount;
-      else if (type === 'materials') materialsSubtotal += amount;
+      else if (type === 'materials' || type === 'appliance') materialsSubtotal += amount;
 
       // Wrap description text
       const descColW = hasQtyData ? COL_DESC_W - 6 : (CONTENT_W - COL_TYPE_W - COL_EXT_W - 6);
@@ -233,7 +235,7 @@ export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       if (type === 'labor') doc.setTextColor(BLUE_LABEL);
-      else if (type === 'materials') doc.setTextColor(AMBER_LABEL);
+      else if (type === 'materials' || type === 'appliance') doc.setTextColor(AMBER_LABEL);
       else doc.setTextColor(MID);
       // Labor lines carry the tech's initials (e.g. "Labor BB"); full names stay internal.
       const tech = type === 'labor' ? normalizeTechnician(item.technician) : '';

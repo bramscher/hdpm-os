@@ -1,10 +1,18 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { ArrowLeft, Save, FileDown, Loader2, Trash2, Wrench, Package, Check, Sparkles, Clock } from "lucide-react";
+import { ArrowLeft, Save, FileDown, Loader2, Trash2, Wrench, Package, Check, Sparkles, Clock, Refrigerator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { WorkOrderRow, HdmsInvoice, LineItem, TECHNICIANS, normalizeTechnician } from "@/lib/invoices";
+import {
+  WorkOrderRow,
+  HdmsInvoice,
+  LineItem,
+  TECHNICIANS,
+  normalizeTechnician,
+  DEFAULT_MARKUP_PCT,
+  chargedFromCost,
+} from "@/lib/invoices";
 
 interface InvoiceFormProps {
   workOrder: WorkOrderRow | null;
@@ -13,8 +21,21 @@ interface InvoiceFormProps {
   onSaved: (invoice: HdmsInvoice) => void;
 }
 
-type LineItemType = "labor" | "materials" | "other";
+type LineItemType = "labor" | "materials" | "other" | "appliance";
 type RateType = "standard" | "after-hours";
+
+/** Materials-style lines that carry a cost basis and get marked up. */
+function isMaterialType(t: LineItemType): boolean {
+  return t === "materials" || t === "appliance";
+}
+
+/** The effective markup % string for a line, falling back to the type default. */
+function effMarkup(li: FormLineItem): string {
+  if (li.markupPct != null && li.markupPct !== "") return li.markupPct;
+  return li.type === "appliance"
+    ? String(DEFAULT_MARKUP_PCT.appliance)
+    : String(DEFAULT_MARKUP_PCT.materials);
+}
 
 // ── Labor rate constants ──────────
 const STANDARD_RATE = 95;
@@ -39,6 +60,9 @@ interface FormLineItem {
   rate: string;
   rateType: RateType;
   technician?: string; // "Brody" | "Alberto" — attributes labor to a tech (labor lines only)
+  // Materials / appliance-specific (internal only — never printed on the PDF)
+  cost?: string;       // what HDMS paid for this line
+  markupPct?: string;  // markup % applied on top of cost (defaults: 25 materials / 10 appliance)
   // Materials-specific
   flatFeeKey: string;
 }
@@ -59,6 +83,12 @@ function blankLineItem(type: LineItemType = "labor", technician = ""): FormLineI
     rate: type === "labor" ? STANDARD_RATE.toFixed(2) : "",
     rateType: "standard",
     technician: type === "labor" ? technician : "",
+    cost: "",
+    markupPct: type === "appliance"
+      ? String(DEFAULT_MARKUP_PCT.appliance)
+      : type === "materials"
+        ? String(DEFAULT_MARKUP_PCT.materials)
+        : "",
     flatFeeKey: "",
   };
 }
@@ -66,6 +96,7 @@ function blankLineItem(type: LineItemType = "labor", technician = ""): FormLineI
 const TYPE_STYLES: Record<LineItemType, { bg: string; text: string; label: string; icon: typeof Wrench }> = {
   labor: { bg: "bg-blue-50", text: "text-blue-700", label: "Labor", icon: Wrench },
   materials: { bg: "bg-amber-50", text: "text-amber-700", label: "Materials", icon: Package },
+  appliance: { bg: "bg-orange-50", text: "text-orange-700", label: "Appliance", icon: Refrigerator },
   other: { bg: "bg-charcoal-50", text: "text-charcoal-600", label: "Other", icon: Wrench },
 };
 
@@ -130,7 +161,17 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
   }, [lineItems]);
 
   const materialsTotal = useMemo(() => {
-    return lineItems.filter((li) => li.type === "materials").reduce((sum, li) => sum + (parseFloat(li.amount) || 0), 0);
+    return lineItems.filter((li) => isMaterialType(li.type)).reduce((sum, li) => sum + (parseFloat(li.amount) || 0), 0);
+  }, [lineItems]);
+
+  // Markup captured across material/appliance lines = charged − cost (only where cost entered).
+  const markupTotal = useMemo(() => {
+    return lineItems.reduce((sum, li) => {
+      if (!isMaterialType(li.type)) return sum;
+      const cost = parseFloat(li.cost || "") || 0;
+      if (cost <= 0) return sum;
+      return sum + ((parseFloat(li.amount) || 0) - cost);
+    }, 0);
   }, [lineItems]);
 
   // ── Pre-populate from work order or existing invoice ──────────
@@ -161,6 +202,8 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
             rate: li.unit_price ? li.unit_price.toFixed(2) : ((li.type || "labor") === "labor" ? STANDARD_RATE.toFixed(2) : ""),
             rateType: "standard" as RateType,
             technician: (li.type || "labor") === "labor" ? normalizeTechnician(li.technician) : "",
+            cost: li.cost != null ? String(li.cost) : "",
+            markupPct: li.markup_pct != null ? String(li.markup_pct) : "",
             flatFeeKey: "",
           }))
         );
@@ -565,8 +608,8 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
             : STANDARD_RATE.toFixed(2);
         }
 
-        // Auto-calculate amount = qty × rate for ALL line types
-        if (field === "qty" || field === "rate" || field === "rateType") {
+        // Auto-calculate amount = qty × rate for labor/other (materials use cost × markup below)
+        if ((field === "qty" || field === "rate" || field === "rateType") && !isMaterialType(updated.type)) {
           const q = parseFloat(updated.qty) || 0;
           const r = parseFloat(updated.rate) || 0;
           if (q > 0 && r > 0) {
@@ -574,21 +617,39 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
           }
         }
 
+        // Materials/appliance: charged amount = cost × (1 + markup%). Editing the
+        // amount directly still works (manual override) — it just isn't recomputed here.
+        if ((field === "cost" || field === "markupPct") && isMaterialType(updated.type)) {
+          const c = parseFloat(updated.cost || "") || 0;
+          const mk = parseFloat(effMarkup(updated)) || 0;
+          if (c > 0) updated.amount = chargedFromCost(c, mk).toFixed(2);
+        }
+
         // When switching type TO labor, set default rate fields
         if (field === "type" && value === "labor") {
           updated.rate = STANDARD_RATE.toFixed(2);
           updated.rateType = "standard";
+          updated.cost = "";
+          updated.markupPct = "";
           updated.flatFeeKey = "";
         }
-        // When switching type TO materials, clear labor-specific fields
-        if (field === "type" && value === "materials") {
+        // When switching type TO materials/appliance, clear labor fields and set
+        // the type's default markup, recomputing the charge if a cost is present.
+        if (field === "type" && (value === "materials" || value === "appliance")) {
           updated.rate = "";
           updated.rateType = "standard";
+          updated.markupPct = value === "appliance"
+            ? String(DEFAULT_MARKUP_PCT.appliance)
+            : String(DEFAULT_MARKUP_PCT.materials);
+          const c = parseFloat(updated.cost || "") || 0;
+          if (c > 0) updated.amount = chargedFromCost(c, parseFloat(updated.markupPct)).toFixed(2);
         }
         // When switching type TO other, clear specifics
         if (field === "type" && value === "other") {
           updated.rate = "";
           updated.rateType = "standard";
+          updated.cost = "";
+          updated.markupPct = "";
           updated.flatFeeKey = "";
         }
 
@@ -636,19 +697,29 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
   function buildSavePayload() {
     // Save ALL line items the user has in the form — if they added it, keep it
     const validLineItems: LineItem[] = lineItems
-      .map((li) => ({
-        description: li.description.trim(),
-        account: li.account.trim() || undefined,
-        type: li.type,
-        technician: li.type === "labor" ? li.technician || undefined : undefined,
-        qty: parseFloat(li.qty) || undefined,
-        unit_price: parseFloat(li.rate) || undefined,
-        amount: parseFloat(li.amount) || 0,
-      }));
+      .map((li) => {
+        const isMat = isMaterialType(li.type);
+        const cost = isMat ? parseFloat(li.cost || "") || 0 : 0;
+        const markup = isMat ? parseFloat(effMarkup(li)) || 0 : 0;
+        return {
+          description: li.description.trim(),
+          account: li.account.trim() || undefined,
+          type: li.type,
+          technician: li.type === "labor" ? li.technician || undefined : undefined,
+          qty: parseFloat(li.qty) || undefined,
+          unit_price: parseFloat(li.rate) || undefined,
+          amount: parseFloat(li.amount) || 0,
+          // Internal cost/markup — only when a cost was actually entered.
+          cost: isMat && cost > 0 ? cost : undefined,
+          markup_pct: isMat && cost > 0 ? markup : undefined,
+        };
+      });
 
     const computedTotal = validLineItems.reduce((sum, li) => sum + li.amount, 0);
     const computedLabor = validLineItems.filter((li) => li.type === "labor").reduce((sum, li) => sum + li.amount, 0);
-    const computedMaterials = validLineItems.filter((li) => li.type === "materials").reduce((sum, li) => sum + li.amount, 0);
+    const computedMaterials = validLineItems
+      .filter((li) => li.type === "materials" || li.type === "appliance")
+      .reduce((sum, li) => sum + li.amount, 0);
 
     // Short summary for the invoice description field (used for search, not shown on PDF when line items exist)
     const allDescs = validLineItems
@@ -1010,6 +1081,17 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
                 <Package className="h-3 w-3 mr-1" />
                 + Materials
               </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => addLineItem("appliance")}
+                disabled={isLoading}
+                className="text-orange-600 hover:text-orange-800 text-xs h-7"
+              >
+                <Refrigerator className="h-3 w-3 mr-1" />
+                + Appliance
+              </Button>
             </div>
           </div>
 
@@ -1018,10 +1100,10 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
             <div className="grid grid-cols-[80px_1fr_60px_80px_48px_90px_36px] gap-2 px-3 py-2 bg-charcoal-50 border-b border-sand-200 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">
               <span>Type</span>
               <span>Description</span>
-              <span>Qty</span>
-              <span>Price</span>
+              <span title="Hours/Qty for labor · Cost paid for materials & appliances">Qty/Cost</span>
+              <span title="Rate for labor · Markup % for materials & appliances">Price/Mk%</span>
               <span className="text-center">OT</span>
-              <span className="text-right">Extended</span>
+              <span className="text-right">Charged</span>
               <span />
             </div>
 
@@ -1031,6 +1113,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
               const isUnpriced = li.description.trim() && (parseFloat(li.amount) || 0) === 0;
               const isLabor = li.type === "labor";
               const isMaterials = li.type === "materials";
+              const isMaterial = isMaterialType(li.type);
 
               return (
                 <div
@@ -1048,6 +1131,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
                   >
                     <option value="labor">Labor</option>
                     <option value="materials">Materials</option>
+                    <option value="appliance">Appliance</option>
                     <option value="other">Other</option>
                   </select>
 
@@ -1117,32 +1201,65 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
                     )}
                   </div>
 
-                  {/* Qty — all line types */}
-                  <Input
-                    type="number"
-                    step={isLabor ? "0.25" : "1"}
-                    min="0"
-                    value={li.qty}
-                    onChange={(e) => updateLineItem(li.id, "qty", e.target.value)}
-                    placeholder={isLabor ? "Hrs" : "Qty"}
-                    disabled={isLoading}
-                    className="h-8 text-xs text-center bg-transparent border-sand-200"
-                  />
-
-                  {/* Unit Price — all line types */}
-                  <div className="relative">
-                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-charcoal-400 text-[10px]">$</span>
+                  {/* Qty (labor/other) OR Cost (materials/appliance — internal only) */}
+                  {isMaterial ? (
+                    <div className="relative">
+                      <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-charcoal-400 text-[10px]">$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={li.cost ?? ""}
+                        onChange={(e) => updateLineItem(li.id, "cost", e.target.value)}
+                        placeholder="cost"
+                        disabled={isLoading}
+                        title="What HDMS paid — internal only, never shown on the owner's invoice"
+                        className="h-8 text-xs pl-4 text-right bg-transparent border-sand-200"
+                      />
+                    </div>
+                  ) : (
                     <Input
                       type="number"
-                      step="0.01"
+                      step={isLabor ? "0.25" : "1"}
                       min="0"
-                      value={li.rate}
-                      onChange={(e) => updateLineItem(li.id, "rate", e.target.value)}
-                      placeholder={isLabor ? "/hr" : "ea"}
+                      value={li.qty}
+                      onChange={(e) => updateLineItem(li.id, "qty", e.target.value)}
+                      placeholder={isLabor ? "Hrs" : "Qty"}
                       disabled={isLoading}
-                      className="h-8 text-xs pl-4 text-right bg-transparent border-sand-200"
+                      className="h-8 text-xs text-center bg-transparent border-sand-200"
                     />
-                  </div>
+                  )}
+
+                  {/* Unit Price (labor/other) OR Markup % (materials/appliance — internal only) */}
+                  {isMaterial ? (
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={effMarkup(li)}
+                        onChange={(e) => updateLineItem(li.id, "markupPct", e.target.value)}
+                        disabled={isLoading}
+                        title="Markup % applied to cost — internal only. Defaults: 25% materials, 10% appliance."
+                        className="h-8 text-xs pr-4 text-right bg-transparent border-sand-200"
+                      />
+                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-charcoal-400 text-[10px]">%</span>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-charcoal-400 text-[10px]">$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={li.rate}
+                        onChange={(e) => updateLineItem(li.id, "rate", e.target.value)}
+                        placeholder={isLabor ? "/hr" : "ea"}
+                        disabled={isLoading}
+                        className="h-8 text-xs pl-4 text-right bg-transparent border-sand-200"
+                      />
+                    </div>
+                  )}
 
                   {/* After-hours toggle — labor only; empty spacer for others */}
                   {isLabor ? (
@@ -1207,6 +1324,11 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
                     )}
                     {materialsTotal > 0 && (
                       <span>Materials: <span className="font-medium text-amber-600">${materialsTotal.toFixed(2)}</span></span>
+                    )}
+                    {markupTotal > 0 && (
+                      <span title="Margin captured on materials & appliances (internal only)">
+                        Markup: <span className="font-medium text-orange-600">${markupTotal.toFixed(2)}</span>
+                      </span>
                     )}
                   </div>
                   <span />

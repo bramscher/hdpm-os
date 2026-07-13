@@ -8,11 +8,51 @@ import { getSupabaseAdmin } from './supabase';
 export interface LineItem {
   description: string;
   account?: string;        // GL account code from work order (e.g. "6500: Keys, Locks...")
-  type?: 'labor' | 'materials' | 'other';  // categorization for the line item
+  type?: LineItemType;     // categorization for the line item
   technician?: string;     // tech who performed this labor (e.g. "Brody" | "Alberto"); labor lines only
   qty?: number;            // quantity (hours for labor, count for materials)
   unit_price?: number;     // per-unit price (hourly rate for labor, per-item for materials)
-  amount: number;          // extended amount (qty × unit_price, or manual entry)
+  amount: number;          // extended amount charged to the owner (qty × unit_price, or manual entry)
+  // ── Internal-only cost/markup (materials & appliance lines) ──────────
+  // These NEVER appear on the owner-facing PDF — only `amount` (the marked-up
+  // charge) is printed. They exist so the internal markup report can show margin.
+  cost?: number;           // what HDMS actually paid for this line (total, not per-unit)
+  markup_pct?: number;     // markup percentage applied on top of cost (e.g. 25 or 10)
+}
+
+/** Line-item categories. `appliance` is materials with its own default markup. */
+export type LineItemType = 'labor' | 'materials' | 'other' | 'appliance';
+
+/** Line types that carry a material cost and get marked up (vs. labor/other). */
+export const MATERIAL_TYPES: readonly LineItemType[] = ['materials', 'appliance'];
+
+/** Default markup percentage applied to cost, by line type. */
+export const DEFAULT_MARKUP_PCT: Record<'materials' | 'appliance', number> = {
+  materials: 25,
+  appliance: 10,
+};
+
+/** Charge = cost marked up by the given percentage, rounded to cents. */
+export function chargedFromCost(cost: number, markupPct: number): number {
+  return Math.round(cost * (1 + markupPct / 100) * 100) / 100;
+}
+
+/** The recorded cost basis of a line (0 when no cost was entered). */
+export function lineCost(li: LineItem): number {
+  return li.cost != null && li.cost > 0 ? li.cost : 0;
+}
+
+/**
+ * Markup captured on a line = charged amount − recorded cost.
+ * Returns 0 for labor/other or any line with no cost recorded, so legacy
+ * invoices (no cost basis) never report phantom markup.
+ */
+export function lineMarkup(li: LineItem): number {
+  const type = li.type || 'labor';
+  if (!MATERIAL_TYPES.includes(type)) return 0;
+  const cost = lineCost(li);
+  if (cost <= 0) return 0;
+  return Math.round((li.amount - cost) * 100) / 100;
 }
 
 /** The two HDMS technicians labor can be attributed to. */

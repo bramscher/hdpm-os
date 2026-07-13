@@ -26,6 +26,7 @@ import { WorkOrderTable } from "./work-order-table";
 import { InvoiceForm } from "./invoice-form";
 import { InvoiceList } from "./invoice-list";
 import { BillableReport } from "./billable-report";
+import { SelectionReport } from "./selection-report";
 
 // ============================================
 // Work Order Types (mirrors lib/work-orders.ts)
@@ -175,6 +176,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const [fromWorkOrder, setFromWorkOrder] = useState(false);
   const [invoices, setInvoices] = useState<HdmsInvoice[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
+  const [reportInvoices, setReportInvoices] = useState<HdmsInvoice[] | null>(null);
 
   // Work orders state
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -955,6 +957,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 invoices={invoices}
                 onRefresh={fetchInvoices}
                 onEdit={handleEditInvoice}
+                onRunReport={setReportInvoices}
                 isLoading={isLoadingInvoices}
               />
             </>
@@ -981,6 +984,14 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           editInvoice={editInvoice}
           onBack={handleBackFromForm}
           onSaved={handleInvoiceSaved}
+        />
+      )}
+
+      {/* Selection markup report (modal over the Invoices tab) */}
+      {reportInvoices && (
+        <SelectionReport
+          invoices={reportInvoices}
+          onClose={() => setReportInvoices(null)}
         />
       )}
     </div>
