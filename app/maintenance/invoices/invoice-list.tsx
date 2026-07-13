@@ -501,9 +501,9 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
                   isSelected && "ring-2 ring-terra-300 bg-terra-50/40"
                 )}
               >
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
                   {/* Left: Invoice info */}
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     {/* Selection checkbox */}
                     <button
                       type="button"
@@ -573,8 +573,8 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
                     </div>
                   </div>
 
-                  {/* Center: Amount */}
-                  <div className="text-right shrink-0">
+                  {/* Amount — fixed-width column so totals right-align across rows */}
+                  <div className="text-right shrink-0 w-36">
                     <span className="text-lg font-semibold text-charcoal-900">
                       {formatCurrency(invoice.total_amount)}
                     </span>
@@ -593,8 +593,8 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
                     )}
                   </div>
 
-                  {/* Right: Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
+                  {/* Actions — right-aligned in a consistent-width column regardless of button count */}
+                  <div className="flex items-center justify-end gap-1 shrink-0 min-w-[224px]">
                     {/* Preview */}
                     {hasPdf && (
                       <Button
