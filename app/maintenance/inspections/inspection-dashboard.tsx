@@ -19,8 +19,18 @@ import {
   List,
   Bell,
   X as XIcon,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// AppFolio "Letters" deep link. Opens the saved "Inspection Letter — TENANT
+// NOTIFICATION" template (id 197) in edit mode: Communication → Letters. AppFolio
+// has no send API and recipients are chosen in-page (search each unit, check the
+// resident), so this lands staff on the exact template; the per-date inspection
+// date + per-unit address/resident below make recipient selection one search each.
+const APPFOLIO_WEB_BASE = "https://highdesertpm.appfolio.com";
+const APPFOLIO_INSPECTION_LETTER_ID = 197;
+const APPFOLIO_INSPECTION_LETTER_URL = `${APPFOLIO_WEB_BASE}/letter_writing/tenant_letters/${APPFOLIO_INSPECTION_LETTER_ID}/edit`;
 
 // ────────────────────────────────────────────────
 // Types
@@ -1096,8 +1106,9 @@ function NoticeModal({
           <div>
             <h3 className="text-base font-bold text-charcoal-900">Send Tenant Inspection Notices</h3>
             <p className="text-xs text-charcoal-500 mt-1 max-w-md">
-              AppFolio has no send API and notices must be logged in AppFolio. Copy each date&apos;s
-              recipients + message into <b>Realm-X Assistant → Send Bulk Email</b>, then mark them sent.
+              For each date, click <b>Open Inspection Letter in AppFolio</b> — it opens the saved
+              <b> &ldquo;Inspection Letter — TENANT NOTIFICATION&rdquo;</b> template. Set the inspection
+              date, search each unit below and check its resident, send, then mark them sent here.
             </p>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-charcoal-100 rounded-lg">
@@ -1114,8 +1125,9 @@ function NoticeModal({
         </div>
 
         <div className="px-6 py-2 text-[11px] text-charcoal-500 bg-charcoal-50 border-b border-charcoal-100">
-          Automated send via the AppFolio Realm-X connector is wired and waiting on
-          connector activation; until then, send through Realm-X below and mark sent.
+          The button opens the exact letter template (Communication → Letters). AppFolio picks
+          recipients in-page, so each unit&apos;s address + resident is listed to search &amp; check.
+          Fully-automated send via the Realm-X connector is still pending activation.
         </div>
 
         <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
@@ -1139,35 +1151,76 @@ function NoticeModal({
                     )}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  <button
-                    onClick={() => copy(`em-${dateKey}`, emails.join(", "))}
-                    disabled={emails.length === 0}
-                    className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-terra-50 text-terra-700 hover:bg-terra-100 disabled:opacity-40"
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  {/* Primary: open the exact AppFolio letter template */}
+                  <a
+                    href={APPFOLIO_INSPECTION_LETTER_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-terra-500 text-white hover:bg-terra-600"
                   >
-                    {copied === `em-${dateKey}` ? "Copied!" : "Copy emails"}
-                  </button>
-                  <button
-                    onClick={() => copy(`sub-${dateKey}`, tmpl.subject)}
-                    className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
-                  >
-                    {copied === `sub-${dateKey}` ? "Copied!" : "Copy subject"}
-                  </button>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open Inspection Letter in AppFolio
+                  </a>
+                  {dateKey !== "no-date" && (
+                    <button
+                      onClick={() => copy(`date-${dateKey}`, longDate(dateKey))}
+                      className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
+                    >
+                      {copied === `date-${dateKey}` ? "Copied!" : "Copy date"}
+                    </button>
+                  )}
                   <button
                     onClick={() => copy(`body-${dateKey}`, tmpl.body)}
                     className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
                   >
                     {copied === `body-${dateKey}` ? "Copied!" : "Copy message"}
                   </button>
-                </div>
-                <details className="text-xs text-charcoal-500">
-                  <summary className="cursor-pointer hover:text-charcoal-700">Recipients &amp; message</summary>
-                  <p className="mt-2 break-words"><b>To:</b> {emails.join(", ") || "—"}</p>
-                  {items.some((n) => !n.email) && (
-                    <p className="mt-1 text-amber-600">
-                      No email on file: {items.filter((n) => !n.email).map((n) => n.address).join("; ")}
-                    </p>
+                  {emails.length > 0 && (
+                    <button
+                      onClick={() => copy(`em-${dateKey}`, emails.join(", "))}
+                      className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
+                      title="For the Realm-X email fallback"
+                    >
+                      {copied === `em-${dateKey}` ? "Copied!" : "Copy emails"}
+                    </button>
                   )}
+                </div>
+
+                {dateKey !== "no-date" && (
+                  <p className="text-[11px] text-charcoal-500 mb-2">
+                    In AppFolio: set the inspection date to <b>{longDate(dateKey)}</b>, then search
+                    each unit below and check its resident.
+                  </p>
+                )}
+
+                {/* Per-unit recipients — the search term + resident to check in AppFolio */}
+                <div className="space-y-1">
+                  {items.map((n) => (
+                    <div
+                      key={n.id}
+                      className="flex items-center justify-between gap-2 text-xs bg-charcoal-50 rounded px-2 py-1.5"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-medium text-charcoal-800">{n.resident_name || "Resident"}</span>
+                        {n.address && <span className="text-charcoal-400"> &middot; {n.address}</span>}
+                        {!n.email && <span className="ml-1 text-amber-600">(no email)</span>}
+                      </div>
+                      {n.address && (
+                        <button
+                          onClick={() => copy(`addr-${n.id}`, n.address)}
+                          className="shrink-0 px-2 py-1 rounded text-[11px] bg-white border border-charcoal-200 text-charcoal-600 hover:bg-charcoal-100"
+                          title="Copy the unit address to search recipients in AppFolio"
+                        >
+                          {copied === `addr-${n.id}` ? "Copied!" : "Copy address"}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <details className="text-xs text-charcoal-500 mt-2">
+                  <summary className="cursor-pointer hover:text-charcoal-700">Letter message (reference)</summary>
                   <pre className="mt-2 whitespace-pre-wrap font-sans bg-charcoal-50 rounded p-2 text-charcoal-600">{tmpl.body}</pre>
                 </details>
               </div>

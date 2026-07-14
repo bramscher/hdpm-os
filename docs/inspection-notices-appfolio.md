@@ -24,6 +24,20 @@ AppFolio page. Our app's job is to compute *who is due and when* (move-in-anchor
 This is confirmed to satisfy the logging requirement (Realm-X Assistant bulk email
 is recorded on the tenant page). It's manual per batch — no API send exists.
 
+### Preferred path — deep link into AppFolio Letters (Communication → Letters)
+
+The routine notice is a saved AppFolio **Letters** template, **"Inspection Letter —
+TENANT NOTIFICATION"** (`letter_writing/tenant_letters/197`). The Send Notices modal
+now shows, per date group, an **Open Inspection Letter in AppFolio** button that deep
+links to `…/letter_writing/tenant_letters/197/edit`, plus the exact **inspection date**
+to set and each unit's **address + resident** to search and check.
+
+AppFolio's Letters tool picks recipients **in-page** (search by unit, check the
+resident) — there is no URL parameter for the tenant — so the link lands staff on the
+right template with the date/recipient legwork pre-listed, not fully pre-filled.
+The template id (`197`) is set in `inspection-dashboard.tsx`
+(`APPFOLIO_INSPECTION_LETTER_ID`); update it there if the template is recreated.
+
 ## Chosen model (2026-06-29): Flow heads-up + exact-date via bridge
 
 Two layers, both logged in AppFolio:
