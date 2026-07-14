@@ -1136,7 +1136,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
                   </select>
 
                   {/* Description */}
-                  <div className="relative">
+                  <div className="relative min-w-0">
                     {/* Tech attribution for labor — initials print on the invoice (BB/AF) */}
                     {isLabor && (
                       <select
