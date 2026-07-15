@@ -17,7 +17,7 @@ export const DEFAULT_PAYEE = 'High Desert Maintenance Services';
 export interface Payment {
   id: string;
   paid_on: string; // YYYY-MM-DD
-  amount: number; // the ACH/check total actually received
+  amount: number | null; // the ACH/check total actually received (null = not entered yet)
   payee: string; // who was paid (default HDMS)
   reference: string | null;
   method: string; // 'ach' | 'check' | 'other'
@@ -38,7 +38,7 @@ export interface Payment {
 
 export interface CapturePaymentInput {
   paid_on: string;
-  amount: number;
+  amount?: number | null; // optional — capture by date now, fill amount later
   payee?: string;
   reference?: string;
   method?: string;
@@ -50,6 +50,16 @@ export interface CapturePaymentInput {
 
 export interface CreatePaymentInput extends CapturePaymentInput {
   invoice_ids: string[];
+}
+
+/** Editable fields on a payment (invoice links are managed via attach/detach). */
+export interface UpdatePaymentInput {
+  paid_on?: string;
+  amount?: number | null;
+  payee?: string;
+  reference?: string | null;
+  method?: string;
+  memo?: string | null;
 }
 
 /** A payment plus the invoices it covers (for the detail view). */
@@ -162,7 +172,7 @@ export async function capturePayment(input: CapturePaymentInput): Promise<Paymen
     .from('hdms_payments')
     .insert({
       paid_on: input.paid_on,
-      amount: input.amount,
+      amount: input.amount ?? null,
       payee: input.payee?.trim() || DEFAULT_PAYEE,
       reference: input.reference?.trim() || null,
       method: input.method?.trim() || 'ach',
@@ -185,6 +195,39 @@ export async function capturePayment(input: CapturePaymentInput): Promise<Paymen
   }
 
   return payment as Payment;
+}
+
+/** Update a payment's editable fields (not its invoice links). */
+export async function updatePayment(id: string, input: UpdatePaymentInput): Promise<Payment> {
+  const supabase = getSupabaseAdmin();
+
+  const patch: Record<string, unknown> = {};
+  if (input.paid_on !== undefined) patch.paid_on = input.paid_on;
+  if (input.amount !== undefined) patch.amount = input.amount;
+  if (input.payee !== undefined) patch.payee = input.payee?.trim() || DEFAULT_PAYEE;
+  if (input.reference !== undefined) patch.reference = input.reference?.trim() || null;
+  if (input.method !== undefined) patch.method = input.method?.trim() || 'ach';
+  if (input.memo !== undefined) patch.memo = input.memo?.trim() || null;
+
+  if (Object.keys(patch).length === 0) {
+    const existing = await getPaymentById(id);
+    if (!existing) throw new Error('Payment not found.');
+    // Strip the invoices field to return a plain Payment.
+    const { invoices: _invoices, ...payment } = existing;
+    return payment;
+  }
+
+  const { data, error } = await supabase
+    .from('hdms_payments')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Failed to update payment: ${error?.message}`);
+  }
+  return data as Payment;
 }
 
 /**

@@ -37,9 +37,12 @@ export async function POST(request: NextRequest) {
     if (!paid_on) {
       return NextResponse.json({ error: 'Payment date is required' }, { status: 400 });
     }
-    const amount = parseFloat(body.amount);
-    if (!Number.isFinite(amount)) {
-      return NextResponse.json({ error: 'A valid payment amount is required' }, { status: 400 });
+    // Amount is optional — capture by date now, fill it in later. But if a
+    // non-empty value is sent, it must be a valid number.
+    const hasAmount = body.amount !== undefined && body.amount !== null && body.amount !== '';
+    const amount = hasAmount ? parseFloat(body.amount) : null;
+    if (hasAmount && !Number.isFinite(amount as number)) {
+      return NextResponse.json({ error: 'Payment amount must be a valid number' }, { status: 400 });
     }
 
     const common = {

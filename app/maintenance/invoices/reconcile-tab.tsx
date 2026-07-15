@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Loader2,
   Trash2,
+  Pencil,
   ChevronDown,
   ChevronRight,
   CheckCircle2,
@@ -18,7 +19,8 @@ import type { Payment, PaymentWithInvoices } from "@/lib/payments";
 import { InvoiceList } from "./invoice-list";
 import { CapturePaymentModal } from "./capture-payment-modal";
 
-function formatCurrency(amount: number): string {
+function formatCurrency(amount: number | null): string {
+  if (amount == null) return "—";
   const n = typeof amount === "number" ? amount : parseFloat(String(amount)) || 0;
   const sign = n < 0 ? "-" : "";
   return `${sign}$${Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
@@ -26,7 +28,10 @@ function formatCurrency(amount: number): string {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
-  const d = new Date(dateStr);
+  // Parse a YYYY-MM-DD date as LOCAL (not UTC) so e.g. "2026-07-10" doesn't
+  // render as Jul 9 in negative-offset timezones.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(dateStr);
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
@@ -60,6 +65,7 @@ export function ReconcileTab({
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [showCapture, setShowCapture] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -178,7 +184,17 @@ export function ReconcileTab({
       {showCapture && (
         <CapturePaymentModal
           onClose={() => setShowCapture(false)}
-          onCaptured={fetchPayments}
+          onSaved={fetchPayments}
+        />
+      )}
+      {editingPayment && (
+        <CapturePaymentModal
+          payment={editingPayment}
+          onClose={() => setEditingPayment(null)}
+          onSaved={() => {
+            fetchPayments();
+            onRefreshInvoices();
+          }}
         />
       )}
 
@@ -217,13 +233,15 @@ export function ReconcileTab({
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Billed</th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Received</th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Variance</th>
-                  <th className="w-10" />
+                  <th className="w-16" />
                 </tr>
               </thead>
               <tbody>
                 {payments.map((p) => {
-                  const variance = Math.round((Number(p.amount) - Number(p.invoice_total)) * 100) / 100;
-                  const balanced = Math.abs(variance) < 0.01;
+                  const amt = p.amount == null ? null : Number(p.amount);
+                  const variance =
+                    amt == null ? null : Math.round((amt - Number(p.invoice_total)) * 100) / 100;
+                  const balanced = variance != null && Math.abs(variance) < 0.01;
                   const isOpen = expanded === p.id;
                   const isConfirming = confirmDelete === p.id;
                   return (
@@ -252,20 +270,24 @@ export function ReconcileTab({
                         <td className="px-3 py-2.5 text-right text-xs text-blue-600">{formatCurrency(Number(p.labor_total))}</td>
                         <td className="px-3 py-2.5 text-right text-xs text-amber-600">{formatCurrency(Number(p.materials_total))}</td>
                         <td className="px-3 py-2.5 text-right text-xs font-medium text-charcoal-800">{formatCurrency(Number(p.invoice_total))}</td>
-                        <td className="px-3 py-2.5 text-right text-xs font-semibold text-charcoal-900">{formatCurrency(Number(p.amount))}</td>
+                        <td className="px-3 py-2.5 text-right text-xs font-semibold text-charcoal-900">{formatCurrency(amt)}</td>
                         <td className="px-3 py-2.5 text-right">
-                          <span
-                            className={`inline-flex items-center gap-1 text-[11px] font-medium ${
-                              balanced ? "text-green-600" : "text-amber-600"
-                            }`}
-                          >
-                            {balanced ? (
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                            ) : (
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                            )}
-                            {balanced ? "Balanced" : formatCurrency(variance)}
-                          </span>
+                          {amt == null ? (
+                            <span className="text-[11px] text-charcoal-300">no amount</span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center gap-1 text-[11px] font-medium ${
+                                balanced ? "text-green-600" : "text-amber-600"
+                              }`}
+                            >
+                              {balanced ? (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              ) : (
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                              )}
+                              {balanced ? "Balanced" : formatCurrency(variance)}
+                            </span>
+                          )}
                         </td>
                         <td className="px-2 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                           {isConfirming ? (
@@ -285,13 +307,22 @@ export function ReconcileTab({
                               </button>
                             </div>
                           ) : (
-                            <button
-                              onClick={() => setConfirmDelete(p.id)}
-                              title="Unreconcile (delete payment, invoices revert to unpaid)"
-                              className="text-charcoal-300 hover:text-red-600 transition-colors"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => setEditingPayment(p)}
+                                title="Edit payment (date, amount, reference)"
+                                className="text-charcoal-300 hover:text-terra-600 transition-colors"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setConfirmDelete(p.id)}
+                                title="Unreconcile (delete payment, invoices revert to unpaid)"
+                                className="text-charcoal-300 hover:text-red-600 transition-colors"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>

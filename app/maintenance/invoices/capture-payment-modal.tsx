@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { X, Loader2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { Payment } from "@/lib/payments";
 
 // Kept in sync with DEFAULT_PAYEE in lib/payments.ts (inlined so this client
 // component doesn't pull the server-only payments module into the bundle).
@@ -19,16 +20,21 @@ function todayInput(): string {
 
 interface CapturePaymentModalProps {
   onClose: () => void;
-  onCaptured: () => void;
+  onSaved: () => void;
+  /** When present, the modal edits this payment (PATCH) instead of capturing a new one. */
+  payment?: Payment;
 }
 
-export function CapturePaymentModal({ onClose, onCaptured }: CapturePaymentModalProps) {
-  const [payee, setPayee] = useState(DEFAULT_PAYEE);
-  const [paidOn, setPaidOn] = useState(todayInput());
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("ach");
-  const [reference, setReference] = useState("");
-  const [memo, setMemo] = useState("");
+export function CapturePaymentModal({ onClose, onSaved, payment }: CapturePaymentModalProps) {
+  const isEdit = !!payment;
+  const [payee, setPayee] = useState(payment?.payee ?? DEFAULT_PAYEE);
+  const [paidOn, setPaidOn] = useState(payment?.paid_on ?? todayInput());
+  const [amount, setAmount] = useState(
+    payment?.amount != null ? String(payment.amount) : ""
+  );
+  const [method, setMethod] = useState(payment?.method ?? "ach");
+  const [reference, setReference] = useState(payment?.reference ?? "");
+  const [memo, setMemo] = useState(payment?.memo ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,33 +53,40 @@ export function CapturePaymentModal({ onClose, onCaptured }: CapturePaymentModal
     };
   }, [handleKeyDown]);
 
-  const parsedAmount = parseFloat(amount);
-  const canSave = !saving && !!paidOn && Number.isFinite(parsedAmount) && !!payee.trim();
+  // Amount is optional — capture by date now, fill it in later.
+  const trimmedAmount = amount.trim();
+  const amountValid = trimmedAmount === "" || Number.isFinite(parseFloat(trimmedAmount));
+  const canSave = !saving && !!paidOn && !!payee.trim() && amountValid;
 
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paid_on: paidOn,
-          amount: parsedAmount,
-          payee: payee.trim(),
-          method,
-          reference: reference.trim() || undefined,
-          memo: memo.trim() || undefined,
-          // no invoice_ids → captured "open"
-        }),
-      });
+      // Empty amount → null (clears it on edit; "not set yet" on capture).
+      const amountValue = trimmedAmount === "" ? null : parseFloat(trimmedAmount);
+      const bodyBase = {
+        paid_on: paidOn,
+        amount: amountValue,
+        payee: payee.trim(),
+        method,
+        reference: reference.trim() || null,
+        memo: memo.trim() || null,
+      };
+      const res = await fetch(
+        isEdit ? `/api/payments/${payment!.id}` : "/api/payments",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bodyBase),
+        }
+      );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to capture payment");
-      onCaptured();
+      if (!res.ok) throw new Error(data.error || "Failed to save payment");
+      onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to capture payment");
+      setError(err instanceof Error ? err.message : "Failed to save payment");
       setSaving(false);
     }
   }
@@ -86,7 +99,9 @@ export function CapturePaymentModal({ onClose, onCaptured }: CapturePaymentModal
         <div className="flex items-center justify-between px-5 py-3 border-b border-charcoal-200/60 bg-charcoal-50/80">
           <div className="flex items-center gap-3">
             <Wallet className="h-5 w-5 text-terra-600" />
-            <span className="font-semibold text-charcoal-900 text-sm">Capture ACH payment</span>
+            <span className="font-semibold text-charcoal-900 text-sm">
+              {isEdit ? "Edit payment" : "Capture ACH payment"}
+            </span>
           </div>
           <button
             onClick={saving ? undefined : onClose}
@@ -112,7 +127,7 @@ export function CapturePaymentModal({ onClose, onCaptured }: CapturePaymentModal
             </div>
             <div>
               <label className="block text-[11px] font-semibold text-charcoal-500 uppercase tracking-wider mb-1">
-                Amount
+                Amount <span className="text-charcoal-300 normal-case">(optional)</span>
               </label>
               <Input
                 type="number"
@@ -179,8 +194,10 @@ export function CapturePaymentModal({ onClose, onCaptured }: CapturePaymentModal
             {saving ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                Capturing…
+                Saving…
               </>
+            ) : isEdit ? (
+              "Save changes"
             ) : (
               "Capture payment"
             )}
