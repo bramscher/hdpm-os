@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Plus,
   TrendingUp,
+  Wallet,
 } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
@@ -27,6 +28,8 @@ import { InvoiceForm } from "./invoice-form";
 import { InvoiceList } from "./invoice-list";
 import { BillableReport } from "./billable-report";
 import { SelectionReport } from "./selection-report";
+import { ReconcileTab } from "./reconcile-tab";
+import { PaymentReconcileModal } from "./payment-reconcile-modal";
 
 // ============================================
 // Work Order Types (mirrors lib/work-orders.ts)
@@ -158,7 +161,7 @@ function PillToggle<T extends string>({
 // ============================================
 
 type View = "main" | "table" | "form";
-type Tab = "work-orders" | "invoices" | "report";
+type Tab = "work-orders" | "invoices" | "report" | "reconcile";
 
 interface InvoiceDashboardProps {
   userEmail: string;
@@ -177,6 +180,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const [invoices, setInvoices] = useState<HdmsInvoice[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
   const [reportInvoices, setReportInvoices] = useState<HdmsInvoice[] | null>(null);
+  const [reconcileInvoices, setReconcileInvoices] = useState<HdmsInvoice[] | null>(null);
+  const [paymentsReloadToken, setPaymentsReloadToken] = useState(0);
 
   // Work orders state
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -661,6 +666,18 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
               <TrendingUp className="h-4 w-4" />
               Report
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("reconcile")}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                activeTab === "reconcile"
+                  ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
+                  : "text-charcoal-400 hover:text-charcoal-600"
+              }`}
+            >
+              <Wallet className="h-4 w-4" />
+              Reconcile
+            </button>
           </div>
 
           {/* ============================== */}
@@ -959,6 +976,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 onRefresh={fetchInvoices}
                 onEdit={handleEditInvoice}
                 onRunReport={setReportInvoices}
+                onReconcile={setReconcileInvoices}
                 isLoading={isLoadingInvoices}
               />
             </>
@@ -968,6 +986,20 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           {/* Report Tab                     */}
           {/* ============================== */}
           {activeTab === "report" && <BillableReport />}
+
+          {/* ============================== */}
+          {/* Reconcile Tab                  */}
+          {/* ============================== */}
+          {activeTab === "reconcile" && (
+            <ReconcileTab
+              invoices={invoices}
+              isLoadingInvoices={isLoadingInvoices}
+              onRefreshInvoices={fetchInvoices}
+              onEdit={handleEditInvoice}
+              onReconcile={setReconcileInvoices}
+              reloadToken={paymentsReloadToken}
+            />
+          )}
         </div>
       )}
 
@@ -993,6 +1025,18 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
         <SelectionReport
           invoices={reportInvoices}
           onClose={() => setReportInvoices(null)}
+        />
+      )}
+
+      {/* Payment reconciliation (modal) */}
+      {reconcileInvoices && (
+        <PaymentReconcileModal
+          invoices={reconcileInvoices}
+          onClose={() => setReconcileInvoices(null)}
+          onRecorded={() => {
+            fetchInvoices();
+            setPaymentsReloadToken((t) => t + 1);
+          }}
         />
       )}
     </div>

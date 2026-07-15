@@ -18,6 +18,7 @@ import {
   ArrowDown,
   ArrowUpDown,
   BarChart3,
+  Wallet,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -33,9 +34,14 @@ interface InvoiceListProps {
   invoices: HdmsInvoice[];
   onRefresh: () => void;
   onEdit: (invoice: HdmsInvoice) => void;
-  onRunReport: (invoices: HdmsInvoice[]) => void;
+  /** Open the internal markup report for the selected invoices. Button hidden when omitted. */
+  onRunReport?: (invoices: HdmsInvoice[]) => void;
+  /** Reconcile the selected invoices to a trust-account payment. Button hidden when omitted. */
+  onReconcile?: (invoices: HdmsInvoice[]) => void;
   isLoading: boolean;
 }
+
+type PaidFilter = "all" | "unpaid" | "paid";
 
 // ── Sort + date helpers ──────────
 type SortField = "date" | "number" | "amount" | "property";
@@ -214,7 +220,7 @@ function PdfPreviewModal({
 // Invoice List
 // ============================================
 
-export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoading }: InvoiceListProps) {
+export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconcile, isLoading }: InvoiceListProps) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [previewInvoice, setPreviewInvoice] = useState<HdmsInvoice | null>(null);
@@ -224,6 +230,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -251,6 +258,10 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
         if (!haystack.includes(q)) return false;
       }
 
+      // Paid / unpaid filter (payment_id presence = reconciled to a payment).
+      if (paidFilter === "paid" && !inv.payment_id) return false;
+      if (paidFilter === "unpaid" && inv.payment_id) return false;
+
       if (fromMs === null && toMs === null) return true;
       const d = invoiceDate(inv);
       if (!d) return false;
@@ -276,7 +287,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [invoices, search, dateFrom, dateTo, sortField, sortDir]);
+  }, [invoices, search, dateFrom, dateTo, paidFilter, sortField, sortDir]);
 
   // ── Pagination over the filtered/sorted list ──────────
   const [page, setPage] = useState(1);
@@ -285,7 +296,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
   // Snap back to page 1 whenever the filter/sort inputs change.
   useEffect(() => {
     setPage(1);
-  }, [search, dateFrom, dateTo, sortField, sortDir]);
+  }, [search, dateFrom, dateTo, paidFilter, sortField, sortDir]);
 
   // Keep the page in range if the underlying list shrinks (e.g. after a delete).
   useEffect(() => {
@@ -481,6 +492,24 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
               <SortButton field="number" label="Invoice #" />
               <SortButton field="amount" label="Amount" />
               <SortButton field="property" label="Property" />
+              <span className="mx-1 text-sand-300">|</span>
+              <div className="inline-flex rounded-lg border border-sand-200 overflow-hidden">
+                {(["all", "unpaid", "paid"] as PaidFilter[]).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setPaidFilter(f)}
+                    className={cn(
+                      "px-2 py-1 text-[10px] font-medium capitalize transition-colors",
+                      paidFilter === f
+                        ? "bg-terra-500 text-white"
+                        : "bg-white text-charcoal-500 hover:text-charcoal-700"
+                    )}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-medium text-charcoal-400 uppercase">From:</span>
@@ -536,15 +565,31 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
                 )}
               </span>
             </div>
-            <Button
-              size="sm"
-              onClick={() => onRunReport(selectedInvoices)}
-              disabled={selectedIds.size === 0}
-              className="bg-terra-500 hover:bg-terra-600 text-white text-xs h-8 disabled:opacity-40"
-            >
-              <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
-              Report from selection{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-            </Button>
+            <div className="flex items-center gap-2">
+              {onRunReport && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onRunReport(selectedInvoices)}
+                  disabled={selectedIds.size === 0}
+                  className="text-xs h-8 disabled:opacity-40"
+                >
+                  <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
+                  Report from selection{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+                </Button>
+              )}
+              {onReconcile && (
+                <Button
+                  size="sm"
+                  onClick={() => onReconcile(selectedInvoices)}
+                  disabled={selectedIds.size === 0}
+                  className="bg-terra-500 hover:bg-terra-600 text-white text-xs h-8 disabled:opacity-40"
+                >
+                  <Wallet className="h-3.5 w-3.5 mr-1.5" />
+                  Reconcile payment{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -627,6 +672,12 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, isLoadin
                         {invoice.wo_reference && (
                           <span className="text-[10px] text-charcoal-400 font-mono">
                             WO#{invoice.wo_reference}
+                          </span>
+                        )}
+                        {invoice.payment_id && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full font-medium bg-green-100/80 text-green-700">
+                            <Wallet className="h-2.5 w-2.5" />
+                            Paid
                           </span>
                         )}
                       </div>
