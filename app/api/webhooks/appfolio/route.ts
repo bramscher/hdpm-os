@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as jose from 'jose';
-import { fetchWorkOrderById, fetchPropertyById } from '@/lib/appfolio';
+import {
+  fetchWorkOrderById,
+  fetchPropertyById,
+  fetchBillById,
+  fetchJournalEntryById,
+} from '@/lib/appfolio';
 import {
   getWorkOrderByAppfolioId,
   upsertSingleWorkOrder,
 } from '@/lib/work-orders';
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 // ============================================
 // AppFolio JWKS (cached remote key set)
@@ -116,6 +122,51 @@ async function handleWorkOrderUpdate(entityId: string): Promise<void> {
 }
 
 // ============================================
+// Financial-topic inspection (bills / journal entries / GL / charges)
+// ============================================
+//
+// The lump ACH to HDMS posts to the GL as a journal entry; a webhook is the
+// only way to read one (the v0 API can't list journal entries). During this
+// inspection phase we fetch the entity by Id and store the raw shape in
+// appfolio_webhook_log so we can see a real HDMS disbursement before writing
+// capture logic. Topic strings aren't documented, so match loosely.
+
+const FINANCIAL_TOPIC_RE = /bill|journal|ledger|charge|check|payment|disburs/i;
+
+async function handleFinancialTopic(
+  topic: string,
+  entityId: string,
+  rawPayload: WebhookPayload
+): Promise<void> {
+  let entity: Record<string, unknown> | null = null;
+  let fetchError: string | null = null;
+
+  try {
+    if (/journal|ledger/i.test(topic)) {
+      entity = await fetchJournalEntryById(entityId);
+    } else if (/bill/i.test(topic)) {
+      entity = await fetchBillById(entityId);
+    }
+    // Charges/checks/etc: log the payload; no dedicated fetcher yet.
+  } catch (err) {
+    fetchError = err instanceof Error ? err.message : String(err);
+  }
+
+  console.log(
+    `[Webhook] Financial topic=${topic} entity=${entityId} fetched=${!!entity}` +
+      (fetchError ? ` error=${fetchError}` : '')
+  );
+
+  try {
+    await getSupabaseAdmin()
+      .from('appfolio_webhook_log')
+      .insert({ topic, entity_id: entityId, raw_payload: rawPayload, entity, fetch_error: fetchError });
+  } catch (err) {
+    console.error('[Webhook] Failed to persist webhook log:', err);
+  }
+}
+
+// ============================================
 // POST /api/webhooks/appfolio
 // ============================================
 
@@ -155,7 +206,11 @@ export async function POST(request: NextRequest) {
         break;
 
       default:
-        console.log(`[Webhook] Ignoring unhandled topic: ${payload.topic}`);
+        if (FINANCIAL_TOPIC_RE.test(payload.topic)) {
+          await handleFinancialTopic(payload.topic, payload.entity_id, payload);
+        } else {
+          console.log(`[Webhook] Ignoring unhandled topic: ${payload.topic}`);
+        }
     }
 
     // 5. Respond 200 to acknowledge receipt
@@ -176,7 +231,7 @@ export async function GET() {
   return NextResponse.json({
     status: 'ok',
     endpoint: '/api/webhooks/appfolio',
-    topics: ['work_order_updates'],
+    topics: ['work_order_updates', 'bills / journal entries / GL / charges (inspection log)'],
     message: 'AppFolio webhook receiver is active',
   });
 }
