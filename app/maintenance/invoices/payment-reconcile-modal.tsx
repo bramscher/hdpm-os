@@ -10,7 +10,8 @@ import { aggregate, chargedSplit } from "@/lib/invoice-analysis";
 
 const DEFAULT_PAYEE = "High Desert Maintenance Services";
 
-function formatCurrency(amount: number): string {
+function formatCurrency(amount: number | null): string {
+  if (amount == null) return "—";
   const n = typeof amount === "number" ? amount : parseFloat(String(amount)) || 0;
   const sign = n < 0 ? "-" : "";
   return `${sign}$${Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
@@ -18,7 +19,9 @@ function formatCurrency(amount: number): string {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
-  const d = new Date(dateStr);
+  // Parse YYYY-MM-DD as local so dates don't shift a day in negative-offset TZs.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(dateStr);
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
 }
@@ -119,7 +122,11 @@ export function PaymentReconcileModal({
       ? Number(selectedPayment.invoice_total) + split.total
       : split.total;
   const paymentAmount =
-    mode === "existing" ? (selectedPayment ? Number(selectedPayment.amount) : NaN) : parsedAmount;
+    mode === "existing"
+      ? selectedPayment && selectedPayment.amount != null
+        ? Number(selectedPayment.amount)
+        : NaN
+      : parsedAmount;
   const hasPaymentAmount = Number.isFinite(paymentAmount);
   const variance = hasPaymentAmount ? Math.round((paymentAmount - billedAfter) * 100) / 100 : 0;
   const balanced = hasPaymentAmount && Math.abs(variance) < 0.01;
@@ -169,7 +176,9 @@ export function PaymentReconcileModal({
 
   const varianceLabel = !hasPaymentAmount
     ? mode === "existing"
-      ? "Pick a payment"
+      ? selectedPayment
+        ? "Payment has no amount set"
+        : "Pick a payment"
       : "Enter the payment amount"
     : balanced
     ? "Balanced"
@@ -257,11 +266,14 @@ export function PaymentReconcileModal({
                     className="w-full h-10 rounded-md border border-sand-300 bg-white px-3 text-sm text-charcoal-800 focus:outline-none focus:ring-2 focus:ring-terra-300"
                   >
                     {payments.map((p) => {
-                      const remaining = Math.round((Number(p.amount) - Number(p.invoice_total)) * 100) / 100;
+                      const hasAmt = p.amount != null;
+                      const remaining = hasAmt
+                        ? Math.round((Number(p.amount) - Number(p.invoice_total)) * 100) / 100
+                        : null;
                       return (
                         <option key={p.id} value={p.id}>
-                          {formatDate(p.paid_on)} · {p.payee} · {formatCurrency(Number(p.amount))}
-                          {` · ${formatCurrency(remaining)} left`}
+                          {formatDate(p.paid_on)} · {p.payee} ·{" "}
+                          {hasAmt ? `${formatCurrency(p.amount)} · ${formatCurrency(remaining)} left` : "no amount set"}
                         </option>
                       );
                     })}
@@ -270,7 +282,7 @@ export function PaymentReconcileModal({
                     <div className="grid grid-cols-3 gap-3 text-xs pt-1">
                       <div>
                         <p className="text-charcoal-400">Payment</p>
-                        <p className="font-semibold text-charcoal-800">{formatCurrency(Number(selectedPayment.amount))}</p>
+                        <p className="font-semibold text-charcoal-800">{formatCurrency(selectedPayment.amount)}</p>
                       </div>
                       <div>
                         <p className="text-charcoal-400">Already applied</p>
