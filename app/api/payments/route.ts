@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { createPayment, getPayments } from '@/lib/payments';
+import { capturePayment, createPayment, getPayments } from '@/lib/payments';
 
 export async function GET() {
   try {
@@ -41,22 +41,22 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(amount)) {
       return NextResponse.json({ error: 'A valid payment amount is required' }, { status: 400 });
     }
-    if (!Array.isArray(invoice_ids) || invoice_ids.length === 0) {
-      return NextResponse.json(
-        { error: 'Select at least one invoice to reconcile' },
-        { status: 400 }
-      );
-    }
 
-    const payment = await createPayment({
+    const common = {
       paid_on,
       amount,
+      payee: body.payee?.trim() || undefined,
       reference: body.reference?.trim() || undefined,
       method: body.method?.trim() || undefined,
       memo: body.memo?.trim() || undefined,
-      invoice_ids,
       created_by: session.user.email!,
-    });
+    };
+
+    // With invoices → capture + reconcile in one shot; without → capture "open".
+    const payment =
+      Array.isArray(invoice_ids) && invoice_ids.length > 0
+        ? await createPayment({ ...common, invoice_ids })
+        : await capturePayment(common);
 
     return NextResponse.json({ payment }, { status: 201 });
   } catch (error) {

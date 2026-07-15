@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { HdmsInvoice } from "@/lib/invoices";
 import type { Payment, PaymentWithInvoices } from "@/lib/payments";
 import { InvoiceList } from "./invoice-list";
+import { CapturePaymentModal } from "./capture-payment-modal";
 
 function formatCurrency(amount: number): string {
   const n = typeof amount === "number" ? amount : parseFloat(String(amount)) || 0;
@@ -58,6 +59,7 @@ export function ReconcileTab({
   const [detailLoading, setDetailLoading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [showCapture, setShowCapture] = useState(false);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -152,15 +154,33 @@ export function ReconcileTab({
             Trust-account payments (ACH/check) reconciled to HDMS invoices.
           </p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setMode("new")}
-          className="bg-terra-500 hover:bg-terra-600 text-white text-xs h-9"
-        >
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
-          New reconciliation
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowCapture(true)}
+            className="text-xs h-9"
+          >
+            <Wallet className="h-3.5 w-3.5 mr-1.5" />
+            Capture ACH payment
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setMode("new")}
+            className="bg-terra-500 hover:bg-terra-600 text-white text-xs h-9"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            New reconciliation
+          </Button>
+        </div>
       </div>
+
+      {showCapture && (
+        <CapturePaymentModal
+          onClose={() => setShowCapture(false)}
+          onCaptured={fetchPayments}
+        />
+      )}
 
       {error && (
         <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -189,6 +209,7 @@ export function ReconcileTab({
                 <tr className="border-b border-charcoal-100/80 bg-charcoal-50/40">
                   <th className="w-8" />
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Date</th>
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Payee</th>
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Reference</th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Inv.</th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Labor</th>
@@ -217,6 +238,12 @@ export function ReconcileTab({
                         <td className="px-3 py-2.5 text-xs font-medium text-charcoal-800 whitespace-nowrap">
                           {formatDate(p.paid_on)}
                           <span className="block text-[10px] text-charcoal-400 uppercase">{p.method}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-xs text-charcoal-600 truncate max-w-[160px]">
+                          {p.payee}
+                          {p.source === "appfolio" && (
+                            <span className="ml-1 text-[9px] text-terra-500 uppercase">AF</span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-xs text-charcoal-600 truncate max-w-[140px]">
                           {p.reference || <span className="text-charcoal-300">—</span>}
@@ -271,7 +298,7 @@ export function ReconcileTab({
                       {isOpen && (
                         <tr className="bg-charcoal-50/40">
                           <td />
-                          <td colSpan={9} className="px-3 py-3">
+                          <td colSpan={10} className="px-3 py-3">
                             {detailLoading ? (
                               <div className="flex items-center text-charcoal-400 text-xs py-2">
                                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />

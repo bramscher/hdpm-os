@@ -6,18 +6,24 @@ import { aggregate, chargedSplit } from './invoice-analysis';
 // Types
 // ============================================
 
+export const DEFAULT_PAYEE = 'High Desert Maintenance Services';
+
 /**
- * A recorded trust-account payment (typically one ACH from AppFolio to HDMS)
- * reconciled against a set of HDMS invoices. Totals are snapshotted at record
- * time so the ledger is stable even if a linked invoice is later edited.
+ * A captured trust-account payment (typically one ACH to HDMS). It can be
+ * captured "open" (no invoices yet) and reconciled later by attaching the
+ * invoices it covered. Totals are snapshotted from the linked invoices so the
+ * ledger stays stable even if a linked invoice is later edited.
  */
 export interface Payment {
   id: string;
   paid_on: string; // YYYY-MM-DD
   amount: number; // the ACH/check total actually received
+  payee: string; // who was paid (default HDMS)
   reference: string | null;
   method: string; // 'ach' | 'check' | 'other'
   memo: string | null;
+  source: string; // 'manual' | 'appfolio'
+  appfolio_id: string | null; // check-register entry id when imported
 
   invoice_count: number;
   labor_total: number;
@@ -30,14 +36,20 @@ export interface Payment {
   updated_at: string;
 }
 
-export interface CreatePaymentInput {
+export interface CapturePaymentInput {
   paid_on: string;
   amount: number;
+  payee?: string;
   reference?: string;
   method?: string;
   memo?: string;
-  invoice_ids: string[];
+  source?: string;
+  appfolio_id?: string;
   created_by: string;
+}
+
+export interface CreatePaymentInput extends CapturePaymentInput {
+  invoice_ids: string[];
 }
 
 /** A payment plus the invoices it covers (for the detail view). */
@@ -46,7 +58,7 @@ export interface PaymentWithInvoices extends Payment {
 }
 
 // ============================================
-// Database Operations
+// Reads
 // ============================================
 
 export async function getPayments(): Promise<Payment[]> {
@@ -95,86 +107,163 @@ export async function getPaymentById(id: string): Promise<PaymentWithInvoices | 
   return { ...(data as Payment), invoices: (invoices as HdmsInvoice[]) || [] };
 }
 
+// ============================================
+// Snapshot recompute (shared by attach/detach)
+// ============================================
+
 /**
- * Record a payment and link the given invoices to it.
- * Rejects if any invoice is already reconciled to a different payment.
+ * Recompute a payment's snapshot totals from the invoices currently linked to
+ * it and persist them. Returns the refreshed Payment.
  */
-export async function createPayment(input: CreatePaymentInput): Promise<Payment> {
+async function recomputeSnapshot(paymentId: string): Promise<Payment> {
   const supabase = getSupabaseAdmin();
 
-  const ids = Array.from(new Set(input.invoice_ids.filter(Boolean)));
-  if (ids.length === 0) {
-    throw new Error('Select at least one invoice to reconcile.');
-  }
-
-  // Load the invoices being reconciled — for the guard and the snapshot totals.
-  const { data: invoices, error: invError } = await supabase
+  const { data: linked, error } = await supabase
     .from('hdms_invoices')
     .select('*')
-    .in('id', ids);
+    .eq('payment_id', paymentId);
 
-  if (invError) {
-    throw new Error(`Failed to load invoices: ${invError.message}`);
+  if (error) {
+    throw new Error(`Failed to load linked invoices: ${error.message}`);
   }
 
-  const rows = (invoices as HdmsInvoice[]) || [];
-  if (rows.length !== ids.length) {
-    throw new Error('Some selected invoices no longer exist.');
-  }
+  const split = chargedSplit(aggregate((linked as HdmsInvoice[]) || []));
+  const liveCount = ((linked as HdmsInvoice[]) || []).filter((i) => i.status !== 'void').length;
 
-  const alreadyPaid = rows.filter((r) => r.payment_id);
-  if (alreadyPaid.length > 0) {
-    const codes = alreadyPaid.map((r) => r.invoice_code).join(', ');
-    throw new Error(`Already reconciled to another payment: ${codes}`);
-  }
-
-  // Void invoices carry no charge — exclude them from the link, count, and totals
-  // so the ledger's invoice_count matches its dollar figures.
-  const liveRows = rows.filter((r) => r.status !== 'void');
-  const liveIds = liveRows.map((r) => r.id);
-  if (liveIds.length === 0) {
-    throw new Error('All selected invoices are void — nothing to reconcile.');
-  }
-
-  const split = chargedSplit(aggregate(liveRows));
-
-  const { data: payment, error: payError } = await supabase
+  const { data: updated, error: upErr } = await supabase
     .from('hdms_payments')
-    .insert({
-      paid_on: input.paid_on,
-      amount: input.amount,
-      reference: input.reference?.trim() || null,
-      method: input.method?.trim() || 'ach',
-      memo: input.memo?.trim() || null,
-      invoice_count: liveRows.length,
+    .update({
+      invoice_count: liveCount,
       labor_total: split.labor,
       materials_total: split.materials,
       other_total: split.other,
       invoice_total: split.total,
+    })
+    .eq('id', paymentId)
+    .select()
+    .single();
+
+  if (upErr || !updated) {
+    throw new Error(`Failed to update payment snapshot: ${upErr?.message}`);
+  }
+
+  return updated as Payment;
+}
+
+// ============================================
+// Writes
+// ============================================
+
+/** Capture an "open" payment with no invoices attached yet. */
+export async function capturePayment(input: CapturePaymentInput): Promise<Payment> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: payment, error } = await supabase
+    .from('hdms_payments')
+    .insert({
+      paid_on: input.paid_on,
+      amount: input.amount,
+      payee: input.payee?.trim() || DEFAULT_PAYEE,
+      reference: input.reference?.trim() || null,
+      method: input.method?.trim() || 'ach',
+      memo: input.memo?.trim() || null,
+      source: input.source?.trim() || 'manual',
+      appfolio_id: input.appfolio_id?.trim() || null,
+      invoice_count: 0,
+      labor_total: 0,
+      materials_total: 0,
+      other_total: 0,
+      invoice_total: 0,
       created_by: input.created_by,
     })
     .select()
     .single();
 
-  if (payError || !payment) {
-    console.error('Error creating payment:', payError);
-    throw new Error(`Failed to create payment: ${payError?.message}`);
-  }
-
-  // Link the (live) invoices to the new payment.
-  const { error: linkError } = await supabase
-    .from('hdms_invoices')
-    .update({ payment_id: (payment as Payment).id })
-    .in('id', liveIds);
-
-  if (linkError) {
-    // Roll back the orphaned payment so we don't leave a ledger row with no invoices.
-    await supabase.from('hdms_payments').delete().eq('id', (payment as Payment).id);
-    console.error('Error linking invoices to payment:', linkError);
-    throw new Error(`Failed to link invoices: ${linkError.message}`);
+  if (error || !payment) {
+    console.error('Error capturing payment:', error);
+    throw new Error(`Failed to capture payment: ${error?.message}`);
   }
 
   return payment as Payment;
+}
+
+/**
+ * Link invoices to an existing payment and refresh its snapshot totals.
+ * Rejects invoices already linked to a *different* payment; skips void invoices.
+ */
+export async function attachInvoices(
+  paymentId: string,
+  invoiceIds: string[]
+): Promise<Payment> {
+  const supabase = getSupabaseAdmin();
+
+  const ids = Array.from(new Set(invoiceIds.filter(Boolean)));
+  if (ids.length === 0) throw new Error('No invoices to attach.');
+
+  const { data: invoices, error } = await supabase
+    .from('hdms_invoices')
+    .select('*')
+    .in('id', ids);
+
+  if (error) throw new Error(`Failed to load invoices: ${error.message}`);
+
+  const rows = (invoices as HdmsInvoice[]) || [];
+  if (rows.length !== ids.length) throw new Error('Some invoices no longer exist.');
+
+  const otherPayment = rows.filter((r) => r.payment_id && r.payment_id !== paymentId);
+  if (otherPayment.length > 0) {
+    const codes = otherPayment.map((r) => r.invoice_code).join(', ');
+    throw new Error(`Already reconciled to another payment: ${codes}`);
+  }
+
+  // Void invoices carry no charge — never link them.
+  const liveIds = rows.filter((r) => r.status !== 'void').map((r) => r.id);
+  if (liveIds.length === 0) throw new Error('All selected invoices are void — nothing to attach.');
+
+  const { error: linkErr } = await supabase
+    .from('hdms_invoices')
+    .update({ payment_id: paymentId })
+    .in('id', liveIds);
+
+  if (linkErr) throw new Error(`Failed to attach invoices: ${linkErr.message}`);
+
+  return recomputeSnapshot(paymentId);
+}
+
+/** Unlink invoices from a payment (they revert to unpaid) and refresh the snapshot. */
+export async function detachInvoices(
+  paymentId: string,
+  invoiceIds: string[]
+): Promise<Payment> {
+  const supabase = getSupabaseAdmin();
+
+  const ids = Array.from(new Set(invoiceIds.filter(Boolean)));
+  if (ids.length === 0) throw new Error('No invoices to detach.');
+
+  const { error } = await supabase
+    .from('hdms_invoices')
+    .update({ payment_id: null })
+    .eq('payment_id', paymentId)
+    .in('id', ids);
+
+  if (error) throw new Error(`Failed to detach invoices: ${error.message}`);
+
+  return recomputeSnapshot(paymentId);
+}
+
+/** Capture a payment and attach invoices in one shot (the inline reconcile path). */
+export async function createPayment(input: CreatePaymentInput): Promise<Payment> {
+  const ids = Array.from(new Set(input.invoice_ids.filter(Boolean)));
+  if (ids.length === 0) throw new Error('Select at least one invoice to reconcile.');
+
+  const payment = await capturePayment(input);
+  try {
+    return await attachInvoices(payment.id, ids);
+  } catch (err) {
+    // Roll back the orphaned payment so we don't leave a stranded ledger row.
+    await getSupabaseAdmin().from('hdms_payments').delete().eq('id', payment.id);
+    throw err;
+  }
 }
 
 /** Delete a payment and unlink its invoices (they revert to unpaid). */
