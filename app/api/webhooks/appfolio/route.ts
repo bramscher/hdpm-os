@@ -66,12 +66,17 @@ async function verifySignature(
 // Webhook Payload Type
 // ============================================
 
+// Real AppFolio webhook payload shape (verified from live events 2026-07-15).
+// NOTE: the entity id is `resource_id`, NOT `entity_id`; topics are lowercase
+// plural (e.g. "units", "work_orders", "bills", "journal_entries").
 interface WebhookPayload {
-  client_id: string;
-  id: string;
   topic: string;
-  entity_id: string;
-  update_timestamp: string;
+  event_id: string;
+  client_id: string;
+  event_type: string; // create | update | delete
+  database_id: string;
+  resource_id: string; // the id of the changed entity
+  event_timestamp: string;
   message_sent_at: string;
 }
 
@@ -127,9 +132,12 @@ async function handleWorkOrderUpdate(entityId: string): Promise<void> {
 //
 // The lump ACH to HDMS posts to the GL as a journal entry; a webhook is the
 // only way to read one (the v0 API can't list journal entries). During this
-// inspection phase we log EVERY non-work-order event to appfolio_webhook_log so
-// nothing is missed — including test events and whatever exact topic strings
-// AppFolio uses — and fetch the full entity by Id for the financial ones.
+// inspection phase we log financial events to appfolio_webhook_log and fetch the
+// full entity by Id, so we can see a real HDMS disbursement before writing
+// capture logic. Topic strings are lowercase plural (e.g. "bills",
+// "journal_entries", "general_ledger_details", "charges").
+
+const FINANCIAL_TOPIC_RE = /bill|journal|ledger|charge|check|payment|disburs/i;
 
 async function logWebhookEvent(
   topic: string,
@@ -193,19 +201,24 @@ export async function POST(request: NextRequest) {
 
     // 3. Parse the verified payload
     const payload: WebhookPayload = JSON.parse(rawBody.toString());
+    const entityId = payload.resource_id;
     console.log(
-      `[Webhook] Received: topic=${payload.topic} entity=${payload.entity_id} updated=${payload.update_timestamp}`
+      `[Webhook] Received: topic=${payload.topic} type=${payload.event_type} resource=${entityId} at=${payload.event_timestamp}`
     );
 
     // 4. Route by topic
     switch (payload.topic) {
-      case 'work_order_updates':
-        await handleWorkOrderUpdate(payload.entity_id);
+      case 'work_orders':
+      case 'work_order_updates': // legacy/alias
+        await handleWorkOrderUpdate(entityId);
         break;
 
       default:
-        // Inspection phase: capture every other event so nothing slips through.
-        await logWebhookEvent(payload.topic, payload.entity_id, payload);
+        // Inspection phase: log financial topics (bills / journal entries / GL /
+        // charges) with the fetched entity; ignore the noisy rest (units, etc.).
+        if (FINANCIAL_TOPIC_RE.test(payload.topic)) {
+          await logWebhookEvent(payload.topic, entityId, payload);
+        }
     }
 
     // 5. Respond 200 to acknowledge receipt
