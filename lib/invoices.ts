@@ -90,6 +90,8 @@ export interface HdmsInvoice {
   line_items: LineItem[] | null;
   internal_notes: string | null;
   pdf_path: string | null;
+  /** Set when this invoice has been reconciled to a trust-account payment (see lib/payments.ts). */
+  payment_id: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

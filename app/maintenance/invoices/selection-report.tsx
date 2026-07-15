@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useMemo } from "react";
 import { X, Download, Printer, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { HdmsInvoice, LineItem, lineCost, lineMarkup } from "@/lib/invoices";
+import { HdmsInvoice } from "@/lib/invoices";
+import { emptyGroup, analyze } from "@/lib/invoice-analysis";
 
 // ============================================
 // Helpers
@@ -26,64 +27,8 @@ function invoiceDate(inv: HdmsInvoice): string | null {
   return inv.completed_date || inv.created_at || null;
 }
 
-interface Group {
-  cost: number; // material cost basis (falls back to charge when no cost recorded)
-  markup: number; // charge − cost (0 when no cost recorded)
-  charged: number; // amount billed to owner
-  missingCost: number; // charged amount on lines with no cost recorded
-}
-
-interface Analysis {
-  labor: number;
-  materials: Group;
-  appliance: Group;
-  other: number;
-  total: number;
-}
-
-const emptyGroup = (): Group => ({ cost: 0, markup: 0, charged: 0, missingCost: 0 });
-
-/** Break a single invoice into labor / materials / appliance / other buckets. */
-function analyze(inv: HdmsInvoice): Analysis {
-  const materials = emptyGroup();
-  const appliance = emptyGroup();
-  let labor = 0;
-  let other = 0;
-
-  const items: LineItem[] = inv.line_items || [];
-
-  if (items.length > 0) {
-    for (const li of items) {
-      const type = li.type || "labor";
-      const amount = li.amount || 0;
-      if (type === "labor") {
-        labor += amount;
-      } else if (type === "materials" || type === "appliance") {
-        const g = type === "appliance" ? appliance : materials;
-        const cost = lineCost(li);
-        g.charged += amount;
-        if (cost > 0) {
-          g.cost += cost;
-          g.markup += lineMarkup(li);
-        } else {
-          // No cost recorded — treat the charge as cost so margin isn't overstated.
-          g.cost += amount;
-          g.missingCost += amount;
-        }
-      } else {
-        other += amount;
-      }
-    }
-  } else {
-    // Legacy invoice with no line items — attribute the aggregate columns, no markup.
-    labor = inv.labor_amount || 0;
-    materials.charged = inv.materials_amount || 0;
-    materials.cost = inv.materials_amount || 0;
-    materials.missingCost = inv.materials_amount || 0;
-  }
-
-  return { labor, materials, appliance, other, total: inv.total_amount || 0 };
-}
+// Analysis helpers (analyze / Group / Analysis / emptyGroup) live in
+// @/lib/invoice-analysis so the payment reconciliation flow reuses them.
 
 // ============================================
 // Selection Report (modal)
