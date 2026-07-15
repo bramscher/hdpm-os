@@ -122,18 +122,16 @@ async function handleWorkOrderUpdate(entityId: string): Promise<void> {
 }
 
 // ============================================
-// Financial-topic inspection (bills / journal entries / GL / charges)
+// Webhook event inspection (everything except work orders)
 // ============================================
 //
 // The lump ACH to HDMS posts to the GL as a journal entry; a webhook is the
 // only way to read one (the v0 API can't list journal entries). During this
-// inspection phase we fetch the entity by Id and store the raw shape in
-// appfolio_webhook_log so we can see a real HDMS disbursement before writing
-// capture logic. Topic strings aren't documented, so match loosely.
+// inspection phase we log EVERY non-work-order event to appfolio_webhook_log so
+// nothing is missed — including test events and whatever exact topic strings
+// AppFolio uses — and fetch the full entity by Id for the financial ones.
 
-const FINANCIAL_TOPIC_RE = /bill|journal|ledger|charge|check|payment|disburs/i;
-
-async function handleFinancialTopic(
+async function logWebhookEvent(
   topic: string,
   entityId: string,
   rawPayload: WebhookPayload
@@ -147,13 +145,13 @@ async function handleFinancialTopic(
     } else if (/bill/i.test(topic)) {
       entity = await fetchBillById(entityId);
     }
-    // Charges/checks/etc: log the payload; no dedicated fetcher yet.
+    // Other topics (charges/checks/test/etc): log the payload; no fetcher yet.
   } catch (err) {
     fetchError = err instanceof Error ? err.message : String(err);
   }
 
   console.log(
-    `[Webhook] Financial topic=${topic} entity=${entityId} fetched=${!!entity}` +
+    `[Webhook] Logged topic=${topic} entity=${entityId} fetched=${!!entity}` +
       (fetchError ? ` error=${fetchError}` : '')
   );
 
@@ -206,11 +204,8 @@ export async function POST(request: NextRequest) {
         break;
 
       default:
-        if (FINANCIAL_TOPIC_RE.test(payload.topic)) {
-          await handleFinancialTopic(payload.topic, payload.entity_id, payload);
-        } else {
-          console.log(`[Webhook] Ignoring unhandled topic: ${payload.topic}`);
-        }
+        // Inspection phase: capture every other event so nothing slips through.
+        await logWebhookEvent(payload.topic, payload.entity_id, payload);
     }
 
     // 5. Respond 200 to acknowledge receipt
