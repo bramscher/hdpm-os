@@ -858,6 +858,53 @@ export async function fetchWorkOrderDetails(appfolioId: string): Promise<V0WorkO
 }
 
 // ============================================
+// Public: Fetch a single bill / journal entry by AppFolio ID
+// (used by the webhook inspection handler — both endpoints support filters[Id])
+// ============================================
+
+/** Fetch one bill by Id (returns the raw v0 record for inspection/capture). */
+export async function fetchBillById(
+  id: string
+): Promise<Record<string, unknown> | null> {
+  const config = getConfig();
+  if (!config) return null;
+  try {
+    const res = await v0Fetch<Record<string, unknown>>(
+      '/bills',
+      { 'filters[Id]': id },
+      config.clientId,
+      config.clientSecret,
+      config.developerId
+    );
+    return res.data?.[0] ?? null;
+  } catch (err) {
+    console.error(`[AppFolio] Error fetching bill ${id}:`, err);
+    throw err;
+  }
+}
+
+/** Fetch one journal entry by Id (the only way to read a journal entry — no list). */
+export async function fetchJournalEntryById(
+  id: string
+): Promise<Record<string, unknown> | null> {
+  const config = getConfig();
+  if (!config) return null;
+  try {
+    const res = await v0Fetch<Record<string, unknown>>(
+      '/journal_entries',
+      { 'filters[Id]': id },
+      config.clientId,
+      config.clientSecret,
+      config.developerId
+    );
+    return res.data?.[0] ?? null;
+  } catch (err) {
+    console.error(`[AppFolio] Error fetching journal entry ${id}:`, err);
+    throw err;
+  }
+}
+
+// ============================================
 // Public: Fetch Single Work Order by AppFolio ID
 // (used by webhook handler — lightweight fetch)
 // ============================================
