@@ -124,8 +124,8 @@ describe('mappedStageFor — HDPM AppFolio status vocabulary', () => {
     expect(m.stage).toBe('SCHEDULED');
   });
 
-  it('done/closed statuses win over the text status', () => {
-    expect(mappedStageFor(afWo({ status: 'done', appfolioStatus: 'Completed' })).stage).toBe('VERIFY');
+  it('done/closed statuses win over the text status → both CLOSED', () => {
+    expect(mappedStageFor(afWo({ status: 'done', appfolioStatus: 'Completed' })).stage).toBe('CLOSED');
     expect(mappedStageFor(afWo({ status: 'closed', appfolioStatus: 'Canceled' })).stage).toBe('CLOSED');
   });
 
@@ -150,13 +150,13 @@ describe('initialWorkflowFor', () => {
     expect(wf.next_action_date).toBe('2026-07-05');
   });
 
-  it('done → VERIFY (completed in AppFolio still needs our gate)', () => {
+  it('done → CLOSED (AppFolio-completed closes in our system, closed_at = CompletedOn)', () => {
     const wf = initialWorkflowFor(
       afWo({ status: 'done', appfolioStatus: 'Completed', completedDate: '2026-07-01T00:00:00Z' }),
       NOW
     );
-    expect(wf.stage).toBe('VERIFY');
-    expect(wf.closed_at).toBeNull();
+    expect(wf.stage).toBe('CLOSED');
+    expect(wf.closed_at).toBe('2026-07-01T00:00:00Z');
   });
 
   it('standing grandfather: completed BEFORE launch cutoff → CLOSED on insert', () => {
@@ -184,7 +184,7 @@ describe('initialWorkflowFor', () => {
     expect(wf.closed_at).toBe('2025-11-15T00:00:00Z');
   });
 
-  it('completed post-launch with no CompletedOn still goes to VERIFY (the gate decides)', () => {
+  it('completed post-launch with no CompletedOn → CLOSED, closed_at falls back to LastUpdatedAt', () => {
     const wf = initialWorkflowFor(
       afWo({
         status: 'done',
@@ -194,7 +194,8 @@ describe('initialWorkflowFor', () => {
       }),
       NOW
     );
-    expect(wf.stage).toBe('VERIFY');
+    expect(wf.stage).toBe('CLOSED');
+    expect(wf.closed_at).toBe('2026-07-02T00:00:00Z');
   });
 
   it('closed → CLOSED, grandfathered with closed_at and no next action', () => {
@@ -290,26 +291,27 @@ describe('stageAutomationFor', () => {
     expect(auto?.closed_at).toBe('2026-07-01T00:00:00Z');
   });
 
-  it('completed in AppFolio advances to VERIFY, not CLOSED', () => {
+  it('completed in AppFolio → CLOSED (drops off the board, closed_at = CompletedOn)', () => {
     const auto = stageAutomationFor(
       'IN_PROGRESS',
-      afWo({ status: 'done', appfolioStatus: 'Completed' }),
+      afWo({ status: 'done', appfolioStatus: 'Completed', completedDate: '2026-07-04T00:00:00Z' }),
       NOW
     );
-    expect(auto?.stage).toBe('VERIFY');
+    expect(auto?.stage).toBe('CLOSED');
+    expect(auto?.closed_at).toBe('2026-07-04T00:00:00Z');
   });
 
-  it('closed-in-AppFolio (not canceled) also lands at VERIFY — the gate decides CLOSED', () => {
+  it('closed-in-AppFolio (not canceled) also → CLOSED', () => {
     const auto = stageAutomationFor(
       'IN_PROGRESS',
       afWo({ status: 'closed', appfolioStatus: 'Closed', canceledDate: null }),
       NOW
     );
-    expect(auto?.stage).toBe('VERIFY');
+    expect(auto?.stage).toBe('CLOSED');
   });
 
-  it('does not demote a WO already at VERIFY or beyond', () => {
-    expect(stageAutomationFor('VERIFY', afWo({ status: 'done' }), NOW)).toBeNull();
-    expect(stageAutomationFor('BILL', afWo({ status: 'done' }), NOW)).toBeNull();
+  it('completed work at VERIFY or BILL also closes (AppFolio finished = closed in ours)', () => {
+    expect(stageAutomationFor('VERIFY', afWo({ status: 'done' }), NOW)?.stage).toBe('CLOSED');
+    expect(stageAutomationFor('BILL', afWo({ status: 'done' }), NOW)?.stage).toBe('CLOSED');
   });
 });

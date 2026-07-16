@@ -111,8 +111,12 @@ export function mappedStageFor(wo: AppFolioWorkOrder): {
   stage: Stage;
   waiting_reason: WaitingReason | null;
 } {
-  if (wo.status === 'closed') return { stage: 'CLOSED', waiting_reason: null };
-  if (wo.status === 'done') return { stage: 'VERIFY', waiting_reason: null };
+  // Anything AppFolio considers finished closes in our system too: Completed
+  // ("done") and Closed/Canceled ("closed") both → CLOSED, off the open board.
+  // (No verify/bill gate — AppFolio remains the record for billing.)
+  if (wo.status === 'closed' || wo.status === 'done') {
+    return { stage: 'CLOSED', waiting_reason: null };
+  }
 
   const s = (wo.appfolioStatus || '').toLowerCase().trim();
   if (s === 'estimate requested') return { stage: 'WAITING_ON', waiting_reason: 'VENDOR' };
@@ -223,19 +227,14 @@ export function stageAutomationFor(
 ): StageAutomation | null {
   if (currentStage === 'CLOSED') return null;
 
-  if (wo.canceledDate) {
+  // Anything AppFolio considers finished — Completed ("done"), Closed or
+  // Canceled ("closed") — closes in our system from ANY stage, dropping it off
+  // the open board. No verify/bill gate: AppFolio stays the record for billing.
+  if (wo.canceledDate || wo.status === 'done' || wo.status === 'closed') {
     return {
       stage: 'CLOSED',
-      closed_at: wo.canceledDate || now.toISOString(),
-      reason: 'canceled in AppFolio',
-    };
-  }
-
-  const appfolioFinished = wo.status === 'done' || wo.status === 'closed';
-  if (appfolioFinished && STAGE_ORDER[currentStage] < STAGE_ORDER.VERIFY) {
-    return {
-      stage: 'VERIFY',
-      reason: `AppFolio status "${wo.appfolioStatus}" — awaiting verification + closure gate`,
+      closed_at: wo.completedDate || wo.canceledDate || wo.lastUpdatedAt || now.toISOString(),
+      reason: `AppFolio "${wo.appfolioStatus}" → closed`,
     };
   }
 
