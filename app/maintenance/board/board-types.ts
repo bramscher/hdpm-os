@@ -328,6 +328,14 @@ export function groupOpenByProperty(open: MaintWorkOrder[]): PropertyGroup[] {
   );
 }
 
+/** Substring identifying the internal maintenance crew's vendor record (HDMS). */
+export const INTERNAL_VENDOR_MATCH = 'high desert maintenance services';
+
+/** True when a work order is assigned to the internal HDMS crew. */
+export function isInternalVendor(wo: MaintWorkOrder): boolean {
+  return (wo.vendor_name ?? '').toLowerCase().includes(INTERNAL_VENDOR_MATCH);
+}
+
 /** A vendor's open work orders for one property (sub-group under a vendor). */
 export interface VendorPropertyGroup {
   key: string;
