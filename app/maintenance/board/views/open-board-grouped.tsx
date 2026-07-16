@@ -10,7 +10,13 @@ import { WoCard } from '../components/shared';
  * vendor, so a single unit turn spawns 4–5 cards; this collapses them into
  * Property → Unit → work-order groups with expandable (chevron) detail.
  */
-export default function OpenBoardGrouped({ board }: { board: BoardData }) {
+export default function OpenBoardGrouped({
+  board,
+  showAssignee,
+}: {
+  board: BoardData;
+  showAssignee?: boolean;
+}) {
   const groups = useMemo(() => groupOpenByProperty(board.open), [board.open]);
 
   // Auto-expand any property with a past-due WO so urgent items aren't hidden.
@@ -77,7 +83,7 @@ export default function OpenBoardGrouped({ board }: { board: BoardData }) {
                       {u.wos.length} WO{u.wos.length === 1 ? '' : 's'}
                     </div>
                     {u.wos.map((wo) => (
-                      <WoCard key={wo.id} wo={wo} showStage />
+                      <WoCard key={wo.id} wo={wo} showStage showAssignee={showAssignee} />
                     ))}
                   </div>
                 ))}

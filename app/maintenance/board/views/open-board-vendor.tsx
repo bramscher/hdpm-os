@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BoardData } from '../board-types';
-import { groupOpenByVendor, INTERNAL_VENDOR_MATCH } from '../board-types';
+import { groupOpenByVendor } from '../board-types';
 import { WoCard } from '../components/shared';
 
 /**
@@ -10,25 +10,20 @@ import { WoCard } from '../components/shared';
  * vendor is on, grouped in one place and sub-grouped by property, so you can
  * see (and schedule) all of a vendor's work at a given address at once.
  *
- * Filters: type to narrow to a single vendor, or check "Internal only" to screen
- * to High Desert Maintenance Services. Each card shows who it's assigned to
- * (assigned_to) so internal work with no one on it is easy to catch.
+ * The Internal-HDMS and Assigned-staff filters live on the shared Open-board
+ * toolbar (they apply to every layout); here you can additionally type to narrow
+ * to a single vendor. Each card shows who it's assigned to (assigned_to).
  */
 export default function OpenBoardVendor({ board }: { board: BoardData }) {
   const allGroups = useMemo(() => groupOpenByVendor(board.open), [board.open]);
 
   const [search, setSearch] = useState('');
-  const [internalOnly, setInternalOnly] = useState(false);
 
   const groups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return allGroups.filter((g) => {
-      const name = g.vendorName.toLowerCase();
-      if (internalOnly && !name.includes(INTERNAL_VENDOR_MATCH)) return false;
-      if (q && !name.includes(q)) return false;
-      return true;
-    });
-  }, [allGroups, search, internalOnly]);
+    if (!q) return allGroups;
+    return allGroups.filter((g) => g.vendorName.toLowerCase().includes(q));
+  }, [allGroups, search]);
 
   // Vendor rows expanded by default: any with a past-due WO.
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -42,7 +37,7 @@ export default function OpenBoardVendor({ board }: { board: BoardData }) {
   // the header toggle keeps working).
   const lastAutoSig = useRef('');
   useEffect(() => {
-    const sig = internalOnly ? 'internal' : search.trim().toLowerCase();
+    const sig = search.trim().toLowerCase();
     if (!sig) {
       lastAutoSig.current = '';
       return;
@@ -52,7 +47,7 @@ export default function OpenBoardVendor({ board }: { board: BoardData }) {
       const key = groups[0].vendorKey;
       setExpanded((prev) => new Set(prev).add(key));
     }
-  }, [internalOnly, search, groups]);
+  }, [search, groups]);
 
   const toggle = (key: string) =>
     setExpanded((prev) => {
@@ -99,16 +94,6 @@ export default function OpenBoardVendor({ board }: { board: BoardData }) {
           aria-label="Search vendor"
           style={{ minWidth: 180 }}
         />
-        <label
-          style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}
-        >
-          <input
-            type="checkbox"
-            checked={internalOnly}
-            onChange={(e) => setInternalOnly(e.target.checked)}
-          />
-          Internal only (High Desert Maintenance Services)
-        </label>
         <button className="mo-btn secondary" onClick={expandAll}>
           Expand all
         </button>
@@ -189,10 +174,10 @@ export default function OpenBoardVendor({ board }: { board: BoardData }) {
 
       <p className="note">
         One row per vendor; expand to see their open work orders grouped by property, then expand a
-        property to schedule/manage all its work orders together. Search or check{' '}
-        <b>Internal only</b> to screen to a single vendor. Each card shows who it&apos;s assigned to
-        (👤); <b>⚠ unassigned</b> flags work with no one on it. Left edge color = priority (red P1,
-        amber P2, green P3, gray P4); red date = past due.
+        property to schedule/manage all its work orders together. Use the shared toolbar above to
+        screen to internal HDMS work or a single staff member; type here to narrow to one vendor.
+        Each card shows who it&apos;s assigned to (👤); <b>⚠ unassigned</b> flags work with no one on
+        it. Left edge color = priority (red P1, amber P2, green P3, gray P4); red date = past due.
       </p>
     </section>
   );
