@@ -37,7 +37,16 @@ const STAGE_SHORT: Record<string, string> = {
  * `showStage` prepends a stage chip — used outside the kanban (By Property view)
  * where stage is no longer implied by a column. Default off = kanban unchanged.
  */
-export function WoCard({ wo, showStage }: { wo: MaintWorkOrder; showStage?: boolean }) {
+export function WoCard({
+  wo,
+  showStage,
+  showAssignee,
+}: {
+  wo: MaintWorkOrder;
+  showStage?: boolean;
+  /** Surface who the work is assigned to (assigned_to); flags unassigned WOs. */
+  showAssignee?: boolean;
+}) {
   const pastDue = !!wo.next_action_date && wo.next_action_date < todayStr();
   const edge = wo.priority_class ? wo.priority_class.toLowerCase() : 'p4';
   return (
@@ -51,6 +60,18 @@ export function WoCard({ wo, showStage }: { wo: MaintWorkOrder; showStage?: bool
         {wo.description.length > 96 ? `${wo.description.slice(0, 96)}…` : wo.description} —{' '}
         {woWhere(wo)}
       </b>
+      {showAssignee &&
+        (wo.assigned_to ? (
+          <>
+            <span className="own">👤 {wo.assigned_to}</span>
+            {' · '}
+          </>
+        ) : (
+          <>
+            <span className="due past">⚠ unassigned</span>
+            {' · '}
+          </>
+        ))}
       <span className="own">{wo.owner_name || '⚠ no HDPM owner'}</span>
       {' · '}
       {wo.next_action_date ? (
