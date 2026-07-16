@@ -4,7 +4,7 @@
 
 import Link from 'next/link';
 import type { MaintWorkOrder, WaitingReason } from '@/lib/maintenance/types';
-import { daysPillClass, fmtDate, todayStr, woWhere } from '../board-types';
+import { daysPillClass, fmtDate, isInternalVendor, todayStr, woWhere } from '../board-types';
 
 /** Wait-type badge — one color per type, used everywhere. */
 export function WaitBadge({ reason, small }: { reason: WaitingReason; small?: boolean }) {
@@ -66,12 +66,14 @@ export function WoCard({
             <span className="own">👤 {wo.assigned_to}</span>
             {' · '}
           </>
-        ) : (
+        ) : isInternalVendor(wo) ? (
+          // Only internal HDMS work needs a tech on it. An external vendor IS
+          // the assignment, so a blank assigned_to there is not "unassigned".
           <>
-            <span className="due past">⚠ unassigned</span>
+            <span className="due past">⚠ no tech</span>
             {' · '}
           </>
-        ))}
+        ) : null)}
       <span className="own">{wo.owner_name || '⚠ no HDPM owner'}</span>
       {' · '}
       {wo.next_action_date ? (
