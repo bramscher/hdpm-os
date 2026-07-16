@@ -20,7 +20,7 @@ import { businessDaysBetween, daysBetween } from './business-days';
 export const TRIPWIRE_LABELS: Record<TripwireNumber, string> = {
   1: '#1 Request never became a WO',
   2: '#2 WO unassigned > 1 business day',
-  3: '#3 Past-due or missing next action',
+  3: '#3 Past-due next action',
   4: '#4 Vendor unaccepted > 24h',
   5: '#5 Failed access — new date required today',
   6: '#6 Scope change without approval',
@@ -76,11 +76,14 @@ export function tripwire2(snapshot: TripwireSnapshot): TripwireException[] {
     }));
 }
 
-// ── #3: next_action_date blank or past on an open WO ──
+// ── #3: next_action_date PAST on an open WO (genuinely overdue = "fix today") ──
+// A blank next-action date is NOT an exception here — that's the separate
+// "needs a date" triage backlog (see needsADate() / needsDateCount), so the
+// daily sweep isn't swamped by hundreds of never-triaged WOs.
 export function tripwire3(snapshot: TripwireSnapshot): TripwireException[] {
   const today = snapshot.now.toISOString().slice(0, 10);
   return snapshot.openWorkOrders
-    .filter((wo) => !wo.next_action_date || wo.next_action_date < today)
+    .filter((wo) => !!wo.next_action_date && wo.next_action_date < today)
     .map((wo) => ({
       tripwire: 3 as const,
       label: TRIPWIRE_LABELS[3],
@@ -88,9 +91,29 @@ export function tripwire3(snapshot: TripwireSnapshot): TripwireException[] {
       fixRequired: 'Act or log a new next-action date today',
       owner: wo.owner_name || 'Cheryl',
       workOrderId: wo.id,
-      ageDays: wo.next_action_date
-        ? daysBetween(new Date(wo.next_action_date), snapshot.now)
-        : undefined,
+      ageDays: daysBetween(new Date(wo.next_action_date!), snapshot.now),
+    }));
+}
+
+/**
+ * The "needs a date" triage backlog: open WOs with no next-action date and no
+ * FUTURE AppFolio scheduled visit (those are already planned, not a gap). This
+ * is a backlog count, not a daily "fix today" fire — kept out of the tripwire
+ * exception list on purpose.
+ */
+export function needsADate(snapshot: TripwireSnapshot): TripwireException[] {
+  const nowIso = snapshot.now.toISOString();
+  return snapshot.openWorkOrders
+    .filter(
+      (wo) => !wo.next_action_date && !(wo.scheduled_start && wo.scheduled_start > nowIso),
+    )
+    .map((wo) => ({
+      tripwire: 3 as const,
+      label: '#3 Needs a next-action date',
+      item: `[${wo.stage}${wo.waiting_reason ? `-${wo.waiting_reason}` : ''}] ${woLabel(wo)}`,
+      fixRequired: 'Set a next-action date (triage)',
+      owner: wo.owner_name || 'Cheryl',
+      workOrderId: wo.id,
     }));
 }
 

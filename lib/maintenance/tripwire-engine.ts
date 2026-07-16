@@ -20,7 +20,7 @@ import type {
   VendorAssignment,
   WoDocs,
 } from './types';
-import { TRIPWIRE_REGISTRY } from './tripwires';
+import { TRIPWIRE_REGISTRY, needsADate } from './tripwires';
 
 /**
  * Page through a PostgREST query — Supabase caps single reads at 1000 rows,
@@ -179,6 +179,9 @@ export interface TripwireRunResult {
   /** Rules that threw (never silently dropped). */
   ruleErrors: { tripwire: TripwireNumber; error: string }[];
   ranAt: string;
+  /** Triage backlog: open WOs with no next-action date (excl. future-scheduled). */
+  needsDate: TripwireException[];
+  needsDateCount: number;
 }
 
 /** Run all 12 rules with per-rule error capture. Pure given a snapshot. */
@@ -196,5 +199,12 @@ export function runTripwires(snapshot: TripwireSnapshot): TripwireRunResult {
     }
   }
 
-  return { exceptions, ruleErrors, ranAt: snapshot.now.toISOString() };
+  const needsDate = needsADate(snapshot);
+  return {
+    exceptions,
+    ruleErrors,
+    ranAt: snapshot.now.toISOString(),
+    needsDate,
+    needsDateCount: needsDate.length,
+  };
 }
