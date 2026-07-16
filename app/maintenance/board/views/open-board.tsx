@@ -7,6 +7,7 @@ import { isInternalVendor } from '../board-types';
 import { KpiTile, WoCard } from '../components/shared';
 import OpenBoardGrouped from './open-board-grouped';
 import OpenBoardVendor from './open-board-vendor';
+import OpenBoardRoute from './open-board-route';
 
 const COLUMNS: { stage: MaintWorkOrder['stage']; title: string }[] = [
   { stage: 'NEW', title: 'NEW' },
@@ -28,7 +29,7 @@ export default function OpenBoard({
   board: BoardData;
   exceptions: ExceptionsData | null;
 }) {
-  const [mode, setMode] = useState<'grouped' | 'vendor' | 'kanban'>('grouped');
+  const [mode, setMode] = useState<'grouped' | 'vendor' | 'kanban' | 'route'>('grouped');
   const [internalOnly, setInternalOnly] = useState(false);
   const [assignee, setAssignee] = useState('');
 
@@ -105,6 +106,14 @@ export default function OpenBoard({
         >
           Kanban
         </button>
+        <button
+          role="tab"
+          aria-selected={mode === 'route'}
+          className={mode === 'route' ? 'on' : ''}
+          onClick={() => setMode('route')}
+        >
+          Route Builder
+        </button>
       </div>
 
       {/* Shared staff / HDMS filter — applies to By Property, By Vendor AND Kanban */}
@@ -141,6 +150,7 @@ export default function OpenBoard({
       {mode === 'grouped' && <OpenBoardGrouped board={filteredBoard} showAssignee={showAssignee} />}
       {mode === 'vendor' && <OpenBoardVendor board={filteredBoard} />}
       {mode === 'kanban' && <KanbanBody board={filteredBoard} showAssignee={showAssignee} />}
+      {mode === 'route' && <OpenBoardRoute board={filteredBoard} />}
     </section>
   );
 }
