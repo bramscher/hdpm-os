@@ -35,6 +35,10 @@
     {
       "path": "/api/maintenance/cron/unbilled-report",
       "schedule": "0 14 * * 1"
+    },
+    {
+      "path": "/api/maintenance/cron/appfolio-webhook-resolve",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
