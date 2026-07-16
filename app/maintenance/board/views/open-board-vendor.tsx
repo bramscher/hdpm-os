@@ -2,11 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BoardData } from '../board-types';
-import { groupOpenByVendor } from '../board-types';
+import { groupOpenByVendor, INTERNAL_VENDOR_MATCH } from '../board-types';
 import { WoCard } from '../components/shared';
-
-/** Substring that identifies the internal maintenance crew's vendor record. */
-const INTERNAL_VENDOR_MATCH = 'high desert maintenance services';
 
 /**
  * Vendor-centric consolidation of the open board — every open work order a
