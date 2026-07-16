@@ -38,9 +38,9 @@ function effMarkup(li: FormLineItem): string {
 }
 
 // ── Labor rate constants ──────────
-const STANDARD_RATE = 95;
+const STANDARD_RATE = 85;
 const AFTER_HOURS_MULTIPLIER = 1.5;
-const AFTER_HOURS_RATE = STANDARD_RATE * AFTER_HOURS_MULTIPLIER; // $142.50
+const AFTER_HOURS_RATE = STANDARD_RATE * AFTER_HOURS_MULTIPLIER; // $127.50
 
 // ── Flat fee jobs lookup (user will populate) ──────────
 const FLAT_FEE_JOBS: { key: string; label: string; amount: number; description: string }[] = [
