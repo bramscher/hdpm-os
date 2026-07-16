@@ -536,8 +536,9 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
     if (!userHasEdited.current) return;
     if (isSavingRef.current || isGeneratingRef.current) return;
 
-    // Need at least property name to auto-save
-    if (!propertyName.trim()) return;
+    // Need at least property name and a completed date to persist — the invoice
+    // must not exist without a completed date (required to save or print).
+    if (!propertyName.trim() || !completedDate.trim()) return;
 
     setSaveStatus("unsaved");
 
@@ -784,6 +785,11 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
       return;
     }
 
+    if (!completedDate.trim()) {
+      setError("Completed date is required before saving or printing the invoice.");
+      return;
+    }
+
     // Cancel any pending auto-save
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
@@ -935,10 +941,11 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
           </div>
           <div>
             <label className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">
-              Completed Date
+              Completed Date <span className="text-red-500">*</span>
             </label>
             <Input
               type="date"
+              required
               value={formatDateForInput(completedDate)}
               onChange={(e) => { userHasEdited.current = true; setCompletedDate(e.target.value); }}
               disabled={isLoading}
