@@ -73,6 +73,11 @@ export default function OpenBoard({
           tone={exceptions && exceptions.exceptions.length > 0 ? 'bad' : undefined}
         />
         <KpiTile
+          value={exceptions ? (exceptions.needsDateCount ?? 0) : '…'}
+          label="Needs a date (triage)"
+          tone={exceptions && (exceptions.needsDateCount ?? 0) > 0 ? 'warn' : undefined}
+        />
+        <KpiTile
           value={board.kpis.aging30Plus}
           label="30+ days old"
           tone={board.kpis.aging30Plus > 0 ? 'warn' : undefined}

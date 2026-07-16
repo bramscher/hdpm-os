@@ -27,6 +27,9 @@ export interface ExceptionsData {
   exceptions: TripwireException[];
   ruleErrors: { tripwire: number; error: string }[];
   ranAt: string;
+  /** Triage backlog: open WOs with no next-action date (excl. future-scheduled). */
+  needsDate?: TripwireException[];
+  needsDateCount?: number;
 }
 
 export interface ScoreboardRow {

@@ -13,6 +13,7 @@ import {
   tripwire1,
   tripwire2,
   tripwire3,
+  needsADate,
   tripwire4,
   tripwire5,
   tripwire6,
@@ -154,17 +155,17 @@ describe('tripwire 2 — unassigned > 1 business day', () => {
   });
 });
 
-describe('tripwire 3 — past-due / missing next action', () => {
-  it('fires on past date and on null date', () => {
+describe('tripwire 3 — past-due next action (overdue only)', () => {
+  it('fires only on a PAST date — not blank, not future', () => {
     const s = snapshot({
       openWorkOrders: [
-        wo({ next_action_date: '2026-06-26' }),
-        wo({ next_action_date: null }),
-        wo({ next_action_date: '2026-07-03' }), // future — fine
+        wo({ next_action_date: '2026-06-26' }), // past → fires
+        wo({ next_action_date: null }), // blank → NOT #3 (it's the needs-a-date backlog)
+        wo({ next_action_date: '2026-07-03' }), // future → fine
       ],
     });
     const ex = tripwire3(s);
-    expect(ex).toHaveLength(2);
+    expect(ex).toHaveLength(1);
     expect(ex[0].owner).toBe('Cheryl');
   });
 
@@ -178,6 +179,20 @@ describe('tripwire 3 — past-due / missing next action', () => {
       openWorkOrders: [wo({ next_action_date: '2026-06-26', owner_name: 'Jen' })],
     });
     expect(tripwire3(s)[0].owner).toBe('Jen');
+  });
+});
+
+describe('needsADate — triage backlog (blank date, not future-scheduled)', () => {
+  it('counts blank-date WOs but excludes future-scheduled and dated ones', () => {
+    const s = snapshot({
+      openWorkOrders: [
+        wo({ next_action_date: null }), // blank, no visit → backlog
+        wo({ next_action_date: null, scheduled_start: '2026-07-20T09:00:00Z' }), // future visit → planned, excluded
+        wo({ next_action_date: null, scheduled_start: '2026-06-01T09:00:00Z' }), // past visit, still needs a date → backlog
+        wo({ next_action_date: '2026-06-26' }), // has a date → not backlog (it's overdue, #3)
+      ],
+    });
+    expect(needsADate(s)).toHaveLength(2);
   });
 });
 
