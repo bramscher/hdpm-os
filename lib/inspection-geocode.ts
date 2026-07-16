@@ -30,7 +30,8 @@ interface GoogleGeoResponse {
   }>;
 }
 
-async function geocodeOne(address: string, apiKey: string): Promise<{
+/** Geocode a single address string to lat/lng via Google. Exported for reuse. */
+export async function geocodeOne(address: string, apiKey: string): Promise<{
   lat: number;
   lng: number;
   formatted_address: string;
