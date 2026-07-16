@@ -102,7 +102,7 @@ export default function OpenBoardVendor({ board }: { board: BoardData }) {
         </button>
         <span className="note" style={{ border: 'none', padding: 0, margin: 0 }}>
           {groups.length} vendor{groups.length === 1 ? '' : 's'} · {shownWos} open
-          {unassigned > 0 && <span className="flag"> · {unassigned} unassigned</span>}
+          {unassigned > 0 && <span className="flag"> · {unassigned} no tech</span>}
         </span>
       </div>
 
@@ -128,7 +128,7 @@ export default function OpenBoardVendor({ board }: { board: BoardData }) {
                   {g.properties.length === 1 ? 'y' : 'ies'}
                   {g.pastDue > 0 && <span className="flag"> · {g.pastDue} past-due</span>}
                   {g.p1 > 0 && <span className="warn"> · {g.p1} P1</span>}
-                  {gUnassigned > 0 && <span className="flag"> · {gUnassigned} unassigned</span>}
+                  {gUnassigned > 0 && <span className="flag"> · {gUnassigned} no tech</span>}
                 </span>
               </button>
 
@@ -150,7 +150,7 @@ export default function OpenBoardVendor({ board }: { board: BoardData }) {
                             {p.total} WO{p.total === 1 ? '' : 's'}
                             {p.pastDue > 0 && <span className="flag"> · {p.pastDue} past-due</span>}
                             {p.unassigned > 0 && (
-                              <span className="flag"> · {p.unassigned} unassigned</span>
+                              <span className="flag"> · {p.unassigned} no tech</span>
                             )}
                           </span>
                         </button>
@@ -176,8 +176,9 @@ export default function OpenBoardVendor({ board }: { board: BoardData }) {
         One row per vendor; expand to see their open work orders grouped by property, then expand a
         property to schedule/manage all its work orders together. Use the shared toolbar above to
         screen to internal HDMS work or a single staff member; type here to narrow to one vendor.
-        Each card shows who it&apos;s assigned to (👤); <b>⚠ unassigned</b> flags work with no one on
-        it. Left edge color = priority (red P1, amber P2, green P3, gray P4); red date = past due.
+        Each card shows who it&apos;s assigned to (👤); <b>⚠ no tech</b> flags internal HDMS work with
+        no tech on it (external-vendor work is assigned to the vendor). Left edge color = priority
+        (red P1, amber P2, green P3, gray P4); red date = past due.
       </p>
     </section>
   );

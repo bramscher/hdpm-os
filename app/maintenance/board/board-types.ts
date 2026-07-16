@@ -381,7 +381,9 @@ function groupByProperty(wos: MaintWorkOrder[], today: string): VendorPropertyGr
     p.wos.push(wo);
     p.total += 1;
     if (isPastDue(wo, today)) p.pastDue += 1;
-    if (!wo.assigned_to) p.unassigned += 1;
+    // "no tech" gap: internal HDMS work with nobody on it. External-vendor work
+    // is assigned to the vendor, so a blank assigned_to there is not a gap.
+    if (!wo.assigned_to && isInternalVendor(wo)) p.unassigned += 1;
   }
   return [...map.values()].sort(
     (a, b) => b.pastDue - a.pastDue || b.total - a.total || a.name.localeCompare(b.name),
