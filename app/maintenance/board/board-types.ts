@@ -328,6 +328,16 @@ export function groupOpenByProperty(open: MaintWorkOrder[]): PropertyGroup[] {
   );
 }
 
+/** A vendor's open work orders for one property (sub-group under a vendor). */
+export interface VendorPropertyGroup {
+  key: string;
+  name: string;
+  wos: MaintWorkOrder[];
+  total: number;
+  pastDue: number;
+  unassigned: number;
+}
+
 export interface VendorGroup {
   vendorKey: string;
   vendorName: string;
@@ -336,12 +346,42 @@ export interface VendorGroup {
   total: number;
   pastDue: number;
   p1: number;
+  /** The vendor's WOs sub-grouped by property, for scheduling per address. */
+  properties: VendorPropertyGroup[];
+}
+
+/** Sub-group an already stage/date-sorted list of WOs by property. */
+function groupByProperty(wos: MaintWorkOrder[], today: string): VendorPropertyGroup[] {
+  const map = new Map<string, VendorPropertyGroup>();
+  for (const wo of wos) {
+    const key = wo.property_id || wo.property_name || '—unknown—';
+    let p = map.get(key);
+    if (!p) {
+      p = {
+        key,
+        name: wo.property_name || '— Unknown property —',
+        wos: [],
+        total: 0,
+        pastDue: 0,
+        unassigned: 0,
+      };
+      map.set(key, p);
+    }
+    p.wos.push(wo);
+    p.total += 1;
+    if (isPastDue(wo, today)) p.pastDue += 1;
+    if (!wo.assigned_to) p.unassigned += 1;
+  }
+  return [...map.values()].sort(
+    (a, b) => b.pastDue - a.pastDue || b.total - a.total || a.name.localeCompare(b.name),
+  );
 }
 
 /**
  * Collapse the open board into one group per assigned vendor — every work order
- * a vendor is on, in one place. Unassigned WOs sort to the bottom under a
- * dedicated bucket. Sort: past-due desc, total desc, name; WOs by stage/date.
+ * a vendor is on, in one place, further sub-grouped by property. Unassigned WOs
+ * sort to the bottom under a dedicated bucket. Sort: past-due desc, total desc,
+ * name; WOs by stage/date.
  */
 export function groupOpenByVendor(open: MaintWorkOrder[]): VendorGroup[] {
   const today = todayStr();
@@ -360,6 +400,7 @@ export function groupOpenByVendor(open: MaintWorkOrder[]): VendorGroup[] {
         total: 0,
         pastDue: 0,
         p1: 0,
+        properties: [],
       };
       map.set(key, g);
     }
@@ -369,7 +410,10 @@ export function groupOpenByVendor(open: MaintWorkOrder[]): VendorGroup[] {
     if (wo.priority_class === 'P1') g.p1 += 1;
   }
 
-  for (const g of map.values()) g.wos.sort(byStageThenDate);
+  for (const g of map.values()) {
+    g.wos.sort(byStageThenDate);
+    g.properties = groupByProperty(g.wos, today);
+  }
 
   return [...map.values()].sort(
     (a, b) =>
