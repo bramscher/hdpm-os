@@ -83,6 +83,20 @@ describe('transition matrix', () => {
     );
     expect(errors).toHaveLength(0);
   });
+
+  it('systemOverride advances completed work to VERIFY even without a next_action_date', () => {
+    // The sync reconciling AppFolio-completed work: a WO stuck in TRIAGED with no
+    // next-action date must still advance (was silently blocked before).
+    const stuck: WorkflowState = { ...base, stage: 'TRIAGED', next_action_date: null };
+    expect(validateTransition(stuck, { stage: 'VERIFY' }, {}, { systemOverride: true })).toHaveLength(0);
+  });
+
+  it('user-driven move still requires a next_action_date on open stages', () => {
+    const stuck: WorkflowState = { ...base, stage: 'TRIAGED', next_action_date: null };
+    expect(validateTransition(stuck, { stage: 'VERIFY' })).toContain(
+      'Every open work order needs a next_action_date'
+    );
+  });
 });
 
 describe('WAITING_ON invariants', () => {

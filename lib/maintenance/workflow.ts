@@ -124,7 +124,10 @@ export function validateTransition(
   }
 
   // ── Open WOs always have ONE named owner and a next-action date ──
-  if (targetStage !== 'CLOSED') {
+  // Skipped for system-driven moves: the sync reconciling AppFolio-completed
+  // work into VERIFY must not be blocked by a missing next-action date (these
+  // are hygiene rules for user-driven transitions, not hard DB invariants).
+  if (targetStage !== 'CLOSED' && !opts.systemOverride) {
     if (!next.owner_name) {
       errors.push('Every open work order needs a named HDPM owner (accountable team member)');
     }
