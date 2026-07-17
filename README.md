@@ -5,7 +5,7 @@ The operating system for **High Desert Property Management** (~835 doors across 
 **Stack:** Next.js 16 / React 18 / TypeScript 5.7 / Supabase (PostgreSQL + pgvector) / Tailwind CSS 3.4 / Recharts 3 / Anthropic SDK / Vercel
 **Auth:** Microsoft Azure AD (@highdesertpm.com only)
 **Domain:** hdpmchat.highdesertpm.com
-
+  
 ---
 
 ## Table of Contents
