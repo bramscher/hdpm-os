@@ -150,7 +150,7 @@ export default function BoardClient() {
             key={v.key}
             className={view === v.key ? 'active' : ''}
             onClick={() => setView(v.key)}
-            title={v.hint}
+            data-tip={v.hint}
           >
             {v.label}
             {counts[v.key] !== undefined && <span className="n">{counts[v.key]}</span>}

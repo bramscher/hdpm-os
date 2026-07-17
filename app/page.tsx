@@ -84,6 +84,15 @@ interface TodayRoute {
 
 const HDPM_OFFICE = { lat: 44.256798, lng: -121.184346 };
 
+/** Instant hover tooltip for the flagship card's stat chips (native title is too slow). */
+function StatTip({ text }: { text: string }) {
+  return (
+    <span className="pointer-events-none absolute left-0 top-full mt-2 z-30 hidden group-hover:block w-64 rounded-lg bg-charcoal-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-lg">
+      {text}
+    </span>
+  );
+}
+
 function fmtMins(mins: number): string {
   const m = Math.round(mins);
   if (m < 60) return `${m}m`;
@@ -193,41 +202,41 @@ export default function Home() {
             {boardKpis && (
               <div className="mt-5 flex flex-wrap items-center gap-6">
                 <div
-                  className="flex items-center gap-2 text-white hover:underline"
-                  title="Work orders not yet CLOSED — NEW through BILL. Click for the live board."
+                  className="relative group flex items-center gap-2 text-white cursor-pointer hover:underline"
                   onClick={goToBoard("")}
                 >
                   <span className="text-xl font-bold">{boardKpis.open}</span>
                   <span className="text-xs text-white/70">open</span>
+                  <StatTip text="Work orders not yet CLOSED — NEW through BILL. Click for the live board." />
                 </div>
                 {boardKpis.pastDue > 0 && (
                   <div
-                    className="flex items-center gap-1.5 text-sm text-white font-medium hover:underline"
-                    title="Open work orders whose next-action date has passed — each one is an exception with an accountable owner. Click for the Exceptions view."
+                    className="relative group flex items-center gap-1.5 text-sm text-white font-medium cursor-pointer hover:underline"
                     onClick={goToBoard("view=exceptions")}
                   >
                     <AlertTriangle className="w-3.5 h-3.5" />
                     <span>{boardKpis.pastDue} past due</span>
+                    <StatTip text="Open work orders whose next-action date has passed — each one is an exception with an accountable owner. Click for the Exceptions view." />
                   </div>
                 )}
                 {boardKpis.aging30Plus > 0 && (
                   <div
-                    className="flex items-center gap-1.5 text-sm text-white/80 hover:underline"
-                    title="Open work orders created 30+ days ago (AppFolio creation date). Click for the Aging view."
+                    className="relative group flex items-center gap-1.5 text-sm text-white/80 cursor-pointer hover:underline"
                     onClick={goToBoard("view=aging")}
                   >
                     <Clock className="w-3.5 h-3.5" />
                     <span>{boardKpis.aging30Plus} aging 30+ days</span>
+                    <StatTip text="Open work orders created 30+ days ago (AppFolio creation date). Click for the Aging view." />
                   </div>
                 )}
                 {boardKpis.p1ThisWeek > 0 && (
                   <div
-                    className="flex items-center gap-1.5 text-sm text-white/80 hover:underline"
-                    title="P1 (emergency) work orders created in the last 7 days, including any already closed. Click to filter the board to P1."
+                    className="relative group flex items-center gap-1.5 text-sm text-white/80 cursor-pointer hover:underline"
                     onClick={goToBoard("view=open&q=P1")}
                   >
                     <Zap className="w-3.5 h-3.5" />
                     <span>{boardKpis.p1ThisWeek} P1 this week</span>
+                    <StatTip text="P1 (emergency) work orders created in the last 7 days, including any already closed. Click to filter the board to P1." />
                   </div>
                 )}
               </div>

@@ -22,7 +22,7 @@ const NAV_ITEMS = [
     adminOnly: true,
   },
   {
-    label: "Maintenance",
+    label: "MaintOS",
     href: "/maintenance/board",
     icon: Wrench,
     matchPrefix: "/maintenance/board",

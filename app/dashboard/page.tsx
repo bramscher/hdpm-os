@@ -1088,8 +1088,6 @@ function ConfigDrawer({
                 <NumberField label="Occupancy target" value={draft.targets.occupancyPct} onChange={(v) => setTarget("occupancyPct", v)} suffix="%" />
                 <NumberField label="Doors goal" value={draft.targets.doorsGoal} onChange={(v) => setTarget("doorsGoal", v)} />
                 <NumberField label="Billable rate floor" value={draft.targets.maintBillableRateMin} onChange={(v) => setTarget("maintBillableRateMin", v)} prefix="$" suffix="/hr" />
-                <NumberField label="Net income goal" value={draft.targets.netIncomeGoal} onChange={(v) => setTarget("netIncomeGoal", v)} prefix="$" />
-                <NumberField label="Owner cash goal" value={draft.targets.ownerCashGoal} onChange={(v) => setTarget("ownerCashGoal", v)} prefix="$" />
               </div>
             </section>
 
@@ -1097,7 +1095,7 @@ function ConfigDrawer({
             <section>
               <h3 className="mb-1 text-sm font-semibold text-charcoal-900">Financial inputs</h3>
               <p className="mb-3 text-xs text-charcoal-400">
-                Power the Owner Goals panel (NOI → $1M, owner cash → $500K, DSCR).
+                Power the Financials panel (net income, owner cash, DSCR).
                 <strong className="text-charcoal-500"> Annual staff cost is required</strong> —
                 QuickBooks doesn&apos;t book payroll, so without it true NOI can&apos;t be computed.
               </p>
@@ -1133,7 +1131,7 @@ function ConfigDrawer({
 }
 
 // ============================================
-// Section A — Owner Goals panel (QuickBooks)
+// Section A — Financials panel (QuickBooks)
 // ============================================
 
 interface FinancialsResponse {
@@ -1158,34 +1156,6 @@ interface FinancialsResponse {
   ownerCashProgressPct?: number | null;
 }
 
-function ProgressGauge({
-  label,
-  value,
-  sub,
-  pct,
-  accent,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  pct: number | null;
-  accent: string; // tailwind bg color for the bar
-}) {
-  const clamped = pct == null ? 0 : Math.max(0, Math.min(100, pct));
-  return (
-    <div className="bg-white rounded-xl border border-sand-200 p-5 shadow-card">
-      <p className="text-xs font-medium text-charcoal-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-charcoal-900 tracking-tight">{value}</p>
-      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-sand-100">
-        <div className={`h-full rounded-full ${accent}`} style={{ width: `${clamped}%` }} />
-      </div>
-      <p className="mt-1.5 text-xs text-charcoal-400">
-        {pct != null && <span className="font-semibold text-charcoal-600">{pct}%</span>} {sub}
-      </p>
-    </div>
-  );
-}
-
 function FinancialsPanel({
   data,
   loading,
@@ -1202,10 +1172,10 @@ function FinancialsPanel({
       <div className="mb-3 flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold text-terra-500 uppercase tracking-widest">
-            Owner Goals
+            Financials
           </p>
           <h2 className="text-lg font-bold text-charcoal-900 tracking-tight">
-            Progress to $1M net income / $500K owner cash
+            Net income, owner cash &amp; DSCR
           </h2>
         </div>
         {data?.seeded && data.periodEnd && (
@@ -1244,29 +1214,31 @@ function FinancialsPanel({
               </p>
             </div>
 
-            <ProgressGauge
-              label="Net Income → $1M"
-              value={data.adjustedNoiTTM != null ? fmtMoney(data.adjustedNoiTTM) : "—"}
-              sub={
-                data.adjustedNoiTTM != null
-                  ? `of ${fmtMoney(data.goals?.netIncomeGoal ?? 0)}${data.noiMarginPct != null ? ` · ${data.noiMarginPct}% margin` : ""}`
-                  : "set staff cost in config"
-              }
-              pct={data.noiProgressPct ?? null}
-              accent="bg-emerald-500"
-            />
+            <div className="bg-white rounded-xl border border-sand-200 p-5 shadow-card">
+              <p className="text-xs font-medium text-charcoal-500">Net Income (TTM)</p>
+              <p className="mt-1 text-2xl font-bold text-charcoal-900 tracking-tight">
+                {data.adjustedNoiTTM != null ? fmtMoney(data.adjustedNoiTTM) : "—"}
+              </p>
+              <p className="mt-3 text-xs text-charcoal-400">
+                {data.adjustedNoiTTM != null
+                  ? data.noiMarginPct != null
+                    ? `${data.noiMarginPct}% margin · after staff cost`
+                    : "after staff cost"
+                  : "set staff cost in config"}
+              </p>
+            </div>
 
-            <ProgressGauge
-              label="Owner Cash → $500K"
-              value={data.ownerDistributableCash != null ? fmtMoney(data.ownerDistributableCash) : "—"}
-              sub={
-                data.ownerDistributableCash != null
-                  ? `of ${fmtMoney(data.goals?.ownerCashGoal ?? 0)} · after debt service`
-                  : "set staff cost + debt service"
-              }
-              pct={data.ownerCashProgressPct ?? null}
-              accent="bg-terra-500"
-            />
+            <div className="bg-white rounded-xl border border-sand-200 p-5 shadow-card">
+              <p className="text-xs font-medium text-charcoal-500">Owner Cash (TTM)</p>
+              <p className="mt-1 text-2xl font-bold text-charcoal-900 tracking-tight">
+                {data.ownerDistributableCash != null ? fmtMoney(data.ownerDistributableCash) : "—"}
+              </p>
+              <p className="mt-3 text-xs text-charcoal-400">
+                {data.ownerDistributableCash != null
+                  ? "after debt service"
+                  : "set staff cost + debt service"}
+              </p>
+            </div>
 
             <div className="bg-white rounded-xl border border-sand-200 p-5 shadow-card">
               <p className="text-xs font-medium text-charcoal-500">DSCR</p>
@@ -1526,7 +1498,7 @@ export default function DashboardPage() {
         onSaved={setConfig}
       />
 
-      {/* Section A — Owner Goals (QuickBooks financials) */}
+      {/* Section A — Financials (QuickBooks) */}
       <FinancialsPanel
         data={financials}
         loading={financialsLoading}

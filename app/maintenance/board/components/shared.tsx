@@ -105,7 +105,7 @@ export function KpiTile({
   return (
     <div
       className={`kpi ${tone ?? ''}${onClick ? ' click' : ''}`}
-      title={title}
+      data-tip={title}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
