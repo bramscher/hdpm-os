@@ -72,6 +72,11 @@ export default function Aging({ board, onChanged }: { board: BoardData; onChange
             value={bands[i]}
             label={label}
             tone={i === 3 && bands[3] > 0 ? 'bad' : i === 2 && bands[2] > 0 ? 'warn' : undefined}
+            title={`Open work orders aged ${label} since their AppFolio creation date. ${
+              i >= 2
+                ? 'These appear in the list below (oldest first).'
+                : 'Healthy band — not listed below (the list starts at 15 days).'
+            }`}
           />
         ))}
       </div>

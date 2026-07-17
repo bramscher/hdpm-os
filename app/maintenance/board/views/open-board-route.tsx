@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BoardData } from '../board-types';
 import { todayStr } from '../board-types';
 import { GoogleMap } from '@/components/GoogleMap';
@@ -32,6 +32,39 @@ interface OptimizeResult {
   excluded: { work_order_id: string; reason: string }[];
 }
 
+interface PublishedStop {
+  work_order_id: string;
+  stop_order: number;
+  address: string;
+  drive_minutes_from_prev: number;
+  service_minutes: number;
+  work_orders: {
+    wo_number: string | null;
+    description: string;
+    property_name: string;
+    unit_name: string | null;
+    stage: string;
+  } | null;
+}
+
+interface PublishedRoute {
+  id: string;
+  route_date: string;
+  assigned_tech: string | null;
+  total_drive_minutes: number;
+  total_service_minutes: number;
+  stop_count: number;
+  calendar_event_id: string | null;
+  stops: PublishedStop[];
+}
+
+interface PublishOutcome {
+  scheduled: string[];
+  dated: string[];
+  skipped: { work_order_id: string; error: string }[];
+  calendar: { created: boolean; skippedReason?: string; webLink?: string | null };
+}
+
 function fmtMins(mins: number): string {
   const m = Math.round(mins);
   if (m < 60) return `${m}m`;
@@ -61,6 +94,68 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
   const [result, setResult] = useState<OptimizeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ── Publish state ──
+  const [publishDate, setPublishDate] = useState(todayStr());
+  const [tech, setTech] = useState('Alberto');
+  const [addToCalendar, setAddToCalendar] = useState(true);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<PublishOutcome | null>(null);
+  const [published, setPublished] = useState<PublishedRoute[]>([]);
+
+  const loadPublished = useCallback(async (date: string) => {
+    try {
+      const res = await fetch(`/api/maintenance/routes?date=${date}`);
+      const data = await res.json();
+      if (res.ok) setPublished(data.routes ?? []);
+    } catch {
+      /* non-fatal — the publish list is informational */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPublished(publishDate);
+  }, [publishDate, loadPublished]);
+
+  async function publish() {
+    if (!result) return;
+    setPublishing(true);
+    setPublishError(null);
+    setOutcome(null);
+    try {
+      const res = await fetch('/api/maintenance/routes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          routeDate: publishDate,
+          assignedTech: tech,
+          stops: result.stops,
+          polyline: result.polyline,
+          totalDriveMinutes: result.total_drive_minutes,
+          totalServiceMinutes: result.total_service_minutes,
+          createCalendarEvent: addToCalendar,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Publish failed');
+      setOutcome(data as PublishOutcome);
+      await loadPublished(publishDate);
+    } catch (e) {
+      setPublishError(e instanceof Error ? e.message : 'Publish failed');
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function cancelRoute(id: string) {
+    try {
+      const res = await fetch(`/api/maintenance/routes/${id}`, { method: 'DELETE' });
+      if (res.ok) await loadPublished(publishDate);
+    } catch {
+      /* leave the row; a reload will re-sync */
+    }
+  }
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -144,6 +239,37 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
         </p>
       )}
 
+      {published.length > 0 && (
+        <div className="card" style={{ margin: '10px 0', borderColor: '#2f7d32' }}>
+          {published.map((r) => (
+            <div key={r.id} style={{ fontSize: 13 }}>
+              <b>
+                Published route · {r.route_date} · {r.assigned_tech ?? 'unassigned'}
+              </b>{' '}
+              — {r.stop_count} stops · drive {fmtMins(r.total_drive_minutes)} · on-site{' '}
+              {fmtMins(r.total_service_minutes)}
+              {r.calendar_event_id && ' · on Outlook'}
+              <button
+                className="mo-btn secondary"
+                style={{ marginLeft: 10 }}
+                onClick={() => cancelRoute(r.id)}
+              >
+                Cancel route
+              </button>
+              <ol style={{ margin: '4px 0 6px', paddingLeft: 22 }}>
+                {r.stops.map((s) => (
+                  <li key={s.work_order_id} style={{ fontSize: 12 }}>
+                    {s.work_orders?.property_name ?? s.address}
+                    {s.work_orders?.unit_name ? ` · ${s.work_orders.unit_name}` : ''}
+                    {s.work_orders?.wo_number ? ` · #${s.work_orders.wo_number}` : ''}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+      )}
+
       {result && (
         <div style={{ margin: '10px 0' }}>
           <GoogleMap pins={pins} polyline={result.polyline} height="360px" showOffice />
@@ -179,6 +305,61 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
             <p className="note" style={{ marginTop: 6 }}>
               {result.excluded.length} work order{result.excluded.length === 1 ? '' : 's'} skipped
               (no address / could not geocode).
+            </p>
+          )}
+
+          <div
+            className="grouptools"
+            style={{ marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}
+          >
+            <b style={{ fontSize: 13 }}>Publish day route:</b>
+            <input
+              type="date"
+              value={publishDate}
+              onChange={(e) => setPublishDate(e.target.value)}
+              style={{ fontSize: 13 }}
+            />
+            <select value={tech} onChange={(e) => setTech(e.target.value)} style={{ fontSize: 13 }}>
+              <option value="Alberto">Alberto</option>
+              <option value="Brody">Brody</option>
+            </select>
+            <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input
+                type="checkbox"
+                checked={addToCalendar}
+                onChange={(e) => setAddToCalendar(e.target.checked)}
+              />
+              Add to Outlook calendar
+            </label>
+            <button className="mo-btn" onClick={publish} disabled={publishing}>
+              {publishing ? 'Publishing…' : `Publish route (${result.stops.length} stops)`}
+            </button>
+          </div>
+          {publishError && (
+            <p className="note" style={{ color: '#b91c1c', borderColor: '#fca5a5' }}>
+              {publishError}
+            </p>
+          )}
+          {outcome && (
+            <p className="note" style={{ marginTop: 6, borderColor: '#2f7d32' }}>
+              Route published · {outcome.scheduled.length} WO
+              {outcome.scheduled.length === 1 ? '' : 's'} moved to SCHEDULED
+              {outcome.dated.length > 0 &&
+                ` · ${outcome.dated.length} kept their stage (date + tech set)`}
+              {outcome.skipped.length > 0 && ` · ${outcome.skipped.length} could not be updated`}
+              {' · '}
+              {outcome.calendar.created ? (
+                outcome.calendar.webLink ? (
+                  <a href={outcome.calendar.webLink} target="_blank" rel="noopener noreferrer">
+                    Outlook event created ↗
+                  </a>
+                ) : (
+                  'Outlook event created'
+                )
+              ) : (
+                `calendar: ${outcome.calendar.skippedReason ?? 'skipped'}`
+              )}
+              {' · Now on the home dashboard.'}
             </p>
           )}
         </div>
@@ -222,10 +403,11 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
       )}
 
       <p className="note" style={{ marginTop: 10 }}>
-        Scheduling lives in AppFolio — use <b>View AppFolio calendar</b> for the authoritative
-        schedule. Here, tick the stops for a run (the list respects the staff/HDMS filter above),
-        then <b>Optimize route</b> for the least-driving order + a Google Maps turn-by-turn link.
-        Starts from the HDPM office.
+        Tick the stops for a run (the list respects the staff/HDMS filter above), then{' '}
+        <b>Optimize route</b> for the least-driving order, and <b>Publish day route</b> to put it
+        on the schedule: each stop&apos;s WO gets the route date + tech (audited), the run appears
+        on the home dashboard, and Outlook gets the crew&apos;s calendar event. Starts from the
+        HDPM office. <b>View AppFolio calendar</b> stays the property-side view.
       </p>
     </section>
   );

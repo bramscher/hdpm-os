@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { MaintWorkOrder } from '@/lib/maintenance/types';
 import type { BoardData, ExceptionsData } from '../board-types';
 import { isInternalVendor } from '../board-types';
@@ -29,9 +30,11 @@ export default function OpenBoard({
   board: BoardData;
   exceptions: ExceptionsData | null;
 }) {
+  const router = useRouter();
   const [mode, setMode] = useState<'grouped' | 'vendor' | 'kanban' | 'route'>('grouped');
   const [internalOnly, setInternalOnly] = useState(false);
   const [assignee, setAssignee] = useState('');
+  const goTo = (params: string) => router.replace(`/maintenance/board?${params}`, { scroll: false });
 
   // Distinct staff names from assigned_to (splitting any comma-joined multi-assignees).
   const staffOptions = useMemo(() => {
@@ -66,24 +69,45 @@ export default function OpenBoard({
   return (
     <section>
       <div className="kpis">
-        <KpiTile value={board.kpis.open} label="Open work orders" />
+        <KpiTile
+          value={board.kpis.open}
+          label="Open work orders"
+          title="Every work order not yet CLOSED — NEW through BILL — mirrored from AppFolio with HDPM workflow fields on top. Click to see them laid out by stage (Kanban)."
+          onClick={() => setMode('kanban')}
+        />
         <KpiTile
           value={exceptions ? exceptions.exceptions.length : '…'}
           label="Exceptions (fix today)"
           tone={exceptions && exceptions.exceptions.length > 0 ? 'bad' : undefined}
+          title="Today's tripwire hits, each with one accountable owner: unassigned > 1 business day, past next-action dates, estimate approvals stuck > 3 business days, VERIFY items missing docs, and more. Click for the full list grouped by owner."
+          onClick={() => goTo('view=exceptions')}
         />
         <KpiTile
           value={exceptions ? (exceptions.needsDateCount ?? 0) : '…'}
           label="Needs a date (triage)"
           tone={exceptions && (exceptions.needsDateCount ?? 0) > 0 ? 'warn' : undefined}
+          title="Open work orders with no next-action date at all — not overdue, just never scheduled, so nobody is on the hook for a day yet. Click for the needs-a-date backlog at the bottom of Exceptions."
+          onClick={() => goTo('view=exceptions')}
         />
         <KpiTile
           value={board.kpis.aging30Plus}
           label="30+ days old"
           tone={board.kpis.aging30Plus > 0 ? 'warn' : undefined}
+          title="Open work orders created more than 30 days ago (AppFolio creation date). Click for the Aging view — oldest first, with inline owner/date fixes."
+          onClick={() => goTo('view=aging')}
         />
-        <KpiTile value={board.kpis.p1ThisWeek} label="P1 this week" />
-        <KpiTile value={`${board.kpis.ownerAndDateCoverage}%`} label="Have HDPM owner + date" />
+        <KpiTile
+          value={board.kpis.p1ThisWeek}
+          label="P1 this week"
+          title="Work orders marked P1 (emergency) created in the last 7 days, including any already closed. Click to filter the board to P1 work."
+          onClick={() => goTo('view=open&q=P1')}
+        />
+        <KpiTile
+          value={`${board.kpis.ownerAndDateCoverage}%`}
+          label="Have HDPM owner + date"
+          title="Share of open work orders carrying both an accountable HDPM owner and a next-action date — the core ground rule (no orphaned work). The gaps surface as exceptions; click to see them."
+          onClick={() => goTo('view=exceptions')}
+        />
       </div>
 
       <div className="mo-seg" role="tablist" aria-label="Board layout">

@@ -91,13 +91,26 @@ export function KpiTile({
   value,
   label,
   tone,
+  title,
+  onClick,
 }: {
   value: string | number;
   label: string;
   tone?: 'bad' | 'warn';
+  /** Hover tooltip: what's counted in this number. */
+  title?: string;
+  /** Makes the tile a drill-down into the view holding this data. */
+  onClick?: () => void;
 }) {
   return (
-    <div className={`kpi ${tone ?? ''}`}>
+    <div
+      className={`kpi ${tone ?? ''}${onClick ? ' click' : ''}`}
+      title={title}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => (e.key === 'Enter' || e.key === ' ') && onClick() : undefined}
+    >
       <div className="v">{value}</div>
       <div className="l">{label}</div>
     </div>

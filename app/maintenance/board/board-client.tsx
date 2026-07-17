@@ -15,14 +15,46 @@ import TriageReview from './views/triage-review';
 import InfoHelp from './components/info-help';
 
 const VIEWS = [
-  { key: 'open', label: 'Open Board' },
-  { key: 'triage', label: '✦ Triage Review' },
-  { key: 'wait', label: 'Waiting-On' },
-  { key: 'vendor', label: 'Vendor Scoreboard' },
-  { key: 'aging', label: 'Aging' },
-  { key: 'exceptions', label: 'Exceptions' },
-  { key: 'turnover', label: 'Turnover' },
-  { key: 'monday', label: 'Monday Review' },
+  {
+    key: 'open',
+    label: 'Open Board',
+    hint: 'Every open work order — By Property, By Vendor, Kanban, or Route Builder layouts, with the shared staff/HDMS filter.',
+  },
+  {
+    key: 'triage',
+    label: '✦ Triage Review',
+    hint: 'AI-proposed priority, owner, and next-action date for un-triaged work orders — review, edit, and apply (every apply is audited).',
+  },
+  {
+    key: 'wait',
+    label: 'Waiting-On',
+    hint: 'Open work orders parked on a wait reason: tenant, vendor, parts, owner, weather, or internal.',
+  },
+  {
+    key: 'vendor',
+    label: 'Vendor Scoreboard',
+    hint: 'Per-vendor open counts and cycle times (rolling 90 days + all-time history) — who executes and who sits on work.',
+  },
+  {
+    key: 'aging',
+    label: 'Aging',
+    hint: 'Oldest open work orders (15+ days by AppFolio creation date), with inline owner/date/stage fixes.',
+  },
+  {
+    key: 'exceptions',
+    label: 'Exceptions',
+    hint: "Today's tripwire hits grouped by accountable owner, the needs-a-date backlog, and the digest-recipients panel.",
+  },
+  {
+    key: 'turnover',
+    label: 'Turnover',
+    hint: 'Unit-turn work orders — vacancy-critical work tracked against the move-in clock.',
+  },
+  {
+    key: 'monday',
+    label: 'Monday Review',
+    hint: "Weekly stand-up summary: last week's closes, current exceptions, and the stuck pile.",
+  },
 ] as const;
 
 type ViewKey = (typeof VIEWS)[number]['key'];
@@ -66,6 +98,12 @@ export default function BoardClient() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Deep links can prefill the search (e.g. the "P1 this week" KPI → ?q=P1).
+  const qParam = searchParams.get('q');
+  useEffect(() => {
+    if (qParam !== null) setQuery(qParam);
+  }, [qParam]);
 
   const setView = (key: ViewKey) => {
     router.replace(`/maintenance/board?view=${key}`, { scroll: false });
@@ -112,6 +150,7 @@ export default function BoardClient() {
             key={v.key}
             className={view === v.key ? 'active' : ''}
             onClick={() => setView(v.key)}
+            title={v.hint}
           >
             {v.label}
             {counts[v.key] !== undefined && <span className="n">{counts[v.key]}</span>}
