@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/sync/work-orders?days=7",
-      "schedule": "0 8 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/sync/appfolio",

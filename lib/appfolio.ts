@@ -686,6 +686,7 @@ interface V0WorkOrder {
   WorkOrderIssue?: string;
   SmartMaintenanceUrgency?: string;
   Type?: string;
+  Recurring?: boolean;
 }
 
 export type WorkOrderStatus = 'open' | 'closed' | 'done';
@@ -712,6 +713,8 @@ export interface AppFolioWorkOrder {
   lastUpdatedAt: string | null;
   /** AppFolio web-app URL for this WO — the dashboard's "edit it in AppFolio" jump-off */
   link: string | null;
+  /** AppFolio auto-generates recurring WOs weeks ahead — used to defer them off the board */
+  recurring: boolean;
 }
 
 // ============================================
@@ -828,6 +831,7 @@ export async function fetchAppFolioWorkOrders(
     createdAt: wo.CreatedAt || null,
     lastUpdatedAt: wo.LastUpdatedAt || null,
     link: wo.Link || null,
+    recurring: wo.Recurring === true,
   }));
 }
 
@@ -960,6 +964,7 @@ export async function fetchWorkOrderById(
       createdAt: match.CreatedAt || null,
       lastUpdatedAt: match.LastUpdatedAt || null,
       link: match.Link || null,
+      recurring: match.Recurring === true,
     };
   } catch (err) {
     console.error(`[AppFolio] Error fetching work order ${entityId}:`, err);

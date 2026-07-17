@@ -21,6 +21,7 @@ import type {
   WoDocs,
 } from './types';
 import { TRIPWIRE_REGISTRY, needsADate } from './tripwires';
+import { isDeferredRecurring } from './recurring';
 
 /**
  * Page through a PostgREST query — Supabase caps single reads at 1000 rows,
@@ -73,7 +74,12 @@ export async function loadTripwireSnapshot(): Promise<TripwireSnapshot> {
 
   if (turnRes.error) throw new Error(`Snapshot load failed: ${turnRes.error.message}`);
 
-  const openWorkOrders = openWorkOrdersRaw as MaintWorkOrder[];
+  // Recurring WOs scheduled for a future week are not yet actionable — keep
+  // them out of every tripwire (same deferral the board applies).
+  const todayStr = now.toISOString().slice(0, 10);
+  const openWorkOrders = (openWorkOrdersRaw as MaintWorkOrder[]).filter(
+    (wo) => !isDeferredRecurring(wo, todayStr)
+  );
   const openIds = openWorkOrders.map((wo) => wo.id);
 
   // Invoice linkage (rule 8) + line-item docs (rule 7) for open WOs.

@@ -43,6 +43,8 @@ export interface WorkOrder {
   canceled_date: string | null;
   permission_to_enter: boolean;
   appfolio_link: string | null;
+  /** AppFolio's Recurring flag — auto-generated future WOs deferred until their due week */
+  appfolio_recurring: boolean;
   /** AppFolio's own CreatedAt — use for all age math (created_at = row insert time) */
   appfolio_created_at: string | null;
   /** AppFolio's own LastUpdatedAt — seed clock for time-in-status */

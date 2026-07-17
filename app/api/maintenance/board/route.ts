@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { requireStaffSession } from '@/lib/maintenance/api-auth';
 import { fetchAllRows } from '@/lib/maintenance/tripwire-engine';
+import { isDeferredRecurring } from '@/lib/maintenance/recurring';
 import type { MaintWorkOrder, Turn, VendorAssignment } from '@/lib/maintenance/types';
 
 /**
@@ -47,9 +48,12 @@ export async function GET() {
       if (res.error) throw new Error(res.error.message);
     }
 
-    const open = (openRaw as MaintWorkOrder[]).sort((a, b) =>
-      (a.next_action_date ?? '').localeCompare(b.next_action_date ?? '')
-    );
+    // Recurring WOs stay off the board (and out of the KPIs below) until the
+    // calendar week their scheduled date falls in.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const open = (openRaw as MaintWorkOrder[])
+      .filter((wo) => !isDeferredRecurring(wo, todayStr))
+      .sort((a, b) => (a.next_action_date ?? '').localeCompare(b.next_action_date ?? ''));
     const closedThisWeek = (closedRes.data ?? []) as MaintWorkOrder[];
     const turns = (turnsRes.data ?? []) as Turn[];
     const assignments = (assignmentsRes.data ?? []) as VendorAssignment[];
