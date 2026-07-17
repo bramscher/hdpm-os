@@ -58,6 +58,37 @@ interface BoardKpis {
   p1ThisWeek: number;
 }
 
+interface TodayRouteStop {
+  work_order_id: string;
+  stop_order: number;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  work_orders: {
+    wo_number: string | null;
+    property_name: string;
+    unit_name: string | null;
+  } | null;
+}
+
+interface TodayRoute {
+  id: string;
+  route_date: string;
+  assigned_tech: string | null;
+  total_drive_minutes: number;
+  total_service_minutes: number;
+  stop_count: number;
+  stops: TodayRouteStop[];
+}
+
+const HDPM_OFFICE = { lat: 44.256798, lng: -121.184346 };
+
+function fmtMins(mins: number): string {
+  const m = Math.round(mins);
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 export default function Home() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin === true;
@@ -65,6 +96,7 @@ export default function Home() {
   const [routeStats, setRouteStats] = useState<RouteStats | null>(null);
   const [vacancyCount, setVacancyCount] = useState<number | null>(null);
   const [boardKpis, setBoardKpis] = useState<BoardKpis | null>(null);
+  const [todayRoutes, setTodayRoutes] = useState<TodayRoute[]>([]);
 
   useEffect(() => {
     // Fetch maintenance board KPIs
@@ -92,6 +124,12 @@ export default function Home() {
           total_stops: routes.reduce((sum: number, r: { total_stops?: number }) => sum + (r.total_stops || 0), 0),
         });
       })
+      .catch(() => {});
+
+    // Fetch today's published maintenance day route(s)
+    fetch("/api/maintenance/routes")
+      .then((r) => r.json())
+      .then((data) => setTodayRoutes(data.routes ?? []))
       .catch(() => {});
 
     // Fetch cached vacancy count
@@ -170,6 +208,89 @@ export default function Home() {
             )}
           </div>
         </Link>
+
+        {/* Today's field route (published from the maintenance board) */}
+        {todayRoutes.map((route) => {
+          const coords = route.stops
+            .filter((s) => s.lat != null && s.lng != null)
+            .map((s) => `${s.lat},${s.lng}`);
+          const mapsUrl =
+            coords.length > 0
+              ? `https://www.google.com/maps/dir/${HDPM_OFFICE.lat},${HDPM_OFFICE.lng}/${coords.join("/")}`
+              : null;
+          return (
+            <div
+              key={route.id}
+              className="mb-5 bg-white rounded-xl border border-terra-200 p-6 shadow-card relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-terra-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60" />
+              <div className="relative">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 bg-terra-100 rounded-xl flex items-center justify-center">
+                      <Route className="w-5 h-5 text-terra-600" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold text-terra-500 uppercase tracking-widest">
+                        Today&apos;s field route
+                      </p>
+                      <h3 className="text-base font-semibold text-charcoal-900">
+                        {route.assigned_tech ?? "HDMS crew"} · {route.stop_count} stops
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {mapsUrl && (
+                      <a
+                        href={mapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-terra-600 hover:text-terra-700"
+                      >
+                        Open in Google Maps ↗
+                      </a>
+                    )}
+                    <Link
+                      href="/maintenance/board"
+                      className="text-xs font-medium text-charcoal-400 hover:text-charcoal-600"
+                    >
+                      Board →
+                    </Link>
+                  </div>
+                </div>
+                <ol className="list-decimal pl-5 text-sm text-charcoal-600 space-y-0.5">
+                  {route.stops.map((s) => (
+                    <li key={s.work_order_id}>
+                      <span className="font-medium text-charcoal-900">
+                        {s.work_orders?.property_name ?? s.address}
+                      </span>
+                      {s.work_orders?.unit_name ? ` · ${s.work_orders.unit_name}` : ""}
+                      <span className="text-charcoal-400">
+                        {" "}
+                        — {s.address}
+                        {s.work_orders?.wo_number ? ` · #${s.work_orders.wo_number}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <div className="mt-3 flex items-center gap-4 text-xs text-charcoal-400">
+                  <span className="flex items-center gap-1.5">
+                    <Car className="w-3 h-3" />
+                    drive {fmtMins(route.total_drive_minutes)}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3 h-3" />
+                    on-site {fmtMins(route.total_service_minutes)}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <CalendarDays className="w-3 h-3" />
+                    starts 8:00 AM at the office
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
 
         {/* Tool Cards */}
         <div className="grid lg:grid-cols-2 gap-5 stagger-children">
