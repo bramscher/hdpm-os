@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   FileText,
@@ -97,6 +98,15 @@ export default function Home() {
   const [vacancyCount, setVacancyCount] = useState<number | null>(null);
   const [boardKpis, setBoardKpis] = useState<BoardKpis | null>(null);
   const [todayRoutes, setTodayRoutes] = useState<TodayRoute[]>([]);
+  const router = useRouter();
+
+  // The flagship card is one big <Link>; stat chips inside it deep-link to
+  // their specific board view without triggering the card's own navigation.
+  const goToBoard = (params: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    router.push(`/maintenance/board${params ? `?${params}` : ""}`);
+  };
 
   useEffect(() => {
     // Fetch maintenance board KPIs
@@ -182,24 +192,40 @@ export default function Home() {
             </p>
             {boardKpis && (
               <div className="mt-5 flex flex-wrap items-center gap-6">
-                <div className="flex items-center gap-2 text-white">
+                <div
+                  className="flex items-center gap-2 text-white hover:underline"
+                  title="Work orders not yet CLOSED — NEW through BILL. Click for the live board."
+                  onClick={goToBoard("")}
+                >
                   <span className="text-xl font-bold">{boardKpis.open}</span>
                   <span className="text-xs text-white/70">open</span>
                 </div>
                 {boardKpis.pastDue > 0 && (
-                  <div className="flex items-center gap-1.5 text-sm text-white font-medium">
+                  <div
+                    className="flex items-center gap-1.5 text-sm text-white font-medium hover:underline"
+                    title="Open work orders whose next-action date has passed — each one is an exception with an accountable owner. Click for the Exceptions view."
+                    onClick={goToBoard("view=exceptions")}
+                  >
                     <AlertTriangle className="w-3.5 h-3.5" />
                     <span>{boardKpis.pastDue} past due</span>
                   </div>
                 )}
                 {boardKpis.aging30Plus > 0 && (
-                  <div className="flex items-center gap-1.5 text-sm text-white/80">
+                  <div
+                    className="flex items-center gap-1.5 text-sm text-white/80 hover:underline"
+                    title="Open work orders created 30+ days ago (AppFolio creation date). Click for the Aging view."
+                    onClick={goToBoard("view=aging")}
+                  >
                     <Clock className="w-3.5 h-3.5" />
                     <span>{boardKpis.aging30Plus} aging 30+ days</span>
                   </div>
                 )}
                 {boardKpis.p1ThisWeek > 0 && (
-                  <div className="flex items-center gap-1.5 text-sm text-white/80">
+                  <div
+                    className="flex items-center gap-1.5 text-sm text-white/80 hover:underline"
+                    title="P1 (emergency) work orders created in the last 7 days, including any already closed. Click to filter the board to P1."
+                    onClick={goToBoard("view=open&q=P1")}
+                  >
                     <Zap className="w-3.5 h-3.5" />
                     <span>{boardKpis.p1ThisWeek} P1 this week</span>
                   </div>
