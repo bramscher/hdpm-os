@@ -39,6 +39,10 @@
     {
       "path": "/api/maintenance/cron/appfolio-webhook-resolve",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/maintenance/cron/metrics",
+      "schedule": "30 13 * * *"
     }
   ]
 }

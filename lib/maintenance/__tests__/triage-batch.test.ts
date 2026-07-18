@@ -51,14 +51,14 @@ describe('proposalFrom — owner rules', () => {
     expect(proposalFrom(triage(), wo(), THU).proposed_owner_name).toBe('Cheryl');
   });
 
-  it('OWNER blocker → Jen', () => {
+  it('OWNER blocker → Cheryl (role correction 2026-07-18: PMs do no maintenance work)', () => {
     const t = triage({ blocker: { classification: 'OWNER', detail: 'owner deciding' } });
-    expect(proposalFrom(t, wo(), THU).proposed_owner_name).toBe('Jen');
+    expect(proposalFrom(t, wo(), THU).proposed_owner_name).toBe('Cheryl');
   });
 
-  it('estimate statuses → Jen regardless of blocker', () => {
-    expect(proposalFrom(triage(), wo('WAITING_ON', 'Estimate Requested'), THU).proposed_owner_name).toBe('Jen');
-    expect(proposalFrom(triage(), wo('WAITING_ON', 'Estimated'), THU).proposed_owner_name).toBe('Jen');
+  it('estimate statuses → Cheryl regardless of blocker', () => {
+    expect(proposalFrom(triage(), wo('WAITING_ON', 'Estimate Requested'), THU).proposed_owner_name).toBe('Cheryl');
+    expect(proposalFrom(triage(), wo('WAITING_ON', 'Estimated'), THU).proposed_owner_name).toBe('Cheryl');
   });
 });
 
