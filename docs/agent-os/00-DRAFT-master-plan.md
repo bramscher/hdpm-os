@@ -24,7 +24,7 @@ Answered in full in `01-questions-and-answers.md`. The one-line versions:
 | Q6 | **No agent for Bryce** (CCB license holder, oversight only). Inspections agent → **Brody**. Roster additions: Matt Free (oversight transitioning out through ~Dec 2026), Ashley, Bianca; Alberto is *Lead* Tech. |
 | Q7 | Product option kept open cheaply (org_id/RLS/config-as-data now; billing/onboarding/white-label/SOC2 deferred to post-case-study ~Q1 2027). Shape: **agent team as an AppFolio add-on**. |
 | Q8 | The agent plan is **one input among several** at Sep 4. Aug 25 is a target, not a hard gate; Phase 1 metrics are briefing inputs. |
-| Addendum 07-18 | Alberto is field-outbound all day (SMS-only confirmed). Ashley covers Haven + leasing queries + **`info@highdesertpm.com`**, the primary email contact. **Email triage is critical** (all PMs + Cheryl) → new Email Triage Agent (#10); SMS becomes a two-way texting tool, not just Alberto's channel. |
+| Addendum 07-18 | Alberto is field-outbound all day and works through the **AppFolio vendor app as HDMS** (an HDPM-owned vendor entity) + text — Agent #4 reads the vendor app and texts only the gaps; the Vendor Chaser special-cases HDMS. Ashley covers Haven + leasing queries + **`info@highdesertpm.com`**, the primary email contact. **Email triage is critical** (all PMs + Cheryl) → new Email Triage Agent (#10); SMS becomes a two-way texting tool. All iPhone holders carry Zoom/Slack/AppFolio (Slack push = field backup). |
 
 ---
 
@@ -46,7 +46,8 @@ Answered in full in `01-questions-and-answers.md`. The one-line versions:
 ### Channels (per Q1)
 
 - **Slack** (Block Kit interactive messages) — the desk surface: Cheryl, Brody, Penny, Craig, Matt; PMs later. Already in daily use, so no new-tool adoption tax.
-- **Zoom Phone SMS** — the field surface: Alberto (outbound on maintenance essentially all day — nothing in his flow may assume a desk). *Pending verification: inbound webhook support for structured replies.* Per the 07-18 addendum, the SMS adapter is also a **two-way texting tool**: send-on-tap tenant/vendor texts from Cheryl's cards, under the Q2 ceilings (vendor L3 max, tenant L2 wall).
+- **Zoom Phone SMS** — the field surface: Alberto (outbound on maintenance essentially all day). *Pending verification: inbound webhook support for structured replies.* Per the 07-18 addendum, the SMS adapter is also a **two-way texting tool**: send-on-tap tenant/vendor texts from Cheryl's cards, under the Q2 ceilings (vendor L3 max, tenant L2 wall).
+- **AppFolio vendor app** — Alberto's primary work surface: he operates as **High Desert Maintenance Services (HDMS)**, an HDPM-owned vendor entity, and logs WO activity there (this is the `hdms_payments` connection). The agent layer treats the vendor app as a **read channel** (via the WO webhook/mirror), never a surface it posts to — SMS handles the outbound half of Alberto's loop. All iPhone holders also carry Zoom, Slack, and AppFolio, so Slack push is a viable backup for field staff, but Alberto's day runs on vendor app + text.
 - **Email / Outlook via Graph** — three roles: (a) Cheryl lives in AppFolio + email today, so her morning card mirrors to email during Phase 1; (b) the Estimate Chaser writes ready-to-send drafts into her Outlook drafts folder; (c) **inbound email is a channel, not just an outbox** — `info@highdesertpm.com` is the company's primary email contact (Ashley monitors it) and feeds the Email Triage Agent (#10). Graph integration is unaffected by the Teams→Slack switch.
 - **In-app** stays the deep-work surface, not the notification surface.
 
@@ -96,12 +97,13 @@ Team facts per the Notion roles doc + Craig's corrections (see `01`): Cheryl own
 
 ### Alberto (Maintenance Lead Tech) — field channel
 
-**4. Route & Day-Close Agent**
-- Trigger: day-route publish (shipped 2026-07-17) → 6:45am **Zoom Phone SMS**: today's stops, gate codes, parts notes. 4:30pm SMS: "Reply per job: DONE / BLOCKED <why> / hours + materials."
-- Data: routes, WO detail, prior time/materials patterns.
-- Autonomy: L2 — structured replies parse into time/materials entries and status updates *as proposals Cheryl confirms* (L3 after promotion: apply directly, notify Cheryl of anomalies only).
-- HITL: Cheryl reviews parsed entries initially; techs never see prices (existing rule). Note Alberto is the *lead* tech — he already updates WOs in AppFolio and oversees vendor quality on turns, so the day-close should also accept turn-status notes, not just per-job time.
-- Adoption hook: everything by text reply — no app, no login, ever. This also finally populates time/materials data, which feeds Penny's agent.
+**4. Route & Day-Close Agent** (revised 07-18: read the vendor app, don't duplicate it)
+- Alberto works through the **AppFolio vendor app as HDMS** all day — so the agent's first job is to *read* what he already logs (via the WO webhook/mirror) rather than ask him to re-report it by text. SMS covers the outbound half and the gaps.
+- Trigger: day-route publish (shipped 2026-07-17) → 6:45am **Zoom Phone SMS**: today's stops, gate codes, parts notes. 4:30pm: a **gap-fill day-close**, not a full re-report — the agent diffs the day's route against HDMS activity in the mirror and texts only what's missing: "WO #412 shows no hours — reply hours + materials. WO #418 still open — DONE or BLOCKED <why>?"
+- Data: routes, WO detail, HDMS vendor-app activity from the mirror, prior time/materials patterns. *Pending verification (Phase 0): exactly what the vendor app captures — status, hours, materials, photos — and whether it all reaches the webhook/mirror; the less it captures, the more the SMS day-close carries.*
+- Autonomy: L2 — SMS replies parse into time/materials entries and status updates *as proposals Cheryl confirms* (L3 after promotion: apply directly, notify Cheryl of anomalies only).
+- HITL: Cheryl reviews parsed entries initially; techs never see prices (existing rule). Alberto is the *lead* tech overseeing vendor quality on turns, so the day-close also accepts turn-status notes.
+- Adoption hook: nothing new to learn — he keeps working the vendor app he already uses, and the only texts he gets are short and specific. Time/materials data finally gets complete, which feeds Penny's agent.
 - *(Brody is not on this SMS flow — he's in AppFolio + Slack and his agent surface is #6 and the shared vendor/turn views.)*
 
 ### Penny (Sr Finance)
@@ -132,6 +134,7 @@ Team facts per the Notion roles doc + Craig's corrections (see `01`): Cheryl own
 **8. Vendor Chaser Agent** (Cheryl owns, Craig sees)
 - Trigger: vendor scoreboard thresholds — accepted-but-unworked age (the Firkus pattern: accepts fast, sits on 46+ WOs), scheduled-date-passed (40 WOs).
 - Autonomy: L1 email drafts now → L2 send-on-tap → L3 send-then-notify (the Q2 ceiling for vendor comms). SMS chasing via Zoom Phone if a vendor is text-first — no 10DLC dependency.
+- **HDMS special case:** High Desert Maintenance Services appears in the vendor data but is HDPM-owned (it's Alberto). It is excluded from external chase templates — an "HDMS chase" is an SMS nudge to Alberto or an escalation line in Cheryl's card, never a vendor-relations email, and HDMS is scored separately on the vendor scoreboard.
 - HITL: Cheryl approves tone/timing initially; monthly vendor report to Craig with "keep/pressure/replace" flags.
 - Adoption hook: nobody at HDPM enjoys chasing Firkus; this is the chore everyone gladly delegates first.
 
@@ -164,7 +167,7 @@ Deferred to post-Sep 4 by the existing Wave 2 gate: dispatch queue, magic links,
 - Craig's own checklist: digest opt-ins + any pending migrations. *The prerequisite from 07-wave1-redirect still stands: nothing matters until Wave 1 is actually adopted.*
 - Build: `metrics_snapshot` daily cron and freeze the baseline (205 exceptions; 89/78/37 split; approval latency ~30d median; ~0 staff actions/week). **The baseline must predate the agents or the case study is worthless.**
 - Build: `agent_proposal` generalization, `agent_outbox` + channel adapter (**Slack first**, email second), Slack app + bot registration, `agent-service` skeleton on Railway/Fly.
-- Verify: Zoom Phone SMS inbound webhooks (blocks #4); Haven API docs/credentials (blocks #9); Graph webhook access to the `info@` shared mailbox (blocks #10); AppFolio MCP specs/pricing/timeline + Realm-X native-automation inventory (feeds Sep 4).
+- Verify: Zoom Phone SMS inbound webhooks (blocks #4); what the AppFolio vendor app captures for HDMS and whether it reaches the webhook/mirror (shapes #4's read-vs-ask split); Haven API docs/credentials (blocks #9); Graph webhook access to the `info@` shared mailbox (blocks #10); AppFolio MCP specs/pricing/timeline + Realm-X native-automation inventory (feeds Sep 4).
 - A 30-minute team session where *the team picks* which agent goes first from the roster (people don't resist tools they chose).
 
 **Phase 1 — Propose-then-apply (Aug; Aug 25 readability is a target, not a gate — Q8).**

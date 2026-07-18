@@ -151,9 +151,24 @@ Jobber/Realm-X evaluations. Consequences:
 
 Three additional facts from Craig after the 8 questions were recorded:
 
-1. **Alberto is outbound on maintenance essentially all the time** — confirms
-   the SMS-only field channel for him; he is rarely at a desk, so nothing in
-   his flow can assume Slack or AppFolio-at-a-desktop during the day.
+1. **Alberto is outbound on maintenance essentially all the time**, and
+   (revision) **he works through the AppFolio vendor app as "High Desert
+   Maintenance Services" (HDMS)** — a vendor entity owned by HDPM (this is
+   the `hdms_payments` connection). He's mostly in that app and text. All
+   iPhone holders at HDPM have Zoom, Slack, and AppFolio installed, so Slack
+   push is a viable backup surface — but Alberto's primary channels are the
+   **vendor app + SMS**. Design consequences:
+   - The Day-Close Agent should **read HDMS activity from the AppFolio
+     mirror/webhooks instead of asking Alberto to re-report by SMS** what he
+     already logs in the vendor app. SMS is for routes, nudges, and gaps
+     (e.g. "WO #412 has no hours logged — reply with hours"), not primary
+     data entry.
+   - The Vendor Chaser must **special-case HDMS**: it's not an external
+     vendor to email-chase; an "HDMS chase" is an SMS nudge to Alberto /
+     escalation to Cheryl.
+   - *Verification:* what the vendor-app workflow actually captures (status,
+     hours, materials, photos?) and whether it flows through the existing
+     work-order webhook/mirror.
 2. **Ashley's scope is wider than "front desk + Haven":** she helps with
    Haven, **leasing queries**, and **`info@highdesertpm.com` — the company's
    primary email contact**. The shared `info@` inbox is a front door on par
@@ -189,3 +204,6 @@ Three additional facts from Craig after the 8 questions were recorded:
    mailbox (blocks the Email Triage Agent, #10).
 8. Confirm with Craig what "better text integration" should cover beyond
    two-way Zoom SMS from cards (see Addendum interpretation note).
+9. Verify what the AppFolio vendor app captures for HDMS work (status, hours,
+   materials, photos) and whether it reaches the WO webhook/mirror — shapes
+   Agent #4's read-vs-ask split.
