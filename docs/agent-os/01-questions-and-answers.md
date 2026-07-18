@@ -207,3 +207,27 @@ Three additional facts from Craig after the 8 questions were recorded:
 9. Verify what the AppFolio vendor app captures for HDMS work (status, hours,
    materials, photos) and whether it reaches the WO webhook/mirror — shapes
    Agent #4's read-vs-ask split.
+10. Azure: register app-only Graph `Mail.ReadWrite` (admin consent +
+    ApplicationAccessPolicy scoping to Cheryl's mailbox and `info@`) — current
+    Graph auth is delegated calendar-only; hard blocker for Brief D and #10.
+11. Build a bills mirror + nightly `/bills` sync before Agent #5 (stress-test
+    finding: no bills data store exists; the webhook log is a staging table).
+
+## Post-review corrections (2026-07-18 stress test)
+
+A 28-agent adversarial review of this plan against the repo produced 16
+verified findings, folded into `00-DRAFT-master-plan.md` the same day. The
+ones that changed recorded answers or facts:
+
+- **Door count (Craig, mid-review): 460 *buildings*, ~850 *units/doors*.** The
+  draft's "460 doors" conflated the two. Per-door pricing math uses 850 —
+  consistent with the $850/mo Write API at $1/unit/mo. Part 5 anchors
+  recomputed (Assist ≈ $1,275/mo at 850 doors; value multiple ~1.6–2× at
+  HDPM's scale).
+- **Q1/Q3 correction:** "Graph integration is unaffected" was true only of the
+  Teams→Slack switch — headless mailbox access does not exist and requires
+  Azure app-only registration (action item 10). And the Q3 estimate retarget
+  needs a code change: shipped TW11 hardcodes `owner: 'Jen'` (fixed in
+  Brief A).
+- **Guardrail precision:** the "everything starts L1/L2" rule now names its
+  two sanctioned exceptions (Ops Brief self-send; emergency paging).
