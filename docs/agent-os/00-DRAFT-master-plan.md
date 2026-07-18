@@ -24,6 +24,7 @@ Answered in full in `01-questions-and-answers.md`. The one-line versions:
 | Q6 | **No agent for Bryce** (CCB license holder, oversight only). Inspections agent → **Brody**. Roster additions: Matt Free (oversight transitioning out through ~Dec 2026), Ashley, Bianca; Alberto is *Lead* Tech. |
 | Q7 | Product option kept open cheaply (org_id/RLS/config-as-data now; billing/onboarding/white-label/SOC2 deferred to post-case-study ~Q1 2027). Shape: **agent team as an AppFolio add-on**. |
 | Q8 | The agent plan is **one input among several** at Sep 4. Aug 25 is a target, not a hard gate; Phase 1 metrics are briefing inputs. |
+| Addendum 07-18 | Alberto is field-outbound all day (SMS-only confirmed). Ashley covers Haven + leasing queries + **`info@highdesertpm.com`**, the primary email contact. **Email triage is critical** (all PMs + Cheryl) → new Email Triage Agent (#10); SMS becomes a two-way texting tool, not just Alberto's channel. |
 
 ---
 
@@ -45,8 +46,8 @@ Answered in full in `01-questions-and-answers.md`. The one-line versions:
 ### Channels (per Q1)
 
 - **Slack** (Block Kit interactive messages) — the desk surface: Cheryl, Brody, Penny, Craig, Matt; PMs later. Already in daily use, so no new-tool adoption tax.
-- **Zoom Phone SMS** — the field surface: Alberto. *Pending verification: inbound webhook support for structured replies.*
-- **Email / Outlook drafts via Graph** — Cheryl lives in AppFolio + email today, so (a) her morning card mirrors to email during Phase 1, and (b) the Estimate Chaser writes ready-to-send drafts into her Outlook drafts folder. Graph integration is unaffected by the Teams→Slack switch.
+- **Zoom Phone SMS** — the field surface: Alberto (outbound on maintenance essentially all day — nothing in his flow may assume a desk). *Pending verification: inbound webhook support for structured replies.* Per the 07-18 addendum, the SMS adapter is also a **two-way texting tool**: send-on-tap tenant/vendor texts from Cheryl's cards, under the Q2 ceilings (vendor L3 max, tenant L2 wall).
+- **Email / Outlook via Graph** — three roles: (a) Cheryl lives in AppFolio + email today, so her morning card mirrors to email during Phase 1; (b) the Estimate Chaser writes ready-to-send drafts into her Outlook drafts folder; (c) **inbound email is a channel, not just an outbox** — `info@highdesertpm.com` is the company's primary email contact (Ashley monitors it) and feeds the Email Triage Agent (#10). Graph integration is unaffected by the Teams→Slack switch.
 - **In-app** stays the deep-work surface, not the notification surface.
 
 ### Supabase as the spine (shared state)
@@ -134,16 +135,24 @@ Team facts per the Notion roles doc + Craig's corrections (see `01`): Cheryl own
 - HITL: Cheryl approves tone/timing initially; monthly vendor report to Craig with "keep/pressure/replace" flags.
 - Adoption hook: nobody at HDPM enjoys chasing Firkus; this is the chore everyone gladly delegates first.
 
-### Ashley (Front Desk) + after-hours
+### Ashley (Front Desk — phones, Haven, leasing queries, and the `info@` inbox)
 
 **9. Intake Agent (Haven)** (unblocked by Q4 — API/webhook exists)
 - Trigger: Haven call events via API/webhook, behind a **generic "after-hours call source" adapter** — Haven is on the table for replacement, so it's the first implementation, not the foundation. Data: call transcript/summary → structured WO proposal → feeds Agent #2; un-stubs tripwires #1 and #9.
 - HITL: **Ashley** — she already continuously monitors Haven's dashboards; daytime call-derived proposals route to her for confirmation, reducing the watch-the-dashboard burden rather than routing around her.
 - Autonomy: L2 — emergency-classified calls page Cheryl/on-call immediately (that alert path is L3 from day one; false-positive pages are cheaper than a missed flood).
 
+**10. Email Triage Agent** (added per the 07-18 addendum — "email triage is critical for all PMs and Cheryl")
+- Trigger: Graph webhooks on **`info@highdesertpm.com`** (the primary company email contact, monitored by Ashley) and on Cheryl's maintenance lane first; PM inboxes (Jen, Bianca, Kennedy) as the fast-follow.
+- Data: sender matched against the tenant/owner/vendor mirror, thread history, WO mirror, vacancy/listing data for leasing queries.
+- Action: classify (maintenance request / leasing query / owner / vendor / payment / junk) → route to the right person's Slack card with a **drafted reply attached** → maintenance-request emails become structured WO proposals feeding Agent #2.
+- Autonomy: L1/L2 — routing proposals and reply drafts only; tenant/owner-facing replies inherit the Q2 hard wall (a human always taps send). Junk-filing can earn L3/L4.
+- HITL: Ashley for `info@`, Cheryl for the maintenance lane, each PM for their own inbox.
+- Adoption hook: the `info@` front door stops depending on one person's attention; every email arrives pre-classified with a reply already written. Weekly stat: median time-to-first-response on `info@`.
+
 ### PM lane (Jen, Bianca, Kennedy) — future
 
-No agent in Phases 1–2 (per Q3: PMs do compliance, move-in/move-out, sales only — none of the maintenance pools). The natural post-Phase-2 candidate is a **Compliance & Move-Cycle Agent** (notice prep, renewals, insurance-compliance chasing, move-in/move-out checklists), scoped with Jen after her return from leave. Kennedy is the tech-savvy early adopter to pilot it.
+No *dedicated* agent in Phases 1–2 (per Q3: PMs do compliance, move-in/move-out, sales only — none of the maintenance pools), but the PMs are early beneficiaries of the Email Triage Agent (#10) on their own inboxes. The natural post-Phase-2 candidate is a **Compliance & Move-Cycle Agent** (notice prep, renewals, insurance-compliance chasing, move-in/move-out checklists), scoped with Jen after her return from leave. Kennedy is the tech-savvy early adopter to pilot it.
 
 Deferred to post-Sep 4 by the existing Wave 2 gate: dispatch queue, magic links, tenant notification automation, AppFolio write-backs.
 
@@ -155,7 +164,7 @@ Deferred to post-Sep 4 by the existing Wave 2 gate: dispatch queue, magic links,
 - Craig's own checklist: digest opt-ins + any pending migrations. *The prerequisite from 07-wave1-redirect still stands: nothing matters until Wave 1 is actually adopted.*
 - Build: `metrics_snapshot` daily cron and freeze the baseline (205 exceptions; 89/78/37 split; approval latency ~30d median; ~0 staff actions/week). **The baseline must predate the agents or the case study is worthless.**
 - Build: `agent_proposal` generalization, `agent_outbox` + channel adapter (**Slack first**, email second), Slack app + bot registration, `agent-service` skeleton on Railway/Fly.
-- Verify: Zoom Phone SMS inbound webhooks (blocks #4); Haven API docs/credentials (blocks #9); AppFolio MCP specs/pricing/timeline + Realm-X native-automation inventory (feeds Sep 4).
+- Verify: Zoom Phone SMS inbound webhooks (blocks #4); Haven API docs/credentials (blocks #9); Graph webhook access to the `info@` shared mailbox (blocks #10); AppFolio MCP specs/pricing/timeline + Realm-X native-automation inventory (feeds Sep 4).
 - A 30-minute team session where *the team picks* which agent goes first from the roster (people don't resist tools they chose).
 
 **Phase 1 — Propose-then-apply (Aug; Aug 25 readability is a target, not a gate — Q8).**
@@ -163,7 +172,8 @@ Deferred to post-Sep 4 by the existing Wave 2 gate: dispatch queue, magic links,
 - **Success gate to enter Phase 2: ≥25 human actions/week flowing through cards/drafts for 2 consecutive weeks** (vs. ~0 baseline), and Cheryl says "keep it" out loud. If the gate fails, stop and fix adoption — more capability is explicitly not the answer.
 
 **Phase 2 — Act-on-tap + field channel (Sep–Oct).**
-- Intake Triage on webhooks (#2), Alberto's SMS day-close via Zoom Phone (#4 — no 10DLC long-pole), Penny's reconciliation proposals (#5), Vendor Chaser at L1→L2 (#8), Brody's inspections cadence (#6).
+- **First item: Email Triage (#10) on `info@` + Cheryl's maintenance lane** — flagged critical in the 07-18 addendum; it is the named candidate to pull *into* Phase 1 if the team picks it at the Phase 0 session or Phase 1 lands early. PM inboxes follow once the classify/route loop proves out.
+- Then: Intake Triage on webhooks (#2), Alberto's SMS day-close via Zoom Phone (#4 — no 10DLC long-pole), two-way SMS from Cheryl's cards, Penny's reconciliation proposals (#5), Vendor Chaser at L1→L2 (#8), Brody's inspections cadence (#6).
 - **Sep 4 decision, with the agent data as one input among several (Q8):** wo_event counts of "approved in HDPM-OS but had to be re-typed into AppFolio" quantify the retyping pain. The write-path question is now three-way (Q5): **Write API ($850/mo) vs. the anticipated AppFolio MCP vs. keep retyping** — decided on MCP specs/timeline gathered in Phase 0. If retyped touches ≥~40/week and the MCP isn't imminent/suitable for unattended service use, the Write API pays for itself in retyping labor alone.
 
 **Phase 3 — Write-backs + gated features (Oct+, if any write path lands).**
@@ -209,6 +219,7 @@ This folder (`docs/agent-os/`) mirrors maintenance-os conventions: `00` this pla
 - **Brief C** — Slack app + bot + Morning Action Card (with email mirror) *(unblocked by Q1)*
 - **Brief D** — Estimate Chaser (Graph drafts into Cheryl's folder) *(unblocked by Q2/Q3)*
 - **Brief E** — Ops Brief agent (Craig + Matt)
-- Phase 2 briefs (Intake Triage, Zoom SMS day-close, reconciliation, vendor chaser, inspections) gated on the Phase 1 adoption gate and the Sep 4 write-path outcome.
+- **Brief F** — Email Triage agent: `info@` + Cheryl's maintenance lane *(first Phase 2 brief; pull-forward candidate)*
+- Remaining Phase 2 briefs (Intake Triage, Zoom SMS day-close + two-way texting, reconciliation, vendor chaser, inspections) gated on the Phase 1 adoption gate and the Sep 4 write-path outcome.
 
 **The one-sentence version:** ship the plumbing that already exists, freeze the baseline, put seven actionable items a day in front of Cheryl in Slack (mirrored to the email she already lives in) and pre-written chase drafts in her Outlook folder, measure whether humans finally act, and bring those numbers — plus the AppFolio MCP's real specs — to Sep 4 as one strong input among several.

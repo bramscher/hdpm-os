@@ -147,6 +147,35 @@ Jobber/Realm-X evaluations. Consequences:
 
 ---
 
+## Addendum (2026-07-18, post-walkthrough)
+
+Three additional facts from Craig after the 8 questions were recorded:
+
+1. **Alberto is outbound on maintenance essentially all the time** — confirms
+   the SMS-only field channel for him; he is rarely at a desk, so nothing in
+   his flow can assume Slack or AppFolio-at-a-desktop during the day.
+2. **Ashley's scope is wider than "front desk + Haven":** she helps with
+   Haven, **leasing queries**, and **`info@highdesertpm.com` — the company's
+   primary email contact**. The shared `info@` inbox is a front door on par
+   with the phone line, and it currently rides on one person's attention.
+3. **Email triage is critical** for all PMs and for Cheryl's maintenance
+   coordination, and the operation **needs better text/SMS integration and
+   tools**. Recorded as:
+   - A new **Email Triage Agent** (#10) enters the roster: Graph-webhook
+     watcher on `info@` (Ashley as human-in-the-loop) and on Cheryl's
+     maintenance lane first, extending to PM inboxes next. Classify → route →
+     draft; maintenance-request emails feed the Intake Triage agent as WO
+     proposals; tenant/owner-facing replies inherit the Q2 hard wall (L2).
+   - **Two-way texting** becomes a first-class channel capability, not just
+     Alberto's day-close: the Zoom Phone SMS adapter should support
+     send-on-tap tenant/vendor texting from Cheryl's cards, under the same
+     Q2 ceilings (vendor L3 max, tenant L2 wall). *Interpretation note:
+     "better text integration" is read as SMS/texting tooling — flag if this
+     meant something else (e.g. rich text in cards).*
+   - Priority: first item of Phase 2, and the named candidate to pull into
+     Phase 1 if the team picks it at the Phase 0 session or Phase 1 lands
+     early.
+
 ## Consolidated action items
 
 1. Verify Zoom Phone SMS API inbound webhook support (blocks Agent #4 design).
@@ -156,3 +185,7 @@ Jobber/Realm-X evaluations. Consequences:
 5. Fix the Bryce hours discrepancy in the Notion roles page (62 vs 2 hrs/month).
 6. Confirm with Cheryl which surface she prefers acting from (Slack card vs
    email mirror) after two weeks of Phase 1 data.
+7. Verify Graph webhook/delegated access to the `info@highdesertpm.com` shared
+   mailbox (blocks the Email Triage Agent, #10).
+8. Confirm with Craig what "better text integration" should cover beyond
+   two-way Zoom SMS from cards (see Addendum interpretation note).
