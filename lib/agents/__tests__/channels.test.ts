@@ -37,11 +37,9 @@ describe('adapter registry', () => {
   });
 
   it('unwired channels fail cleanly with a reason', async () => {
-    for (const channel of ['sms_zoom', 'outlook_draft'] as const) {
-      const outcome = await getAdapter(channel).send(msg({ channel }));
-      expect(outcome.status).toBe('failed');
-      expect(outcome.error).toContain('not configured');
-    }
+    const outcome = await getAdapter('sms_zoom').send(msg({ channel: 'sms_zoom' }));
+    expect(outcome.status).toBe('failed');
+    expect(outcome.error).toContain('not configured');
   });
 
   it('notConfiguredAdapter is inert', async () => {
@@ -68,6 +66,87 @@ describe('sendEmail', () => {
     const outcome = await getAdapter('email').send(msg({ channel: 'email', recipient_address: null }));
     expect(outcome.status).toBe('skipped');
     expect(outcome.error).toContain('recipient_address');
+  });
+});
+
+describe('outlook_draft adapter', () => {
+  it('skips without a mailbox (recipient_address)', async () => {
+    const outcome = await getAdapter('outlook_draft').send(
+      msg({ channel: 'outlook_draft', recipient_address: null })
+    );
+    expect(outcome.status).toBe('skipped');
+    expect(outcome.error).toContain('mailbox');
+  });
+
+  it('skips under AGENT_GRAPH_DRYRUN=1 before any network call', async () => {
+    vi.stubEnv('AGENT_GRAPH_DRYRUN', '1');
+    const outcome = await getAdapter('outlook_draft').send(
+      msg({ channel: 'outlook_draft', recipient_address: 'cheryl@highdesertpm.com' })
+    );
+    expect(outcome).toEqual({ status: 'skipped', error: 'AGENT_GRAPH_DRYRUN=1' });
+  });
+
+  it('skips when the Graph app-only env vars are missing', async () => {
+    vi.stubEnv('AZURE_TENANT_ID', '');
+    vi.stubEnv('AGENT_GRAPH_CLIENT_ID', '');
+    vi.stubEnv('AGENT_GRAPH_CLIENT_SECRET', '');
+    const outcome = await getAdapter('outlook_draft').send(
+      msg({ channel: 'outlook_draft', recipient_address: 'cheryl@highdesertpm.com' })
+    );
+    expect(outcome.status).toBe('skipped');
+    expect(outcome.error).toContain('not configured');
+  });
+
+  it('creates a draft via Graph and returns the message id', async () => {
+    vi.stubEnv('AZURE_TENANT_ID', 'tenant-1');
+    vi.stubEnv('AGENT_GRAPH_CLIENT_ID', 'client-1');
+    vi.stubEnv('AGENT_GRAPH_CLIENT_SECRET', 'secret-1');
+    const calls: { url: string; body: string }[] = [];
+    vi.stubGlobal('fetch', async (url: string, init: { body: string }) => {
+      calls.push({ url, body: String(init.body) });
+      if (url.includes('login.microsoftonline.com')) {
+        return {
+          ok: true,
+          json: async () => ({ access_token: 'tok', expires_in: 3600 }),
+        };
+      }
+      return { ok: true, json: async () => ({ id: 'AAMkAGraphId' }) };
+    });
+
+    const outcome = await getAdapter('outlook_draft').send(
+      msg({
+        channel: 'outlook_draft',
+        recipient_address: 'cheryl@highdesertpm.com',
+        subject: 'Bid follow-up',
+        payload: { html: '<p>hi</p>', to_recipients: ['bids@firkus.com'] },
+      })
+    );
+    expect(outcome).toEqual({ status: 'sent', message_id: 'AAMkAGraphId' });
+    const draftCall = calls.find((c) => c.url.includes('graph.microsoft.com'))!;
+    expect(draftCall.url).toContain('/users/cheryl%40highdesertpm.com/messages');
+    const body = JSON.parse(draftCall.body);
+    expect(body.toRecipients).toEqual([{ emailAddress: { address: 'bids@firkus.com' } }]);
+    expect(body.body.contentType).toBe('HTML');
+    vi.unstubAllGlobals();
+  });
+
+  it('surfaces Graph errors (e.g. ApplicationAccessPolicy 403) as failed', async () => {
+    vi.stubEnv('AZURE_TENANT_ID', 'tenant-1');
+    vi.stubEnv('AGENT_GRAPH_CLIENT_ID', 'client-1');
+    vi.stubEnv('AGENT_GRAPH_CLIENT_SECRET', 'secret-1');
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url.includes('login.microsoftonline.com')) {
+        return { ok: true, json: async () => ({ access_token: 'tok', expires_in: 3600 }) };
+      }
+      return { ok: false, status: 403, text: async () => 'AccessDenied by policy' };
+    });
+    const outcome = await getAdapter('outlook_draft').send(
+      msg({ channel: 'outlook_draft', recipient_address: 'craig@highdesertpm.com' })
+    );
+    expect(outcome.status).toBe('failed');
+    expect(outcome.error).toContain('graph 403');
+    expect(outcome.error).toContain('AccessDenied');
+    vi.unstubAllGlobals();
   });
 });
 

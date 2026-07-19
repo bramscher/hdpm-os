@@ -224,7 +224,7 @@ This folder (`docs/agent-os/`) mirrors maintenance-os conventions: `00` this pla
 - **Brief A** — metrics_snapshot + baseline freeze + TW11 owner fix *(SHIPPED 2026-07-18/19; migration `20260718_metrics_snapshot.sql` pending Craig's SQL-editor run → done; baseline freeze via `?freezeBaseline=1` after deploy)*
 - **Brief B** — agent_proposal / agent_outbox / agent_config / staff migrations + channel adapters + service-auth + webhook signature verification *(SHIPPED 2026-07-19; migrations `20260719_*.sql` to run in SQL editor; conventions in `02-brief-b-conventions.md`; Craig fills staff contact fields + sets `HDPM_SERVICE_TOKEN` if unset)*
 - **Brief C** — Slack app + bot + Morning Action Card (with email mirror) *(unblocked by Q1; consumes Brief B's auth path)*
-- **Brief D** — Estimate Chaser (Graph drafts into Cheryl's folder) *(policy unblocked by Q2/Q3; **technically blocked on the Phase 0 Azure app-only Mail.ReadWrite registration**)*
+- **Brief D** — Estimate Chaser (Graph drafts into Cheryl's folder) *(SHIPPED 2026-07-19; Azure app-only Mail.ReadWrite registration done — "HDPM-OS Agent Mail", ApplicationAccessPolicy-scoped to cheryl@ + info@; migration `20260721_estimate_chaser_escalate.sql` to run in SQL editor; `AGENT_GRAPH_DRYRUN=1` available for a staged first run; interim 3×/45d escalation = Slack DM to Craig until Brief E absorbs it)*
 - **Brief E** — Ops Brief agent (Craig + Matt)
 - **Brief F** — Email Triage agent: `info@` + Cheryl's maintenance lane *(first Phase 2 brief; pull-forward candidate)*
 - Remaining Phase 2 briefs (Intake Triage, Zoom SMS day-close + two-way texting, reconciliation, vendor chaser, inspections) gated on the Phase 1 adoption gate and the Sep 4 write-path outcome.

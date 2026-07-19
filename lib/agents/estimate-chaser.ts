@@ -1,0 +1,364 @@
+/**
+ * Estimate Chaser — pure logic. Brief D, Agent #3 in
+ * docs/agent-os/00-DRAFT-master-plan.md.
+ *
+ * Turns the TW11 stuck-estimates pool into ready-to-send Outlook drafts in
+ * Cheryl's Drafts folder (L1 — she reviews and sends from the client she
+ * already lives in). Two kinds map straight off appfolio_status:
+ *   'estimate requested' → vendor_chase   (draft To: the vendor)
+ *   'estimated'          → owner_approval (draft To: blank — no reliable
+ *                          WO→owner-contact mapping; Cheryl fills it)
+ *
+ * Hard rules encoded here:
+ * - NEVER a dollar amount: the AppFolio v0 API exposes no estimate amounts
+ *   (verified 2026-07-05), so the language never claims one.
+ * - No appfolio_link in draft bodies — drafts are external-facing and the
+ *   link is an internal web-app URL. It stays in proposal payloads and the
+ *   (internal) escalation Slack message.
+ * - HDMS (HDPM-owned vendor, i.e. Alberto) never gets a vendor-relations
+ *   chase draft.
+ *
+ * Everything here is DB-free and fetch-free so it unit-tests like
+ * morning-card.ts. Orchestration lives in estimate-chaser-run.ts.
+ */
+
+import type { TripwireException } from '@/lib/maintenance/types';
+import { businessDaysBetween } from '@/lib/maintenance/business-days';
+
+export const ESTIMATE_CHASER_AGENT = 'estimate_chaser';
+export const VENDOR_CHASE_ACTION = 'vendor_chase';
+export const OWNER_APPROVAL_ACTION = 'owner_approval';
+/** Interim Craig escalation (L3 self-addressed reporting) until Brief E's Ops Brief absorbs it. */
+export const ESCALATE_ACTION = 'escalate';
+
+/** Never double-chase the same WO inside this window (either chase kind). */
+export const CHASE_COOLDOWN_BUSINESS_DAYS = 3;
+/** Chased this many times → roll up to Craig instead of chasing again. */
+export const ESCALATE_CHASE_COUNT = 3;
+/**
+ * Aged past this → roll up to Craig. Calendar days (the spec's ">45d" reads
+ * as real time stuck, not ~9 weeks of business days), measured from the WO's
+ * entry into its current status — the same clock TW11 uses.
+ */
+export const ESCALATE_AGE_CALENDAR_DAYS = 45;
+/** Re-escalate the same WO at most about weekly. */
+export const ESCALATE_COOLDOWN_BUSINESS_DAYS = 5;
+
+export type ChaseKind = typeof VENDOR_CHASE_ACTION | typeof OWNER_APPROVAL_ACTION;
+
+/** The work_orders columns the chaser needs (MaintWorkOrder satisfies this). */
+export interface WorkOrderLite {
+  id: string;
+  wo_number: string | null;
+  property_name: string;
+  property_address: string | null;
+  unit_name: string | null;
+  description: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  appfolio_status: string | null;
+  appfolio_link: string | null;
+}
+
+export interface ChaseCandidate {
+  workOrderId: string;
+  kind: ChaseKind;
+  woNumber: string | null;
+  propertyName: string | null;
+  propertyAddress: string | null;
+  unitName: string | null;
+  description: string | null;
+  vendorId: string | null;
+  vendorName: string | null;
+  /** Internal-only — never rendered into draft bodies. */
+  appfolioLink: string | null;
+  /** Business days in status, from the TW11 exception. */
+  ageBusinessDays: number;
+  /** Calendar days since status entry — drives the 45d escalation rule. */
+  ageCalendarDays: number;
+}
+
+const INTERNAL_VENDOR_NAME_RE = /high desert maintenance/i;
+
+function isInternalVendor(wo: WorkOrderLite, internalVendorIds: string[]): boolean {
+  if (wo.vendor_id && internalVendorIds.includes(wo.vendor_id)) return true;
+  return !!wo.vendor_name && INTERNAL_VENDOR_NAME_RE.test(wo.vendor_name);
+}
+
+function kindFor(wo: WorkOrderLite): ChaseKind {
+  const status = (wo.appfolio_status || '').toLowerCase().trim();
+  if (status === 'estimate requested') return VENDOR_CHASE_ACTION;
+  // 'estimated' — and source-(a) approval-record WOs in any other status —
+  // are waiting on a decision, not a vendor bid.
+  return OWNER_APPROVAL_ACTION;
+}
+
+/**
+ * Classify TW11 exceptions into chase candidates. Dedupes to one candidate
+ * per WO; drops exceptions whose WO row is missing (nothing to draft from);
+ * routes internal-vendor (HDMS) bid chases to skippedInternal — nudging
+ * Alberto is the Vendor Chaser's job, never a vendor-relations email.
+ */
+export function classifyPool(
+  exceptions: TripwireException[],
+  wosById: Map<string, WorkOrderLite>,
+  internalVendorIds: string[],
+  calendarAgeByWo: Map<string, number>
+): { candidates: ChaseCandidate[]; skippedInternal: ChaseCandidate[] } {
+  const candidates: ChaseCandidate[] = [];
+  const skippedInternal: ChaseCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const ex of exceptions) {
+    if (ex.tripwire !== 11 || !ex.workOrderId || seen.has(ex.workOrderId)) continue;
+    const wo = wosById.get(ex.workOrderId);
+    if (!wo) continue;
+    seen.add(ex.workOrderId);
+
+    const kind = kindFor(wo);
+    const candidate: ChaseCandidate = {
+      workOrderId: wo.id,
+      kind,
+      woNumber: wo.wo_number,
+      propertyName: wo.property_name || null,
+      propertyAddress: wo.property_address,
+      unitName: wo.unit_name,
+      description: wo.description || null,
+      vendorId: wo.vendor_id,
+      vendorName: wo.vendor_name,
+      appfolioLink: wo.appfolio_link,
+      ageBusinessDays: ex.ageDays ?? 0,
+      ageCalendarDays: calendarAgeByWo.get(wo.id) ?? ex.ageDays ?? 0,
+    };
+
+    if (kind === VENDOR_CHASE_ACTION && isInternalVendor(wo, internalVendorIds)) {
+      skippedInternal.push(candidate);
+    } else {
+      candidates.push(candidate);
+    }
+  }
+
+  return { candidates, skippedInternal };
+}
+
+// ============================================
+// Chase decision
+// ============================================
+
+export interface ChaseHistory {
+  /** Prior chase proposals of this candidate's kind (non-expired). */
+  chaseCount: number;
+  /** Most recent chase proposal across BOTH kinds — a status flip must not restart chasing immediately. */
+  lastChaseAt: Date | null;
+  lastEscalateAt: Date | null;
+}
+
+export type ChaseDecision =
+  | { action: 'chase' }
+  | { action: 'skip'; reason: 'cooldown' | 'escalation_cooldown' }
+  | { action: 'escalate'; reason: 'chased_3x' | 'aged_45d' };
+
+/** Precedence: escalate > cooldown > chase. Pure. */
+export function decideChase(c: ChaseCandidate, h: ChaseHistory, now: Date): ChaseDecision {
+  const shouldEscalate =
+    h.chaseCount >= ESCALATE_CHASE_COUNT || c.ageCalendarDays > ESCALATE_AGE_CALENDAR_DAYS;
+  if (shouldEscalate) {
+    if (
+      h.lastEscalateAt &&
+      businessDaysBetween(h.lastEscalateAt, now) < ESCALATE_COOLDOWN_BUSINESS_DAYS
+    ) {
+      return { action: 'skip', reason: 'escalation_cooldown' };
+    }
+    return {
+      action: 'escalate',
+      reason: h.chaseCount >= ESCALATE_CHASE_COUNT ? 'chased_3x' : 'aged_45d',
+    };
+  }
+  if (h.lastChaseAt && businessDaysBetween(h.lastChaseAt, now) < CHASE_COOLDOWN_BUSINESS_DAYS) {
+    return { action: 'skip', reason: 'cooldown' };
+  }
+  return { action: 'chase' };
+}
+
+// ============================================
+// Draft templates
+// ============================================
+
+function escapeHtml(s: string): string {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+// Brand constants matching lib/maintenance/digest.ts.
+const GR = '#2f7d32';
+const HAIR = '#e5e7eb';
+const MUTED = '#6b7280';
+
+function ordinal(n: number): string {
+  if (n === 2) return 'second';
+  if (n === 3) return 'third';
+  return `${n}th`;
+}
+
+/** "WO #123 — 456 Main St, Unit 4" (address preferred; falls back to property name). */
+function woRef(c: ChaseCandidate): string {
+  const where = c.propertyAddress || c.propertyName || 'property';
+  const unit = c.unitName ? `, Unit ${c.unitName}` : '';
+  return `${c.woNumber ? `WO #${c.woNumber} — ` : ''}${where}${unit}`;
+}
+
+function detailBlockHtml(c: ChaseCandidate): string {
+  return `
+  <table style="border:1px solid ${HAIR};border-left:3px solid ${GR};border-collapse:collapse;width:100%;font-size:14px;margin:12px 0;">
+    <tr><td style="padding:10px 12px;">
+      <strong>${escapeHtml(woRef(c))}</strong><br/>
+      <span style="color:${MUTED};">${escapeHtml(c.description ?? '')}</span>
+    </td></tr>
+  </table>`;
+}
+
+const SIGNATURE_TEXT = ['Thank you,', 'Cheryl', 'High Desert Property Management'].join('\n');
+const SIGNATURE_HTML = `<p style="margin:16px 0 0;">Thank you,<br/>Cheryl<br/>High Desert Property Management</p>`;
+
+function wrapHtml(paragraphs: string[]): string {
+  return `
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:640px;color:#111827;font-size:14px;line-height:1.5;">
+  ${paragraphs.join('\n  ')}
+  ${SIGNATURE_HTML}
+</div>`;
+}
+
+export interface DraftContent {
+  subject: string;
+  html: string;
+  text: string;
+  toRecipients: string[];
+}
+
+/**
+ * Vendor bid chase. To: the vendor when their email is known, else blank for
+ * Cheryl to fill. Round ≥ 2 acknowledges the earlier follow-up.
+ */
+export function buildVendorChaseDraft(
+  c: ChaseCandidate,
+  vendorEmail: string | null,
+  chaseRound: number
+): DraftContent {
+  const subject = `Bid follow-up — ${woRef(c)}`;
+  const greeting = `Hi ${c.vendorName || 'there'},`;
+  const opener =
+    chaseRound >= 2
+      ? `Just checking in again — this is our ${ordinal(chaseRound)} follow-up on the estimate we requested for the work order below (${c.ageBusinessDays} business days now).`
+      : `Following up on the estimate we requested for the work order below — we haven't received your bid yet (${c.ageBusinessDays} business days).`;
+  const ask = `Could you send over your bid, or let us know if you're unable to take this job so we can plan accordingly?`;
+
+  const html = wrapHtml([
+    `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
+    `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
+    detailBlockHtml(c),
+    `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
+  ]);
+
+  const text = [
+    greeting,
+    '',
+    opener,
+    '',
+    woRef(c),
+    c.description ?? '',
+    '',
+    ask,
+    '',
+    SIGNATURE_TEXT,
+  ].join('\n');
+
+  return { subject, html, text, toRecipients: vendorEmail ? [vendorEmail] : [] };
+}
+
+/**
+ * Owner approval request. To: always blank — Cheryl addresses it to the
+ * property owner. Never states an amount (none is available, by design).
+ */
+export function buildOwnerApprovalDraft(c: ChaseCandidate, chaseRound: number): DraftContent {
+  const subject = `Approval needed — ${woRef(c)}`;
+  const greeting = `Hi [owner name],`;
+  const opener =
+    chaseRound >= 2
+      ? `Just checking in again on the repair approval below — it has been pending ${c.ageBusinessDays} business days and we'd love to get it moving.`
+      : `We have an estimate in hand for the repair below and are waiting on your go-ahead (pending ${c.ageBusinessDays} business days).`;
+  const ask = `Could you reply with your approval — or any questions — so we can get the work scheduled?`;
+
+  const html = wrapHtml([
+    `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
+    `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
+    detailBlockHtml(c),
+    `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
+  ]);
+
+  const text = [
+    greeting,
+    '',
+    opener,
+    '',
+    woRef(c),
+    c.description ?? '',
+    '',
+    ask,
+    '',
+    SIGNATURE_TEXT,
+  ].join('\n');
+
+  return { subject, html, text, toRecipients: [] };
+}
+
+// ============================================
+// Escalation (internal — Slack DM to Craig)
+// ============================================
+
+export interface EscalationItem {
+  candidate: ChaseCandidate;
+  reason: 'chased_3x' | 'aged_45d';
+  chaseCount: number;
+}
+
+function reasonLabel(item: EscalationItem): string {
+  return item.reason === 'chased_3x'
+    ? `chased ${item.chaseCount}× with no movement`
+    : `${item.candidate.ageCalendarDays} days stuck`;
+}
+
+/** Internal surface — the AppFolio link IS included here. */
+export function buildEscalationSlack(
+  items: EscalationItem[],
+  dateStr: string
+): { text: string; blocks: unknown[] } {
+  const text = `🚨 Estimate Chaser — ${items.length} stuck estimate${items.length === 1 ? '' : 's'} need${items.length === 1 ? 's' : ''} your eyes (${dateStr})`;
+  const blocks: unknown[] = [
+    { type: 'section', text: { type: 'mrkdwn', text: `*${text}*` } },
+    ...items.map((item) => {
+      const c = item.candidate;
+      const kind = c.kind === VENDOR_CHASE_ACTION ? 'vendor bid' : 'owner approval';
+      const link = c.appfolioLink ? ` · <${c.appfolioLink}|AppFolio>` : '';
+      return {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${woRef(c)}*\n${kind} · ${reasonLabel(item)} · ${c.ageBusinessDays} business days in status${link}`,
+        },
+      };
+    }),
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: 'Escalated by the Estimate Chaser: chased 3× or >45 days stuck. These stop getting auto-chased until they move.',
+        },
+      ],
+    },
+  ];
+  return { text, blocks };
+}
