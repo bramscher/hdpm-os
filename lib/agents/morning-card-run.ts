@@ -303,7 +303,7 @@ export async function runMorningCard(opts: {
   // Email mirror to Cheryl.
   const emailTo = cheryl?.email ?? null;
   if (emailTo) {
-    const baseUrl = process.env.NEXTAUTH_URL || 'https://hdpm-os.vercel.app';
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://hdpmchat.highdesertpm.com';
     const mail = buildCardEmailHtml(header, items, baseUrl);
     await enqueueOutbox({
       channel: 'email',
