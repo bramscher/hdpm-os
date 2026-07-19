@@ -6,9 +6,10 @@ export const maxDuration = 300;
 /**
  * POST /api/agents/cron/morning-card
  *
- * Weekday cron (14:30 UTC ≈ 7:30 AM PT in summer — UTC drift in winter is the
- * accepted repo-wide cron limitation). Sends Cheryl's Morning Action Card
- * (Slack, interactive) + Craig's read-only copy + the email mirror.
+ * Weekday cron (13:30 UTC ≈ 6:30 AM PT in summer, before staff arrive at 7 —
+ * UTC drift in winter is the accepted repo-wide cron limitation). Sends
+ * Cheryl's Morning Action Card (Slack, interactive) + Craig's read-only copy
+ * + the email mirror.
  *
  * Query flags:
  * - ?nudge=1  — 1 PM pass: one (and only one) nudge iff every card item is

@@ -46,7 +46,7 @@
     },
     {
       "path": "/api/agents/cron/morning-card",
-      "schedule": "30 14 * * 1-5"
+      "schedule": "30 13 * * 1-5"
     },
     {
       "path": "/api/agents/cron/morning-card?nudge=1",
