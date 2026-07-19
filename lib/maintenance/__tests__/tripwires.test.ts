@@ -403,10 +403,10 @@ describe('tripwire 11 — approval pending > 3 business days', () => {
     };
   }
 
-  it('fires after 3 business days, owner Jen', () => {
+  it('fires after 3 business days, owner Cheryl (role correction 2026-07-18)', () => {
     const ex = tripwire11(snapshot({ approvals: [approval()] }));
     expect(ex).toHaveLength(1);
-    expect(ex[0].owner).toBe('Jen');
+    expect(ex[0].owner).toBe('Cheryl');
     expect(ex[0].item).toContain('R. Simmons');
   });
 
@@ -430,7 +430,7 @@ describe('tripwire 11 — approval pending > 3 business days', () => {
     });
     const ex = tripwire11(s);
     expect(ex).toHaveLength(1);
-    expect(ex[0].owner).toBe('Jen');
+    expect(ex[0].owner).toBe('Cheryl');
     expect(ex[0].item).toContain('Estimate Requested 5d');
     expect(ex[0].item).toContain('vendor bid outstanding');
   });

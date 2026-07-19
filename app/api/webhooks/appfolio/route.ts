@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as jose from 'jose';
+import { verifyAppfolioSignature } from '@/lib/webhook-verify';
 import {
   fetchWorkOrderById,
   fetchPropertyById,
@@ -11,56 +11,6 @@ import {
   upsertSingleWorkOrder,
 } from '@/lib/work-orders';
 import { getSupabaseAdmin } from '@/lib/supabase';
-
-// ============================================
-// AppFolio JWKS (cached remote key set)
-// ============================================
-
-const JWKS = jose.createRemoteJWKSet(
-  new URL('https://api.appfolio.com/.well-known/jwks.json')
-);
-
-// ============================================
-// JWS Signature Verification
-// ============================================
-
-/**
- * Verify the detached JWS signature from AppFolio.
- *
- * AppFolio sends X-JWS-Signature in detached payload format:
- *   BASE64URL(header)..BASE64URL(signature)
- *
- * We reconstruct the full compact JWS by base64url-encoding
- * the raw request body and inserting it between the two parts.
- *
- * Algorithm: RSASSA-PSS-SHA-256 (PS256)
- * JWKS: https://api.appfolio.com/.well-known/jwks.json
- */
-async function verifySignature(
-  rawBody: Buffer,
-  jwsSignature: string
-): Promise<boolean> {
-  try {
-    const [encodedHeader, encodedSignature] = jwsSignature.split('..');
-    if (!encodedHeader || !encodedSignature) {
-      console.error('[Webhook] Malformed X-JWS-Signature header');
-      return false;
-    }
-
-    // Base64url-encode the raw body (unpadded, per RFC 4648)
-    const encodedPayload = rawBody.toString('base64url').replaceAll('=', '');
-
-    // Reconstruct the full compact JWS
-    const message = `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
-
-    // Verify against AppFolio's public keys
-    await jose.compactVerify(message, JWKS);
-    return true;
-  } catch (error) {
-    console.error('[Webhook] Signature verification failed:', error);
-    return false;
-  }
-}
 
 // ============================================
 // Webhook Payload Type
@@ -191,7 +141,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Verify JWS signature against AppFolio public keys
-    const isValid = await verifySignature(rawBody, jwsSignature);
+    const isValid = await verifyAppfolioSignature(rawBody, jwsSignature);
     if (!isValid) {
       return NextResponse.json(
         { error: 'Invalid signature' },

@@ -307,8 +307,10 @@ export function tripwire11(snapshot: TripwireSnapshot): TripwireException[] {
         tripwire: 11 as const,
         label: TRIPWIRE_LABELS[11],
         item: `${a.kind} approval from ${a.requested_of}${wo ? ` — ${woLabel(wo)}` : ''} (day ${days})`,
-        fixRequired: 'PM follows up with decision-maker today',
-        owner: 'Jen',
+        fixRequired: 'Follow up with decision-maker today',
+        // Role correction 2026-07-18 (docs/agent-os/01 Q3): Cheryl owns the
+        // estimate/approval pool end-to-end; PMs do no maintenance work.
+        owner: 'Cheryl',
         workOrderId: a.work_order_id,
         ageDays: days,
       };
@@ -331,7 +333,7 @@ export function tripwire11(snapshot: TripwireSnapshot): TripwireException[] {
         label: TRIPWIRE_LABELS[11],
         item: `[${wo.appfolio_status} ${days}d] ${woLabel(wo)} (${est.waitingOn})`,
         fixRequired: est.fix,
-        owner: 'Jen',
+        owner: 'Cheryl',
         workOrderId: wo.id,
         ageDays: days,
       };

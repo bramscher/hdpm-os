@@ -32,8 +32,6 @@ const RUNWAY_BUSINESS_DAYS: Record<AiTriage['priority']['recommended'], number> 
   P4: 10, // planned
 };
 
-const ESTIMATE_STATUSES = ['estimate requested', 'estimated'];
-
 export interface DerivedProposal {
   proposed_priority_class: AiTriage['priority']['recommended'];
   proposed_next_action_date: string;
@@ -55,11 +53,9 @@ export function proposalFrom(
     date = nextBusinessDay(date);
   }
 
-  const isEstimateStatus = ESTIMATE_STATUSES.includes(
-    (wo.appfolio_status || '').toLowerCase().trim()
-  );
-  const owner =
-    triage.blocker.classification === 'OWNER' || isEstimateStatus ? 'Jen' : 'Cheryl';
+  // Role correction 2026-07-18 (docs/agent-os/01 Q3): Cheryl owns vendor
+  // estimates AND owner approvals for maintenance; PMs do no maintenance work.
+  const owner = 'Cheryl';
 
   return {
     proposed_priority_class: priority,

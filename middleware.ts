@@ -9,6 +9,7 @@ const PUBLIC_PREFIXES = [
   "/api/webhooks",
   "/api/kpi/cron", // Vercel cron — protected by CRON_SECRET, not session auth
   "/api/maintenance/cron", // Vercel cron — protected by CRON_SECRET, not session auth
+  "/api/agents", // Agent layer — self-guarded via HDPM_SERVICE_TOKEN or staff session (requireStaffOrService)
 ];
 
 // Admin-only: the entire KPI/financial dashboard and its data APIs.
