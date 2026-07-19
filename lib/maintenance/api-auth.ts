@@ -6,6 +6,9 @@
  */
 
 import { getServerSession } from 'next-auth';
+import type { NextRequest } from 'next/server';
+import { isAgentActor, parseAgentActor } from '@/lib/agents/actor';
+import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
 
 export interface StaffSession {
   email: string;
@@ -18,4 +21,45 @@ export async function requireStaffSession(): Promise<StaffSession | null> {
   const email = session?.user?.email;
   if (!email || !email.endsWith('@highdesertpm.com')) return null;
   return { email, actor: session?.user?.name || email };
+}
+
+// ============================================
+// Agent-layer auth (Brief B): staff session OR service token
+// ============================================
+
+export type AgentCaller =
+  | { kind: 'staff'; actor: string; email: string }
+  | { kind: 'service'; actor: string; agent?: string };
+
+/**
+ * Guard for /api/agents routes (exempted from session middleware — this is
+ * the only gate). Two caller classes:
+ *
+ * 1. Service (agent-service, scripts): `Authorization: Bearer HDPM_SERVICE_TOKEN`
+ *    (same pattern as /api/intake/rental-analysis-request) + `X-Agent-Actor`:
+ *    either 'agent:<name>' or a staff person/email resolved via the staff
+ *    table (that's how a Slack tap relayed by the service carries the human).
+ *    Missing/unresolvable actor → null (401). Unset token env → token path
+ *    always fails (never match empty === empty).
+ * 2. Browser staff: falls back to requireStaffSession().
+ */
+export async function requireStaffOrService(request: NextRequest): Promise<AgentCaller | null> {
+  const serviceToken = process.env.HDPM_SERVICE_TOKEN;
+  const authHeader = request.headers.get('authorization');
+
+  if (authHeader?.startsWith('Bearer ')) {
+    if (!serviceToken || authHeader !== `Bearer ${serviceToken}`) return null;
+    const actorHeader = request.headers.get('x-agent-actor')?.trim();
+    if (!actorHeader) return null;
+    if (isAgentActor(actorHeader)) {
+      return { kind: 'service', actor: actorHeader, agent: parseAgentActor(actorHeader) ?? undefined };
+    }
+    const staff = await resolveStaffByPersonOrEmail(actorHeader);
+    if (!staff) return null;
+    return { kind: 'service', actor: staff.name || staff.email || staff.person };
+  }
+
+  const session = await requireStaffSession();
+  if (!session) return null;
+  return { kind: 'staff', actor: session.actor, email: session.email };
 }

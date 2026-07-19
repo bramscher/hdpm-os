@@ -10,9 +10,9 @@
  *   MAINT_DIGEST_FROM — optional From, default below
  */
 
-import { Resend } from 'resend';
 import type { Digest } from './digest';
 import { getActiveRecipients } from './recipients';
+import { sendEmail } from '@/lib/agents/channels/email';
 
 const DEFAULT_FROM = 'HDMS Maintenance <maintenance@highdesertpm.com>';
 
@@ -24,8 +24,7 @@ export interface SendResult {
 }
 
 export async function sendDigestEmail(owner: string, digest: Digest): Promise<SendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
+  if (!process.env.RESEND_API_KEY) {
     return { owner, sent: false, reason: 'RESEND_API_KEY not configured' };
   }
 
@@ -35,21 +34,15 @@ export async function sendDigestEmail(owner: string, digest: Digest): Promise<Se
     return { owner, sent: false, reason: `"${owner}" not opted in (Exceptions view → Digest recipients)` };
   }
 
-  try {
-    const resend = new Resend(apiKey);
-    const { error } = await resend.emails.send({
-      from: process.env.MAINT_DIGEST_FROM || DEFAULT_FROM,
-      to,
-      subject: digest.subject,
-      html: digest.html,
-      text: digest.text,
-    });
-    if (error) {
-      return { owner, to, sent: false, reason: error.message };
-    }
-    return { owner, to, sent: true };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { owner, to, sent: false, reason: message };
+  const outcome = await sendEmail({
+    from: process.env.MAINT_DIGEST_FROM || DEFAULT_FROM,
+    to,
+    subject: digest.subject,
+    html: digest.html,
+    text: digest.text,
+  });
+  if (outcome.status !== 'sent') {
+    return { owner, to, sent: false, reason: outcome.error ?? outcome.status };
   }
+  return { owner, to, sent: true };
 }

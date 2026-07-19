@@ -1,42 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as jose from 'jose';
+import { verifyAppfolioSignature } from '@/lib/webhook-verify';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { SOURCE_BUCKETS } from '@/lib/appfolio-kpi';
-
-// ============================================
-// AppFolio JWKS (cached remote key set)
-// ============================================
-
-const JWKS = jose.createRemoteJWKSet(
-  new URL('https://api.appfolio.com/.well-known/jwks.json')
-);
-
-// ============================================
-// JWS Signature Verification
-// (same detached payload pattern as /api/webhooks/appfolio)
-// ============================================
-
-async function verifySignature(
-  rawBody: Buffer,
-  jwsSignature: string
-): Promise<boolean> {
-  try {
-    const [encodedHeader, encodedSignature] = jwsSignature.split('..');
-    if (!encodedHeader || !encodedSignature) {
-      console.error('[Leads Webhook] Malformed X-JWS-Signature header');
-      return false;
-    }
-
-    const encodedPayload = rawBody.toString('base64url').replaceAll('=', '');
-    const message = `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
-
-    await jose.compactVerify(message, JWKS);
-    return true;
-  } catch (error) {
-    console.error('[Leads Webhook] Signature verification failed:', error);
-    return false;
-  }
-}
 
 // ============================================
 // Webhook Payload Type
@@ -150,7 +115,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Verify JWS signature
-    const isValid = await verifySignature(rawBody, jwsSignature);
+    const isValid = await verifyAppfolioSignature(rawBody, jwsSignature);
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }

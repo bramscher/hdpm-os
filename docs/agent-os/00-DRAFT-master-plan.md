@@ -221,8 +221,8 @@ The before/after on this table *is* the sales deck. It also governs spend: per Q
 
 This folder (`docs/agent-os/`) mirrors maintenance-os conventions: `00` this plan, `01-questions-and-answers` (done), then `02-architecture`, `03-agent-roster`, `04-rollout-waves`, `05-metrics-and-product` as the build docs. Then one brief per Claude Code session, plan mode first, in order:
 
-- **Brief A** — metrics_snapshot + baseline freeze + TW11 owner fix *(safe to run now; extends the existing `kpi_snapshots` cron pattern)*
-- **Brief B** — agent_proposal / agent_outbox / agent_config migrations + channel adapter interface + service-auth path, webhook signature verification, and the Slack/phone→staff identity map *(safe to run now)*
+- **Brief A** — metrics_snapshot + baseline freeze + TW11 owner fix *(SHIPPED 2026-07-18/19; migration `20260718_metrics_snapshot.sql` pending Craig's SQL-editor run → done; baseline freeze via `?freezeBaseline=1` after deploy)*
+- **Brief B** — agent_proposal / agent_outbox / agent_config / staff migrations + channel adapters + service-auth + webhook signature verification *(SHIPPED 2026-07-19; migrations `20260719_*.sql` to run in SQL editor; conventions in `02-brief-b-conventions.md`; Craig fills staff contact fields + sets `HDPM_SERVICE_TOKEN` if unset)*
 - **Brief C** — Slack app + bot + Morning Action Card (with email mirror) *(unblocked by Q1; consumes Brief B's auth path)*
 - **Brief D** — Estimate Chaser (Graph drafts into Cheryl's folder) *(policy unblocked by Q2/Q3; **technically blocked on the Phase 0 Azure app-only Mail.ReadWrite registration**)*
 - **Brief E** — Ops Brief agent (Craig + Matt)
