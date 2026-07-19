@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { FileText, BarChart3, Home, MessageCircle, LogOut, ChevronRight, ChevronLeft, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench } from "lucide-react";
+import { FileText, BarChart3, Home, MessageCircle, LogOut, ChevronRight, ChevronLeft, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -20,6 +20,12 @@ const NAV_ITEMS = [
     icon: Activity,
     matchPrefix: "/dashboard",
     adminOnly: true,
+  },
+  {
+    label: "Agents",
+    href: "/agents",
+    icon: Bot,
+    matchPrefix: "/agents",
   },
   {
     label: "MaintOS",
