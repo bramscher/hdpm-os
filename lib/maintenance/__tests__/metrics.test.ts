@@ -5,6 +5,7 @@ import {
   exceptionsMetric,
   isHumanAction,
   staffActionsMetric,
+  retypeTouchesMetric,
   transitionsFrom,
   statusSpells,
   pairedDurationsDays,
@@ -96,6 +97,25 @@ describe('staffActionsMetric', () => {
       'cheryl@highdesertpm.com': 1,
       'penny@highdesertpm.com': 1,
     });
+  });
+});
+
+// ── retype touches (Sep 4 trigger) ──
+
+describe('retypeTouchesMetric', () => {
+  it('counts human stage_change/assign only, in 7d and 28d windows', () => {
+    const events = [
+      event({ event_type: 'stage_change', created_at: '2026-07-17T12:00:00Z' }), // in 7d
+      event({ event_type: 'assign', created_at: '2026-07-01T12:00:00Z' }), // 28d only
+      event({ event_type: 'stage_change', actor: 'system:sync', created_at: '2026-07-17T12:00:00Z' }),
+      event({ event_type: 'note', created_at: '2026-07-17T12:00:00Z' }), // not a retype type
+      event({ event_type: 'schedule', created_at: '2026-07-17T12:00:00Z' }), // HDPM-only field
+    ];
+    const { metric, value } = retypeTouchesMetric(events, NOW);
+    expect(metric).toBe('appfolio_retype_touches');
+    expect(value.last7Days).toBe(1);
+    expect(value.last28Days).toBe(2);
+    expect(value.weeklyTarget).toBe(40);
   });
 });
 

@@ -94,6 +94,31 @@ export function staffActionsMetric(events: MetricEventRow[], now: Date): MetricR
   };
 }
 
+/**
+ * The Sep 4 write-path trigger: human actions in HDPM-OS that imply an
+ * AppFolio-side change someone must re-type by hand (status changes and
+ * owner/tech/vendor assignments — next-action dates and notes are HDPM-OS
+ * concepts with no AppFolio field). Threshold per the master plan: ≥40/week
+ * and the Write API pays for itself in retyping labor.
+ */
+export function retypeTouchesMetric(events: MetricEventRow[], now: Date): MetricRow {
+  const weekAgo = new Date(now.getTime() - 7 * DAY_MS).toISOString();
+  const fourWeeksAgo = new Date(now.getTime() - 28 * DAY_MS).toISOString();
+  const touches = events.filter(
+    (e) =>
+      (e.event_type === 'stage_change' || e.event_type === 'assign') &&
+      !e.actor.startsWith('system:')
+  );
+  return {
+    metric: 'appfolio_retype_touches',
+    value: {
+      last7Days: touches.filter((e) => e.created_at >= weekAgo).length,
+      last28Days: touches.filter((e) => e.created_at >= fourWeeksAgo).length,
+      weeklyTarget: 40,
+    },
+  };
+}
+
 // ============================================
 // Status clocks (Session A pattern): estimate latency + days-to-schedule
 // ============================================
@@ -343,6 +368,7 @@ export async function computeAllMetrics(
     )) as MetricEventRow[];
 
     rows.push(staffActionsMetric(events, now));
+    rows.push(retypeTouchesMetric(events, now));
     const transitions = transitionsFrom(events);
     rows.push(estimateLatencyMetric(transitions, now));
     rows.push(daysToScheduleMetric(transitions));
