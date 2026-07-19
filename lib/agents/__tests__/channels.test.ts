@@ -37,7 +37,7 @@ describe('adapter registry', () => {
   });
 
   it('unwired channels fail cleanly with a reason', async () => {
-    for (const channel of ['slack', 'sms_zoom', 'outlook_draft'] as const) {
+    for (const channel of ['sms_zoom', 'outlook_draft'] as const) {
       const outcome = await getAdapter(channel).send(msg({ channel }));
       expect(outcome.status).toBe('failed');
       expect(outcome.error).toContain('not configured');
@@ -68,5 +68,61 @@ describe('sendEmail', () => {
     const outcome = await getAdapter('email').send(msg({ channel: 'email', recipient_address: null }));
     expect(outcome.status).toBe('skipped');
     expect(outcome.error).toContain('recipient_address');
+  });
+});
+
+describe('slack adapter', () => {
+  it('skips without SLACK_BOT_TOKEN', async () => {
+    vi.stubEnv('SLACK_BOT_TOKEN', '');
+    const outcome = await getAdapter('slack').send(msg({ channel: 'slack', recipient_address: 'U123' }));
+    expect(outcome.status).toBe('skipped');
+    expect(outcome.error).toContain('SLACK_BOT_TOKEN');
+  });
+
+  it('skips without a recipient address', async () => {
+    vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-test');
+    const outcome = await getAdapter('slack').send(msg({ channel: 'slack', recipient_address: null }));
+    expect(outcome.status).toBe('skipped');
+    expect(outcome.error).toContain('recipient_address');
+  });
+
+  it('sends and returns the composite channel:ts message id, passing blocks through', async () => {
+    vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-test');
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal('fetch', async (url: string, init: { body: string }) => {
+      calls.push({ url, body: JSON.parse(init.body) });
+      return {
+        json: async () => ({ ok: true, channel: 'D0ABC', ts: '1721.456' }),
+      };
+    });
+
+    const outcome = await getAdapter('slack').send(
+      msg({ channel: 'slack', recipient_address: 'U123', payload: { blocks: [{ type: 'divider' }] } })
+    );
+    expect(outcome).toEqual({ status: 'sent', message_id: 'D0ABC:1721.456' });
+    expect(calls[0].url).toContain('chat.postMessage');
+    expect(calls[0].body.channel).toBe('U123');
+    expect(calls[0].body.blocks).toEqual([{ type: 'divider' }]);
+    vi.unstubAllGlobals();
+  });
+
+  it('surfaces slack API errors as failed', async () => {
+    vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-test');
+    vi.stubGlobal('fetch', async () => ({
+      json: async () => ({ ok: false, error: 'channel_not_found' }),
+    }));
+    const outcome = await getAdapter('slack').send(msg({ channel: 'slack', recipient_address: 'U123' }));
+    expect(outcome).toEqual({ status: 'failed', error: 'channel_not_found' });
+    vi.unstubAllGlobals();
+  });
+
+  it('treats a thrown fetch as failed', async () => {
+    vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-test');
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('network down');
+    });
+    const outcome = await getAdapter('slack').send(msg({ channel: 'slack', recipient_address: 'U123' }));
+    expect(outcome).toEqual({ status: 'failed', error: 'network down' });
+    vi.unstubAllGlobals();
   });
 });

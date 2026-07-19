@@ -43,6 +43,14 @@
     {
       "path": "/api/maintenance/cron/metrics",
       "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/agents/cron/morning-card",
+      "schedule": "30 14 * * 1-5"
+    },
+    {
+      "path": "/api/agents/cron/morning-card?nudge=1",
+      "schedule": "0 20 * * 1-5"
     }
   ]
 }
