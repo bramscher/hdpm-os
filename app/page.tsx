@@ -84,10 +84,17 @@ interface TodayRoute {
 
 const HDPM_OFFICE = { lat: 44.256798, lng: -121.184346 };
 
-/** Instant hover tooltip for the flagship card's stat chips (native title is too slow). */
+/**
+ * Instant hover tooltip for the flagship card's stat chips (native title is
+ * too slow). Scoped to the chip's own named group (group/stat) — the card
+ * itself is also a Tailwind group for its arrow animation, and a bare
+ * group-hover here would pop every tooltip at once on card hover. Renders
+ * ABOVE the chip: the chips sit at the card's bottom edge and the card is
+ * overflow-hidden, so a below-the-chip tooltip gets clipped.
+ */
 function StatTip({ text }: { text: string }) {
   return (
-    <span className="pointer-events-none absolute left-0 top-full mt-2 z-30 hidden group-hover:block w-64 rounded-lg bg-charcoal-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-lg">
+    <span className="pointer-events-none absolute left-0 bottom-full mb-2 z-30 hidden group-hover/stat:block w-64 rounded-lg bg-charcoal-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-lg">
       {text}
     </span>
   );
@@ -202,7 +209,7 @@ export default function Home() {
             {boardKpis && (
               <div className="mt-5 flex flex-wrap items-center gap-6">
                 <div
-                  className="relative group flex items-center gap-2 text-white cursor-pointer hover:underline"
+                  className="relative group/stat flex items-center gap-2 text-white cursor-pointer hover:underline"
                   onClick={goToBoard("")}
                 >
                   <span className="text-xl font-bold">{boardKpis.open}</span>
@@ -211,7 +218,7 @@ export default function Home() {
                 </div>
                 {boardKpis.pastDue > 0 && (
                   <div
-                    className="relative group flex items-center gap-1.5 text-sm text-white font-medium cursor-pointer hover:underline"
+                    className="relative group/stat flex items-center gap-1.5 text-sm text-white font-medium cursor-pointer hover:underline"
                     onClick={goToBoard("view=exceptions")}
                   >
                     <AlertTriangle className="w-3.5 h-3.5" />
@@ -221,7 +228,7 @@ export default function Home() {
                 )}
                 {boardKpis.aging30Plus > 0 && (
                   <div
-                    className="relative group flex items-center gap-1.5 text-sm text-white/80 cursor-pointer hover:underline"
+                    className="relative group/stat flex items-center gap-1.5 text-sm text-white/80 cursor-pointer hover:underline"
                     onClick={goToBoard("view=aging")}
                   >
                     <Clock className="w-3.5 h-3.5" />
@@ -231,7 +238,7 @@ export default function Home() {
                 )}
                 {boardKpis.p1ThisWeek > 0 && (
                   <div
-                    className="relative group flex items-center gap-1.5 text-sm text-white/80 cursor-pointer hover:underline"
+                    className="relative group/stat flex items-center gap-1.5 text-sm text-white/80 cursor-pointer hover:underline"
                     onClick={goToBoard("view=open&q=P1")}
                   >
                     <Zap className="w-3.5 h-3.5" />
