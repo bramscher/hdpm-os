@@ -216,3 +216,59 @@ export async function deleteExternalContact(externalContactId: string): Promise<
     throw new Error(`Zoom delete contact error (${res.status}): ${text.substring(0, 300)}`);
   }
 }
+
+// ============================================
+// SMS (Brief D.5 — vendor chase by text)
+// ============================================
+
+/**
+ * Outbound SMS via POST /phone/sms/messages (added by Zoom May 2025).
+ * The sender is a fixed identity from env — Cheryl's Zoom line, so vendor
+ * replies land in the Zoom app she already works from:
+ *   ZOOM_SMS_SENDER_USER_ID — Zoom user id (or email) owning the line
+ *   ZOOM_SMS_SENDER_NUMBER  — the SMS-capable number, E.164
+ *
+ * Known tenant-dependent caveat (2025 devforum): some accounts could not get
+ * the SMS write scope on Server-to-Server apps or send on behalf of other
+ * users. The /api/agents/sms-test probe settles it per-tenant; errors here
+ * surface verbatim in agent_outbox.error.
+ */
+
+export function isZoomSmsConfigured(): boolean {
+  return (
+    isZoomConfigured() &&
+    !!process.env.ZOOM_SMS_SENDER_USER_ID &&
+    !!process.env.ZOOM_SMS_SENDER_NUMBER
+  );
+}
+
+export async function sendSms(input: {
+  toPhoneNumber: string; // E.164
+  message: string;
+}): Promise<{ messageId: string | null }> {
+  const senderUserId = process.env.ZOOM_SMS_SENDER_USER_ID;
+  const senderNumber = process.env.ZOOM_SMS_SENDER_NUMBER;
+  if (!senderUserId || !senderNumber) {
+    throw new Error('Zoom SMS sender not configured (ZOOM_SMS_SENDER_USER_ID / ZOOM_SMS_SENDER_NUMBER)');
+  }
+
+  const res = await zoomFetch('/phone/sms/messages', {
+    method: 'POST',
+    body: JSON.stringify({
+      message: input.message,
+      sender: { user_id: senderUserId, phone_number: senderNumber },
+      to_members: [{ phone_number: input.toPhoneNumber }],
+    }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Zoom SMS send error (${res.status}): ${text.substring(0, 300)}`);
+  }
+  try {
+    const data = JSON.parse(text) as { message_id?: string; id?: string };
+    return { messageId: data.message_id ?? data.id ?? null };
+  } catch {
+    return { messageId: null };
+  }
+}

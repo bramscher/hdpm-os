@@ -1531,3 +1531,71 @@ export async function fetchAppFolioPropertiesWithCustomFields(): Promise<
     };
   });
 }
+
+// ============================================
+// Vendor contact field audit (Brief D.5 diagnostics)
+// ============================================
+
+/**
+ * Diagnose why vendor emails come back null: fetch the raw /vendors records
+ * for the given AppFolio vendor ids and report what fields actually exist,
+ * with any email-looking values redacted to x***@domain. Craig confirmed
+ * ~99% of vendors have email+phone in AppFolio, yet extractEmail() finds
+ * few — this tells us the real field name(s) so the extractor can be fixed.
+ */
+export async function auditVendorContactFields(vendorIds: string[]): Promise<
+  {
+    id: string;
+    name: string | null;
+    fieldNames: string[];
+    emailLike: { path: string; redacted: string }[];
+    extractedEmail: string | null;
+    extractedPhone: string | null;
+  }[]
+> {
+  const wanted = new Set(vendorIds);
+  const rows = await fetchAllRaw('/vendors');
+  const out = [];
+
+  const redact = (v: string): string => {
+    const at = v.indexOf('@');
+    if (at <= 0) return 'x***';
+    return `${v[0]}***${v.slice(at)}`;
+  };
+
+  const scan = (value: unknown, path: string, depth: number, found: { path: string; redacted: string }[]) => {
+    if (depth > 3 || found.length >= 10) return;
+    if (typeof value === 'string') {
+      if (/@[^@\s]+\.[^@\s]+/.test(value)) found.push({ path, redacted: redact(value.trim()) });
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((v, i) => scan(v, `${path}[${i}]`, depth + 1, found));
+      return;
+    }
+    if (value && typeof value === 'object') {
+      for (const [k, v] of Object.entries(value as RawRecord)) {
+        scan(v, path ? `${path}.${k}` : k, depth + 1, found);
+      }
+    }
+  };
+
+  for (const r of rows) {
+    const id = asString(r.Id);
+    if (!id || !wanted.has(id)) continue;
+    const emailLike: { path: string; redacted: string }[] = [];
+    scan(r, '', 0, emailLike);
+    out.push({
+      id,
+      name:
+        asString(r.CompanyName) ||
+        [asString(r.FirstName), asString(r.LastName)].filter(Boolean).join(' ') ||
+        null,
+      fieldNames: Object.keys(r),
+      emailLike,
+      extractedEmail: extractEmail(r),
+      extractedPhone: extractPhone(r),
+    });
+  }
+  return out;
+}

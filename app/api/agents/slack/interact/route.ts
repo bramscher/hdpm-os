@@ -5,6 +5,9 @@ import { resolveStaffBySlackId } from '@/lib/agents/staff';
 import { decideProposal } from '@/lib/agents/proposals';
 import { annotateProposalPayload, rebuildCard } from '@/lib/agents/morning-card-run';
 import { parseBlockAction, snoozeDate, isValidYmd } from '@/lib/agents/morning-card';
+import { parseEcActionId, ESTIMATE_CHASER_AGENT, VENDOR_CHASE_SMS_ACTION } from '@/lib/agents/estimate-chaser';
+import { rebuildSmsQueueCard } from '@/lib/agents/estimate-chaser-run';
+import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
 import { updateSlackMessage, splitSlackMessageId } from '@/lib/agents/channels/slack';
 import { updateWorkOrderWorkflow, WorkflowValidationError } from '@/lib/maintenance/workflow-db';
 import { recordEvent } from '@/lib/maintenance/events';
@@ -56,6 +59,14 @@ export async function POST(request: NextRequest) {
     return new NextResponse(null, { status: 200 });
   }
   const actor = staff.name || staff.person;
+
+  // Estimate Chaser namespace (ec:*) — the Text chase queue card (Brief D.5).
+  const rawAction = payload.actions[0] as { action_id?: unknown } | undefined;
+  const ecAction =
+    typeof rawAction?.action_id === 'string' ? parseEcActionId(rawAction.action_id) : null;
+  if (ecAction) {
+    return handleEcAction(ecAction, actor, payload.response_url);
+  }
 
   const action = parseBlockAction(payload.actions[0]);
   if (!action) {
@@ -189,6 +200,139 @@ export async function POST(request: NextRequest) {
       const target = splitSlackMessageId(proposal.channel_message_id);
       if (target) {
         await updateSlackMessage({ ...target, text: card.text, blocks: card.blocks });
+      }
+    }
+  }
+
+  return new NextResponse(null, { status: 200 });
+}
+
+// ── Estimate Chaser (ec:*) — send-on-tap SMS from the Text chase queue ──
+
+/**
+ * sendsms: decide FIRST (double-tap guard), then enqueue + dispatch the
+ * sms_zoom outbox row as the tapping human's action. skip: reject with a
+ * note. Either way the queue card rebuilds from proposal state.
+ */
+async function handleEcAction(
+  action: { kind: 'sendsms' | 'skip'; proposalId: string },
+  actor: string,
+  responseUrl: string | undefined
+): Promise<NextResponse> {
+  const supabase = getSupabaseAdmin();
+  const { data: proposalRow } = await supabase
+    .from('agent_proposal')
+    .select('*')
+    .eq('id', action.proposalId)
+    .maybeSingle();
+  const proposal = proposalRow as AgentProposal | null;
+  if (
+    !proposal ||
+    proposal.agent !== ESTIMATE_CHASER_AGENT ||
+    proposal.action_type !== VENDOR_CHASE_SMS_ACTION ||
+    !proposal.subject_id
+  ) {
+    return new NextResponse(null, { status: 200 });
+  }
+  const pl = proposal.payload as Record<string, unknown>;
+  const chaseDate = typeof pl.chase_date === 'string' ? pl.chase_date : '';
+  const tapTime = new Date().toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  let transientError: { proposalId: string; message: string } | undefined;
+
+  try {
+    if (action.kind === 'skip') {
+      const decided = await decideProposal(action.proposalId, 'rejected', actor);
+      if (decided) {
+        await annotateProposalPayload(action.proposalId, {
+          resolution: `Skipped by ${actor} ${tapTime}`,
+        });
+      }
+    } else {
+      const smsText = typeof pl.sms_text === 'string' ? pl.sms_text : '';
+      const vendorPhone = typeof pl.vendor_phone === 'string' ? pl.vendor_phone : '';
+      if (!smsText || !vendorPhone) {
+        transientError = { proposalId: action.proposalId, message: 'proposal is missing text or phone' };
+      } else {
+        // Decide FIRST — null means already decided (double-tap): never send twice.
+        const decided = await decideProposal(action.proposalId, 'approved', actor);
+        if (decided) {
+          const outboxRow = await enqueueOutbox({
+            proposal_id: action.proposalId,
+            channel: 'sms_zoom',
+            recipient_person: typeof pl.vendor_name === 'string' ? pl.vendor_name : null,
+            recipient_address: vendorPhone,
+            body: smsText,
+            payload: {
+              work_order_id: proposal.subject_id,
+              chase_date: chaseDate,
+              sent_by: actor,
+            },
+          });
+          await dispatchOutbox({ channel: 'sms_zoom' });
+          const { data: sentRow } = await supabase
+            .from('agent_outbox')
+            .select('status, message_id, error')
+            .eq('id', outboxRow.id)
+            .maybeSingle();
+
+          if (sentRow?.status === 'sent') {
+            await annotateProposalPayload(action.proposalId, {
+              resolution: `Text sent by ${actor} ${tapTime}`,
+              sms_message_id: sentRow.message_id,
+            });
+            await recordEvent({
+              work_order_id: proposal.subject_id,
+              event_type: 'note',
+              payload: {
+                note: `Vendor texted re bid chase (${typeof pl.wo_ref === 'string' ? pl.wo_ref : proposal.subject_id})`,
+                source: 'estimate_chaser_sms',
+              },
+              actor,
+            });
+          } else if (sentRow?.status === 'skipped') {
+            await annotateProposalPayload(action.proposalId, {
+              resolution: `Text NOT sent (${sentRow.error ?? 'skipped'}) — tap recorded by ${actor} ${tapTime}`,
+            });
+            transientError = {
+              proposalId: action.proposalId,
+              message: sentRow.error ?? 'send skipped',
+            };
+          } else {
+            await annotateProposalPayload(action.proposalId, {
+              resolution: `Text queued for retry (${sentRow?.error ?? 'send failed'}) — approved by ${actor} ${tapTime}`,
+            });
+            transientError = {
+              proposalId: action.proposalId,
+              message: `send failed, will retry: ${sentRow?.error ?? 'unknown error'}`,
+            };
+          }
+        }
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Agents] ec action failed:', msg);
+    transientError = { proposalId: action.proposalId, message: msg };
+  }
+
+  if (chaseDate) {
+    const card = await rebuildSmsQueueCard(chaseDate, transientError);
+    if (card) {
+      const replaced = await respond(responseUrl, {
+        replace_original: true,
+        text: card.text,
+        blocks: card.blocks,
+      });
+      if (!replaced && proposal.channel_message_id) {
+        const target = splitSlackMessageId(proposal.channel_message_id);
+        if (target) {
+          await updateSlackMessage({ ...target, text: card.text, blocks: card.blocks });
+        }
       }
     }
   }

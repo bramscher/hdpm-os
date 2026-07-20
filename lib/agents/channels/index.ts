@@ -4,10 +4,8 @@
  *
  * SendOutcome mirrors the NoticeResult shape from lib/inspection-notify.ts
  * (status/message_id/error) — the proven sender-agnostic contract.
- * slack (Brief C), email, in_app, and outlook_draft (Brief D) are live;
- * sms_zoom is registered as a not-configured stub until its brief lands: it
- * returns 'failed' so the rows stay visible and retryable, then park at the
- * attempt cap with the reason.
+ * All five channels are live: slack (Brief C), email, in_app,
+ * outlook_draft (Brief D), and sms_zoom (Brief D.5).
  */
 
 import type { AgentChannel, OutboxMessage } from '../types';
@@ -15,6 +13,7 @@ import { emailAdapter } from './email';
 import { inAppAdapter } from './in-app';
 import { outlookDraftAdapter } from './outlook-draft';
 import { slackAdapter } from './slack';
+import { smsZoomAdapter } from './sms-zoom';
 
 export interface SendOutcome {
   status: 'sent' | 'failed' | 'skipped';
@@ -38,7 +37,7 @@ const REGISTRY: Record<AgentChannel, ChannelAdapter> = {
   email: emailAdapter,
   in_app: inAppAdapter,
   slack: slackAdapter,
-  sms_zoom: notConfiguredAdapter('sms_zoom'),
+  sms_zoom: smsZoomAdapter,
   outlook_draft: outlookDraftAdapter,
 };
 
