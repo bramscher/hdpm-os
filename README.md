@@ -23,6 +23,7 @@ The operating system for **High Desert Property Management** (~835 doors across 
   - [Monday Review](#monday-review)
   - [Work Order Detail](#work-order-detail)
   - [Tripwires & Email Digests](#tripwires--email-digests)
+- [Agent-OS (the Agent Team)](#agent-os-the-agent-team)
 - [KPI Dashboard](#kpi-dashboard)
   - [KPI Cards](#kpi-cards)
   - [KPI Trends](#kpi-trends)
@@ -171,6 +172,29 @@ Twelve if-then rules run every weekday at 6 AM PT; each person gets **one email 
 | 11 | Approval or **AppFolio estimate** pending > 3 business days | Jen |
 
 (#1 and #9 await the Haven.AI integration. Full rule table: `docs/maintenance-os/02-functional-spec.md` §5.)
+
+---
+
+## Agent-OS (the Agent Team)
+
+**Sidebar:** Click **Agents** · **Docs:** `docs/agent-os/00-DRAFT-master-plan.md` (the plan) + `docs/agent-os/02-brief-b-conventions.md` (the contract) · **Team guide:** Notion → "SOP: Maintenance Agents"
+
+The agent layer converts the Maintenance OS's *detection* (tripwires, exceptions) into *staff motion* in the channels people already use — Slack, Outlook, and Zoom SMS. Every agent output is an `agent_proposal` row first (audit trail + approval queue), every outbound message goes through `agent_outbox` (channel adapters: `slack`, `email`, `outlook_draft`, `sms_zoom`, `in_app` — all five live), and autonomy is data, not code: `agent_config` holds one row per (agent, action) on the **L0 observe → L1 draft → L2 act-on-tap → L3 act-then-notify → L4 silent** ladder, with per-action ceilings (owner/tenant-facing hard-walled at L2 forever) and a global kill switch (`agent='*', action_type='*', enabled=false`).
+
+**Status (2026-07-20):**
+
+| Agent | What it does | Autonomy | Status |
+|-------|--------------|----------|--------|
+| **Morning Action Card** (Brief C) | Weekday 6:30 AM PT: Cheryl's 7 most important exceptions as a Slack card with Done / Snooze / Set-date / Reassign buttons; Craig gets a read-only copy + email mirror | L2 | ✅ Live |
+| **Estimate Chaser — email** (Brief D) | Weekday 6:45 AM PT: TW11 stuck estimates become ready-to-send Outlook drafts in Cheryl's Drafts folder via app-only Graph (vendor bid chases + owner approval asks; never a dollar amount; 3-business-day no-double-chase cooldown) | L1 | ✅ Live |
+| **Estimate Chaser — SMS** (Brief D.5/D.5b) | Vendor chases go SMS-first when a phone is known: a Slack "Text chase queue" card with per-item [Send text] buttons; taps send from Cheryl's Zoom line via her own OAuth token (Zoom S2S tokens can't send SMS) | L2 | 🟡 Built & deployed; disabled in `agent_config` pending Cheryl's one-time Zoom authorize (`/api/agents/zoom-oauth/start`) |
+| **Escalations → Craig** | Items chased 3× or stuck >45 days roll up as a Slack DM digest to Craig (interim until the Ops Brief) | L3 | ✅ Live |
+| **Ops Brief** (Brief E) | Daily 5 PM + Monday deep brief for Craig/Matt, absorbing all agent escalations | — | 🔜 Next brief |
+| Email Triage, Intake, Day-Close SMS, Reconciliation, Vendor Chaser, Inspections | See the master plan roster (#2, #4–#6, #8–#10) | — | Phase 2 |
+
+**Key routes:** `/agents` (dashboard: config matrix, proposals, outbox) · `/api/agents/cron/morning-card` + `/api/agents/cron/estimate-chaser` (crons) · `/api/agents/slack/interact` (button taps; Slack-signature auth) · `/api/agents/dispatch` (manual outbox drain) · `/api/agents/sms-test` (Zoom SMS probe) · `/api/agents/vendor-contact-audit` (AppFolio contact-field diagnostics) · `/api/agents/zoom-oauth/start` (one-time SMS sender authorization)
+
+**Adoption gate (Phase 1):** ≥25 human actions/week through cards/drafts for 2 consecutive weeks (baseline ~0), then Phase 2 agents unlock. Metrics captured daily in `metrics_snapshot`; baseline frozen pre-agents.
 
 ---
 
@@ -437,13 +461,18 @@ Configured in `vercel.json`. All times are UTC.
 | Schedule | Endpoint | Purpose |
 |----------|----------|---------|
 | **Every 15 min** | `/api/sync/work-orders?days=1` | AppFolio work-order mirror delta (+ vendor roster) |
-| **8 AM daily** | `/api/sync/work-orders?days=7` | Work-order deep pass (webhook safety net) |
+| **Every 30 min** | `/api/maintenance/cron/appfolio-webhook-resolve` | Resolve webhook-logged WO events against the mirror |
+| **Hourly** | `/api/sync/work-orders?days=7` | Work-order deep pass (webhook safety net) |
 | **9 AM daily** | `/api/sync/appfolio` | Full AppFolio sync: properties, vacancies, comps |
 | **9:30 AM daily** | `/api/inspections/candidates/sync` | Refresh inspection candidates (move-in-anchored cadence) |
 | **11 AM daily** | `/api/sync/zoom-contacts` | AppFolio → Zoom Phone contact sync |
 | **1 PM Mon–Fri** | `/api/maintenance/cron/tripwires` | Run the 12 tripwires; email per-owner exception digests (6 AM PT) |
+| **1:30 PM Mon–Fri** | `/api/agents/cron/morning-card` | Cheryl's Morning Action Card → Slack + email mirror (6:30 AM PT) |
+| **1:30 PM daily** | `/api/maintenance/cron/metrics` | Daily `metrics_snapshot` capture (agent-layer KPIs) |
+| **1:45 PM Mon–Fri** | `/api/agents/cron/estimate-chaser` | Estimate Chaser: Outlook drafts + SMS queue card + Craig escalations (6:45 AM PT) |
 | **2 PM daily** | `/api/kpi/cron` | Capture daily KPI snapshots for the trends page |
 | **2 PM Monday** | `/api/maintenance/cron/unbilled-report` | Verified-but-unbilled weekly report → Penny |
+| **8 PM Mon–Fri** | `/api/agents/cron/morning-card?nudge=1` | One (and only one) 1 PM PT nudge if the card is untouched |
 | **Jan 1 annually** | `/api/sync/hud` | HUD Fair Market Rent data refresh |
 
 Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted from Azure AD middleware (Vercel cron sends GET; every cron route's GET delegates to its authenticated POST). AppFolio also pushes updates in real time through `/api/webhooks/appfolio` and `/api/webhooks/appfolio-leads`.
@@ -484,6 +513,24 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `MAINT_DIGEST_RECIPIENTS` | Maintenance OS | Fallback JSON map of owner → email. Normally unnecessary — admins manage opt-ins in the app (Maintenance → Exceptions → Digest recipients, backed by `maint_digest_recipient`) |
 | `MAINT_DIGEST_FROM` | Maintenance OS | From address for digests (default `HDMS Maintenance <maintenance@highdesertpm.com>`) |
 
+### Agent-OS
+
+| Variable | Service | Purpose |
+|----------|---------|---------|
+| `SLACK_BOT_TOKEN` | Slack | Bot token for agent cards/DMs (skipped when absent) |
+| `SLACK_SIGNING_SECRET` | Slack | Verifies `/api/agents/slack/interact` button taps |
+| `HDPM_SERVICE_TOKEN` | Agent-OS | Service-caller auth for `/api/agents/*` (with `X-Agent-Actor` header) |
+| `AGENT_EMAIL_FROM` | Resend | From address for agent emails (falls back to `MAINT_DIGEST_FROM`) |
+| `AZURE_TENANT_ID` | Microsoft Graph | App-only mail tenant (distinct from `AZURE_AD_TENANT_ID`) |
+| `AGENT_GRAPH_CLIENT_ID` / `AGENT_GRAPH_CLIENT_SECRET` | Microsoft Graph | "HDPM-OS Agent Mail" app — application `Mail.ReadWrite`, ApplicationAccessPolicy-scoped to cheryl@ + info@ |
+| `AGENT_GRAPH_DRYRUN` | Microsoft Graph | `=1` skips draft creation (staged rollout) |
+| `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET` | Zoom | Server-to-Server app ("HDPM Appfolio Sync") — contact sync; cannot send SMS |
+| `ZOOM_USER_CLIENT_ID` / `ZOOM_USER_CLIENT_SECRET` | Zoom | User-managed app ("HDPM-OS SMS Sender") — per-user OAuth for SMS sending |
+| `ZOOM_SMS_SENDER_NUMBER` | Zoom Phone | E.164 line texts send from (Cheryl's) |
+| `ZOOM_SMS_SENDER_EMAIL` | Zoom Phone | Sender's Zoom login (default `cheryl@highdesertpm.com`); their OAuth token does the sending |
+| `ZOOM_SMS_SENDER_USER_ID` | Zoom Phone | Legacy S2S fallback sender id (unused once the OAuth token exists) |
+| `AGENT_ZOOM_SMS_DRYRUN` | Zoom Phone | `=1` skips SMS sending (staged rollout) |
+
 ---
 
 ## Database
@@ -510,6 +557,13 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `approval` / `recommendation` / `turn` | Owner/PM approvals · tech field recommendations · turnover board data |
 | `ai_triage_proposal` | Batch AI triage proposals awaiting human review (pending/applied/skipped) |
 | `maint_digest_recipient` | Digest opt-ins (person → email + enabled), managed from the Exceptions view |
+| `agent_proposal` | Every agent output, first — audit trail, approval queue, and autonomy-promotion training data |
+| `agent_outbox` | Every outbound agent message (Slack / email / Outlook draft / SMS) with retry + delivery state |
+| `agent_config` | The autonomy matrix as data: per (agent, action) level, ceiling, daily cap + the global kill switch |
+| `staff` | Staff identity map (email, phone, Slack ID) — how taps and replies resolve to a human actor |
+| `metrics_snapshot` | Daily agent-layer KPI capture (open exceptions, approval latency, staff actions/week, …) |
+| `zoom_contact_map` | AppFolio → Zoom Phone contact mirror (vendor/owner/tenant, E.164 phone + email) |
+| `zoom_user_token` | Per-user Zoom OAuth tokens for SMS sending (auto-rotating refresh) |
 | `rental_comps` / `market_baselines` | Rental comps, baselines, and saved comp-analysis reports |
 | `conversations` / `conversation_messages` | AI chat history and individual messages (with sources and attachments) |
 | `knowledge_chunks` | pgvector knowledge base chunks for ORS 90 semantic search |
