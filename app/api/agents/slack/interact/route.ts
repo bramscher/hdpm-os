@@ -5,8 +5,9 @@ import { resolveStaffBySlackId } from '@/lib/agents/staff';
 import { decideProposal } from '@/lib/agents/proposals';
 import { annotateProposalPayload, rebuildCard } from '@/lib/agents/morning-card-run';
 import { parseBlockAction, snoozeDate, isValidYmd } from '@/lib/agents/morning-card';
-import { parseEcActionId, ESTIMATE_CHASER_AGENT, VENDOR_CHASE_SMS_ACTION } from '@/lib/agents/estimate-chaser';
+import { parseEcActionId, ESTIMATE_CHASER_AGENT, VENDOR_CHASE_SMS_ACTION, ESCALATE_ACTION } from '@/lib/agents/estimate-chaser';
 import { rebuildSmsQueueCard } from '@/lib/agents/estimate-chaser-run';
+import { parseObActionId, applyAckToBlocks, OPS_BRIEF_AGENT, SEND_BRIEF_ACTION } from '@/lib/agents/ops-brief';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
 import { updateSlackMessage, splitSlackMessageId } from '@/lib/agents/channels/slack';
 import { updateWorkOrderWorkflow, WorkflowValidationError } from '@/lib/maintenance/workflow-db';
@@ -66,6 +67,13 @@ export async function POST(request: NextRequest) {
     typeof rawAction?.action_id === 'string' ? parseEcActionId(rawAction.action_id) : null;
   if (ecAction) {
     return handleEcAction(ecAction, actor, payload.response_url);
+  }
+
+  // Ops Brief namespace (ob:*) — [Acknowledge] on needs-Craig items (Brief E).
+  const obAction =
+    typeof rawAction?.action_id === 'string' ? parseObActionId(rawAction.action_id) : null;
+  if (obAction) {
+    return handleObAction(obAction, actor, payload.response_url);
   }
 
   const action = parseBlockAction(payload.actions[0]);
@@ -335,6 +343,97 @@ async function handleEcAction(
         }
       }
     }
+  }
+
+  return new NextResponse(null, { status: 200 });
+}
+
+// ── Ops Brief (ob:*) — [Acknowledge] on needs-Craig escalations ──
+
+/**
+ * Ack = payload annotation on the escalation proposal (they're auto_applied
+ * at DM time, so decideProposal doesn't apply). The brief's stored blocks
+ * are patched in place — no full re-gather on tap. Idempotent: an already-
+ * acknowledged item just re-renders.
+ */
+async function handleObAction(
+  action: { kind: 'ack'; proposalId: string },
+  actor: string,
+  responseUrl: string | undefined
+): Promise<NextResponse> {
+  const supabase = getSupabaseAdmin();
+  const { data: escRow } = await supabase
+    .from('agent_proposal')
+    .select('*')
+    .eq('id', action.proposalId)
+    .maybeSingle();
+  const escalation = escRow as AgentProposal | null;
+  if (
+    !escalation ||
+    escalation.agent !== ESTIMATE_CHASER_AGENT ||
+    escalation.action_type !== ESCALATE_ACTION
+  ) {
+    return new NextResponse(null, { status: 200 });
+  }
+  const escPl = escalation.payload as Record<string, unknown>;
+  const tapTime = new Date().toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  try {
+    if (typeof escPl.acknowledged_by !== 'string') {
+      await annotateProposalPayload(action.proposalId, {
+        acknowledged_by: actor,
+        acknowledged_at: new Date().toISOString(),
+        resolution: `Acknowledged by ${actor} ${tapTime}`,
+      });
+      if (escalation.subject_id) {
+        await recordEvent({
+          work_order_id: escalation.subject_id,
+          event_type: 'note',
+          payload: { note: 'Ops brief: escalation acknowledged', source: 'ops_brief' },
+          actor,
+        });
+      }
+    }
+
+    // Patch the brief message: find the latest brief whose escalation list
+    // contains this item, update its stored blocks, replace the message.
+    const { data: briefRows } = await supabase
+      .from('agent_proposal')
+      .select('*')
+      .eq('agent', OPS_BRIEF_AGENT)
+      .eq('action_type', SEND_BRIEF_ACTION)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const brief = ((briefRows ?? []) as AgentProposal[]).find((b) => {
+      const ids = (b.payload as Record<string, unknown>).escalation_ids;
+      return Array.isArray(ids) && ids.includes(action.proposalId);
+    });
+    if (brief) {
+      const briefPl = brief.payload as Record<string, unknown>;
+      const blocks = Array.isArray(briefPl.blocks) ? (briefPl.blocks as unknown[]) : [];
+      const patched = applyAckToBlocks(blocks, action.proposalId, actor, tapTime);
+      if (patched) {
+        await annotateProposalPayload(brief.id, { blocks: patched });
+        const text = typeof briefPl.brief_date === 'string' ? `Ops Brief — ${briefPl.brief_date}` : 'Ops Brief';
+        const replaced = await respond(responseUrl, {
+          replace_original: true,
+          text,
+          blocks: patched,
+        });
+        if (!replaced && brief.channel_message_id) {
+          const target = splitSlackMessageId(brief.channel_message_id);
+          if (target) {
+            await updateSlackMessage({ ...target, text, blocks: patched });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Agents] ob action failed:', err instanceof Error ? err.message : String(err));
   }
 
   return new NextResponse(null, { status: 200 });

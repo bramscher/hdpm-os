@@ -55,6 +55,14 @@
     {
       "path": "/api/agents/cron/estimate-chaser",
       "schedule": "45 13 * * 1-5"
+    },
+    {
+      "path": "/api/agents/cron/ops-brief",
+      "schedule": "0 0 * * 2-6"
+    },
+    {
+      "path": "/api/agents/cron/ops-brief?deep=1",
+      "schedule": "0 15 * * 1"
     }
   ]
 }
