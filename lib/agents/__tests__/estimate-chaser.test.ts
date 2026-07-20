@@ -7,9 +7,14 @@ import {
   decideChase,
   buildVendorChaseDraft,
   buildOwnerApprovalDraft,
+  buildVendorChaseSms,
+  buildSmsQueueCard,
   buildEscalationSlack,
+  encodeEcActionId,
+  parseEcActionId,
   type ChaseCandidate,
   type ChaseHistory,
+  type SmsQueueItem,
   type WorkOrderLite,
 } from '../estimate-chaser';
 
@@ -245,6 +250,96 @@ describe('draft templates', () => {
     );
     expect(d.html).toContain('&lt;broken&gt; &amp; &quot;leaky&quot;');
     expect(d.html).not.toContain('<broken>');
+  });
+});
+
+// ── SMS chase (Brief D.5) ──
+
+describe('buildVendorChaseSms', () => {
+  const round1 = buildVendorChaseSms(candidate(), 1);
+  const round2 = buildVendorChaseSms(candidate(), 2);
+
+  it('stays within two SMS segments and never mentions money or links', () => {
+    for (const sms of [round1, round2]) {
+      expect(sms.length).toBeLessThanOrEqual(320);
+      expect(sms).not.toMatch(/\$/);
+      expect(sms).not.toMatch(/https?:\/\/|appfolio/i);
+    }
+  });
+
+  it('identifies Cheryl/HDPM, the WO, and the property', () => {
+    expect(round1).toContain('Cheryl');
+    expect(round1).toContain('High Desert Property Mgmt');
+    expect(round1).toContain('WO #412');
+    expect(round1).toContain('123 Brosterhous Rd');
+  });
+
+  it('round ≥ 2 acknowledges the earlier chase', () => {
+    expect(round2).toContain('again');
+    expect(round1).not.toContain('again');
+  });
+
+  it('truncates long descriptions', () => {
+    const sms = buildVendorChaseSms(candidate({ description: 'x'.repeat(500) }), 1);
+    expect(sms.length).toBeLessThanOrEqual(320);
+  });
+});
+
+describe('ec action ids', () => {
+  it('round-trips', () => {
+    expect(parseEcActionId(encodeEcActionId('sendsms', 'p-123'))).toEqual({
+      kind: 'sendsms',
+      proposalId: 'p-123',
+    });
+    expect(parseEcActionId(encodeEcActionId('skip', 'p-9'))).toEqual({
+      kind: 'skip',
+      proposalId: 'p-9',
+    });
+  });
+
+  it('rejects foreign namespaces and unknown kinds', () => {
+    expect(parseEcActionId('mc:done:p-1')).toBeNull();
+    expect(parseEcActionId('ec:explode:p-1')).toBeNull();
+    expect(parseEcActionId('ec:sendsms:')).toBeNull();
+  });
+});
+
+describe('buildSmsQueueCard', () => {
+  const items: SmsQueueItem[] = [
+    {
+      proposalId: 'p-1',
+      status: 'proposed',
+      vendorName: 'Cascade Plumbing',
+      vendorPhone: '+15415550100',
+      woRef: 'WO #412 — 123 Brosterhous Rd, Unit 4',
+      smsText: 'Hi Cascade Plumbing, ...',
+    },
+    {
+      proposalId: 'p-2',
+      status: 'approved',
+      vendorName: 'Firkus Roofing',
+      vendorPhone: '+15415550101',
+      woRef: 'WO #500 — 9 Main St',
+      smsText: 'Hi Firkus Roofing, ...',
+      resolution: 'Text sent by Cheryl 7:02 AM',
+    },
+  ];
+  const { text, blocks } = buildSmsQueueCard(items, '2026-07-21');
+  const s = JSON.stringify(blocks);
+
+  it('counts only pending items in the header', () => {
+    expect(text).toContain('1 of 2 to send');
+  });
+
+  it('renders buttons only for proposed items, with a confirm dialog on send', () => {
+    expect(s).toContain(`ec:sendsms:p-1`);
+    expect(s).toContain(`ec:skip:p-1`);
+    expect(s).not.toContain(`ec:sendsms:p-2`);
+    expect(s).toContain('Send this text?');
+  });
+
+  it('shows the resolution on decided items', () => {
+    expect(s).toContain('Text sent by Cheryl 7:02 AM');
   });
 });
 

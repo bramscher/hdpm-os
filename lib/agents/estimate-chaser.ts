@@ -27,6 +27,11 @@ import { businessDaysBetween } from '@/lib/maintenance/business-days';
 
 export const ESTIMATE_CHASER_AGENT = 'estimate_chaser';
 export const VENDOR_CHASE_ACTION = 'vendor_chase';
+/**
+ * Brief D.5: vendor chase by text, L2 send-on-tap (SMS has no drafts folder,
+ * so L1 doesn't map — Cheryl's tap on the Slack queue card is the review).
+ */
+export const VENDOR_CHASE_SMS_ACTION = 'vendor_chase_sms';
 export const OWNER_APPROVAL_ACTION = 'owner_approval';
 /** Interim Craig escalation (L3 self-addressed reporting) until Brief E's Ops Brief absorbs it. */
 export const ESCALATE_ACTION = 'escalate';
@@ -312,6 +317,146 @@ export function buildOwnerApprovalDraft(c: ChaseCandidate, chaseRound: number): 
   ].join('\n');
 
   return { subject, html, text, toRecipients: [] };
+}
+
+// ============================================
+// SMS chase (Brief D.5)
+// ============================================
+
+const SMS_DESC_MAX = 60;
+
+/**
+ * The text Cheryl's tap sends. Same hard rules as the email templates: no
+ * dollar amounts, no links. Kept under ~320 chars (two SMS segments).
+ */
+export function buildVendorChaseSms(c: ChaseCandidate, chaseRound: number): string {
+  const where = c.propertyAddress || c.propertyName || 'the property';
+  const unit = c.unitName ? ` #${c.unitName}` : '';
+  const wo = c.woNumber ? `WO #${c.woNumber}` : 'the work order';
+  const desc = (c.description ?? '').slice(0, SMS_DESC_MAX).trim();
+
+  if (chaseRound >= 2) {
+    return `Hi ${c.vendorName || 'there'}, Cheryl at High Desert Property Mgmt again — still hoping to get your bid for ${wo} at ${where}${unit}. Can you let me know either way? Thanks!`;
+  }
+  return `Hi ${c.vendorName || 'there'}, this is Cheryl at High Desert Property Mgmt. Following up on the bid for ${wo} at ${where}${unit}${desc ? ` (${desc})` : ''} — could you send it over, or let me know if you can't take it? Thanks!`;
+}
+
+// ── ec:* action ids (Slack interactivity namespace for the chaser) ──
+
+export type EcActionKind = 'sendsms' | 'skip';
+const EC_ACTION_KINDS: EcActionKind[] = ['sendsms', 'skip'];
+
+export function encodeEcActionId(kind: EcActionKind, proposalId: string): string {
+  return `ec:${kind}:${proposalId}`;
+}
+
+export function parseEcActionId(
+  actionId: string
+): { kind: EcActionKind; proposalId: string } | null {
+  const m = actionId.match(/^ec:([a-z]+):(.+)$/);
+  if (!m || !EC_ACTION_KINDS.includes(m[1] as EcActionKind) || !m[2]) return null;
+  return { kind: m[1] as EcActionKind, proposalId: m[2] };
+}
+
+// ── Text chase queue card (one Slack card per run, buttons per item) ──
+
+export interface SmsQueueItem {
+  proposalId: string;
+  status: string; // ProposalStatus — buttons render only while 'proposed'
+  vendorName: string | null;
+  vendorPhone: string;
+  woRef: string; // "WO #412 — 123 Main St, Unit 4"
+  smsText: string;
+  /** e.g. "Text sent by Cheryl 7:02 AM" / "Skipped by Cheryl 7:03 AM" */
+  resolution?: string;
+  /** Transient render-only error decoration (never persisted). */
+  error?: string;
+}
+
+export function smsQueueItemFromCandidate(
+  c: ChaseCandidate,
+  proposalId: string,
+  status: string,
+  vendorPhone: string,
+  smsText: string
+): SmsQueueItem {
+  return {
+    proposalId,
+    status,
+    vendorName: c.vendorName,
+    vendorPhone,
+    woRef: woRef(c),
+    smsText,
+  };
+}
+
+export function buildSmsQueueCard(
+  items: SmsQueueItem[],
+  dateStr: string
+): { text: string; blocks: unknown[] } {
+  const pending = items.filter((i) => i.status === 'proposed').length;
+  const text = `📱 Text chase queue — ${dateStr} (${pending} of ${items.length} to send)`;
+
+  const blocks: unknown[] = [
+    { type: 'section', text: { type: 'mrkdwn', text: `*${text}*` } },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: 'Each tap sends the text below from your Zoom line — replies land in your Zoom app. Nothing sends without your tap.',
+        },
+      ],
+    },
+    { type: 'divider' },
+  ];
+
+  for (const item of items) {
+    const state =
+      item.status === 'proposed'
+        ? ''
+        : `\n${item.status === 'rejected' ? '⏭️' : '✅'} ${item.resolution ?? item.status}`;
+    const errorLine = item.error ? `\n:warning: ${item.error}` : '';
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*${item.vendorName ?? 'Vendor'}* · ${item.vendorPhone}\n${item.woRef}\n> ${item.smsText}${state}${errorLine}`,
+      },
+    });
+    if (item.status === 'proposed') {
+      blocks.push({
+        type: 'actions',
+        block_id: `ec-item:${item.proposalId}`,
+        elements: [
+          {
+            type: 'button',
+            action_id: encodeEcActionId('sendsms', item.proposalId),
+            text: { type: 'plain_text', text: '📱 Send text' },
+            style: 'primary',
+            value: item.proposalId,
+            confirm: {
+              title: { type: 'plain_text', text: 'Send this text?' },
+              text: {
+                type: 'mrkdwn',
+                text: `To *${item.vendorName ?? 'vendor'}* at ${item.vendorPhone}`,
+              },
+              confirm: { type: 'plain_text', text: 'Send' },
+              deny: { type: 'plain_text', text: 'Cancel' },
+            },
+          },
+          {
+            type: 'button',
+            action_id: encodeEcActionId('skip', item.proposalId),
+            text: { type: 'plain_text', text: 'Skip' },
+            value: item.proposalId,
+          },
+        ],
+      });
+    }
+  }
+
+  return { text, blocks };
 }
 
 // ============================================

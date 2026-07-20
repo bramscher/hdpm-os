@@ -36,10 +36,10 @@ describe('adapter registry', () => {
     expect(getAdapter('in_app').channel).toBe('in_app');
   });
 
-  it('unwired channels fail cleanly with a reason', async () => {
-    const outcome = await getAdapter('sms_zoom').send(msg({ channel: 'sms_zoom' }));
-    expect(outcome.status).toBe('failed');
-    expect(outcome.error).toContain('not configured');
+  it('all five channels resolve to real adapters', () => {
+    for (const ch of ['email', 'in_app', 'slack', 'sms_zoom', 'outlook_draft'] as const) {
+      expect(getAdapter(ch).channel).toBe(ch);
+    }
   });
 
   it('notConfiguredAdapter is inert', async () => {
@@ -146,6 +146,88 @@ describe('outlook_draft adapter', () => {
     expect(outcome.status).toBe('failed');
     expect(outcome.error).toContain('graph 403');
     expect(outcome.error).toContain('AccessDenied');
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('sms_zoom adapter', () => {
+  const SMS_ENV = {
+    ZOOM_ACCOUNT_ID: 'acct-1',
+    ZOOM_CLIENT_ID: 'cid-1',
+    ZOOM_CLIENT_SECRET: 'sec-1',
+    ZOOM_SMS_SENDER_USER_ID: 'cheryl-zoom-id',
+    ZOOM_SMS_SENDER_NUMBER: '+15415550199',
+  };
+  const stubSmsEnv = () => {
+    for (const [k, v] of Object.entries(SMS_ENV)) vi.stubEnv(k, v);
+  };
+
+  it('skips under AGENT_ZOOM_SMS_DRYRUN=1 before any network call', async () => {
+    vi.stubEnv('AGENT_ZOOM_SMS_DRYRUN', '1');
+    const outcome = await getAdapter('sms_zoom').send(
+      msg({ channel: 'sms_zoom', recipient_address: '+15415550100', body: 'hi' })
+    );
+    expect(outcome).toEqual({ status: 'skipped', error: 'AGENT_ZOOM_SMS_DRYRUN=1' });
+  });
+
+  it('skips without a phone or body', async () => {
+    stubSmsEnv();
+    const noPhone = await getAdapter('sms_zoom').send(
+      msg({ channel: 'sms_zoom', recipient_address: null, body: 'hi' })
+    );
+    expect(noPhone.status).toBe('skipped');
+    const noBody = await getAdapter('sms_zoom').send(
+      msg({ channel: 'sms_zoom', recipient_address: '+15415550100', body: null })
+    );
+    expect(noBody.status).toBe('skipped');
+  });
+
+  it('skips when Zoom SMS env is not configured', async () => {
+    vi.stubEnv('ZOOM_SMS_SENDER_USER_ID', '');
+    vi.stubEnv('ZOOM_SMS_SENDER_NUMBER', '');
+    const outcome = await getAdapter('sms_zoom').send(
+      msg({ channel: 'sms_zoom', recipient_address: '+15415550100', body: 'hi' })
+    );
+    expect(outcome.status).toBe('skipped');
+    expect(outcome.error).toContain('not configured');
+  });
+
+  it('sends via Zoom and returns the message id', async () => {
+    stubSmsEnv();
+    const calls: { url: string; body?: string }[] = [];
+    vi.stubGlobal('fetch', async (url: string, init?: { body?: string }) => {
+      calls.push({ url, body: init?.body ? String(init.body) : undefined });
+      if (url.includes('zoom.us/oauth/token')) {
+        return { ok: true, text: async () => JSON.stringify({ access_token: 'tok', expires_in: 3600 }) };
+      }
+      return { ok: true, status: 200, text: async () => JSON.stringify({ message_id: 'sms-abc' }) };
+    });
+
+    const outcome = await getAdapter('sms_zoom').send(
+      msg({ channel: 'sms_zoom', recipient_address: '+15415550100', body: 'Hi Cascade!' })
+    );
+    expect(outcome).toEqual({ status: 'sent', message_id: 'sms-abc' });
+    const smsCall = calls.find((c) => c.url.includes('/phone/sms/messages'))!;
+    const body = JSON.parse(smsCall.body!);
+    expect(body.message).toBe('Hi Cascade!');
+    expect(body.sender).toEqual({ user_id: 'cheryl-zoom-id', phone_number: '+15415550199' });
+    expect(body.to_members).toEqual([{ phone_number: '+15415550100' }]);
+    vi.unstubAllGlobals();
+  });
+
+  it('surfaces Zoom API errors as failed', async () => {
+    stubSmsEnv();
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url.includes('zoom.us/oauth/token')) {
+        return { ok: true, text: async () => JSON.stringify({ access_token: 'tok', expires_in: 3600 }) };
+      }
+      return { ok: false, status: 400, headers: { get: () => null }, text: async () => 'invalid scope' };
+    });
+    const outcome = await getAdapter('sms_zoom').send(
+      msg({ channel: 'sms_zoom', recipient_address: '+15415550100', body: 'hi' })
+    );
+    expect(outcome.status).toBe('failed');
+    expect(outcome.error).toContain('400');
     vi.unstubAllGlobals();
   });
 });
