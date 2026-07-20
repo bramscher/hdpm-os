@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireStaffOrService } from '@/lib/maintenance/api-auth';
 import { getAdapter } from '@/lib/agents/channels';
-import { isZoomSmsConfigured } from '@/lib/zoom-phone';
+import { isZoomSmsConfigured, smsSenderEmail } from '@/lib/zoom-phone';
+import { getZoomUserTokenStatus, isZoomUserOAuthConfigured } from '@/lib/zoom-user-oauth';
 import type { OutboxMessage } from '@/lib/agents/types';
 
 export const maxDuration = 60;
@@ -47,9 +48,13 @@ export async function POST(request: NextRequest) {
       payload: {},
     };
     const outcome = await getAdapter('sms_zoom').send(msg as OutboxMessage);
+    const sender = smsSenderEmail();
     return NextResponse.json({
       configured: isZoomSmsConfigured(),
       dryRun: process.env.AGENT_ZOOM_SMS_DRYRUN === '1',
+      sender,
+      oauthAppConfigured: isZoomUserOAuthConfigured(),
+      senderToken: await getZoomUserTokenStatus(sender),
       outcome,
     });
   } catch (err) {
