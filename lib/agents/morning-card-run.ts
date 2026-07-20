@@ -61,6 +61,7 @@ function proposalToCardItem(p: AgentProposal): CardItem {
     status: p.status,
     resolution: typeof pl.resolution === 'string' ? pl.resolution : undefined,
     nextActionDate: typeof pl.nextActionDate === 'string' ? pl.nextActionDate : null,
+    appfolioLink: typeof pl.appfolioLink === 'string' ? pl.appfolioLink : null,
   };
 }
 
@@ -204,13 +205,14 @@ export async function runMorningCard(opts: {
     return { ...result, items: seven.length };
   }
 
-  // Current owner/date per WO (datepicker initial_date + owner backfill info).
+  // Current owner/date per WO (datepicker initial_date + owner backfill
+  // info) + the AppFolio deep link for the card's Open button.
   const woIds = seven.map((ex) => ex.workOrderId!);
-  const woById = new Map<string, { next_action_date: string | null }>();
+  const woById = new Map<string, { next_action_date: string | null; appfolio_link: string | null }>();
   if (woIds.length > 0) {
     const { data: wos } = await supabase
       .from('work_orders')
-      .select('id, next_action_date')
+      .select('id, next_action_date, appfolio_link')
       .in('id', woIds);
     for (const wo of wos ?? []) woById.set(wo.id, wo);
   }
@@ -233,6 +235,7 @@ export async function runMorningCard(opts: {
         fixRequired: ex.fixRequired,
         ageDays: ex.ageDays,
         nextActionDate: woById.get(ex.workOrderId!)?.next_action_date ?? null,
+        appfolioLink: woById.get(ex.workOrderId!)?.appfolio_link ?? null,
         header,
       },
       rationale: ex.fixRequired,

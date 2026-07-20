@@ -233,6 +233,25 @@ describe('buildCardBlocks', () => {
     const blocks = buildCardBlocks({ header, items: [], readOnly: false });
     expect(JSON.stringify(blocks)).toContain('Zero exceptions');
   });
+
+  it('item with an AppFolio link gets the Open button first (5 elements, url wired)', () => {
+    const items = [cardItem({ appfolioLink: 'https://hdpm.appfolio.com/wo/412' })];
+    const blocks = buildCardBlocks({ header, items, readOnly: false }) as Block[];
+    const actions = blocks.find((b) => b.type === 'actions')!;
+    expect(actions.elements).toHaveLength(5);
+    const first = actions.elements![0] as { action_id?: string; url?: string };
+    expect(first.action_id).toBe('mc:link:p-1');
+    expect(first.url).toBe('https://hdpm.appfolio.com/wo/412');
+    // mc:link is NOT a known action kind — its interaction must no-op.
+    expect(parseActionId('mc:link:p-1')).toBeNull();
+  });
+
+  it('footer tells Cheryl to still tap Done after working in AppFolio', () => {
+    const blocks = buildCardBlocks({ header, items: seven, readOnly: false });
+    const s = JSON.stringify(blocks);
+    expect(s).toContain('still tap ✅ Done');
+    expect(s).toContain('Deleting the message');
+  });
 });
 
 describe('buildNudge', () => {

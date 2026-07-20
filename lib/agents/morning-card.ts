@@ -147,6 +147,8 @@ export interface CardItem {
   resolution?: string; // 'Done by Cheryl 9:14am' / 'Snoozed to 2026-07-22 (vendor)'
   error?: string; // transient render-only validation message
   nextActionDate?: string | null; // datepicker initial_date
+  /** Deep link into AppFolio — Cheryl's observed flow is AppFolio-first. */
+  appfolioLink?: string | null;
 }
 
 export interface CardHeader {
@@ -202,6 +204,19 @@ function itemActionsBlock(item: CardItem): Record<string, unknown> {
     type: 'actions',
     block_id: `mc-item:${item.proposalId}`,
     elements: [
+      // AppFolio deep link first — Cheryl works AppFolio-first (observed
+      // 2026-07-20): open the WO there, do the work, come back, tap Done.
+      // 'link' is not an ACTION_KIND, so the interaction it fires no-ops.
+      ...(item.appfolioLink
+        ? [
+            {
+              type: 'button',
+              action_id: `mc:link:${item.proposalId}`,
+              text: { type: 'plain_text', text: 'Open in AppFolio ↗' },
+              url: item.appfolioLink,
+            },
+          ]
+        : []),
       {
         type: 'button',
         action_id: encodeActionId('done', item.proposalId),
@@ -267,7 +282,7 @@ export function buildCardBlocks(input: {
     contextBlock(
       readOnly
         ? "_Read-only copy — Cheryl's card is live._"
-        : 'Tap = it happens. Untouched items expire tomorrow morning. Also in your email.'
+        : 'Open in AppFolio, do the work, then *still tap ✅ Done here* — that records it. Deleting the message doesn’t. Untouched items expire tomorrow morning.'
     )
   );
   return blocks;
