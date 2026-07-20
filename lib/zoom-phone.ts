@@ -91,9 +91,10 @@ async function getAccessToken(): Promise<string> {
 async function zoomFetch(
   path: string,
   init: RequestInit = {},
-  retryOn429 = true
+  retryOn429 = true,
+  tokenOverride?: string
 ): Promise<Response> {
-  const token = await getAccessToken();
+  const token = tokenOverride ?? (await getAccessToken());
   const res = await fetch(`${ZOOM_API_BASE}${path}`, {
     ...init,
     headers: {
@@ -235,10 +236,11 @@ export async function deleteExternalContact(externalContactId: string): Promise<
  */
 
 export function isZoomSmsConfigured(): boolean {
+  // Sender number is always required; auth comes from either the sender's
+  // stored OAuth token (Brief D.5b, preferred) or the S2S app fallback.
   return (
-    isZoomConfigured() &&
-    !!process.env.ZOOM_SMS_SENDER_USER_ID &&
-    !!process.env.ZOOM_SMS_SENDER_NUMBER
+    !!process.env.ZOOM_SMS_SENDER_NUMBER &&
+    (isZoomConfigured() || !!process.env.ZOOM_USER_CLIENT_ID)
   );
 }
 
@@ -254,6 +256,11 @@ function isUserContextRejection(status: number, body: string): boolean {
   return /"code"\s*:\s*(7639|124|135)|current user|another user/i.test(body);
 }
 
+/** The mailbox^W phone line owner whose Zoom account sends the texts. */
+export function smsSenderEmail(): string {
+  return process.env.ZOOM_SMS_SENDER_EMAIL || 'cheryl@highdesertpm.com';
+}
+
 export async function sendSms(input: {
   toPhoneNumber: string; // E.164
   message: string;
@@ -261,24 +268,57 @@ export async function sendSms(input: {
   const senderUserId = process.env.ZOOM_SMS_SENDER_USER_ID;
   const senderNumber = process.env.ZOOM_SMS_SENDER_NUMBER;
   const accountId = process.env.ZOOM_ACCOUNT_ID;
-  if (!senderUserId || !senderNumber) {
-    throw new Error('Zoom SMS sender not configured (ZOOM_SMS_SENDER_USER_ID / ZOOM_SMS_SENDER_NUMBER)');
+  if (!senderNumber) {
+    throw new Error('Zoom SMS sender not configured (ZOOM_SMS_SENDER_NUMBER)');
   }
 
-  const body = JSON.stringify({
-    message: input.message,
-    sender: { user_id: senderUserId, phone_number: senderNumber },
-    to_members: [{ phone_number: input.toPhoneNumber }],
+  // Preferred path (Brief D.5b): the sender's OWN OAuth token — the only
+  // token class Zoom accepts for the user-level SMS send. Falls back to the
+  // S2S attempt chain when the sender hasn't authorized yet, so the probe
+  // still reports something actionable.
+  const { getZoomUserAuth } = await import('@/lib/zoom-user-oauth');
+  const userAuth = await getZoomUserAuth(smsSenderEmail()).catch((err) => {
+    throw new Error(err instanceof Error ? err.message : String(err));
   });
 
-  let endpoint = '/phone/sms/messages';
-  let res = await zoomFetch(endpoint, { method: 'POST', body });
-  let text = await res.text();
+  const bodyFor = (userId: string) =>
+    JSON.stringify({
+      message: input.message,
+      sender: { user_id: userId, phone_number: senderNumber },
+      to_members: [{ phone_number: input.toPhoneNumber }],
+    });
 
-  if (!res.ok && accountId && isUserContextRejection(res.status, text)) {
-    endpoint = `/accounts/${encodeURIComponent(accountId)}/phone/sms/messages`;
+  let endpoint = '/phone/sms/messages';
+  let res: Response;
+  let text: string;
+
+  if (userAuth) {
+    res = await zoomFetch(
+      endpoint,
+      { method: 'POST', body: bodyFor(userAuth.zoomUserId ?? senderUserId ?? 'me') },
+      true,
+      userAuth.accessToken
+    );
+    text = await res.text();
+  } else {
+    if (!senderUserId) {
+      throw new Error(
+        `Zoom SMS: ${smsSenderEmail()} has not authorized the SMS app (visit /api/agents/zoom-oauth/start) and no ZOOM_SMS_SENDER_USER_ID fallback is set`
+      );
+    }
+    const body = bodyFor(senderUserId);
     res = await zoomFetch(endpoint, { method: 'POST', body });
     text = await res.text();
+    if (!res.ok && accountId && isUserContextRejection(res.status, text)) {
+      endpoint = `/accounts/${encodeURIComponent(accountId)}/phone/sms/messages`;
+      res = await zoomFetch(endpoint, { method: 'POST', body });
+      text = await res.text();
+    }
+    if (!res.ok && isUserContextRejection(res.status, text)) {
+      throw new Error(
+        `Zoom SMS send error (${res.status}) [${endpoint}]: ${text.substring(0, 200)} — S2S tokens can't send SMS; have ${smsSenderEmail()} authorize via /api/agents/zoom-oauth/start`
+      );
+    }
   }
 
   if (!res.ok) {
