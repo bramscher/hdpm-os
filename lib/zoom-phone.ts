@@ -242,28 +242,47 @@ export function isZoomSmsConfigured(): boolean {
   );
 }
 
+/**
+ * Zoom rejects user-context sends from account-level (S2S) tokens — staff
+ * confirmed the user endpoint needs a token OWNED by the sending user
+ * (devforum 133055; surfaces as 7639 "number does not belong to the current
+ * user", 124, or 135). Detect that class of rejection so we can retry via
+ * the account-level endpoint Zoom added for exactly this case.
+ */
+function isUserContextRejection(status: number, body: string): boolean {
+  if (status !== 400 && status !== 401 && status !== 403) return false;
+  return /"code"\s*:\s*(7639|124|135)|current user|another user/i.test(body);
+}
+
 export async function sendSms(input: {
   toPhoneNumber: string; // E.164
   message: string;
 }): Promise<{ messageId: string | null }> {
   const senderUserId = process.env.ZOOM_SMS_SENDER_USER_ID;
   const senderNumber = process.env.ZOOM_SMS_SENDER_NUMBER;
+  const accountId = process.env.ZOOM_ACCOUNT_ID;
   if (!senderUserId || !senderNumber) {
     throw new Error('Zoom SMS sender not configured (ZOOM_SMS_SENDER_USER_ID / ZOOM_SMS_SENDER_NUMBER)');
   }
 
-  const res = await zoomFetch('/phone/sms/messages', {
-    method: 'POST',
-    body: JSON.stringify({
-      message: input.message,
-      sender: { user_id: senderUserId, phone_number: senderNumber },
-      to_members: [{ phone_number: input.toPhoneNumber }],
-    }),
+  const body = JSON.stringify({
+    message: input.message,
+    sender: { user_id: senderUserId, phone_number: senderNumber },
+    to_members: [{ phone_number: input.toPhoneNumber }],
   });
 
-  const text = await res.text();
+  let endpoint = '/phone/sms/messages';
+  let res = await zoomFetch(endpoint, { method: 'POST', body });
+  let text = await res.text();
+
+  if (!res.ok && accountId && isUserContextRejection(res.status, text)) {
+    endpoint = `/accounts/${encodeURIComponent(accountId)}/phone/sms/messages`;
+    res = await zoomFetch(endpoint, { method: 'POST', body });
+    text = await res.text();
+  }
+
   if (!res.ok) {
-    throw new Error(`Zoom SMS send error (${res.status}): ${text.substring(0, 300)}`);
+    throw new Error(`Zoom SMS send error (${res.status}) [${endpoint}]: ${text.substring(0, 300)}`);
   }
   try {
     const data = JSON.parse(text) as { message_id?: string; id?: string };

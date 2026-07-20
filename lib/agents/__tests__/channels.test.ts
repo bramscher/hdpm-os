@@ -215,6 +215,32 @@ describe('sms_zoom adapter', () => {
     vi.unstubAllGlobals();
   });
 
+  it('falls back to the account-level endpoint on user-context rejections (7639)', async () => {
+    stubSmsEnv();
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      calls.push(url);
+      if (url.includes('zoom.us/oauth/token')) {
+        return { ok: true, text: async () => JSON.stringify({ access_token: 'tok', expires_in: 3600 }) };
+      }
+      if (url.includes('/accounts/')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ message_id: 'sms-acct-1' }) };
+      }
+      return {
+        ok: false,
+        status: 400,
+        headers: { get: () => null },
+        text: async () => '{"code":7639,"message":"The SMS for the number does not belong to the current user."}',
+      };
+    });
+    const outcome = await getAdapter('sms_zoom').send(
+      msg({ channel: 'sms_zoom', recipient_address: '+15415550100', body: 'hi' })
+    );
+    expect(outcome).toEqual({ status: 'sent', message_id: 'sms-acct-1' });
+    expect(calls.some((u) => u.includes('/accounts/acct-1/phone/sms/messages'))).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
   it('surfaces Zoom API errors as failed', async () => {
     stubSmsEnv();
     vi.stubGlobal('fetch', async (url: string) => {
