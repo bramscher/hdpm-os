@@ -46,15 +46,20 @@ export function nextStatus(from: KeySlotStatus, action: KeyTransitionAction): Ke
   return to;
 }
 
-/** Default issue: 4 copies of the main key — 2 tenant, 1 office, 1 vendor. */
+/**
+ * Default issue: 4 copies of the main key — 2 out with the tenant, 2 in
+ * office custody (the office copy and the vendor loaner). The loaner only
+ * becomes holder_type 'vendor' when it's actually checked out to a vendor,
+ * so a freshly issued key shows "2 of 4 out".
+ */
 export const DEFAULT_KEY_TEMPLATE: KeyTypeTemplateEntry[] = [
   {
     label: 'Main',
     copies: [
       { holder_type: 'tenant' },
       { holder_type: 'tenant' },
-      { holder_type: 'office' },
-      { holder_type: 'vendor' },
+      { holder_type: 'office', holder_name: 'Office' },
+      { holder_type: 'office', holder_name: 'Vendor loaner' },
     ],
   },
 ];
@@ -93,7 +98,7 @@ export interface KeyListFilter {
 }
 
 interface ActiveAssignmentRow extends KeyAssignment {
-  key_type: Array<{ id: string; key_copy: Array<Pick<KeyCopy, 'id' | 'status'>> }>;
+  key_type: Array<{ id: string; key_copy: Array<Pick<KeyCopy, 'id' | 'status' | 'holder_type'>> }>;
 }
 
 export async function getKeySlots(filter: KeyListFilter = {}): Promise<KeyListRow[]> {
@@ -107,7 +112,7 @@ export async function getKeySlots(filter: KeyListFilter = {}): Promise<KeyListRo
 
   const { data: assignments, error: aErr } = await supabase
     .from('key_assignment')
-    .select('*, key_type(id, key_copy(id, status))')
+    .select('*, key_type(id, key_copy(id, status, holder_type))')
     .is('released_at', null);
   if (aErr) throw new Error(`Failed to load key assignments: ${aErr.message}`);
 
@@ -130,7 +135,7 @@ export async function getKeySlots(filter: KeyListFilter = {}): Promise<KeyListRo
       property_name: a?.property_name ?? null,
       owner_name: a?.owner_name ?? null,
       tenant_names: a?.tenant_names ?? [],
-      copies_out: copies.filter((c) => c.status === 'issued').length,
+      copies_out: copies.filter((c) => c.status === 'issued' && c.holder_type !== 'office').length,
       copies_total: copies.length,
       sync_flag: a?.sync_flag ?? null,
       unlinked: Boolean(a && !a.appfolio_unit_id),

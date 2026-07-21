@@ -53,11 +53,13 @@ describe('key state machine', () => {
 });
 
 describe('default key template', () => {
-  it('is 4 main copies: 2 tenant, 1 office, 1 vendor', () => {
+  it('is 4 main copies: 2 tenant out, office copy + vendor loaner in office custody', () => {
     expect(DEFAULT_KEY_TEMPLATE).toHaveLength(1);
     expect(DEFAULT_KEY_TEMPLATE[0].label).toBe('Main');
     const holders = DEFAULT_KEY_TEMPLATE[0].copies.map((c) => c.holder_type);
-    expect(holders).toEqual(['tenant', 'tenant', 'office', 'vendor']);
+    expect(holders).toEqual(['tenant', 'tenant', 'office', 'office']);
+    const names = DEFAULT_KEY_TEMPLATE[0].copies.map((c) => c.holder_name ?? null);
+    expect(names).toEqual([null, null, 'Office', 'Vendor loaner']);
   });
 });
 

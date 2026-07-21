@@ -21,8 +21,8 @@ const DEFAULT_TEMPLATE: KeyTypeTemplateEntry[] = [
     copies: [
       { holder_type: "tenant" },
       { holder_type: "tenant" },
-      { holder_type: "office" },
-      { holder_type: "vendor" },
+      { holder_type: "office", holder_name: "Office" },
+      { holder_type: "office", holder_name: "Vendor loaner" },
     ],
   },
 ];

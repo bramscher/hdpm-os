@@ -494,6 +494,7 @@ export async function commitKeysImport(
         t.copies.map((c) => ({
           key_type_id: typeRow.id,
           holder_type: c.holder_type,
+          holder_name: c.holder_name ?? null,
           status: 'issued',
           issued_at: assignedAt,
         }))
