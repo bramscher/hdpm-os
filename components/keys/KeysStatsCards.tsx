@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { KeyRound, CheckCircle2, DoorOpen, CircleDashed, AlertTriangle } from "lucide-react";
+import { KeyRound, CheckCircle2, DoorOpen, DoorClosed, CircleDashed, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { KeyStats } from "@/types/keys";
 
@@ -23,6 +23,7 @@ const CARDS: CardDef[] = [
   { key: null, label: "Total Keys", value: (s) => s.total, icon: <KeyRound className="w-5 h-5" /> },
   { key: "assigned", label: "Assigned", value: (s) => s.assigned, icon: <CheckCircle2 className="w-5 h-5" /> },
   { key: "vacant", label: "Vacant", value: (s) => s.vacant, icon: <DoorOpen className="w-5 h-5" /> },
+  { key: "af_vacant", label: "AppFolio Vacant", value: (s) => s.af_vacant, icon: <DoorClosed className="w-5 h-5" /> },
   { key: "open", label: "Open #s", value: (s) => s.open, icon: <CircleDashed className="w-5 h-5" /> },
   { key: "flagged", label: "Flagged", value: (s) => s.flagged, icon: <AlertTriangle className="w-5 h-5" />, highlight: true },
 ];
@@ -30,7 +31,7 @@ const CARDS: CardDef[] = [
 export function KeysStatsCards({ stats, activeFilter, onFilter }: KeysStatsCardsProps) {
   if (!stats) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {CARDS.map((c) => (
           <div key={c.label} className="bg-white rounded-xl border border-sand-200 p-5 animate-pulse">
             <div className="h-3 w-16 bg-sand-200 rounded mb-2" />
@@ -42,7 +43,7 @@ export function KeysStatsCards({ stats, activeFilter, onFilter }: KeysStatsCards
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {CARDS.map((c) => {
         const isActive = activeFilter === c.key;
         return (

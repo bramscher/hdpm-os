@@ -94,7 +94,7 @@ export async function appendKeyEvent(
 
 export interface KeyListFilter {
   q?: string;
-  status?: KeySlotStatus | 'flagged' | 'unlinked';
+  status?: KeySlotStatus | 'flagged' | 'unlinked' | 'af_vacant';
 }
 
 interface ActiveAssignmentRow extends KeyAssignment {
@@ -139,6 +139,7 @@ export async function getKeySlots(filter: KeyListFilter = {}): Promise<KeyListRo
       copies_total: copies.length,
       sync_flag: a?.sync_flag ?? null,
       unlinked: Boolean(a && !a.appfolio_unit_id),
+      af_vacant: Boolean(a && a.unit_occupied === false),
       assigned_at: a?.assigned_at ?? null,
     };
   });
@@ -148,6 +149,8 @@ export async function getKeySlots(filter: KeyListFilter = {}): Promise<KeyListRo
     rows = rows.filter((r) => r.sync_flag !== null);
   } else if (status === 'unlinked') {
     rows = rows.filter((r) => r.unlinked);
+  } else if (status === 'af_vacant') {
+    rows = rows.filter((r) => r.af_vacant);
   } else if (status) {
     rows = rows.filter((r) => r.status === status);
   }
@@ -177,6 +180,7 @@ export async function getKeyStats(): Promise<KeyStats> {
     retired: rows.filter((r) => r.status === 'retired').length,
     flagged: rows.filter((r) => r.sync_flag !== null).length,
     unlinked: rows.filter((r) => r.unlinked).length,
+    af_vacant: rows.filter((r) => r.af_vacant).length,
   };
 }
 

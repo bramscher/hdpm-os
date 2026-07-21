@@ -101,6 +101,7 @@ export interface KeyListRow {
   copies_total: number;
   sync_flag: KeySyncFlag | null;
   unlinked: boolean; // active assignment exists but no appfolio_unit_id
+  af_vacant: boolean; // AppFolio reports no current tenants for the linked unit
   assigned_at: string | null;
 }
 
@@ -112,6 +113,8 @@ export interface KeyStats {
   retired: number;
   flagged: number;
   unlinked: number;
+  /** Linked keys whose AppFolio unit currently has no tenants. */
+  af_vacant: number;
 }
 
 /** Full detail payload for /keys/[id]. */
