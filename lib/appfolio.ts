@@ -1532,6 +1532,76 @@ export async function fetchAppFolioPropertiesWithCustomFields(): Promise<
   });
 }
 
+/**
+ * Owner name per property via GET /owners?filters[PropertyId]=… — the
+ * "Owner Name" custom field is unused in this AppFolio account, so the
+ * owners endpoint is the only reliable source. One request per property,
+ * concurrency-limited; multiple owners are joined with " & ".
+ */
+export async function fetchAppFolioPropertyOwnerMap(
+  propertyIds: string[]
+): Promise<Map<string, string>> {
+  const config = getConfig();
+  const map = new Map<string, string>();
+  if (!config) return map;
+  const { clientId, clientSecret, developerId } = config;
+
+  // The v0 API rate-limits aggressively (429 after ~60 quick requests), so
+  // pace lookups and back off on 429. Callers keep the request count small
+  // by only asking for properties that still need an owner.
+  const CONCURRENCY = 2;
+  const PACE_MS = 350;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const queue = [...new Set(propertyIds)];
+  async function lookup(propertyId: string): Promise<void> {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const res = await v0Fetch<RawRecord>(
+          '/owners',
+          {
+            'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z',
+            'filters[PropertyId]': propertyId,
+            'page[number]': '1',
+            'page[size]': '10',
+          },
+          clientId,
+          clientSecret,
+          developerId
+        );
+        const names = (res.data || [])
+          .filter((o) => !o.HiddenAt)
+          .map(
+            (o) =>
+              (asString(o.CompanyName) || '').trim() ||
+              [asString(o.FirstName), asString(o.LastName)].filter(Boolean).join(' ').trim()
+          )
+          .filter(Boolean);
+        if (names.length > 0) map.set(propertyId, names.join(' & '));
+        return;
+      } catch (err) {
+        const is429 = err instanceof Error && err.message.includes('(429)');
+        if (is429 && attempt < 3) {
+          await sleep(15000 * (attempt + 1));
+          continue;
+        }
+        console.warn('[AppFolio] owner lookup failed for property', propertyId, err);
+        return;
+      }
+    }
+  }
+  async function worker() {
+    while (queue.length > 0) {
+      const propertyId = queue.shift();
+      if (!propertyId) return;
+      await lookup(propertyId);
+      await sleep(PACE_MS);
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+  console.log(`[AppFolio] Owner map: ${map.size}/${propertyIds.length} properties resolved`);
+  return map;
+}
+
 // ============================================
 // Vendor contact field audit (Brief D.5 diagnostics)
 // ============================================

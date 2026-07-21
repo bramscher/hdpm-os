@@ -11,6 +11,7 @@
 
 import {
   fetchAppFolioPropertiesWithCustomFields,
+  fetchAppFolioPropertyOwnerMap,
   fetchAppFolioUnits,
   fetchAppFolioTenants,
   type AppFolioPropertyWithCustomFields,
@@ -106,6 +107,7 @@ interface ActiveLinkedAssignment {
   id: string;
   key_slot_id: string;
   appfolio_unit_id: string;
+  owner_name: string | null;
   sync_flag: KeySyncFlag | null;
   key_slot: { status: KeySlotStatus } | { status: KeySlotStatus }[];
 }
@@ -124,14 +126,30 @@ export async function syncKeyAssignments(): Promise<KeySyncResult> {
     fetchAppFolioUnits(),
     fetchAppFolioTenants(),
   ]);
-  const snapshots = buildUnitSnapshotMap(properties, units, tenants);
 
   const { data: assignments, error } = await supabase
     .from('key_assignment')
-    .select('id, key_slot_id, appfolio_unit_id, sync_flag, key_slot(status)')
+    .select('id, key_slot_id, appfolio_unit_id, owner_name, sync_flag, key_slot(status)')
     .is('released_at', null)
     .not('appfolio_unit_id', 'is', null);
   if (error) throw new Error(`Failed to load active assignments: ${error.message}`);
+
+  // Owner names come from per-property /owners lookups, which are heavily
+  // rate-limited — so only resolve properties whose assignments are still
+  // missing an owner (near zero once backfilled).
+  const unitToProperty = new Map(units.map((u) => [u.id, u.propertyId]));
+  const needOwner = new Set<string>();
+  for (const a of (assignments || []) as unknown as ActiveLinkedAssignment[]) {
+    if (a.owner_name) continue;
+    const propId = unitToProperty.get(a.appfolio_unit_id);
+    if (propId) needOwner.add(propId);
+  }
+  const ownerMap = await fetchAppFolioPropertyOwnerMap([...needOwner]);
+  const propertiesWithOwners = properties.map((p) => ({
+    ...p,
+    ownerName: ownerMap.get(p.appfolioPropertyId) ?? p.ownerName,
+  }));
+  const snapshots = buildUnitSnapshotMap(propertiesWithOwners, units, tenants);
 
   let updated = 0;
   let flagged = 0;
@@ -153,7 +171,9 @@ export async function syncKeyAssignments(): Promise<KeySyncResult> {
       fields.city = snapshot.city;
       fields.state = snapshot.state;
       fields.zip = snapshot.zip;
-      fields.owner_name = snapshot.ownerName;
+      // Only overwrite the owner when AppFolio actually resolved one — a
+      // failed lookup must not wipe a previously synced (or imported) name.
+      if (snapshot.ownerName) fields.owner_name = snapshot.ownerName;
       fields.tenant_names = snapshot.tenantNames;
       fields.unit_occupied = snapshot.occupied;
     }
