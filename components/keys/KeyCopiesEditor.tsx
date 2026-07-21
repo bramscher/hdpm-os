@@ -16,15 +16,18 @@ const COPY_STATUS_STYLES: Record<string, string> = {
 interface KeyCopiesEditorProps {
   slotId: string;
   keyTypes: KeyType[];
+  tenantNames?: string[];
   editable: boolean;
   onChanged: () => void;
 }
 
 /** Per-type copy tables with inline issue / return / lost actions. */
-export function KeyCopiesEditor({ slotId, keyTypes, editable, onChanged }: KeyCopiesEditorProps) {
+export function KeyCopiesEditor({ slotId, keyTypes, tenantNames = [], editable, onChanged }: KeyCopiesEditorProps) {
   const [busy, setBusy] = useState(false);
   const [addingType, setAddingType] = useState(false);
   const [newTypeLabel, setNewTypeLabel] = useState("");
+  const [editingCopyId, setEditingCopyId] = useState<string | null>(null);
+  const [holderDraft, setHolderDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function call(path: string, method: string, body?: unknown) {
@@ -44,6 +47,16 @@ export function KeyCopiesEditor({ slotId, keyTypes, editable, onChanged }: KeyCo
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveHolder(copyId: string, name: string, asTenant: boolean) {
+    const holderName = name.trim();
+    await call(`/api/keys/${slotId}/copies/${copyId}`, "PATCH", {
+      holderName: holderName || null,
+      // Naming a tenant as the holder also flips custody to 'tenant'.
+      ...(asTenant && holderName ? { holderType: "tenant" } : {}),
+    });
+    setEditingCopyId(null);
   }
 
   async function addType() {
@@ -100,7 +113,63 @@ export function KeyCopiesEditor({ slotId, keyTypes, editable, onChanged }: KeyCo
                     <td className="px-4 py-2 text-charcoal-700 w-28">
                       {HOLDER_LABELS[c.holder_type]}
                     </td>
-                    <td className="px-4 py-2 text-charcoal-500">{c.holder_name || "—"}</td>
+                    <td className="px-4 py-2 text-charcoal-500">
+                      {editingCopyId === c.id ? (
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <input
+                            value={holderDraft}
+                            onChange={(e) => setHolderDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveHolder(c.id, holderDraft, false);
+                              if (e.key === "Escape") setEditingCopyId(null);
+                            }}
+                            placeholder="Holder name…"
+                            autoFocus
+                            className="w-32 px-2 py-1 rounded border border-sand-200 text-xs focus:outline-none focus:ring-2 focus:ring-terra-400"
+                          />
+                          {tenantNames.map((name) => (
+                            <button
+                              key={name}
+                              disabled={busy}
+                              onClick={() => saveHolder(c.id, name, true)}
+                              title={`Set holder to ${name} (tenant)`}
+                              className="px-2 py-0.5 rounded-full bg-terra-50 text-terra-700 text-[11px] font-medium hover:bg-terra-100 border border-terra-200"
+                            >
+                              {name}
+                            </button>
+                          ))}
+                          <button
+                            disabled={busy}
+                            onClick={() => saveHolder(c.id, holderDraft, false)}
+                            className="text-xs font-semibold text-terra-600 hover:underline"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingCopyId(null)}
+                            className="text-xs text-charcoal-400 hover:text-charcoal-700"
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      ) : editable ? (
+                        <button
+                          onClick={() => {
+                            setEditingCopyId(c.id);
+                            setHolderDraft(c.holder_name ?? "");
+                          }}
+                          title="Edit holder"
+                          className={cn(
+                            "hover:underline decoration-dotted underline-offset-2 text-left",
+                            c.holder_name ? "text-charcoal-500" : "text-charcoal-300"
+                          )}
+                        >
+                          {c.holder_name || "Set holder"}
+                        </button>
+                      ) : (
+                        c.holder_name || "—"
+                      )}
+                    </td>
                     <td className="px-4 py-2">
                       <span
                         className={cn(

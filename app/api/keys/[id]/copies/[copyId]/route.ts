@@ -4,11 +4,12 @@ import { requireStaffSession } from '@/lib/maintenance/api-auth';
 import { appendKeyEvent } from '@/lib/keys';
 
 const COPY_STATUSES = new Set(['issued', 'returned', 'lost', 'destroyed']);
+const HOLDER_TYPES = new Set(['tenant', 'office', 'vendor', 'staff', 'other']);
 
 /**
  * PATCH /api/keys/:id/copies/:copyId — mark a copy returned / lost /
- * destroyed (or re-issued), correct holder name, toggle charged.
- * Body: { status?, holderName?, charged?, notes? }
+ * destroyed (or re-issued), correct holder name/type, toggle charged.
+ * Body: { status?, holderName?, holderType?, charged?, notes? }
  */
 export async function PATCH(
   request: NextRequest,
@@ -24,6 +25,7 @@ export async function PATCH(
     const body = (await request.json()) as {
       status?: string;
       holderName?: string;
+      holderType?: string;
       charged?: boolean;
       notes?: string;
     };
@@ -42,6 +44,12 @@ export async function PATCH(
       }
     }
     if (body.holderName !== undefined) fields.holder_name = body.holderName;
+    if (body.holderType !== undefined) {
+      if (!HOLDER_TYPES.has(body.holderType)) {
+        return NextResponse.json({ error: `Invalid holder type: ${body.holderType}` }, { status: 422 });
+      }
+      fields.holder_type = body.holderType;
+    }
     if (body.charged !== undefined) fields.charged = body.charged;
     if (body.notes !== undefined) fields.notes = body.notes;
     if (Object.keys(fields).length === 0) {

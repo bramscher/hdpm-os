@@ -245,6 +245,7 @@ export function KeyDetailClient({ slotId }: { slotId: string }) {
           <KeyCopiesEditor
             slotId={slotId}
             keyTypes={key_types}
+            tenantNames={assignment.tenant_names ?? []}
             editable={slot.status === "assigned" || slot.status === "vacant"}
             onChanged={load}
           />
