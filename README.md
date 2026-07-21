@@ -38,6 +38,7 @@ The operating system for **High Desert Property Management** (~835 doors across 
 - [Rent Comps](#rent-comps)
   - [Comps Dashboard](#comps-dashboard)
   - [Comps Analysis Wizard](#comps-analysis-wizard)
+- [Key Manager](#key-manager)
 - [Owner Reports](#owner-reports)
 - [AI Chat (ORS 90)](#ai-chat-ors-90)
 - [Scheduled Jobs (Crons)](#scheduled-jobs-crons)
@@ -414,6 +415,35 @@ A three-step wizard that produces a shareable comp report for owner presentation
 
 ---
 
+## Key Manager
+
+**Path:** `/keys`
+
+Physical key registry for the office key wall: 972 permanent key numbers, each either open (available), assigned to a property, vacant (move-out processed, awaiting reissue), or retired. Key numbers are permanent identities that can be recycled to a different property when freed — full history is preserved in an append-only event log per key.
+
+**Dashboard cards** (each clickable to filter the table):
+
+| Card | Meaning |
+|------|---------|
+| **Total Keys** | All key numbers in the registry |
+| **Assigned** | Keys attached to a property with copies issued |
+| **Vacant** | Move-out processed on the key: copies accounted for, waiting for reissue |
+| **AppFolio Vacant** | Linked keys whose AppFolio unit has no current tenants — the move-out work queue |
+| **Open #s** | Unused numbers available for new properties |
+| **Flagged** | Key state disagrees with AppFolio (e.g. key assigned but unit vacant) |
+
+**Copy custody model.** Default issue is 4 copies of the main key: 2 tenant copies (out), plus an **Office** copy and a **Vendor loaner** held in office custody. "X of 4 out" counts only copies issued to someone other than the office. The vendor loaner is checked out to a vendor from the key detail page (vendor-name chips, self-curating list via `/api/keys/vendors`) and checked back in when returned. Extra tenant copies are issued as charged. Additional key types (garage, shed, mailbox…) can be added per key.
+
+**Key detail page** (`/keys/[id]`): status transitions (assign → mark vacant → reissue → release/retire), per-copy tracking with click-to-edit holders (tenant chips from the AppFolio sync), notes, full history feed, and prev/next navigation between key numbers (chevrons or arrow keys).
+
+**Working the move-out queue:** click **AppFolio Vacant** → open each key → **Mark vacant** → record what happened to each outstanding copy (returned / lost) → key moves to Vacant and the flag clears. On the next move-in, **Reissue** creates a fresh copy set.
+
+**AppFolio sync** (hourly at :45) refreshes property/owner/tenant/occupancy snapshots on every linked key and raises flags on mismatches. Owner names are resolved via per-property `/owners` lookups, which are heavily rate-limited — the sync only resolves owners for keys missing one, capped at 60 lookups per run. The AppFolio "Owner Name" property custom field is unused in this account and cannot be relied on.
+
+**Seed import** (`/keys/import`, one-time): parses the master key list spreadsheet, matches addresses to AppFolio units through a tiered matcher (exact → street+unit → direction-insensitive → typo-tolerant), and previews matched / unmatched / open per row before commit. Unmatched rows import as **unlinked** and can be linked to a unit later from the detail page (Unlinked tab tracks the backlog).
+
+---
+
 ## Owner Reports
 
 **Path:** `/reports/owner`
@@ -463,6 +493,7 @@ Configured in `vercel.json`. All times are UTC.
 | **Every 15 min** | `/api/sync/work-orders?days=1` | AppFolio work-order mirror delta (+ vendor roster) |
 | **Every 30 min** | `/api/maintenance/cron/appfolio-webhook-resolve` | Resolve webhook-logged WO events against the mirror |
 | **Hourly** | `/api/sync/work-orders?days=7` | Work-order deep pass (webhook safety net) |
+| **Hourly at :45** | `/api/sync/keys` | Key Manager ↔ AppFolio sync: tenants, owners, occupancy, flags |
 | **9 AM daily** | `/api/sync/appfolio` | Full AppFolio sync: properties, vacancies, comps |
 | **9:30 AM daily** | `/api/inspections/candidates/sync` | Refresh inspection candidates (move-in-anchored cadence) |
 | **11 AM daily** | `/api/sync/zoom-contacts` | AppFolio → Zoom Phone contact sync |
