@@ -144,7 +144,12 @@ export async function syncKeyAssignments(): Promise<KeySyncResult> {
     const propId = unitToProperty.get(a.appfolio_unit_id);
     if (propId) needOwner.add(propId);
   }
-  const ownerMap = await fetchAppFolioPropertyOwnerMap([...needOwner]);
+  const OWNER_LOOKUP_BATCH = 60;
+  const ownerBatch = [...needOwner].slice(0, OWNER_LOOKUP_BATCH);
+  if (needOwner.size > ownerBatch.length) {
+    console.log(`[keys-sync] owner backlog ${needOwner.size}, resolving ${ownerBatch.length} this run`);
+  }
+  const ownerMap = await fetchAppFolioPropertyOwnerMap(ownerBatch);
   const propertiesWithOwners = properties.map((p) => ({
     ...p,
     ownerName: ownerMap.get(p.appfolioPropertyId) ?? p.ownerName,

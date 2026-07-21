@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HOLDER_LABELS, fmtDate } from "./shared";
@@ -21,6 +21,11 @@ interface KeyCopiesEditorProps {
   onChanged: () => void;
 }
 
+/** Vendor-custody copies get vendor chips; everything else gets tenant chips. */
+function isVendorLoaner(c: { holder_type: string; holder_name: string | null }): boolean {
+  return c.holder_type === "vendor" || (c.holder_type === "office" && c.holder_name === "Vendor loaner");
+}
+
 /** Per-type copy tables with inline issue / return / lost actions. */
 export function KeyCopiesEditor({ slotId, keyTypes, tenantNames = [], editable, onChanged }: KeyCopiesEditorProps) {
   const [busy, setBusy] = useState(false);
@@ -28,7 +33,16 @@ export function KeyCopiesEditor({ slotId, keyTypes, tenantNames = [], editable, 
   const [newTypeLabel, setNewTypeLabel] = useState("");
   const [editingCopyId, setEditingCopyId] = useState<string | null>(null);
   const [holderDraft, setHolderDraft] = useState("");
+  const [vendorNames, setVendorNames] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editable) return;
+    fetch("/api/keys/vendors")
+      .then((r) => r.json())
+      .then((d) => setVendorNames(d.vendors ?? []))
+      .catch(() => {});
+  }, [editable]);
 
   async function call(path: string, method: string, body?: unknown) {
     setBusy(true);
@@ -49,12 +63,12 @@ export function KeyCopiesEditor({ slotId, keyTypes, tenantNames = [], editable, 
     }
   }
 
-  async function saveHolder(copyId: string, name: string, asTenant: boolean) {
+  async function saveHolder(copyId: string, name: string, holderType?: "tenant" | "vendor") {
     const holderName = name.trim();
     await call(`/api/keys/${slotId}/copies/${copyId}`, "PATCH", {
       holderName: holderName || null,
-      // Naming a tenant as the holder also flips custody to 'tenant'.
-      ...(asTenant && holderName ? { holderType: "tenant" } : {}),
+      // Naming a tenant/vendor as the holder also flips custody to them.
+      ...(holderType && holderName ? { holderType } : {}),
     });
     setEditingCopyId(null);
   }
@@ -120,19 +134,19 @@ export function KeyCopiesEditor({ slotId, keyTypes, tenantNames = [], editable, 
                             value={holderDraft}
                             onChange={(e) => setHolderDraft(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") saveHolder(c.id, holderDraft, false);
+                              if (e.key === "Enter") saveHolder(c.id, holderDraft, isVendorLoaner(c) ? "vendor" : undefined);
                               if (e.key === "Escape") setEditingCopyId(null);
                             }}
                             placeholder="Holder name…"
                             autoFocus
                             className="w-32 px-2 py-1 rounded border border-sand-200 text-xs focus:outline-none focus:ring-2 focus:ring-terra-400"
                           />
-                          {tenantNames.map((name) => (
+                          {(isVendorLoaner(c) ? vendorNames : tenantNames).map((name) => (
                             <button
                               key={name}
                               disabled={busy}
-                              onClick={() => saveHolder(c.id, name, true)}
-                              title={`Set holder to ${name} (tenant)`}
+                              onClick={() => saveHolder(c.id, name, isVendorLoaner(c) ? "vendor" : "tenant")}
+                              title={`Set holder to ${name} (${isVendorLoaner(c) ? "vendor" : "tenant"})`}
                               className="px-2 py-0.5 rounded-full bg-terra-50 text-terra-700 text-[11px] font-medium hover:bg-terra-100 border border-terra-200"
                             >
                               {name}
@@ -140,7 +154,7 @@ export function KeyCopiesEditor({ slotId, keyTypes, tenantNames = [], editable, 
                           ))}
                           <button
                             disabled={busy}
-                            onClick={() => saveHolder(c.id, holderDraft, false)}
+                            onClick={() => saveHolder(c.id, holderDraft, isVendorLoaner(c) ? "vendor" : undefined)}
                             className="text-xs font-semibold text-terra-600 hover:underline"
                           >
                             Save
@@ -193,13 +207,19 @@ export function KeyCopiesEditor({ slotId, keyTypes, tenantNames = [], editable, 
                             <button
                               disabled={busy}
                               onClick={() =>
-                                call(`/api/keys/${slotId}/copies/${c.id}`, "PATCH", {
-                                  status: "returned",
-                                })
+                                c.holder_type === "vendor"
+                                  ? // Loaner comes back to the office hook, still active.
+                                    call(`/api/keys/${slotId}/copies/${c.id}`, "PATCH", {
+                                      holderType: "office",
+                                      holderName: "Vendor loaner",
+                                    })
+                                  : call(`/api/keys/${slotId}/copies/${c.id}`, "PATCH", {
+                                      status: "returned",
+                                    })
                               }
                               className="text-xs font-medium text-terra-600 hover:underline"
                             >
-                              Return
+                              {c.holder_type === "vendor" ? "Check in" : "Return"}
                             </button>
                             <button
                               disabled={busy}

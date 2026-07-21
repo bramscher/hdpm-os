@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/sync/keys",
-      "schedule": "15 9 * * *"
+      "schedule": "45 * * * *"
     },
     {
       "path": "/api/kpi/cron",
