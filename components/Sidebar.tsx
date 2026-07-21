@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { FileText, BarChart3, Home, MessageCircle, LogOut, ChevronRight, ChevronLeft, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot } from "lucide-react";
+import { FileText, BarChart3, Home, MessageCircle, LogOut, ChevronRight, ChevronLeft, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -58,6 +58,12 @@ const NAV_ITEMS = [
     href: "/comps",
     icon: BarChart3,
     matchPrefix: "/comps",
+  },
+  {
+    label: "Keys",
+    href: "/keys",
+    icon: KeyRound,
+    matchPrefix: "/keys",
   },
   {
     label: "Craigslist",

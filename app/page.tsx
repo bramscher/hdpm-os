@@ -22,6 +22,7 @@ import {
   Wrench,
   Activity,
   Phone,
+  KeyRound,
 } from "lucide-react";
 
 function getGreeting() {
@@ -486,6 +487,38 @@ export default function Home() {
                 <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
                   <BarChart3 className="w-3 h-3" />
                   <span>PDF reports</span>
+                </div>
+              </div>
+            </div>
+          </Link>
+
+          {/* Key Manager */}
+          <Link
+            href="/keys"
+            className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-terra-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
+            <div className="relative">
+              <div className="flex items-start justify-between mb-5">
+                <div className="w-11 h-11 bg-terra-100 rounded-xl flex items-center justify-center">
+                  <KeyRound className="w-5 h-5 text-terra-600" />
+                </div>
+                <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-terra-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
+              </div>
+              <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
+                Key Manager
+              </h3>
+              <p className="text-sm text-charcoal-400 leading-relaxed">
+                Physical key registry — assignments, copies out, vacancy workflow, and full history per key number.
+              </p>
+              <div className="mt-4 flex items-center gap-4">
+                <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
+                  <KeyRound className="w-3 h-3" />
+                  <span>AppFolio-synced</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
+                  <Clock className="w-3 h-3" />
+                  <span>Never overwritten</span>
                 </div>
               </div>
             </div>

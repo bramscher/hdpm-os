@@ -21,6 +21,10 @@
       "schedule": "30 9 * * *"
     },
     {
+      "path": "/api/sync/keys",
+      "schedule": "15 9 * * *"
+    },
+    {
       "path": "/api/kpi/cron",
       "schedule": "0 14 * * *"
     },
