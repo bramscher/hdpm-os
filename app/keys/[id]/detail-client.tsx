@@ -2,7 +2,8 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, KeyRound, AlertTriangle, Link2Off } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, ChevronLeft, ChevronRight, KeyRound, AlertTriangle, Link2Off } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, SYNC_FLAG_LABELS, fmtDate } from "@/components/keys/shared";
 import { AssignKeyModal } from "@/components/keys/AssignKeyModal";
@@ -26,6 +27,7 @@ export function KeyDetailClient({ slotId }: { slotId: string }) {
   const [savingNote, setSavingNote] = useState(false);
   const [linkUnit, setLinkUnit] = useState<KeyUnitOption | null>(null);
   const [linking, setLinking] = useState(false);
+  const router = useRouter();
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +46,21 @@ export function KeyDetailClient({ slotId }: { slotId: string }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Arrow-key navigation between adjacent key numbers (inactive while typing
+  // or while a modal is open).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (modal) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const nav = detail?.nav;
+      if (e.key === "ArrowLeft" && nav?.prev) router.push(`/keys/${nav.prev.id}`);
+      if (e.key === "ArrowRight" && nav?.next) router.push(`/keys/${nav.next.id}`);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [detail, modal, router]);
 
   async function transition(action: string) {
     const res = await fetch(`/api/keys/${slotId}/transition`, {
@@ -131,12 +148,42 @@ export function KeyDetailClient({ slotId }: { slotId: string }) {
     <div className="space-y-6">
       {/* Back + header */}
       <div>
-        <Link
-          href="/keys"
-          className="inline-flex items-center gap-1 text-xs font-medium text-charcoal-400 hover:text-charcoal-700 mb-4"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" /> Key Manager
-        </Link>
+        <div className="flex items-center justify-between mb-4">
+          <Link
+            href="/keys"
+            className="inline-flex items-center gap-1 text-xs font-medium text-charcoal-400 hover:text-charcoal-700"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Key Manager
+          </Link>
+          <div className="flex items-center gap-1">
+            {detail.nav?.prev ? (
+              <Link
+                href={`/keys/${detail.nav.prev.id}`}
+                title={`Key #${detail.nav.prev.key_number} (←)`}
+                className="inline-flex items-center gap-0.5 px-2 py-1 rounded-lg text-xs font-medium text-charcoal-500 hover:text-charcoal-900 hover:bg-sand-100"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" /> #{detail.nav.prev.key_number}
+              </Link>
+            ) : (
+              <span className="px-2 py-1 text-xs text-charcoal-200">
+                <ChevronLeft className="w-3.5 h-3.5 inline" />
+              </span>
+            )}
+            {detail.nav?.next ? (
+              <Link
+                href={`/keys/${detail.nav.next.id}`}
+                title={`Key #${detail.nav.next.key_number} (→)`}
+                className="inline-flex items-center gap-0.5 px-2 py-1 rounded-lg text-xs font-medium text-charcoal-500 hover:text-charcoal-900 hover:bg-sand-100"
+              >
+                #{detail.nav.next.key_number} <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            ) : (
+              <span className="px-2 py-1 text-xs text-charcoal-200">
+                <ChevronRight className="w-3.5 h-3.5 inline" />
+              </span>
+            )}
+          </div>
+        </div>
 
         <div className="bg-white rounded-xl border border-sand-200 shadow-card p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">

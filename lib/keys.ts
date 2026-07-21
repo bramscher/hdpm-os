@@ -197,7 +197,7 @@ export async function getKeyDetail(slotId: string): Promise<KeyDetail | null> {
     throw new Error(`Failed to load key slot: ${error.message}`);
   }
 
-  const [{ data: assignments, error: aErr }, { data: events, error: eErr }] = await Promise.all([
+  const [{ data: assignments, error: aErr }, { data: events, error: eErr }, { data: prevSlot }, { data: nextSlot }] = await Promise.all([
     supabase
       .from('key_assignment')
       .select('*')
@@ -209,6 +209,20 @@ export async function getKeyDetail(slotId: string): Promise<KeyDetail | null> {
       .eq('key_slot_id', slotId)
       .order('created_at', { ascending: false })
       .limit(200),
+    supabase
+      .from('key_slot')
+      .select('id, key_number')
+      .lt('key_number', (slot as KeySlot).key_number)
+      .order('key_number', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('key_slot')
+      .select('id, key_number')
+      .gt('key_number', (slot as KeySlot).key_number)
+      .order('key_number', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
   ]);
   if (aErr) throw new Error(`Failed to load assignments: ${aErr.message}`);
   if (eErr) throw new Error(`Failed to load events: ${eErr.message}`);
@@ -240,6 +254,10 @@ export async function getKeyDetail(slotId: string): Promise<KeyDetail | null> {
     key_types: keyTypes,
     past_assignments: all.filter((a) => a.released_at !== null),
     events: (events || []) as KeyEvent[],
+    nav: {
+      prev: (prevSlot as { id: string; key_number: number } | null) ?? null,
+      next: (nextSlot as { id: string; key_number: number } | null) ?? null,
+    },
   };
 }
 

@@ -121,6 +121,11 @@ export interface KeyDetail {
   key_types: KeyType[];
   past_assignments: KeyAssignment[];
   events: KeyEvent[];
+  /** Adjacent slots by key_number for prev/next navigation. */
+  nav: {
+    prev: { id: string; key_number: number } | null;
+    next: { id: string; key_number: number } | null;
+  };
 }
 
 /** Copy template used when assigning/reissuing (editable in the modal). */
