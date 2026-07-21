@@ -130,7 +130,8 @@ const STREET_ABBREV: Record<string, string> = {
   place: 'pl', 'pl.': 'pl',
   lane: 'ln', 'ln.': 'ln',
   boulevard: 'blvd', 'blvd.': 'blvd',
-  circle: 'cir', 'cir.': 'cir',
+  circle: 'cir', 'cir.': 'cir', cr: 'cir',
+  lp: 'loop',
   way: 'way',
   loop: 'loop',
   terrace: 'ter', 'ter.': 'ter',
@@ -143,15 +144,31 @@ const STREET_ABBREV: Record<string, string> = {
  * ("#A", "# A", "Apt A", "Unit A" -> "#a"), fix glued number+direction
  * ("1551NE" -> "1551 ne").
  */
+const CITY_WORDS = new Set([
+  'bend', 'redmond', 'madras', 'sisters', 'culver', 'prineville',
+  'terrebonne', 'tumalo', 'alfalfa', 'metolius',
+]);
+const JUNK_WORDS = new Set(['duplex', 'triplex', 'fourplex', '4-plex', 'or', 'oregon']);
+
 export function normalizeAddressString(address: string): string {
   let s = address.trim().toLowerCase();
   s = s.replace(/(\d)([a-z]{2})\b/g, (m, num, dir) =>
     ['ne', 'nw', 'se', 'sw'].includes(dir) ? `${num} ${dir}` : m
   );
-  s = s.replace(/\b(apt|unit|apartment)\.?\s*/g, '#');
-  s = s.replace(/#\s+/g, '#');
+  s = s.replace(/\b(apt|unit|apartment|ste|suite|space|spc)\.?\s*/g, '#');
+  s = s.replace(/\bm#/g, '#'); // mobile-home space markers ("M#57")
+  s = s.replace(/#[\s#]+/g, '#'); // "# 1" / "##1" -> "#1"
   s = s.replace(/\s+/g, ' ').trim();
-  const words = s.split(' ').map((w) => STREET_ABBREV[w] ?? w);
+  let words = s
+    .split(' ')
+    .map((w) => w.replace(/[.,]+$/g, ''))
+    .map((w) => STREET_ABBREV[w] ?? w)
+    .filter((w) => w !== '-' && w !== '' && !JUNK_WORDS.has(w));
+  // Drop trailing city names ("318 NE Hillcrest, Madras") — but keep street
+  // names that merely end in a city word ("123 River Bend" stays intact).
+  while (words.length > 3 && CITY_WORDS.has(words[words.length - 1])) {
+    words.pop();
+  }
   return words.join(' ').replace(/[.,]/g, '');
 }
 
@@ -209,6 +226,36 @@ export function buildUnitMatchTargets(
   return targets;
 }
 
+const DIRECTION_WORDS = new Set(['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']);
+const FRACTION_RE = /^\d\/\d$/;
+
+/**
+ * Decompose a normalized address into comparable parts: the unit designator
+ * (after '#', or a bare fraction like "1/4"), the street key without its
+ * suffix, and a direction-less variant of that key for typo'd or omitted
+ * N/S/E/W prefixes.
+ */
+export function addressMatchParts(normalized: string): {
+  unit: string | null;
+  key: string;
+  dirlessKey: string;
+} {
+  const [base, ...unitParts] = normalized.split('#');
+  let unit: string | null = unitParts.join('').replace(/\s/g, '') || null;
+  let words = base.trim().split(' ').filter(Boolean);
+  const fraction = words.find((w) => FRACTION_RE.test(w));
+  if (fraction) {
+    words = words.filter((w) => !FRACTION_RE.test(w));
+    unit = unit ?? fraction;
+  }
+  if (words.length > 2 && Object.values(STREET_ABBREV).includes(words[words.length - 1])) {
+    words.pop();
+  }
+  const key = words.join(' ');
+  const dirlessKey = words.filter((w) => !DIRECTION_WORDS.has(w)).join(' ');
+  return { unit, key, dirlessKey };
+}
+
 export function matchRowToUnit(
   rawAddress: string,
   targets: UnitMatchTarget[]
@@ -218,11 +265,68 @@ export function matchRowToUnit(
   if (exact.length === 1) return exact[0];
   if (exact.length > 1) return null; // ambiguous — leave unlinked for manual pick
 
-  const key = streetKeyOf(normalized);
-  if (!/^\d/.test(key)) return null; // no leading street number — too weak
-  const fuzzy = targets.filter((t) => t.streetKey === key);
-  if (fuzzy.length === 1) return fuzzy[0];
+  const row = addressMatchParts(normalized);
+  if (!/^\d/.test(row.key)) return null; // no leading street number — too weak
+
+  const parts = targets.map((t) => ({ t, p: addressMatchParts(t.normalized) }));
+
+  // Tiered passes, strictest first; each must resolve to exactly one unit.
+  const unitCompatible = (u: string | null) =>
+    u === row.unit || u === null || row.unit === null;
+  const passes: ((c: { p: ReturnType<typeof addressMatchParts> }) => boolean)[] = [
+    (c) => c.p.key === row.key && c.p.unit === row.unit,
+    (c) => c.p.key === row.key && unitCompatible(c.p.unit),
+    (c) => c.p.dirlessKey === row.dirlessKey && c.p.unit === row.unit,
+    (c) => c.p.dirlessKey === row.dirlessKey && unitCompatible(c.p.unit),
+  ];
+  for (const pass of passes) {
+    const hits = parts.filter(pass);
+    if (hits.length === 1) return hits[0].t;
+    if (hits.length > 1 && row.unit === null) {
+      // Multiple units share this street and the sheet row names none —
+      // ambiguous, leave unlinked rather than guess.
+      return null;
+    }
+  }
+
+  // Last resort: tolerate small spelling drift in the street name
+  // ("Holiday" / "Holliday", "Penhallow" / "Penhollow"). Street number and
+  // any digit-bearing tokens ("30th") must still match exactly.
+  const typo = parts.filter(
+    (c) =>
+      unitCompatible(c.p.unit) &&
+      nameSpelling(c.p.dirlessKey).number === nameSpelling(row.dirlessKey).number &&
+      nameSpelling(c.p.dirlessKey).digits === nameSpelling(row.dirlessKey).digits &&
+      levenshtein(nameSpelling(c.p.dirlessKey).letters, nameSpelling(row.dirlessKey).letters) <= 2
+  );
+  if (typo.length === 1) return typo[0].t;
   return null;
+}
+
+/** Split a dirless street key into number, ordinal-stripped digit tokens, and a spaceless letter string. */
+function nameSpelling(dirlessKey: string): { number: string; digits: string; letters: string } {
+  const [number, ...rest] = dirlessKey.split(' ');
+  const digits = rest
+    .filter((w) => /\d/.test(w))
+    .map((w) => w.replace(/(st|nd|rd|th)$/, ''))
+    .join(' ');
+  const letters = rest.filter((w) => !/\d/.test(w)).join('');
+  return { number: number ?? '', digits, letters };
+}
+
+function levenshtein(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 3; // early out — caller only cares about <=2
+  const prev = new Array(b.length + 1).fill(0).map((_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j];
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = tmp;
+    }
+  }
+  return prev[b.length];
 }
 
 // ---------------------------------------------------------------------------

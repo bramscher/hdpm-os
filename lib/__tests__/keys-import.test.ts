@@ -172,3 +172,62 @@ describe('validateKeyRows', () => {
     expect(preview.rows[1].issues[0]).toMatch(/Duplicate/);
   });
 });
+
+describe('matchRowToUnit — fuzzy passes', () => {
+  const FUZZY_TARGETS = buildUnitMatchTargets(
+    [
+      unit('t1', '1538 SE Tempest Dr', '#1'),
+      unit('t2', '1538 SE Tempest Dr', '#2'),
+      unit('b1', '1337 NE Barney St'),
+      unit('h1', '2214 NE Holliday Ave'),
+      unit('c1', '3015 NW Cedar Ave'),
+      unit('s1', '205 N Tamarack St'),
+      unit('m1', '365 1/4 SE Miller Ave'),
+      unit('m2', '365 SE Miller Ave'),
+      unit('bw1', '218 NW Broadway St ##1'),
+      unit('f1', '2506 SW Fissure Lp'),
+    ],
+    [
+      property('t1', 'Sokol'), property('t2', 'Sokol'), property('b1', 'Gimpl'),
+      property('h1', 'Pfeifer'), property('c1', 'Bussiere'), property('s1', 'Thorne'),
+      property('m1', 'Coblin'), property('m2', 'Coblin'), property('bw1', 'Fleming'),
+      property('f1', 'N2'),
+    ]
+  );
+
+  it('matches units when the sheet omits the street suffix', () => {
+    expect(matchRowToUnit('1538 SE Tempest # 1', FUZZY_TARGETS)?.appfolioUnitId).toBe('t1');
+    expect(matchRowToUnit('1538 SE Tempest # 2', FUZZY_TARGETS)?.appfolioUnitId).toBe('t2');
+  });
+
+  it('stays null when multiple units exist and the sheet names none', () => {
+    expect(matchRowToUnit('1538 SE Tempest', FUZZY_TARGETS)).toBeNull();
+  });
+
+  it('matches when the sheet omits or typos the direction', () => {
+    expect(matchRowToUnit('1337 Barney St', FUZZY_TARGETS)?.appfolioUnitId).toBe('b1');
+    expect(matchRowToUnit('3015 NE Cedar Ave', FUZZY_TARGETS)?.appfolioUnitId).toBe('c1');
+  });
+
+  it('strips trailing city names and junk words', () => {
+    expect(matchRowToUnit('205 N Tamarack, Sisters', FUZZY_TARGETS)?.appfolioUnitId).toBe('s1');
+    expect(matchRowToUnit('365 SE Miller   Bend   Duplex', FUZZY_TARGETS)?.appfolioUnitId).toBe('m2');
+  });
+
+  it('treats fractions as unit designators', () => {
+    expect(matchRowToUnit('365 SE Miller 1/4  Bend  Duplex', FUZZY_TARGETS)?.appfolioUnitId).toBe('m1');
+  });
+
+  it('collapses doubled hash marks from AppFolio address2', () => {
+    expect(matchRowToUnit('218 NW Broadway Street #1', FUZZY_TARGETS)?.appfolioUnitId).toBe('bw1');
+  });
+
+  it('tolerates small street-name spelling drift', () => {
+    expect(matchRowToUnit('2214 NE Holiday Ave', FUZZY_TARGETS)?.appfolioUnitId).toBe('h1');
+    expect(matchRowToUnit('2506 SW Fissure Loop', FUZZY_TARGETS)?.appfolioUnitId).toBe('f1');
+  });
+
+  it('does not cross-match different streets with the same number', () => {
+    expect(matchRowToUnit('1337 Ramsay St', FUZZY_TARGETS)).toBeNull();
+  });
+});
