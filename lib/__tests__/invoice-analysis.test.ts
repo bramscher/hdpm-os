@@ -12,6 +12,8 @@ function inv(over: Partial<HdmsInvoice>): HdmsInvoice {
     property_name: 'P',
     property_address: 'A',
     wo_reference: null,
+    work_order_id: null,
+    assigned_tech: null,
     completed_date: null,
     description: '',
     labor_amount: 0,

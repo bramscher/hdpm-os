@@ -82,6 +82,13 @@ export interface HdmsInvoice {
   property_name: string;
   property_address: string;
   wo_reference: string | null;
+  work_order_id: string | null;
+  /**
+   * Staff member on the underlying work order (derived at fetch time, not a
+   * DB column): work_orders.assigned_to via work_order_id, falling back to a
+   * wo_reference → wo_number match, then to the labor lines' technician.
+   */
+  assigned_tech: string | null;
   completed_date: string | null;
   description: string;
   labor_amount: number;
@@ -208,7 +215,82 @@ export async function getInvoices(limit = 50, offset = 0): Promise<HdmsInvoice[]
     throw new Error(`Failed to fetch invoices: ${error.message}`);
   }
 
-  return data as HdmsInvoice[];
+  return attachAssignedTech(data as HdmsInvoice[]);
+}
+
+// `.in()` filters go into the request query string, so keep chunks well under
+// URL-length limits (and under PostgREST's 1000-row default cap).
+const WO_LOOKUP_CHUNK = 500;
+
+/**
+ * Populate `assigned_tech` on each invoice from its work order's assigned_to
+ * (by work_order_id, else wo_reference → wo_number), falling back to the labor
+ * lines' technician. Lookup failures degrade to the line-item fallback rather
+ * than failing the fetch.
+ */
+async function attachAssignedTech(invoices: HdmsInvoice[]): Promise<HdmsInvoice[]> {
+  const supabase = getSupabaseAdmin();
+
+  const ids = [...new Set(invoices.map((i) => i.work_order_id).filter((v): v is string => !!v))];
+  const refs = [
+    ...new Set(
+      invoices
+        .filter((i) => !i.work_order_id && i.wo_reference)
+        .map((i) => i.wo_reference as string)
+    ),
+  ];
+
+  const byId = new Map<string, string | null>();
+  const byWoNumber = new Map<string, string | null>();
+
+  for (let c = 0; c < ids.length; c += WO_LOOKUP_CHUNK) {
+    const { data, error } = await supabase
+      .from('work_orders')
+      .select('id, assigned_to')
+      .in('id', ids.slice(c, c + WO_LOOKUP_CHUNK));
+    if (error) console.error('Work-order assigned_to lookup failed:', error);
+    for (const wo of data ?? []) byId.set(wo.id, wo.assigned_to);
+  }
+  for (let c = 0; c < refs.length; c += WO_LOOKUP_CHUNK) {
+    const { data, error } = await supabase
+      .from('work_orders')
+      .select('wo_number, assigned_to')
+      .in('wo_number', refs.slice(c, c + WO_LOOKUP_CHUNK));
+    if (error) console.error('Work-order assigned_to lookup failed:', error);
+    for (const wo of data ?? []) if (wo.wo_number) byWoNumber.set(wo.wo_number, wo.assigned_to);
+  }
+
+  return invoices.map((inv) => {
+    const raw = inv.work_order_id
+      ? byId.get(inv.work_order_id)
+      : inv.wo_reference
+        ? byWoNumber.get(inv.wo_reference)
+        : null;
+    return { ...inv, assigned_tech: deriveAssignedTech(raw, inv.line_items) };
+  });
+}
+
+/**
+ * Best staff attribution for an invoice: a recognized technician from the WO
+ * assignment, else from the labor lines, else the raw WO assignee string
+ * (covers staff beyond the TECHNICIANS list), else the raw labor-line name.
+ */
+function deriveAssignedTech(
+  rawAssigned: string | null | undefined,
+  lineItems: LineItem[] | null
+): string | null {
+  const fromWo = normalizeTechnician(rawAssigned);
+  if (fromWo) return fromWo;
+
+  const laborTech = lineItems?.find(
+    (li) => (li.type || 'labor') === 'labor' && li.technician?.trim()
+  )?.technician;
+  const fromLabor = normalizeTechnician(laborTech);
+  if (fromLabor) return fromLabor;
+
+  if (rawAssigned?.trim()) return rawAssigned.trim();
+  if (laborTech?.trim()) return laborTech.trim();
+  return null;
 }
 
 export async function getInvoiceById(id: string): Promise<HdmsInvoice | null> {
@@ -226,7 +308,8 @@ export async function getInvoiceById(id: string): Promise<HdmsInvoice | null> {
     throw new Error(`Failed to fetch invoice: ${error.message}`);
   }
 
-  return data as HdmsInvoice;
+  const [invoice] = await attachAssignedTech([data as HdmsInvoice]);
+  return invoice;
 }
 
 export async function updateInvoice(id: string, input: UpdateInvoiceInput): Promise<HdmsInvoice> {

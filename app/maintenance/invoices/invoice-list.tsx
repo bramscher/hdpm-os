@@ -22,10 +22,11 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { HdmsInvoice } from "@/lib/invoices";
+import { HdmsInvoice, TECHNICIANS } from "@/lib/invoices";
 
 // How many invoice cards to show per page.
 const PAGE_SIZE = 25;
@@ -43,8 +44,11 @@ interface InvoiceListProps {
 
 type PaidFilter = "all" | "unpaid" | "paid";
 
+/** Tech filter: "all", a staff name, or "none" (no staff attribution). */
+type TechFilter = string;
+
 // ── Sort + date helpers ──────────
-type SortField = "date" | "number" | "amount" | "property";
+type SortField = "date" | "number" | "amount" | "property" | "tech";
 
 /** The date an invoice is filtered/sorted on: completed date, falling back to created. */
 function invoiceDate(inv: HdmsInvoice): Date | null {
@@ -231,8 +235,19 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
+  const [techFilter, setTechFilter] = useState<TechFilter>("all");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  // Staff names present in the data, known technicians first (Brody, Alberto, …).
+  const techOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const inv of invoices) if (inv.assigned_tech) names.add(inv.assigned_tech);
+    const known = TECHNICIANS.filter((t) => names.has(t));
+    const rest = [...names].filter((n) => !(TECHNICIANS as readonly string[]).includes(n)).sort();
+    return [...known, ...rest];
+  }, [invoices]);
+  const hasUnassigned = useMemo(() => invoices.some((i) => !i.assigned_tech), [invoices]);
 
   // Filtered + sorted invoices for display.
   const visible = useMemo(() => {
@@ -251,6 +266,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
           inv.property_address,
           inv.wo_reference,
           inv.description,
+          inv.assigned_tech,
         ]
           .filter(Boolean)
           .join(" ")
@@ -261,6 +277,11 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
       // Paid / unpaid filter (payment_id presence = reconciled to a payment).
       if (paidFilter === "paid" && !inv.payment_id) return false;
       if (paidFilter === "unpaid" && inv.payment_id) return false;
+
+      // Assigned-staff filter.
+      if (techFilter === "none" && inv.assigned_tech) return false;
+      if (techFilter !== "all" && techFilter !== "none" && inv.assigned_tech !== techFilter)
+        return false;
 
       if (fromMs === null && toMs === null) return true;
       const d = invoiceDate(inv);
@@ -279,6 +300,12 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
         cmp = (a.total_amount || 0) - (b.total_amount || 0);
       } else if (sortField === "property") {
         cmp = (a.property_name || "").localeCompare(b.property_name || "");
+      } else if (sortField === "tech") {
+        // Unassigned sorts last regardless of direction.
+        if (!a.assigned_tech && !b.assigned_tech) cmp = 0;
+        else if (!a.assigned_tech) return 1;
+        else if (!b.assigned_tech) return -1;
+        else cmp = a.assigned_tech.localeCompare(b.assigned_tech);
       } else {
         const ad = invoiceDate(a)?.getTime() ?? 0;
         const bd = invoiceDate(b)?.getTime() ?? 0;
@@ -287,7 +314,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [invoices, search, dateFrom, dateTo, paidFilter, sortField, sortDir]);
+  }, [invoices, search, dateFrom, dateTo, paidFilter, techFilter, sortField, sortDir]);
 
   // ── Pagination over the filtered/sorted list ──────────
   const [page, setPage] = useState(1);
@@ -296,7 +323,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
   // Snap back to page 1 whenever the filter/sort inputs change.
   useEffect(() => {
     setPage(1);
-  }, [search, dateFrom, dateTo, paidFilter, sortField, sortDir]);
+  }, [search, dateFrom, dateTo, paidFilter, techFilter, sortField, sortDir]);
 
   // Keep the page in range if the underlying list shrinks (e.g. after a delete).
   useEffect(() => {
@@ -357,7 +384,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
-      setSortDir(field === "property" ? "asc" : "desc");
+      setSortDir(field === "property" || field === "tech" ? "asc" : "desc");
     }
   }
 
@@ -492,6 +519,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
               <SortButton field="number" label="Invoice #" />
               <SortButton field="amount" label="Amount" />
               <SortButton field="property" label="Property" />
+              <SortButton field="tech" label="Assigned" />
               <span className="mx-1 text-sand-300">|</span>
               <div className="inline-flex rounded-lg border border-sand-200 overflow-hidden">
                 {(["all", "unpaid", "paid"] as PaidFilter[]).map((f) => (
@@ -510,6 +538,30 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
                   </button>
                 ))}
               </div>
+              {techOptions.length > 0 && (
+                <>
+                  <span className="mx-1 text-sand-300">|</span>
+                  <span className="text-[10px] font-medium text-charcoal-400 uppercase mr-1">Assigned:</span>
+                  <div className="inline-flex rounded-lg border border-sand-200 overflow-hidden">
+                    {["all", ...techOptions, ...(hasUnassigned ? ["none"] : [])].map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setTechFilter(f)}
+                        className={cn(
+                          "px-2 py-1 text-[10px] font-medium transition-colors",
+                          (f === "all" || f === "none") && "capitalize",
+                          techFilter === f
+                            ? "bg-terra-500 text-white"
+                            : "bg-white text-charcoal-500 hover:text-charcoal-700"
+                        )}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-medium text-charcoal-400 uppercase">From:</span>
@@ -672,6 +724,15 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
                         {invoice.wo_reference && (
                           <span className="text-[10px] text-charcoal-400 font-mono">
                             WO#{invoice.wo_reference}
+                          </span>
+                        )}
+                        {invoice.assigned_tech && (
+                          <span
+                            title="Staff assigned to the work order"
+                            className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full font-medium bg-blue-100/80 text-blue-700"
+                          >
+                            <UserRound className="h-2.5 w-2.5" />
+                            {invoice.assigned_tech}
                           </span>
                         )}
                         {invoice.payment_id && (
