@@ -117,6 +117,14 @@ export interface HdmsInvoice {
   pdf_path: string | null;
   /** Set when this invoice has been reconciled to a trust-account payment (see lib/payments.ts). */
   payment_id: string | null;
+  /**
+   * AppFolio billing comparison (derived at fetch time by lib/af-bills.ts
+   * attachAfBillsToInvoices, not DB columns): sum/count of matched AppFolio
+   * bills and whether the amounts agree ('match' | 'mismatch' | 'unbilled').
+   */
+  af_billed_total?: number | null;
+  af_bill_count?: number;
+  af_bill_status?: 'match' | 'mismatch' | 'unbilled' | null;
   created_by: string;
   created_at: string;
   updated_at: string;

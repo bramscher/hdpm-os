@@ -736,9 +736,16 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
                           </span>
                         )}
                         {invoice.payment_id && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full font-medium bg-green-100/80 text-green-700">
+                          <span
+                            title={
+                              invoice.af_bill_status === "match"
+                                ? "Paid and AppFolio bill matches — fully reconciled"
+                                : "Reconciled to a trust-account payment"
+                            }
+                            className="inline-flex items-center gap-0.5 text-[10px] px-2 py-0.5 rounded-full font-medium bg-green-100/80 text-green-700"
+                          >
                             <Wallet className="h-2.5 w-2.5" />
-                            Paid
+                            {invoice.af_bill_status === "match" ? "Reconciled" : "Paid"}
                           </span>
                         )}
                       </div>
@@ -772,6 +779,28 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
                         {invoice.materials_amount > 0 && (
                           <span className="text-amber-500">M: {formatCurrency(invoice.materials_amount)}</span>
                         )}
+                      </div>
+                    )}
+                    {/* AppFolio billing check: the bill amount entered in AppFolio
+                        next to our invoice total (green = matches to the cent). */}
+                    {invoice.af_bill_status === "match" && (
+                      <div className="text-[10px] font-medium text-green-600 mt-0.5" title="AppFolio bill matches this invoice amount">
+                        AF: {formatCurrency(invoice.af_billed_total ?? 0)} ✓
+                      </div>
+                    )}
+                    {invoice.af_bill_status === "mismatch" && (
+                      <div
+                        className="text-[10px] font-medium text-amber-600 mt-0.5"
+                        title={`AppFolio billed ${formatCurrency(invoice.af_billed_total ?? 0)} vs invoice ${formatCurrency(invoice.total_amount)}`}
+                      >
+                        AF: {formatCurrency(invoice.af_billed_total ?? 0)} (
+                        {(invoice.af_billed_total ?? 0) > invoice.total_amount ? "+" : "−"}
+                        {formatCurrency(Math.abs((invoice.af_billed_total ?? 0) - invoice.total_amount))})
+                      </div>
+                    )}
+                    {invoice.af_bill_status === "unbilled" && (
+                      <div className="text-[10px] font-medium text-red-500 mt-0.5" title="No AppFolio bill found for this invoice — revenue not yet billed">
+                        AF: not billed
                       </div>
                     )}
                   </div>

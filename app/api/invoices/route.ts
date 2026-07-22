@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { createInvoice, getInvoices } from '@/lib/invoices';
+import { attachAfBillsToInvoices } from '@/lib/af-bills';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +18,9 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 5000);
     const offset = parseInt(searchParams.get('offset') || '0', 10) || 0;
 
-    const invoices = await getInvoices(limit, offset);
+    // Decorated with af_billed_total/af_bill_status so the UI can show the
+    // AppFolio-billed amount next to each invoice amount.
+    const invoices = await attachAfBillsToInvoices(await getInvoices(limit, offset));
     return NextResponse.json({ invoices });
   } catch (error) {
     console.error('Get invoices error:', error);

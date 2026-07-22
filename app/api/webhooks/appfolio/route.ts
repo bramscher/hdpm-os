@@ -11,6 +11,7 @@ import {
   upsertSingleWorkOrder,
 } from '@/lib/work-orders';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { upsertAfBillFromWebhook } from '@/lib/af-bills';
 
 // ============================================
 // Webhook Payload Type
@@ -102,6 +103,11 @@ async function logWebhookEvent(
       entity = await fetchJournalEntryById(entityId);
     } else if (/bill/i.test(topic)) {
       entity = await fetchBillById(entityId);
+      // Keep the af_bills snapshot fresh between manual syncs (HDMS bills only).
+      if (entity) {
+        const captured = await upsertAfBillFromWebhook(entity);
+        if (captured) console.log(`[Webhook] HDMS bill ${entityId} upserted into af_bills`);
+      }
     }
     // Other topics (charges/checks/test/etc): log the payload; no fetcher yet.
   } catch (err) {

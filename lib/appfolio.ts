@@ -887,6 +887,57 @@ export async function fetchBillById(
   }
 }
 
+/** Raw v0 bill record (fields verified against live payloads 2026-07-22). */
+export interface V0Bill {
+  Id: string;
+  Reference?: string | null;
+  Description?: string | null;
+  VendorId?: string | null;
+  TotalAmount?: string | null;
+  InvoiceDate?: string | null;
+  DueDate?: string | null;
+  ApprovalStatus?: string | null;
+  LastUpdatedAt?: string | null;
+  LineItems?: Array<Record<string, unknown>>;
+}
+
+/**
+ * Fetch all bills updated since the given ISO timestamp, across all vendors
+ * (the /bills endpoint has no VendorId filter — callers filter client-side).
+ */
+export async function fetchBillsUpdatedSince(isoDate: string): Promise<V0Bill[]> {
+  const config = getConfig();
+  if (!config) return [];
+
+  const bills: V0Bill[] = [];
+  let path = '/bills';
+  let params: Record<string, string> | null = {
+    'filters[LastUpdatedAtFrom]': isoDate,
+    'page[number]': '1',
+    'page[size]': '1000',
+  };
+
+  while (path) {
+    const res: V0ListResponse<V0Bill> = await v0Fetch<V0Bill>(
+      path,
+      params ?? {},
+      config.clientId,
+      config.clientSecret,
+      config.developerId
+    );
+    bills.push(...(res.data ?? []));
+    if (res.next_page_path) {
+      // next_page_path is relative to the API host and carries its own query.
+      path = res.next_page_path.replace(/^\/api\/v0/, '');
+      params = null;
+    } else {
+      path = '';
+    }
+  }
+
+  return bills;
+}
+
 /** Fetch one journal entry by Id (the only way to read a journal entry — no list). */
 export async function fetchJournalEntryById(
   id: string
