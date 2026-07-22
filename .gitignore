@@ -38,3 +38,4 @@ supabase/.temp/
 
 # Contains real P&L figures — seed locally, keep out of history
 scripts/seed-financials.js
+.vscode/

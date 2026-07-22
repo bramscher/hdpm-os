@@ -10,13 +10,11 @@ import {
 /**
  * Tenant inspection notices — dispatch queue + result recording.
  *
- * All notices must be LOGGED INSIDE AppFolio. Three senders can drive this queue,
- * all logging in AppFolio:
+ * All notices must be LOGGED INSIDE AppFolio. The contract is sender-agnostic:
  *   - Manual bridge (today): staff copy-paste into Realm-X Assistant, then POST
  *     { ids } to mark them sent (channel 'manual').
- *   - Realm-X MCP routine (once the connector is authenticated): a scheduled
- *     Claude routine GETs ?dispatchable=1, sends each via the Realm-X MCP, then
- *     POSTs { results } with channel 'realmx_mcp' + message_id / error.
+ *   - A machine sender (none active — the Realm-X MCP route was dropped 07/2026)
+ *     would GET ?dispatchable=1, send, then POST { results } per notice.
  *
  *   GET  ?dispatchable=1  — due notices with an email (machine-sendable).
  *   GET                   — all due notices incl. missing-email (staff view).

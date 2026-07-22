@@ -152,18 +152,16 @@ Caveats / open points:
   contain the **exact route date** our routing engine assigns (we can't write that
   back to AppFolio via API). Decide whether the Flow notice is the "heads-up /
   due-window" notice and the exact-date entry notice goes out separately (bulk-send
-  bridge, or the MCP connector later), or whether the cadence date itself is the
-  scheduled date.
+  bridge), or whether the cadence date itself is the scheduled date.
 - Confirm the AppFolio **plan tier** (Flows require Plus/Max).
 - Flows are configured in the **AppFolio UI** — there is no API to create/fire one.
 
-### Option B: AppFolio Realm-X ⇄ Claude connector (investigate)
-AppFolio shipped an agent-to-agent connector (`mcp.appfolio.com`, June 2026) that
-exposes "operational jobs executed inside AppFolio." It's connected to this project.
-Until someone completes its OAuth (run `/mcp` → "claude.ai AppFolio Realm-X" →
-authorize), only the login tools are visible. **Decisive test:** authorize once, then
-check whether it exposes a "send tenant message" or "run Flow" job. If it does, our
-scheduler could drive AppFolio to send + log notices fully automatically.
+### Option B: AppFolio Realm-X ⇄ Claude connector — dropped (July 2026)
+Explored and not pursuing: the `mcp.appfolio.com` agent-to-agent connector was
+never authorized and no verified "send tenant message" job surfaced; community
+AppFolio MCP servers turned out to wrap only the read-only Reports API. Revisit
+only if AppFolio's official MCP ships with a send job (tracked in the agent-os
+Sep 4 decision).
 
 ### Option C: Stack/Partner API work-order anchor (heavier)
 The only API-writable anchor is a **Work Order** (Stack/Partner API, requires partner

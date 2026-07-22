@@ -4,8 +4,9 @@ How the exact-date "entry notice" for routine inspections gets sent. All notices
 **must be logged inside AppFolio**, so every channel routes through AppFolio.
 
 The app is the **notice queue + system of record**. It does not send anything
-itself — a *sender* drains the queue and reports results back. Two senders share
-one contract; a third (direct email) could be added the same way.
+itself — a *sender* drains the queue and reports results back. The contract is
+sender-agnostic: the manual bridge is live today, and another sender (e.g. direct
+email) can be added without touching the queue.
 
 ## The queue
 
@@ -38,45 +39,17 @@ Auth: `@highdesertpm.com` session **or** `CRON_SECRET` bearer (for headless runs
   → records outcomes; returns `{ sent, failed, skipped }`.
 - `POST { ids: [...] }` → back-compat: marks those sent via `channel='manual'`.
 
-## Sender 1 — manual bridge (live today)
+## Sender — manual bridge (live today)
 
 Dashboard → **Send Notices** → copy each date's recipients + message into
 **Realm-X Assistant → Send Bulk Email** → **Mark sent**. Records `channel='manual'`.
 
-## Sender 2 — Realm-X MCP routine (activate when the connector is authenticated)
+## Future senders
 
-The AppFolio Realm-X MCP is reached from a Claude session, not from the app, so a
-**scheduled Claude routine** drains the queue. Everything below is built; the only
-blocker is the connector's OAuth + a verified "send tenant message" job.
-
-To activate (once Realm-X MCP is connected and can send):
-
-1. Confirm `CRON_SECRET` is set in the app env (already used by the WO sync).
-2. Create the routine with the `/schedule` skill (suggested: daily 07:30), prompt:
-
-```
-You send High Desert PM's due inspection notices through the AppFolio Realm-X MCP.
-Every notice must be logged in AppFolio — only send via Realm-X, never external email.
-
-1. Ensure the AppFolio Realm-X MCP is authenticated (authenticate if needed).
-2. GET {APP_URL}/api/inspections/notify?dispatchable=1 with header
-   `Authorization: Bearer {CRON_SECRET}`. Each notice has id, email, subject, body.
-3. For each notice, send an email to `email` with `subject` + `body` via the
-   Realm-X "Send Bulk Email" / send-message job so it logs on the tenant record.
-   Group by target_date where the job supports multiple recipients.
-4. POST {APP_URL}/api/inspections/notify (same bearer) with:
-   { "results": [ { "id": "<id>", "status": "sent", "channel": "realmx_mcp",
-     "message_id": "<realmx id or ''>" }, ... ] }
-   For any that failed, report { "id", "status": "failed", "channel": "realmx_mcp",
-   "error": "<reason>" } so they retry next run.
-5. Report a one-line summary: sent / failed / skipped.
-
-Never invent recipients or send to anyone not returned by the API. If the Realm-X
-MCP is unavailable, do nothing and report that it's not connected.
-```
-
-3. Watch the first run; confirm messages appear on tenant pages in AppFolio and
-   the dashboard's due count drops. Then let it run daily.
-
-Until then the manual bridge covers sending; nothing else needs to change to flip
-the channel — the queue, tracking, retry, and API are already in place.
+An automated Realm-X-MCP sender was explored and **dropped (July 2026)** — the
+`mcp.appfolio.com` connector was never authorized and no verified "send tenant
+message" job exists (community AppFolio MCP servers only wrap the read-only
+Reports API). The `realmx_mcp` channel value remains in the schema/contract but
+nothing uses it. If a machine sender materializes later (direct email or
+otherwise), it only needs the two calls above: `GET ?dispatchable=1`, send, then
+`POST { results }` — the queue, tracking, and retry are already in place.
