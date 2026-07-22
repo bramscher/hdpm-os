@@ -15,6 +15,7 @@ Maintenance OS build: read docs/maintenance-os/00-README.md before any maintenan
 | `03-build-waves.md` | Feasibility verdicts + build order (3 waves) | Scoping each Claude Code session |
 | `04-dashboard-mockup.html` | Clickable 7-view mockup with the brand system | Visual spec — match it, including the wait-type color system |
 | `05-data-model.md` | Starter Supabase schema (tables, key constraints) | First migration draft — pressure-test, don't paste blindly |
+| `08-unit-turnover-board-mockup.html` | Clickable mockup: Unit Turnover Board (office whiteboard digitized) — board grid, vendor-lane calendar w/ availability rules, unit drawer | Visual spec for the turnover module; same brand system as 04. Fed by AppFolio webhooks (notice-to-vacate → cycle, WO sync → phases); planning doc lives in the "HDPM Processes" Claude project |
 
 ## How to work this with Claude Code
 

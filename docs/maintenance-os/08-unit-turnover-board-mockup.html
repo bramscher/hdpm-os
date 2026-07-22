@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HDPM-OS — Unit Turnover Board (Mockup)</title>
+<style>
+  :root{--dk:#1f5c22;--gr:#2f7d32;--tint:#eef5ee;--lt:#f7faf7;--ink:#1a1a1a;--muted:#5b625b;--hair:#c7cec7;--red:#b3261e;--amber:#9a6a00;--yellow:#c9a400;
+        --v-tri:#2c5f8a;--v-best:#9a6a00;--v-firkus:#6a3d9a;--v-ce:#0e6e6e;--v-sunrise:#b3541e;--v-carpet:#8a2c5f;--v-hdms:#2f7d32;--v-heavenly:#555;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;}
+  body{background:#fff;color:var(--ink);padding:18px 22px;}
+  header{display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--gr);padding-bottom:10px;margin-bottom:14px;flex-wrap:wrap;}
+  header h1{font-size:20px;color:var(--dk);}
+  header .sub{color:var(--muted);font-size:13px;}
+  header .badge{margin-left:auto;background:var(--tint);color:var(--dk);font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;}
+  nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+  nav button{border:1px solid var(--hair);background:var(--lt);color:var(--dk);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  nav button.active{background:var(--gr);color:#fff;border-color:var(--gr);}
+  nav button .n{background:#fff2;border-radius:8px;padding:0 6px;margin-left:4px;font-size:11px;}
+  nav button:not(.active) .n{background:var(--tint);}
+  .view{display:none;} .view.active{display:block;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;}
+  .kpi{border:1px solid var(--hair);border-radius:8px;padding:10px;text-align:center;background:var(--lt);}
+  .kpi .v{font-size:24px;font-weight:800;color:var(--dk);} .kpi .l{font-size:11px;color:var(--muted);margin-top:2px;}
+  .kpi.bad .v{color:var(--red);} .kpi.warn .v{color:var(--amber);}
+  /* status dots — computed, not magnets */
+  .dot{display:inline-block;width:13px;height:13px;border-radius:50%;vertical-align:middle;}
+  .s-ok{background:#2f7d32;} .s-slight{background:#c9a400;} .s-behind{background:#b3261e;} .s-issue{background:#e07000;} .s-hold{background:#8a8f8a;}
+  /* board table */
+  .boardwrap{overflow-x:auto;border:1px solid var(--hair);border-radius:8px;}
+  table.board{border-collapse:collapse;font-size:12px;min-width:1280px;width:100%;}
+  .board th{background:var(--tint);color:var(--dk);padding:7px 8px;border:1px solid var(--hair);font-size:11px;letter-spacing:.3px;text-align:left;white-space:nowrap;}
+  .board th.ph{text-align:center;min-width:86px;}
+  .board td{padding:6px 8px;border:1px solid var(--hair);vertical-align:top;background:#fff;}
+  .board tr.unit:hover td{background:var(--lt);cursor:pointer;}
+  .board td.c{text-align:center;}
+  .unitcell b{display:block;font-size:12.5px;} .unitcell span{color:var(--muted);font-size:11px;}
+  .cell{border-radius:5px;padding:3px 5px;font-size:10.5px;line-height:1.25;}
+  .cell .vd{font-weight:800;letter-spacing:.3px;font-size:9.5px;color:#fff;border-radius:3px;padding:0 4px;display:inline-block;margin-bottom:1px;}
+  .cell .dt{display:block;color:var(--ink);font-weight:600;}
+  .done{background:var(--tint);} .done .dt::after{content:" ✓";color:var(--gr);font-weight:800;}
+  .sched{background:#fff;border:1px dashed var(--hair);}
+  .late{background:#ffe0dd;} .late .dt{color:var(--red);}
+  .blocked{background:#fff3d6;} .blocked .dt{color:var(--amber);}
+  .na{color:var(--hair);text-align:center;}
+  .tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:800;letter-spacing:.3px;}
+  .t-adv{background:var(--tint);color:var(--dk);} .t-sale{background:#ffe0dd;color:var(--red);} .t-punch{background:#fff3d6;color:var(--amber);}
+  .t-lock{background:var(--ink);color:#fff;} .t-owner{background:#efe3fa;color:#6a3d9a;}
+  .movein{font-weight:800;color:var(--dk);white-space:nowrap;} .movein.risk{color:var(--red);}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin:10px 2px;}
+  .legend b{color:var(--ink);font-weight:600;}
+  .note{font-size:12px;color:var(--muted);margin-top:12px;border-top:1px solid var(--hair);padding-top:8px;}
+  /* vendor color key */
+  .vk{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+  .vk span{font-size:10.5px;font-weight:800;color:#fff;border-radius:4px;padding:2px 8px;letter-spacing:.3px;}
+  .bg-tri{background:var(--v-tri);} .bg-best{background:var(--v-best);} .bg-firkus{background:var(--v-firkus);} .bg-ce{background:var(--v-ce);}
+  .bg-sunrise{background:var(--v-sunrise);} .bg-carpet{background:var(--v-carpet);} .bg-hdms{background:var(--v-hdms);} .bg-heavenly{background:var(--v-heavenly);}
+  /* calendar */
+  table.cal{border-collapse:collapse;width:100%;font-size:11.5px;min-width:1100px;}
+  .cal th{background:var(--tint);color:var(--dk);border:1px solid var(--hair);padding:6px;font-size:11px;}
+  .cal th.today{background:var(--gr);color:#fff;}
+  .cal td{border:1px solid var(--hair);padding:4px;vertical-align:top;height:56px;min-width:120px;}
+  .cal td.off{background:repeating-linear-gradient(-45deg,#f3f3f3,#f3f3f3 6px,#fafafa 6px,#fafafa 12px);}
+  .cal .lane{background:var(--lt);font-weight:700;color:var(--dk);white-space:nowrap;padding:6px 8px;font-size:11.5px;}
+  .cal .lane small{display:block;color:var(--muted);font-weight:400;font-size:10px;}
+  .blk{border-radius:4px;color:#fff;font-weight:700;font-size:10px;padding:2px 5px;margin:2px 0;line-height:1.25;}
+  .blk small{display:block;font-weight:400;opacity:.9;}
+  .blk.conflict{outline:2px solid var(--red);}
+  .offlbl{font-size:9.5px;color:var(--muted);font-weight:700;letter-spacing:.4px;}
+  .conflictnote{background:#ffe0dd;color:var(--red);font-size:11.5px;font-weight:700;border-radius:6px;padding:6px 10px;display:inline-block;margin:8px 0;}
+  /* rules view */
+  table.plain{border-collapse:collapse;width:100%;font-size:13px;}
+  .plain th{background:var(--tint);color:var(--dk);text-align:left;padding:8px 10px;border:1px solid var(--hair);font-size:12px;}
+  .plain td{padding:7px 10px;border:1px solid var(--hair);}
+  .plain tr:nth-child(even) td{background:var(--lt);}
+  .flag{color:var(--red);font-weight:700;} .ok{color:var(--gr);font-weight:700;} .warn{color:var(--amber);font-weight:700;}
+  /* drawer */
+  #ov{position:fixed;inset:0;background:#0005;display:none;}
+  #drawer{position:fixed;top:0;right:-460px;width:440px;max-width:92vw;height:100vh;background:#fff;border-left:3px solid var(--gr);box-shadow:-6px 0 24px #0002;transition:right .25s;padding:18px;overflow-y:auto;z-index:10;}
+  #drawer.open{right:0;} #ov.show{display:block;}
+  #drawer h2{color:var(--dk);font-size:17px;margin-bottom:2px;}
+  #drawer .sub2{color:var(--muted);font-size:12px;margin-bottom:12px;}
+  .tl{border-left:2px solid var(--hair);margin:10px 0 14px 6px;padding-left:14px;}
+  .tl .step{position:relative;margin-bottom:11px;font-size:12.5px;}
+  .tl .step::before{content:"";position:absolute;left:-20px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--hair);}
+  .tl .step.d::before{background:var(--gr);} .tl .step.l::before{background:var(--red);} .tl .step.n::before{background:#fff;border:2px solid var(--gr);}
+  .tl .step b{display:block;} .tl .step span{color:var(--muted);font-size:11.5px;}
+  .src{font-size:10px;background:var(--tint);color:var(--dk);border-radius:8px;padding:1px 7px;font-weight:700;}
+  .drawrow{display:flex;justify-content:space-between;border-bottom:1px solid var(--hair);padding:7px 0;font-size:13px;}
+  .drawrow b{color:var(--dk);}
+  .closex{float:right;border:none;background:var(--tint);color:var(--dk);font-weight:800;border-radius:8px;padding:4px 10px;cursor:pointer;}
+</style>
+</head>
+<body>
+<header>
+  <h1>HDPM-OS — Unit Turnover Board</h1>
+  <span class="sub">Property Unit Tracker, digitized · mockup, sample data · fed live by AppFolio webhooks</span>
+  <span class="badge">HIGH DESERT PROPERTY MANAGEMENT</span>
+</header>
+<nav id="nav">
+  <button data-v="board" class="active">Board <span class="n">8</span></button>
+  <button data-v="cal">Calendar — Week of Jul 20</button>
+  <button data-v="rules">Vendors &amp; Rules</button>
+</nav>
+
+<!-- ================= BOARD ================= -->
+<section class="view active" id="board">
+  <div class="kpis">
+    <div class="kpi"><div class="v">8</div><div class="l">Units in turnover</div></div>
+    <div class="kpi bad"><div class="v">2</div><div class="l">Behind schedule</div></div>
+    <div class="kpi warn"><div class="v">1</div><div class="l">Blocked on owner</div></div>
+    <div class="kpi"><div class="v">3</div><div class="l">Move-ins next 7 days</div></div>
+    <div class="kpi"><div class="v">13.5</div><div class="l">Avg days to rent-ready</div></div>
+  </div>
+
+  <div class="boardwrap">
+  <table class="board">
+    <tr>
+      <th></th><th>UNIT</th><th>VACATING</th><th>VAC</th><th>RDY</th>
+      <th class="ph">INSPECT</th><th class="ph">CONTRACTOR</th><th class="ph">FLOORING</th><th class="ph">PAINT</th><th class="ph">CLEAN</th><th class="ph">CARPET</th><th class="ph">PUNCH</th>
+      <th>MOVE-IN</th><th>LOCKBOX</th><th>FLAGS / NOTES</th>
+    </tr>
+
+    <tr class="unit" data-u="elm">
+      <td class="c"><span class="dot s-ok" title="On schedule"></span></td>
+      <td class="unitcell"><b>2542 Elm Pl</b><span>WO 42407</span></td>
+      <td>Dosier</td><td>7/17</td><td><b>7/23</b></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/17</span></div></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/18</span></div></td>
+      <td class="na">—</td>
+      <td><div class="cell done"><span class="vd bg-tri">TRI CO</span><span class="dt">7/20</span></div></td>
+      <td><div class="cell done"><span class="vd bg-ce">C&amp;E</span><span class="dt">7/21</span></div></td>
+      <td class="na">—</td>
+      <td><div class="cell sched"><span class="vd bg-hdms">HDMS</span><span class="dt">today</span></div></td>
+      <td><span class="movein">7/24</span></td>
+      <td><span class="tag t-lock">#218</span></td>
+      <td><span class="tag t-punch">PUNCHLIST</span></td>
+    </tr>
+
+    <tr class="unit" data-u="maui">
+      <td class="c"><span class="dot s-behind" title="Behind"></span></td>
+      <td class="unitcell"><b>822 SE Maui Ln</b><span>WO 42386</span></td>
+      <td>Menendez</td><td>7/8</td><td><b>7/28</b></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/8</span></div></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/14</span></div></td>
+      <td><div class="cell late"><span class="vd bg-carpet">CARPET S</span><span class="dt">slip → 7/27</span></div></td>
+      <td><div class="cell done"><span class="vd bg-tri">TRI CO</span><span class="dt">7/21</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-ce">C&amp;E</span><span class="dt">7/29</span></div></td>
+      <td class="na">—</td>
+      <td><div class="cell sched"><span class="vd bg-hdms">HDMS</span><span class="dt">7/30</span></div></td>
+      <td><span class="movein risk">8/1 ⚠</span></td>
+      <td><span class="tag t-lock">#207</span></td>
+      <td><span class="tag t-owner">OWNER!</span> LR floor est.</td>
+    </tr>
+
+    <tr class="unit" data-u="jeff">
+      <td class="c"><span class="dot s-slight" title="Slight delay"></span></td>
+      <td class="unitcell"><b>130 Jefferson</b><span>WO 42363</span></td>
+      <td>Hunter</td><td>7/2</td><td><b>7/29</b></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/2</span></div></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/24</span></div></td>
+      <td class="na">—</td>
+      <td><div class="cell blocked"><span class="vd bg-tri">TRI CO</span><span class="dt">7/27 (no Fri)</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-best">BEST CL</span><span class="dt">7/28</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-tri">TRI CO</span><span class="dt">7/29</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-hdms">HDMS</span><span class="dt">7/29</span></div></td>
+      <td><span class="movein">8/3</span></td>
+      <td><span class="tag t-lock">#113</span></td>
+      <td>Owner walk 7/26</td>
+    </tr>
+
+    <tr class="unit" data-u="elk">
+      <td class="c"><span class="dot s-ok" title="On schedule"></span></td>
+      <td class="unitcell"><b>1398 Elk #1</b><span>WO 42380</span></td>
+      <td>Mills</td><td>7/8</td><td><b>7/31</b></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/8</span></div></td>
+      <td><div class="cell done"><span class="vd bg-firkus">FIRKUS</span><span class="dt">7/22</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-carpet">CARPET S</span><span class="dt">7/23</span></div></td>
+      <td><div class="cell done"><span class="vd bg-tri">TRI CO</span><span class="dt">7/22</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-sunrise">SUNRISE</span><span class="dt">7/29</span></div></td>
+      <td class="na">—</td>
+      <td><div class="cell sched"><span class="vd bg-hdms">HDMS</span><span class="dt">7/31</span></div></td>
+      <td><span class="movein">8/5</span></td>
+      <td><span class="tag t-lock">#215</span></td>
+      <td><span class="tag t-adv">ADVERTISED</span></td>
+    </tr>
+
+    <tr class="unit" data-u="loper">
+      <td class="c"><span class="dot s-ok" title="On schedule"></span></td>
+      <td class="unitcell"><b>365 Loper #1</b><span>WO 42300</span></td>
+      <td>Ellis</td><td>7/15</td><td><b>8/4</b></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/15</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-firkus">FIRKUS</span><span class="dt">7/23</span></div></td>
+      <td class="na">—</td>
+      <td><div class="cell sched"><span class="vd bg-heavenly">HEAVENLY</span><span class="dt">7/29 (no Tue)</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-sunrise">SUNRISE</span><span class="dt">7/31</span></div></td>
+      <td class="na">—</td>
+      <td><div class="cell sched"><span class="vd bg-hdms">HDMS</span><span class="dt">8/3</span></div></td>
+      <td><span class="movein">8/7</span></td>
+      <td><span class="tag t-lock">#211</span></td>
+      <td></td>
+    </tr>
+
+    <tr class="unit" data-u="obriley">
+      <td class="c"><span class="dot s-behind" title="Behind"></span></td>
+      <td class="unitcell"><b>63020 OB Riley #9</b><span>WO 42331</span></td>
+      <td>Kau</td><td>7/5</td><td><b>7/15 → 7/31</b></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/5</span></div></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/10</span></div></td>
+      <td><div class="cell late"><span class="vd bg-carpet">CARPET S</span><span class="dt">day 17 ⚠</span></div></td>
+      <td><div class="cell done"><span class="vd bg-tri">TRI CO</span><span class="dt">7/13</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-ce">C&amp;E</span><span class="dt">TBD</span></div></td>
+      <td class="na">—</td>
+      <td><div class="cell sched"><span class="vd bg-hdms">HDMS</span><span class="dt">TBD</span></div></td>
+      <td><span class="movein risk">not set</span></td>
+      <td><span class="tag t-lock">#202</span></td>
+      <td>Flooring vendor confirm — Cheryl</td>
+    </tr>
+
+    <tr class="unit" data-u="fifth">
+      <td class="c"><span class="dot s-slight" title="Slight delay"></span></td>
+      <td class="unitcell"><b>535 5th #4</b><span>WO 42352</span></td>
+      <td>Boothe</td><td>7/10</td><td><b>8/1</b></td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/10</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-firkus">FIRKUS</span><span class="dt">7/23</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-carpet">CARPET S</span><span class="dt">7/28</span></div></td>
+      <td><div class="cell sched"><span class="vd bg-tri">TRI CO</span><span class="dt">7/29</span></div></td>
+      <td><div class="cell blocked"><span class="vd bg-best">BEST CL</span><span class="dt">fair → 7/29</span></div></td>
+      <td class="na">—</td>
+      <td><div class="cell sched"><span class="vd bg-hdms">HDMS</span><span class="dt">7/31</span></div></td>
+      <td><span class="movein">8/4</span></td>
+      <td><span class="tag t-lock">#109</span></td>
+      <td></td>
+    </tr>
+
+    <tr class="unit" data-u="sale">
+      <td class="c"><span class="dot s-hold" title="Hold — disposition"></span></td>
+      <td class="unitcell"><b>947 SW 14th A</b><span>WO 42262</span></td>
+      <td>Worthington</td><td>7/7</td><td class="na">—</td>
+      <td><div class="cell done"><span class="vd bg-hdms">HDMS</span><span class="dt">7/7</span></div></td>
+      <td class="na">—</td><td class="na">—</td><td class="na">—</td><td class="na">—</td><td class="na">—</td><td class="na">—</td>
+      <td class="na">—</td>
+      <td><span class="tag t-lock">#200</span></td>
+      <td><span class="tag t-sale">SALE</span> Mgmt termination packet sent</td>
+    </tr>
+  </table>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot s-ok"></span> <b>On schedule</b></span>
+    <span><span class="dot s-slight"></span> <b>Slight delay</b></span>
+    <span><span class="dot s-behind"></span> <b>Behind</b></span>
+    <span><span class="dot s-issue"></span> <b>Major issue</b></span>
+    <span><span class="dot s-hold"></span> <b>Hold / disposition</b></span>
+    <span style="margin-left:auto">Cell states: <b>✓ done</b> · dashed = scheduled · amber = rescheduled by rule · red = slipped</span>
+  </div>
+
+  <p class="note"><b>Nobody moves magnets.</b> Rows are auto-created by the AppFolio notice-to-vacate webhook; phase cells sync to work orders; the status dot is computed from dates vs. today. Click any row for the unit drawer. Amber cells show the scheduler enforcing vendor rules ("Tri County — no Fridays," "Best Cleaners out 7/20–27").</p>
+</section>
+
+<!-- ================= CALENDAR ================= -->
+<section class="view" id="cal">
+  <div class="vk">
+    <span class="bg-tri">TRI COUNTY</span><span class="bg-best">BEST CLEANERS</span><span class="bg-firkus">FIRKUS</span>
+    <span class="bg-ce">C&amp;E CLEANING</span><span class="bg-sunrise">SUNRISE</span><span class="bg-carpet">CARPET SMART</span>
+    <span class="bg-hdms">HDMS CREW</span><span class="bg-heavenly">HEAVENLY</span>
+  </div>
+  <div class="conflictnote">⚠ 1 conflict: Carpet Smart double-booked Mon 7/27 — Maui Ln flooring vs. 5th St flooring (7/28 proposed)</div>
+  <div class="boardwrap">
+  <table class="cal">
+    <tr>
+      <th style="width:150px">Vendor lane</th>
+      <th>Mon 20</th><th>Tue 21</th><th class="today">Wed 22</th><th>Thu 23</th><th>Fri 24</th><th>Sat 25</th><th>Sun 26</th>
+    </tr>
+    <tr>
+      <td class="lane">Tri County <small>paint · no Fridays</small></td>
+      <td><div class="blk bg-tri">2542 Elm — paint<small>final coat</small></div></td>
+      <td><div class="blk bg-tri">822 Maui — paint</div></td>
+      <td><div class="blk bg-tri">1398 Elk — paint</div></td>
+      <td></td>
+      <td class="off"><span class="offlbl">NO FRIDAYS + BLACKOUT 7/24–26</span></td>
+      <td class="off"></td><td class="off"></td>
+    </tr>
+    <tr>
+      <td class="lane">Best Cleaners <small>clean</small></td>
+      <td class="off" colspan="7"><span class="offlbl">OUT — COUNTY FAIR 7/20–27 · jobs auto-pushed to 7/28+</span></td>
+    </tr>
+    <tr>
+      <td class="lane">C&amp;E Cleaning <small>clean</small></td>
+      <td></td>
+      <td><div class="blk bg-ce">2542 Elm — clean</div></td>
+      <td></td><td></td>
+      <td><div class="blk bg-ce">OB Riley #9 — bid walk</div></td>
+      <td></td><td></td>
+    </tr>
+    <tr>
+      <td class="lane">Firkus <small>contracting</small></td>
+      <td></td><td></td>
+      <td><div class="blk bg-firkus">1398 Elk — repairs</div></td>
+      <td><div class="blk bg-firkus">365 Loper — repairs</div><div class="blk bg-firkus">535 5th — repairs</div></td>
+      <td></td><td></td><td></td>
+    </tr>
+    <tr>
+      <td class="lane">Carpet Smart <small>flooring</small></td>
+      <td></td><td></td><td></td>
+      <td><div class="blk bg-carpet">1398 Elk — LVP</div></td>
+      <td></td><td></td>
+      <td><div class="blk bg-carpet conflict">Mon 7/27: Maui + 5th ⚠</div></td>
+    </tr>
+    <tr>
+      <td class="lane">Sunrise <small>clean</small></td>
+      <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+    </tr>
+    <tr>
+      <td class="lane">HDMS crew <small>inspect · punch</small></td>
+      <td></td><td></td>
+      <td><div class="blk bg-hdms">2542 Elm — punchlist</div></td>
+      <td></td>
+      <td><div class="blk bg-hdms">2542 Elm — MOVE-IN 🔑<small>Dosier out → new tenant</small></div></td>
+      <td></td><td></td>
+    </tr>
+  </table>
+  </div>
+  <p class="note">The whiteboard's margin notes become machine-readable rules: weekly rules gray out lanes, blackout ranges push jobs automatically, and double-bookings surface as conflicts <b>before</b> anyone calls a vendor. This view is also each vendor's week at a glance — Phase 3 sends it to them for one-tap confirmation.</p>
+</section>
+
+<!-- ================= RULES ================= -->
+<section class="view" id="rules">
+  <table class="plain">
+    <tr><th>Vendor</th><th>Trade</th><th>Weekly rule</th><th>Blackout dates</th><th>Open jobs</th><th>Status</th></tr>
+    <tr><td><b>Tri County</b></td><td>Paint</td><td class="warn">No Fridays</td><td class="warn">Jul 24–26 · Aug 7–11</td><td>5</td><td class="ok">Active</td></tr>
+    <tr><td><b>Heavenly</b></td><td>Paint</td><td class="warn">No Tuesdays</td><td>—</td><td>1</td><td class="ok">Active</td></tr>
+    <tr><td><b>Best Cleaners</b></td><td>Cleaning</td><td>—</td><td class="flag">Jul 20–27 (county fair)</td><td>2</td><td class="warn">Out this week</td></tr>
+    <tr><td><b>Firkus</b></td><td>Contracting</td><td>—</td><td>Jun 15–22 (past)</td><td>3</td><td class="ok">Active</td></tr>
+    <tr><td><b>C&amp;E Cleaning</b></td><td>Cleaning</td><td>—</td><td>—</td><td>2</td><td class="ok">Active</td></tr>
+    <tr><td><b>Carpet Smart</b></td><td>Flooring</td><td>—</td><td>—</td><td class="flag">3 (1 conflict)</td><td class="warn">Capacity check</td></tr>
+    <tr><td><b>Sunrise</b></td><td>Cleaning</td><td>—</td><td>—</td><td>2</td><td class="ok">Active</td></tr>
+    <tr><td><b>365 Contracting</b></td><td>Contracting</td><td>—</td><td>—</td><td>0</td><td class="ok">Active</td></tr>
+    <tr><td><b>OR Deschutes Paint</b></td><td>Paint</td><td>—</td><td>—</td><td>0</td><td class="ok">Active</td></tr>
+  </table>
+  <p class="note">Today these rules live as marker notes in the board's top margin and in Cheryl's head. Here the scheduler enforces them: it won't propose Tri County on a Friday, and adding a blackout instantly re-flows every affected job and flags any move-in dates put at risk.</p>
+</section>
+
+<!-- ================= DRAWER ================= -->
+<div id="ov"></div>
+<aside id="drawer">
+  <button class="closex" id="closed">✕</button>
+  <h2 id="d-title">822 SE Maui Ln</h2>
+  <div class="sub2" id="d-sub">Turnover cycle · vacated by Menendez 7/8 · WO 42386</div>
+  <div class="drawrow"><span>Status</span><b id="d-status" style="color:var(--red)">● Behind — flooring slipped</b></div>
+  <div class="drawrow"><span>Target ready</span><b id="d-rdy">7/28</b></div>
+  <div class="drawrow"><span>Move-in</span><b id="d-movein" style="color:var(--red)">8/1 — AT RISK ⚠</b></div>
+  <div class="drawrow"><span>Lockbox</span><b id="d-lock">#207</b></div>
+  <div class="grpx" style="margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--dk)">Timeline</div>
+  <div class="tl" id="d-tl">
+    <div class="step d"><b>Move-out inspection — HDMS</b><span>7/8 ✓ · <span class="src">AppFolio WO 42386-1</span></span></div>
+    <div class="step d"><b>Repairs — HDMS</b><span>7/14 ✓ · <span class="src">AppFolio WO 42386-2</span></span></div>
+    <div class="step d"><b>Paint — Tri County</b><span>7/21 ✓ · <span class="src">AppFolio WO 42386-4</span></span></div>
+    <div class="step l"><b>Flooring — Carpet Smart</b><span>was 7/22 → slipped to 7/27 · owner deciding LR floor · <span class="src">AppFolio WO 42386-3</span></span></div>
+    <div class="step n"><b>Clean — C&amp;E</b><span>proposed 7/29 (auto-pushed behind flooring)</span></div>
+    <div class="step n"><b>Punchlist + final walk — HDMS</b><span>proposed 7/30</span></div>
+  </div>
+  <div class="grpx" style="margin:8px 0 6px;font-size:13px;font-weight:700;color:var(--dk)">Chat alerts sent</div>
+  <div style="font-size:12px;color:var(--muted);line-height:1.6">
+    7/22 7:42a — <b style="color:var(--ink)">"Maui Ln flooring slipped 5 days; move-in 8/1 at risk. Owner decision pending since 7/19."</b><br>
+    7/19 — Owner decision requested (LR flooring choice) → Jen
+  </div>
+</aside>
+
+<script>
+  const nav=document.getElementById('nav');
+  nav.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    nav.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById(b.dataset.v).classList.add('active');});
+
+  const D={
+    elm:{t:'2542 Elm Pl',s:'Turnover cycle · vacated by Dosier 7/17 · WO 42407',st:'● On schedule — punchlist today',c:'var(--gr)',r:'7/23',m:'7/24 🔑',mc:'var(--dk)',lock:'#218',
+      tl:[['d','Move-out inspection — HDMS','7/17 ✓ · AppFolio WO 42407-1'],['d','Repairs — HDMS','7/18 ✓'],['d','Paint — Tri County','7/20 ✓'],['d','Clean — C&E','7/21 ✓'],['n','Punchlist — HDMS','today'],['n','Move-in — new tenant','Fri 7/24']],
+      al:'7/22 7:42a — "Elm Pl on track; punchlist today, keys Friday."'},
+    maui:null, // default content in HTML
+    jeff:{t:'130 Jefferson',s:'Turnover cycle · vacated by Hunter 7/2 · WO 42363',st:'● Slight delay — paint moved off Friday',c:'var(--yellow)',r:'7/29',m:'8/3',mc:'var(--dk)',lock:'#113',
+      tl:[['d','Move-out inspection — HDMS','7/2 ✓'],['d','Repairs — HDMS','7/24 ✓'],['n','Paint — Tri County','auto-moved 7/24 → 7/27 (no-Friday rule + blackout)'],['n','Clean — Best Cleaners','7/28 (back from fair)'],['n','Carpet — Tri County','7/29'],['n','Punchlist — HDMS','7/29 · owner walk 7/26']],
+      al:'7/21 — "Jefferson paint auto-rescheduled to Mon 7/27 (Tri County blackout). RDY 7/29 still holds."'},
+    obriley:{t:'63020 OB Riley #9',s:'Turnover cycle · vacated by Kau 7/5 · WO 42331',st:'● Behind — flooring day 17',c:'var(--red)',r:'7/15 → 7/31',m:'not set',mc:'var(--red)',lock:'#202',
+      tl:[['d','Move-out inspection — HDMS','7/5 ✓'],['d','Repairs — HDMS','7/10 ✓'],['d','Paint — Tri County','7/13 ✓'],['l','Flooring — Carpet Smart','scheduling since 7/5 — day 17 ⚠'],['n','Clean — C&E','TBD'],['n','Punchlist — HDMS','TBD']],
+      al:'7/22 7:42a — "OB Riley #9: flooring unconfirmed day 17. Escalated to Cheryl — confirm or reassign today."'},
+  };
+  const drawer=document.getElementById('drawer'),ov=document.getElementById('ov');
+  document.querySelectorAll('tr.unit').forEach(r=>r.addEventListener('click',()=>{
+    const d=D[r.dataset.u];
+    if(d){
+      document.getElementById('d-title').textContent=d.t;
+      document.getElementById('d-sub').textContent=d.s;
+      const st=document.getElementById('d-status');st.textContent=d.st;st.style.color=d.c;
+      document.getElementById('d-rdy').textContent=d.r;
+      const m=document.getElementById('d-movein');m.textContent=d.m;m.style.color=d.mc;
+      document.getElementById('d-lock').textContent=d.lock;
+      document.getElementById('d-tl').innerHTML=d.tl.map(([k,b,s])=>`<div class="step ${k}"><b>${b}</b><span>${s}</span></div>`).join('');
+      document.querySelector('#drawer .tl + .grpx + div, #drawer div[style*="line-height"]').innerHTML=d.al;
+    } // rows without data (maui default / others) just open the sample drawer
+    drawer.classList.add('open');ov.classList.add('show');
+  }));
+  const close=()=>{drawer.classList.remove('open');ov.classList.remove('show');};
+  ov.addEventListener('click',close);document.getElementById('closed').addEventListener('click',close);
+</script>
+</body>
+</html>
