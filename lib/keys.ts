@@ -9,6 +9,7 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { getAfCheckoutsForUnit } from '@/lib/keys-reconcile';
 import type {
   KeyAssignment,
   KeyCopy,
@@ -252,12 +253,17 @@ export async function getKeyDetail(slotId: string): Promise<KeyDetail | null> {
     }));
   }
 
+  const afCheckouts = active?.appfolio_unit_id
+    ? await getAfCheckoutsForUnit(active.appfolio_unit_id)
+    : [];
+
   return {
     slot: slot as KeySlot,
     active_assignment: active,
     key_types: keyTypes,
     past_assignments: all.filter((a) => a.released_at !== null),
     events: (events || []) as KeyEvent[],
+    af_checkouts: afCheckouts,
     nav: {
       prev: (prevSlot as { id: string; key_number: number } | null) ?? null,
       next: (nextSlot as { id: string; key_number: number } | null) ?? null,

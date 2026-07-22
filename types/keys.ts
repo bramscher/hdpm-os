@@ -117,6 +117,20 @@ export interface KeyStats {
   af_vacant: number;
 }
 
+/** One AppFolio "Keys Detail" checkout row (snapshot, unit-scoped). */
+export interface KeyAfCheckout {
+  id: string;
+  appfolio_unit_id: string;
+  key_name: string | null;
+  description: string | null;
+  assignee: string;
+  assignee_type: string | null;
+  number_checked_out: number | null;
+  checked_out_date: string | null;
+  imported_at: string;
+  imported_by: string;
+}
+
 /** Full detail payload for /keys/[id]. */
 export interface KeyDetail {
   slot: KeySlot;
@@ -124,6 +138,8 @@ export interface KeyDetail {
   key_types: KeyType[];
   past_assignments: KeyAssignment[];
   events: KeyEvent[];
+  /** AppFolio checkout snapshot for the active assignment's unit. */
+  af_checkouts: KeyAfCheckout[];
   /** Adjacent slots by key_number for prev/next navigation. */
   nav: {
     prev: { id: string; key_number: number } | null;
@@ -185,4 +201,45 @@ export interface KeyImportCommitResult {
   assignments_created: number;
   open_slots: number;
   batch_id: string;
+}
+
+// -----------------------------------------------------------------------------
+// AppFolio Keys Detail reconcile types
+// -----------------------------------------------------------------------------
+
+/** matched = unit has an active key assignment; no_key = valid unit, no key on file; missing_unit_id = row can't be joined. */
+export type ReconcileRowClass = 'matched' | 'no_key' | 'missing_unit_id';
+
+export interface KeyReconcileRowPreview {
+  row_number: number;
+  unit: string;
+  assignee: string;
+  assignee_type: string | null;
+  description: string | null;
+  checked_out_date: string | null;
+  classification: ReconcileRowClass;
+  key_numbers: number[];
+}
+
+export interface KeyReconcilePreview {
+  total_rows: number;
+  matched: number;
+  no_key: number;
+  missing_unit_id: number;
+  units_covered: number;
+  keys_covered: number;
+  rows: KeyReconcileRowPreview[];
+}
+
+export interface KeyReconcileCommitResult {
+  rows_stored: number;
+  units_covered: number;
+  keys_covered: number;
+  skipped_missing_unit_id: number;
+}
+
+export interface KeyReconcileMeta {
+  last_imported_at: string | null;
+  last_imported_by: string | null;
+  row_count: number;
 }

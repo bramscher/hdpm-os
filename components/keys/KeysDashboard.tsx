@@ -2,12 +2,13 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { KeyRound, RefreshCw, Upload, Search } from "lucide-react";
+import { KeyRound, RefreshCw, Upload, Search, FileKey2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { KeysStatsCards } from "./KeysStatsCards";
 import { KeysTable } from "./KeysTable";
-import type { KeyListRow, KeyStats } from "@/types/keys";
+import { ReconcileAppfolioModal } from "./ReconcileAppfolioModal";
+import type { KeyListRow, KeyReconcileMeta, KeyStats } from "@/types/keys";
 
 const TABS: Array<{ key: string | null; label: string }> = [
   { key: null, label: "All" },
@@ -28,6 +29,21 @@ export function KeysDashboard() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [reconcileMeta, setReconcileMeta] = useState<KeyReconcileMeta | null>(null);
+
+  const loadReconcileMeta = useCallback(async () => {
+    try {
+      const res = await fetch("/api/keys/reconcile");
+      if (res.ok) setReconcileMeta(await res.json());
+    } catch {
+      // meta is cosmetic — ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReconcileMeta();
+  }, [loadReconcileMeta]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -98,6 +114,19 @@ export function KeysDashboard() {
             <RefreshCw className={cn("w-4 h-4 mr-1.5", syncing && "animate-spin")} />
             {syncing ? "Syncing…" : "Sync now"}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setReconcileOpen(true)}
+            title={
+              reconcileMeta?.last_imported_at
+                ? `AppFolio checkout snapshot: ${reconcileMeta.row_count} rows, last reconciled ${new Date(reconcileMeta.last_imported_at).toLocaleDateString()}`
+                : "Import who has each key checked out (and since when) from AppFolio's Keys Detail report"
+            }
+          >
+            <FileKey2 className="w-4 h-4 mr-1.5" />
+            Reconcile AppFolio
+          </Button>
           <Link href="/keys/import">
             <Button variant={showImportProminently ? "default" : "outline"} size="sm">
               <Upload className="w-4 h-4 mr-1.5" />
@@ -149,6 +178,15 @@ export function KeysDashboard() {
       </div>
 
       <KeysTable rows={rows} loading={loading} />
+
+      {reconcileOpen && (
+        <ReconcileAppfolioModal
+          onClose={() => setReconcileOpen(false)}
+          onCommitted={() => {
+            loadReconcileMeta();
+          }}
+        />
+      )}
     </div>
   );
 }

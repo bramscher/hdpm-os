@@ -138,7 +138,7 @@ export function KeyDetailClient({ slotId }: { slotId: string }) {
     );
   }
 
-  const { slot, active_assignment: assignment, key_types, past_assignments, events } = detail;
+  const { slot, active_assignment: assignment, key_types, past_assignments, events, af_checkouts } = detail;
   const address = assignment
     ? [assignment.address_1, assignment.address_2].filter(Boolean).join(" ") || assignment.raw_address
     : null;
@@ -296,6 +296,42 @@ export function KeyDetailClient({ slotId }: { slotId: string }) {
             editable={slot.status === "assigned" || slot.status === "vacant"}
             onChanged={load}
           />
+        </div>
+      )}
+
+      {/* AppFolio checkout snapshot for this unit */}
+      {(af_checkouts?.length ?? 0) > 0 && (
+        <div className="bg-white rounded-xl border border-sand-200 shadow-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-charcoal-900">AppFolio key checkouts</h2>
+            <span className="text-[11px] text-charcoal-400">
+              snapshot {fmtDate(af_checkouts[0].imported_at)}
+            </span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider border-b border-sand-200">
+                <th className="py-1.5 pr-3">Key</th>
+                <th className="py-1.5 pr-3">Checked out to</th>
+                <th className="py-1.5 pr-3">Type</th>
+                <th className="py-1.5 pr-3 text-right">#</th>
+                <th className="py-1.5 text-right">Since</th>
+              </tr>
+            </thead>
+            <tbody>
+              {af_checkouts.map((c) => (
+                <tr key={c.id} className="border-b border-sand-100 last:border-0">
+                  <td className="py-2 pr-3 text-charcoal-600">{c.description || c.key_name || "—"}</td>
+                  <td className="py-2 pr-3 font-medium text-charcoal-900">{c.assignee}</td>
+                  <td className="py-2 pr-3 text-charcoal-500">{c.assignee_type || "—"}</td>
+                  <td className="py-2 pr-3 text-right text-charcoal-600">{c.number_checked_out ?? "—"}</td>
+                  <td className="py-2 text-right text-charcoal-500">
+                    {c.checked_out_date ? fmtDate(c.checked_out_date) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
