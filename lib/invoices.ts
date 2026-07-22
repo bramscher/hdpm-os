@@ -74,6 +74,24 @@ export function normalizeTechnician(raw: string | null | undefined): Technician 
   return '';
 }
 
+/** Staff never shown as an assigned tech (per Craig, 2026-07-22). Matched case-insensitively. */
+const EXCLUDED_ASSIGNEES = ['casy toney', 'casey toney'];
+
+export function isExcludedAssignee(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const s = name.trim().toLowerCase();
+  return EXCLUDED_ASSIGNEES.some((x) => s.includes(x));
+}
+
+/**
+ * Assignee name as shown in the UI: the canonical technician name when
+ * recognized, else the raw string; null when empty or excluded.
+ */
+export function displayAssignee(raw: string | null | undefined): string | null {
+  if (!raw?.trim() || isExcludedAssignee(raw)) return null;
+  return normalizeTechnician(raw) || raw.trim();
+}
+
 export interface HdmsInvoice {
   id: string;
   invoice_number: number;
@@ -279,16 +297,18 @@ function deriveAssignedTech(
   rawAssigned: string | null | undefined,
   lineItems: LineItem[] | null
 ): string | null {
-  const fromWo = normalizeTechnician(rawAssigned);
+  const woRaw = isExcludedAssignee(rawAssigned) ? null : rawAssigned;
+  const fromWo = normalizeTechnician(woRaw);
   if (fromWo) return fromWo;
 
-  const laborTech = lineItems?.find(
+  const rawLaborTech = lineItems?.find(
     (li) => (li.type || 'labor') === 'labor' && li.technician?.trim()
   )?.technician;
+  const laborTech = isExcludedAssignee(rawLaborTech) ? null : rawLaborTech;
   const fromLabor = normalizeTechnician(laborTech);
   if (fromLabor) return fromLabor;
 
-  if (rawAssigned?.trim()) return rawAssigned.trim();
+  if (woRaw?.trim()) return woRaw.trim();
   if (laborTech?.trim()) return laborTech.trim();
   return null;
 }

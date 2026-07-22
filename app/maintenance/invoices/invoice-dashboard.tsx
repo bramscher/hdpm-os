@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
-import { WorkOrderRow, HdmsInvoice } from "@/lib/invoices";
+import { WorkOrderRow, HdmsInvoice, displayAssignee } from "@/lib/invoices";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CsvUploader } from "./csv-uploader";
@@ -116,7 +116,7 @@ const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
 // Sort types
 // ============================================
 
-type SortField = "property_name" | "status" | "priority" | "created_at" | "completed_date";
+type SortField = "property_name" | "status" | "priority" | "assigned_to" | "created_at" | "completed_date";
 
 // ============================================
 // Pill toggle
@@ -355,6 +355,16 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           cmp = aP - bP;
           break;
         }
+        case "assigned_to": {
+          const aT = displayAssignee(a.assigned_to);
+          const bT = displayAssignee(b.assigned_to);
+          // Unassigned sorts last regardless of direction.
+          if (!aT && !bT) cmp = 0;
+          else if (!aT) return 1;
+          else if (!bT) return -1;
+          else cmp = aT.localeCompare(bT);
+          break;
+        }
         case "created_at":
           cmp = (a.created_at || "").localeCompare(b.created_at || "");
           break;
@@ -421,7 +431,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
       wo.description,
       wo.priority || "",
       wo.appfolio_status || wo.status,
-      wo.assigned_to || "",
+      displayAssignee(wo.assigned_to) || "",
       wo.created_at ? new Date(wo.created_at).toLocaleDateString() : "",
       wo.completed_date ? new Date(wo.completed_date).toLocaleDateString() : "",
     ]);
@@ -822,6 +832,14 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                             Status <WoSortIcon field="status" />
                           </span>
                         </th>
+                        <th
+                          className="text-left px-4 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider cursor-pointer hover:text-charcoal-600"
+                          onClick={() => handleWoSort("assigned_to")}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            Assigned <WoSortIcon field="assigned_to" />
+                          </span>
+                        </th>
                         <th className="text-left px-4 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider hidden md:table-cell">
                           Vendor
                         </th>
@@ -840,13 +858,13 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                     <tbody>
                       {woLoading ? (
                         <tr>
-                          <td colSpan={8} className="px-4 py-10 text-center">
+                          <td colSpan={9} className="px-4 py-10 text-center">
                             <Loader2 className="h-5 w-5 animate-spin text-terra-500 mx-auto" />
                           </td>
                         </tr>
                       ) : paginatedWo.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="px-4 py-10 text-center text-charcoal-400 text-xs">
+                          <td colSpan={9} className="px-4 py-10 text-center text-charcoal-400 text-xs">
                             {woHasFilters
                               ? "No work orders match the current filters"
                               : "No work orders yet \u2014 click Sync Now to pull from AppFolio"}
@@ -890,6 +908,9 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                                 <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full ${afStyle.bg} ${afStyle.text}`}>
                                   {afStatus}
                                 </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-charcoal-600 text-[11px] font-medium whitespace-nowrap">
+                                {displayAssignee(wo.assigned_to) || <span className="text-charcoal-300 font-normal">—</span>}
                               </td>
                               <td className="px-4 py-2.5 text-charcoal-500 text-[11px] hidden md:table-cell truncate max-w-[140px]">
                                 {wo.vendor_name || "—"}
