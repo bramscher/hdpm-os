@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
-import { WorkOrderRow, HdmsInvoice, displayAssignee } from "@/lib/invoices";
+import { WorkOrderRow, HdmsInvoice, displayAssignee, TECHNICIANS } from "@/lib/invoices";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CsvUploader } from "./csv-uploader";
@@ -191,6 +191,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const [woSyncMessage, setWoSyncMessage] = useState<string | null>(null);
   const [woAppfolioStatusFilter, setWoAppfolioStatusFilter] = useState<string[]>([]);
   const [woPriorityFilter, setWoPriorityFilter] = useState<string[]>([]);
+  const [woTechFilter, setWoTechFilter] = useState<string[]>([]);
   const [woVendorFilter, setWoVendorFilter] = useState<string>(HDMS_VENDOR_ID);
   const [woSearchInput, setWoSearchInput] = useState("");
   const [woSearch, setWoSearch] = useState("");
@@ -255,7 +256,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   // Reset page when filters change
   useEffect(() => {
     setWoPage(1);
-  }, [woAppfolioStatusFilter, woPriorityFilter, woVendorFilter, woSearch]);
+  }, [woAppfolioStatusFilter, woPriorityFilter, woTechFilter, woVendorFilter, woSearch]);
 
   // Search debounce
   useEffect(() => {
@@ -337,8 +338,25 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
     return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
   }
 
+  // Staff names present in the loaded work orders, known technicians first.
+  const woTechOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const wo of workOrders) {
+      const t = displayAssignee(wo.assigned_to);
+      if (t) names.add(t);
+    }
+    const known = TECHNICIANS.filter((t) => names.has(t));
+    const rest = [...names].filter((n) => !(TECHNICIANS as readonly string[]).includes(n)).sort();
+    return [...known, ...rest, "Unassigned"];
+  }, [workOrders]);
+
   const sortedWo = useMemo(() => {
-    const arr = [...workOrders];
+    // Assigned-tech filter is client-side (multi-select, empty = all).
+    const arr = woTechFilter.length
+      ? workOrders.filter((wo) =>
+          woTechFilter.includes(displayAssignee(wo.assigned_to) ?? "Unassigned")
+        )
+      : [...workOrders];
     arr.sort((a, b) => {
       let cmp = 0;
       switch (woSortField) {
@@ -375,7 +393,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
       return woSortDir === "asc" ? cmp : -cmp;
     });
     return arr;
-  }, [workOrders, woSortField, woSortDir]);
+  }, [workOrders, woTechFilter, woSortField, woSortDir]);
 
   // Pagination
   const totalWoPages = Math.max(1, Math.ceil(sortedWo.length / WO_PAGE_SIZE));
@@ -450,7 +468,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
     return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
   }
 
-  const woHasFilters = woAppfolioStatusFilter.length > 0 || woPriorityFilter.length > 0 || woVendorFilter !== HDMS_VENDOR_ID || !!woSearch;
+  const woHasFilters = woAppfolioStatusFilter.length > 0 || woPriorityFilter.length > 0 || woTechFilter.length > 0 || woVendorFilter !== HDMS_VENDOR_ID || !!woSearch;
 
   // ============================================
   // CSV / PDF handlers
@@ -706,6 +724,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                       onClick={() => {
                         setWoAppfolioStatusFilter([]);
                         setWoPriorityFilter([]);
+                        setWoTechFilter([]);
                         setWoVendorFilter(HDMS_VENDOR_ID);
                         setWoSearchInput("");
                       }}
@@ -762,6 +781,16 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                       options={["Emergency", "Urgent", "High", "Normal", "Low"]}
                       selected={woPriorityFilter}
                       onToggle={(p) => setWoPriorityFilter(toggle(woPriorityFilter, p))}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-medium text-charcoal-400 uppercase">Assigned:</span>
+                    <PillToggle<string>
+                      options={woTechOptions}
+                      selected={woTechFilter}
+                      onToggle={(t) => setWoTechFilter(toggle(woTechFilter, t))}
                     />
                   </div>
                 </div>
