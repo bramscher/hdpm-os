@@ -35,6 +35,27 @@ function woLabel(wo: MaintWorkOrder): string {
   return wo.wo_number ? `#${wo.wo_number}` : wo.description.slice(0, 28);
 }
 
+/** AppFolio Turn Board phases, in make-ready order — one board column each. */
+const PHASES: { key: string; label: string }[] = [
+  { key: 'Keys / Locks', label: 'Keys' },
+  { key: 'Remotes', label: 'Remotes' },
+  { key: 'Maintenance / Repair', label: 'Repair' },
+  { key: 'Floors / Carpets', label: 'Floors' },
+  { key: 'Paint', label: 'Paint' },
+  { key: 'Housekeeping', label: 'Clean' },
+  { key: 'Appliances', label: 'Appliances' },
+  { key: 'Landscape Maintenance', label: 'Landscape' },
+  { key: 'Other', label: 'Other' },
+];
+const PHASE_KEYS = new Set(PHASES.map((p) => p.key));
+
+/** Manually-linked WOs (no category) and unknown categories land in Other. */
+function phaseKeyFor(wo: MaintWorkOrder): string {
+  return wo.unit_turn_category && PHASE_KEYS.has(wo.unit_turn_category)
+    ? wo.unit_turn_category
+    : 'Other';
+}
+
 export default function Turnover({
   board,
   onChanged,
@@ -64,6 +85,10 @@ export default function Turnover({
   const rows = (board.unitTurns ?? [])
     .slice()
     .sort((a, b) => a.vacated_at.localeCompare(b.vacated_at));
+
+  // Phase columns: only render phases that have at least one WO on the board.
+  const allTurnWos = rows.flatMap((t) => byTurn.get(t.id) ?? []);
+  const visiblePhases = PHASES.filter((p) => allTurnWos.some((wo) => phaseKeyFor(wo) === p.key));
 
   const today = todayStr();
   const weekOut = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
@@ -213,15 +238,20 @@ export default function Turnover({
 
       {error && <p className="note flag">{error}</p>}
 
+      <div style={{ overflowX: 'auto' }}>
       <table className="mo-table">
         <thead>
           <tr>
             <th>Unit</th>
-            <th>Days vacant</th>
+            <th>Vacant</th>
             <th>Target ready</th>
             <th>Move-in</th>
-            <th style={{ minWidth: 200 }}>Work orders</th>
-            <th style={{ minWidth: 200 }}>Current blocker</th>
+            {visiblePhases.map((p) => (
+              <th key={p.key} title={p.key}>
+                {p.label}
+              </th>
+            ))}
+            <th style={{ minWidth: 180 }}>Current blocker</th>
             <th>Budget / actual</th>
             <th></th>
           </tr>
@@ -251,6 +281,9 @@ export default function Turnover({
                       <> · #{wos[0].wo_number.split('-')[0]} AppFolio</>
                     )}
                     {turn.status !== 'active' && <> · {turn.status}</>}
+                  </div>
+                  <div className={progressCls} style={{ fontWeight: 700, fontSize: 11 }}>
+                    {wos.length === 0 ? '⚠ no WOs linked' : `${closed}/${wos.length} closed`}
                   </div>
                 </td>
                 <td className={vacant > 21 ? 'flag' : vacant > 14 ? 'warn' : ''}>{vacant}</td>
@@ -285,65 +318,57 @@ export default function Turnover({
                     }}
                   />
                 </td>
-                <td>
-                  <div className={progressCls} style={{ fontWeight: 700, fontSize: 12 }}>
-                    {wos.length === 0 ? '⚠ no WOs linked' : `${closed}/${wos.length} closed`}
-                  </div>
-                  {wos.map((wo) => (
-                    <div key={wo.id} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                      <Link href={`/maintenance/board/wo/${wo.id}`}>{woLabel(wo)}</Link>{' '}
-                      {wo.unit_turn_category && (
-                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                          {wo.unit_turn_category.toLowerCase()}{' '}
-                        </span>
-                      )}
-                      <span
-                        className={
-                          wo.stage === 'CLOSED' ? 'ok' : wo.stage === 'WAITING_ON' ? 'warn' : ''
-                        }
-                        style={{ fontSize: 11 }}
-                      >
-                        {STAGE_LABEL[wo.stage] ?? wo.stage.toLowerCase()}
-                      </span>
-                      {wo.stage !== 'CLOSED' && (wo.vendor_name || wo.assigned_tech) && (
-                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                          {' '}
-                          · {wo.vendor_name || wo.assigned_tech}
-                        </span>
-                      )}{' '}
-                      <button
-                        className="linklike"
-                        title="Unlink this work order from the turn (audited)"
-                        disabled={busy}
-                        onClick={() => save(turn.id, { unlink_wo_ids: [wo.id] })}
-                        style={{ background: 'none', border: 0, padding: 0, color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                  {candidates.length > 0 && (
-                    <select
-                      className="mo-input"
-                      style={{ maxWidth: 200, fontSize: 12, marginTop: 4 }}
-                      value=""
-                      disabled={busy}
-                      title="Open work orders on this property not yet linked to a turn"
-                      onChange={(e) => {
-                        if (e.target.value) save(turn.id, { link_wo_ids: [e.target.value] });
-                      }}
+                {visiblePhases.map((p) => {
+                  const cellWos = wos.filter((wo) => phaseKeyFor(wo) === p.key);
+                  const allDone =
+                    cellWos.length > 0 && cellWos.every((wo) => wo.stage === 'CLOSED');
+                  return (
+                    <td
+                      key={p.key}
+                      style={allDone ? { background: 'var(--tint)' } : undefined}
                     >
-                      <option value="">+ link WO…</option>
-                      {candidates.map((wo) => (
-                        <option key={wo.id} value={wo.id}>
-                          {woLabel(wo)}
-                          {wo.unit_name ? ` · ${wo.unit_name}` : ''} ·{' '}
-                          {wo.description.slice(0, 40)}
-                        </option>
+                      {cellWos.length === 0 && (
+                        <span style={{ color: 'var(--muted)' }}>—</span>
+                      )}
+                      {cellWos.map((wo) => (
+                        <div
+                          key={wo.id}
+                          style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                          title={wo.description}
+                        >
+                          <Link href={`/maintenance/board/wo/${wo.id}`}>
+                            {!wo.wo_number
+                              ? 'WO'
+                              : wo.wo_number.includes('-')
+                                ? `-${wo.wo_number.split('-')[1]}`
+                                : `#${wo.wo_number}`}
+                          </Link>{' '}
+                          <span
+                            className={
+                              wo.stage === 'CLOSED' ? 'ok' : wo.stage === 'WAITING_ON' ? 'warn' : ''
+                            }
+                            style={{ fontSize: 11 }}
+                          >
+                            {STAGE_LABEL[wo.stage] ?? wo.stage.toLowerCase()}
+                          </span>{' '}
+                          <button
+                            title="Unlink this work order from the turn (audited)"
+                            disabled={busy}
+                            onClick={() => save(turn.id, { unlink_wo_ids: [wo.id] })}
+                            style={{ background: 'none', border: 0, padding: 0, color: 'var(--muted)', cursor: 'pointer', fontSize: 10 }}
+                          >
+                            ✕
+                          </button>
+                          {wo.stage !== 'CLOSED' && (wo.vendor_name || wo.assigned_tech) && (
+                            <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                              {(wo.vendor_name || wo.assigned_tech || '').slice(0, 18)}
+                            </div>
+                          )}
+                        </div>
                       ))}
-                    </select>
-                  )}
-                </td>
+                    </td>
+                  );
+                })}
                 <td>
                   <input
                     className="mo-input"
@@ -416,13 +441,34 @@ export default function Turnover({
                       </button>
                     </>
                   )}
+                  {candidates.length > 0 && (
+                    <select
+                      className="mo-input"
+                      style={{ display: 'block', maxWidth: 130, fontSize: 12, marginTop: 4 }}
+                      value=""
+                      disabled={busy}
+                      title="Open work orders on this property not yet linked to a turn"
+                      onChange={(e) => {
+                        if (e.target.value) save(turn.id, { link_wo_ids: [e.target.value] });
+                      }}
+                    >
+                      <option value="">+ link WO…</option>
+                      {candidates.map((wo) => (
+                        <option key={wo.id} value={wo.id}>
+                          {woLabel(wo)}
+                          {wo.unit_name ? ` · ${wo.unit_name}` : ''} ·{' '}
+                          {wo.description.slice(0, 40)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </td>
               </tr>
             );
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={8} style={{ color: 'var(--muted)' }}>
+              <td colSpan={7 + visiblePhases.length} style={{ color: 'var(--muted)' }}>
                 No active unit turns. Turns started on AppFolio&apos;s Unit Turn Board appear
                 here automatically (within the 15-min sync); or start one manually with the
                 button above.
@@ -431,6 +477,7 @@ export default function Turnover({
           )}
         </tbody>
       </table>
+      </div>
       <p className="note">
         Vacancy is rent lost daily — every turn shows ALL of its work orders (any stage),
         its single current blocker, and who owns each piece. Turns Brody starts on
