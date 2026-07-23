@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jackets — UI Explorations</title>
+<style>
+  :root{--dk:#1f5c22;--gr:#2f7d32;--tint:#eef5ee;--lt:#f7faf7;--ink:#1a1a1a;--muted:#5b625b;--hair:#c7cec7;--red:#b3261e;--amber:#9a6a00;--gold:#e8b923;--goldbg:#fdf6e0;
+       --t-tenant:#2c5f8a;--t-owner:#6a3d9a;--t-adv:#0e6e6e;--t-vac:#9a6a00;--t-close:#8a2c5f;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;}
+  body{background:#fff;color:var(--ink);padding:18px 22px;}
+  header{display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--gr);padding-bottom:10px;margin-bottom:14px;flex-wrap:wrap;}
+  header h1{font-size:20px;color:var(--dk);}
+  header .sub{color:var(--muted);font-size:13px;}
+  header .badge{margin-left:auto;background:var(--tint);color:var(--dk);font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;}
+  nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
+  nav button{border:1px solid var(--hair);background:var(--lt);color:var(--dk);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  nav button.active{background:var(--gr);color:#fff;border-color:var(--gr);}
+  .view{display:none;} .view.active{display:block;}
+  .note{font-size:12px;color:var(--muted);margin-top:14px;border-top:1px solid var(--hair);padding-top:8px;max-width:1100px;}
+  .exp{font-size:11px;font-weight:800;letter-spacing:.6px;color:#fff;background:var(--ink);border-radius:4px;padding:2px 8px;vertical-align:middle;margin-right:8px;}
+
+  /* ===== Concept A: the Gold Card ===== */
+  .jacketwrap{display:grid;grid-template-columns:1fr 330px;gap:16px;align-items:start;max-width:1240px;}
+  .goldcard{border:2px solid var(--gold);background:var(--goldbg);border-radius:10px;padding:14px 16px;}
+  .gc-head{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;border-bottom:2px solid var(--gold);padding-bottom:10px;margin-bottom:12px;}
+  .gc-head h2{font-size:18px;color:var(--ink);}
+  .gc-head .meta{color:var(--muted);font-size:12.5px;}
+  .gc-head .route{margin-left:auto;background:#fff;border:1px solid var(--gold);color:#8a6d00;font-size:11px;font-weight:800;letter-spacing:.4px;padding:3px 10px;border-radius:10px;}
+  .prog{height:8px;background:#fff;border:1px solid var(--gold);border-radius:6px;overflow:hidden;margin:2px 0 14px;}
+  .prog i{display:block;height:100%;width:58%;background:var(--gr);}
+  .track{background:#fff;border:1px solid var(--hair);border-left:5px solid var(--hair);border-radius:7px;margin-bottom:9px;padding:9px 12px;}
+  .track.open{border-left-color:var(--tr);}
+  .track.done{opacity:.75;border-left-color:var(--gr);}
+  .track.locked{background:var(--lt);}
+  .tr-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .tr-name{font-size:12px;font-weight:800;letter-spacing:.5px;color:var(--tr,var(--muted));min-width:100px;}
+  .tr-owner{font-size:11.5px;background:var(--tint);color:var(--dk);border-radius:10px;padding:2px 9px;font-weight:700;}
+  .tr-state{font-size:11.5px;color:var(--muted);margin-left:auto;}
+  .tr-state b{color:var(--ink);}
+  .tr-state.late b{color:var(--red);}
+  .chips2{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}
+  .c2{font-size:10.5px;border-radius:4px;padding:2px 8px;border:1px solid var(--hair);background:#fff;color:var(--muted);}
+  .c2.d{background:var(--tint);border-color:var(--tint);color:var(--dk);font-weight:700;}
+  .c2.d::before{content:"✓ ";}
+  .c2.now{border:1.5px solid var(--gr);color:var(--dk);font-weight:700;}
+  .c2.wait{border-style:dashed;}
+  .lockmsg{font-size:11.5px;color:var(--muted);margin-top:6px;font-style:italic;}
+  .lockmsg b{color:var(--amber);}
+  .rail{border:1px solid var(--hair);border-radius:10px;padding:12px 14px;}
+  .rail h3{font-size:12px;color:var(--dk);letter-spacing:.4px;border-bottom:2px solid var(--gr);padding-bottom:5px;margin-bottom:9px;}
+  .sync{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px;}
+  .sync .ok{color:var(--gr);font-weight:800;}
+  .sync .pend{color:var(--amber);font-weight:800;}
+  .act{font-size:11.5px;color:var(--muted);border-left:2px solid var(--hair);padding:2px 0 2px 10px;margin-bottom:8px;line-height:1.45;}
+  .act b{color:var(--ink);}
+  .act .who{color:var(--gr);font-weight:700;}
+
+  /* ===== Concept B: flow view ===== */
+  .flowwrap{overflow-x:auto;padding:10px 0 4px;}
+  .flow{display:flex;align-items:center;gap:0;min-width:1150px;}
+  .fnode{border:1.5px solid var(--hair);border-radius:9px;padding:9px 12px;background:#fff;min-width:140px;text-align:center;position:relative;cursor:pointer;}
+  .fnode h4{font-size:11.5px;color:var(--dk);letter-spacing:.3px;}
+  .fnode .who{font-size:10.5px;color:var(--muted);}
+  .fnode .cnt{position:absolute;top:-10px;right:-8px;background:var(--gr);color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 8px;}
+  .fnode .cnt.hot{background:var(--red);}
+  .fnode.sel{border-color:var(--gr);background:var(--tint);}
+  .fnode.gate{border-style:dashed;background:var(--lt);}
+  .fnode.gate h4{color:var(--amber);}
+  .farrow{width:34px;height:2px;background:var(--hair);position:relative;flex:none;}
+  .farrow::after{content:"";position:absolute;right:0;top:-3px;border:4px solid transparent;border-left-color:var(--hair);}
+  .fbranch{font-size:9.5px;color:var(--muted);text-align:center;flex:none;width:34px;margin-top:-16px;}
+  .dockets{margin-top:14px;border:1px solid var(--hair);border-radius:9px;padding:10px 14px;max-width:760px;}
+  .dockets h3{font-size:12.5px;color:var(--dk);margin-bottom:8px;}
+  .drow{display:flex;gap:10px;align-items:center;font-size:12.5px;border-bottom:1px solid var(--hair);padding:6px 0;}
+  .drow:last-child{border-bottom:none;}
+  .gold{width:16px;height:11px;background:var(--gold);border-radius:2px;flex:none;box-shadow:1px 1px 0 #c99e12;}
+  .drow .u{font-weight:700;min-width:130px;}
+  .drow .d{color:var(--muted);}
+  .drow .late{color:var(--red);font-weight:700;}
+  .drow .claim{margin-left:auto;border:1px solid var(--gr);background:#fff;color:var(--gr);border-radius:7px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;}
+  .drow .claim.mine{background:var(--gr);color:#fff;}
+
+  /* ===== Concept C: the bump ===== */
+  .bumpwrap{max-width:1150px;}
+  .modebar{display:flex;gap:10px;align-items:center;margin-bottom:12px;font-size:12.5px;}
+  .toggle{display:flex;border:1px solid var(--hair);border-radius:8px;overflow:hidden;}
+  .toggle button{border:none;background:#fff;padding:6px 13px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;}
+  .toggle button.on{background:var(--gr);color:#fff;}
+  .price{color:var(--muted);}
+  .gantt{border:1px solid var(--hair);border-radius:9px;overflow:hidden;}
+  .g-head,.g-row{display:grid;grid-template-columns:170px repeat(14,1fr);}
+  .g-head div{background:var(--tint);color:var(--dk);font-size:10.5px;font-weight:700;text-align:center;padding:5px 2px;border-right:1px solid #fff;}
+  .g-head div.we{background:#e2e9e2;}
+  .g-row{border-top:1px solid var(--hair);}
+  .g-row .lbl{font-size:11.5px;font-weight:700;padding:8px 10px;color:var(--ink);background:var(--lt);}
+  .g-row .lbl small{display:block;color:var(--muted);font-weight:400;}
+  .cell{border-right:1px solid #f0f0f0;min-height:34px;position:relative;}
+  .cell.we{background:#fafafa;}
+  .bar{position:absolute;top:6px;left:2px;right:2px;bottom:6px;border-radius:4px;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;}
+  .ghost{opacity:.32;outline:2px dashed var(--red);}
+  .movein-cell .bar{background:var(--dk);}
+  .btnrow{margin:12px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .bump{border:1.5px solid var(--red);color:var(--red);background:#fff;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:800;cursor:pointer;}
+  .bump.done{background:var(--red);color:#fff;}
+  .reset{border:1px solid var(--hair);color:var(--muted);background:#fff;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;}
+  .cascade{display:none;border:1.5px solid var(--red);border-radius:10px;margin-top:12px;overflow:hidden;}
+  .cascade.show{display:block;}
+  .cascade h3{background:#ffe0dd;color:var(--red);font-size:13px;padding:8px 14px;}
+  .cas-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;}
+  .cas-col{padding:10px 14px;border-right:1px solid var(--hair);font-size:12px;}
+  .cas-col:last-child{border-right:none;}
+  .cas-col h4{font-size:11px;letter-spacing:.4px;color:var(--dk);margin-bottom:7px;}
+  .cas-col ul{list-style:none;}
+  .cas-col li{padding:3px 0;color:var(--ink);}
+  .cas-col li small{color:var(--muted);display:block;}
+  .cas-col .warn{color:var(--amber);font-weight:700;}
+  .cas-col .redt{color:var(--red);font-weight:700;}
+  .cas-foot{display:flex;gap:10px;padding:10px 14px;border-top:1px solid var(--hair);background:var(--lt);align-items:center;}
+  .apply{background:var(--gr);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:800;cursor:pointer;}
+  .cancel{background:#fff;border:1px solid var(--hair);border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;color:var(--muted);}
+  .applied{display:none;margin-top:12px;border:1.5px solid var(--gr);background:var(--tint);border-radius:10px;padding:12px 16px;font-size:12.5px;line-height:1.6;}
+  .applied.show{display:block;}
+  .applied b{color:var(--dk);}
+  .wtag2{display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:1px 7px;color:#fff;background:var(--amber);margin-right:6px;}
+  .wtag2.auto{background:var(--gr);}
+
+  /* ===== Concept D: portfolio gantt ===== */
+  .pg{border:1px solid var(--hair);border-radius:10px;overflow:hidden;}
+  .pg-head{display:grid;grid-template-columns:210px 1fr;background:var(--tint);border-bottom:2px solid var(--gr);}
+  .pg-head .l{padding:7px 12px;font-size:11px;font-weight:800;color:var(--dk);letter-spacing:.4px;}
+  .pg-weeks{display:grid;grid-template-columns:repeat(6,1fr);}
+  .pg-weeks div{padding:7px 8px;font-size:11px;font-weight:700;color:var(--dk);border-left:1px solid #d8e2d8;}
+  .pg-black{display:grid;grid-template-columns:210px 1fr;border-bottom:1px solid var(--hair);background:#fffdf4;}
+  .pg-black .l{padding:5px 12px;font-size:10px;font-weight:800;color:var(--amber);letter-spacing:.4px;}
+  .pg-black .tl2{position:relative;height:24px;}
+  .bo{position:absolute;top:4px;height:16px;border-radius:3px;font-size:9px;font-weight:800;color:#fff;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;padding:0 4px;}
+  .pg-group{background:var(--lt);padding:5px 12px;font-size:10.5px;font-weight:800;letter-spacing:.5px;color:var(--dk);border-bottom:1px solid var(--hair);}
+  .pg-row{display:grid;grid-template-columns:210px 1fr;border-bottom:1px solid var(--hair);}
+  .pg-row:hover{background:var(--lt);}
+  .pg-row .l{padding:7px 12px;font-size:12px;display:flex;gap:8px;align-items:center;}
+  .pg-row .l b{font-size:12px;}
+  .pg-row .l small{color:var(--muted);display:block;font-size:10px;}
+  .pg-lane{position:relative;height:38px;background:
+    repeating-linear-gradient(to right, transparent 0, transparent calc(100%/6 - 1px), #eceeec calc(100%/6 - 1px), #eceeec calc(100%/6));}
+  .gb{position:absolute;top:9px;height:20px;border-radius:4px;color:#fff;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;padding:0 3px;}
+  .gb.dn{opacity:.55;}
+  .gb.warnb{background:repeating-linear-gradient(-45deg,var(--amber),var(--amber) 5px,#b98a1a 5px,#b98a1a 10px)!important;}
+  .gate2{position:absolute;top:11px;width:15px;height:15px;transform:rotate(45deg);background:#fff;border:2.5px solid var(--amber);border-radius:2px;}
+  .keymark{position:absolute;top:7px;font-size:15px;}
+  .risk2{position:absolute;top:8px;font-size:10px;font-weight:800;color:var(--red);white-space:nowrap;}
+  .todayline{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:3;}
+  .todaytag{position:absolute;top:-1px;font-size:8.5px;font-weight:800;color:#fff;background:var(--red);border-radius:0 3px 3px 0;padding:0 4px;z-index:3;}
+  .pg-kpi{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px;}
+  .pg-kpi span b{color:var(--dk);font-size:16px;}
+  .pg-kpi .r b{color:var(--red);} .pg-kpi .a b{color:var(--amber);}
+  .pg-ctrl{display:flex;gap:8px;align-items:center;margin:0 0 10px;flex-wrap:wrap;}
+  .pg-ctrl button{border:1px solid var(--hair);background:var(--lt);color:var(--dk);font-weight:800;border-radius:8px;padding:5px 13px;font-size:13px;cursor:pointer;}
+  .pg-ctrl button:hover{background:var(--tint);}
+  .pg-ctrl .rng{font-size:12.5px;color:var(--dk);font-weight:700;margin:0 4px;}
+  .pg-ctrl .hint{margin-left:auto;font-size:11px;color:var(--muted);}
+  .pg-ticks{display:grid;}
+  .pg-ticks div{padding:7px 5px;font-size:10.5px;font-weight:700;color:var(--dk);border-left:1px solid #d8e2d8;white-space:nowrap;overflow:hidden;}
+  .pg-ticks div.today{background:var(--gr);color:#fff;}
+  .pg-ticks div.we{background:#e2e9e2;}
+
+  /* ===== Concept E: My Desk ===== */
+  .deskwrap{max-width:1000px;}
+  .deskhead{display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap;}
+  .avatar{width:42px;height:42px;border-radius:50%;background:var(--gr);color:#fff;font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;}
+  .deskhead h2{font-size:17px;color:var(--dk);}
+  .deskhead .cnts{margin-left:auto;display:flex;gap:8px;font-size:12px;font-weight:700;}
+  .cnt2{border-radius:12px;padding:3px 12px;background:var(--tint);color:var(--dk);}
+  .cnt2.r{background:#ffe0dd;color:var(--red);} .cnt2.a{background:#fff3d6;color:var(--amber);}
+  .dsec{margin:16px 0 8px;font-size:12px;font-weight:800;letter-spacing:.5px;}
+  .dsec.r{color:var(--red);} .dsec.g{color:var(--dk);} .dsec.b{color:#2c5f8a;} .dsec.m{color:var(--muted);}
+  .ditem{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--hair);border-radius:9px;padding:10px 13px;margin-bottom:8px;background:#fff;}
+  .ditem.hot{border-color:var(--red);background:#fffafa;}
+  .ditem .jc{width:8px;align-self:stretch;border-radius:4px;flex:none;}
+  .ditem .bodyx{flex:1;min-width:0;}
+  .ditem b{font-size:13px;}
+  .ditem .why{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.45;}
+  .ditem .why i{color:var(--amber);font-style:normal;font-weight:700;}
+  .ditem .why .csq{color:var(--red);font-weight:700;}
+  .ditem .src{font-size:9.5px;font-weight:800;letter-spacing:.4px;color:#fff;border-radius:3px;padding:1px 6px;margin-left:6px;vertical-align:1px;}
+  .ditem .acts{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end;max-width:220px;}
+  .ditem .acts button{border:1px solid var(--gr);background:#fff;color:var(--gr);font-size:11px;font-weight:700;border-radius:7px;padding:4px 10px;cursor:pointer;white-space:nowrap;}
+  .ditem .acts button.p{background:var(--gr);color:#fff;}
+  .ditem .acts button.gray{border-color:var(--hair);color:var(--muted);}
+  .agechip{display:inline-block;font-size:10.5px;font-weight:800;border-radius:9px;padding:1px 8px;margin-left:8px;}
+  .ag-r{background:#ffe0dd;color:var(--red);} .ag-a{background:#fff3d6;color:var(--amber);} .ag-g{background:var(--tint);color:var(--dk);}
+</style>
+</head>
+<body>
+<div style="background:#1f5c22;display:flex;gap:12px;align-items:center;padding:9px 16px;border-radius:0 0 10px 10px;margin:-0px 0 14px;font-size:12.5px;flex-wrap:wrap;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif"><span style="color:#e8b923;font-weight:800;letter-spacing:.5px">HDPM-OS DEMO</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="00-START-HERE.html">⌂ Home</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="form-inventory-team-review.html">Inventory</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="unit-turnover-board-mockup.html">Turnover Board</a><span style="color:#fff;font-weight:800;background:#2f7d32;border-radius:6px;padding:3px 10px">Jackets UI</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="agents-summary.html">Agents</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="hdpm-home-explorations.html">Home Concepts</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="workflow-engine-concept.html">Concept Doc</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="turnover-board-plan.html">Board Plan</a><span style="margin-left:auto;color:#9dbb9d;font-size:10.5px">sample data · concept site · July 2026</span></div>
+
+<header>
+  <h1>Jackets — UI Explorations</h1>
+  <span class="sub">Five concepts · one data model, five projections · sample data · not a spec, a conversation starter</span>
+  <span class="badge">HIGH DESERT PROPERTY MANAGEMENT</span>
+</header>
+<nav id="nav">
+  <button data-v="card" class="active">A · The Gold Card, digital</button>
+  <button data-v="flow">B · Flow view</button>
+  <button data-v="bump">C · The Bump</button>
+  <button data-v="gantt">D · Portfolio Gantt</button>
+  <button data-v="desk">E · My Desk</button>
+</nav>
+
+<!-- ========== A: GOLD CARD ========== -->
+<section class="view active" id="card">
+  <p style="font-size:13px;color:var(--muted);margin-bottom:12px"><span class="exp">CONCEPT A</span>The Vacancy Tracking form as a living object — still gold, so nobody has to relearn what it is. Five tracks, each owned by a desk, each opened by an event. The paper could only be on one desk; this is on all of them at once.</p>
+  <div class="jacketwrap">
+    <div class="goldcard">
+      <div class="gc-head">
+        <h2>822 SE Maui Ln</h2>
+        <span class="meta">Menendez → vacate 7/8 · notice 6/8 · new tenant move-in 8/1</span>
+        <span class="route">VACANCY TRACKING · GOLD</span>
+      </div>
+      <div class="prog"><i></i></div>
+
+      <div class="track done" style="--tr:var(--t-tenant)">
+        <div class="tr-head"><span class="tr-name">TENANT</span><span class="tr-owner">Front Desk — Dana</span><span class="tr-state">complete 6/9</span></div>
+        <div class="chips2"><span class="c2 d">M/O date saved</span><span class="c2 d">Confirmation shared</span><span class="c2 d">Prorated rent $1,240</span><span class="c2 d">Inspection calendared</span><span class="c2 d">→ PM box</span></div>
+      </div>
+
+      <div class="track done" style="--tr:var(--t-owner)">
+        <div class="tr-head"><span class="tr-name">OWNER</span><span class="tr-owner">PM — Jen</span><span class="tr-state">complete 6/16</span></div>
+        <div class="chips2"><span class="c2 d">Owner notified 6/10</span><span class="c2 d">New listing rent $2,150</span><span class="c2 d">W/S/G paid</span><span class="c2 d">No W/D removal</span><span class="c2 d">MTM</span></div>
+      </div>
+
+      <div class="track open" style="--tr:var(--t-adv)">
+        <div class="tr-head"><span class="tr-name">ADVERTISING</span><span class="tr-owner">Leasing — Kim</span><span class="tr-state">3 of 5 · <b>due 7/25</b></span></div>
+        <div class="chips2"><span class="c2 d">Utilities info</span><span class="c2 d">AppFolio updated</span><span class="c2 d">Website updated</span><span class="c2 now">Craigslist</span><span class="c2 wait">Ad fee charged</span></div>
+      </div>
+
+      <div class="track open" style="--tr:var(--t-vac)">
+        <div class="tr-head"><span class="tr-name">VACANCY</span><span class="tr-owner">Maintenance — Brody</span><span class="tr-state late">keys returned 7/8 · <b>2 garage openers missing</b></span></div>
+        <div class="chips2"><span class="c2 d">Keys 7/8 · drop box</span><span class="c2 d">House 2/2 · Mail 1/1</span><span class="c2 now">Garage 0/2 ⚠</span><span class="c2 d">Actual M/O in AppFolio ✓verified</span><span class="c2 wait">File → PM inspection box</span></div>
+      </div>
+
+      <div class="track locked" style="--tr:var(--t-close)">
+        <div class="tr-head"><span class="tr-name">CLOSE OUT</span><span class="tr-owner">Accounting — Penny</span><span class="tr-state">locked</span></div>
+        <div class="lockmsg">Opens when <b>final inspection is complete</b> — early term fee, credits, fwd address, final accounting, transfer funds, mail check.</div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <h3>APPFOLIO SYNC</h3>
+      <div class="sync"><span class="ok">●</span> Move-out date <b>7/8</b> — verified 7:42a</div>
+      <div class="sync"><span class="ok">●</span> Prorated rent — matches</div>
+      <div class="sync"><span class="pend">●</span> Garage opener charge — <b>guided step</b> waiting on Brody</div>
+      <h3 style="margin-top:14px">ACTIVITY</h3>
+      <div class="act"><b>7/22 9:14a</b> · <span class="who">Brody</span> logged garage openers 0 of 2 → tripwire armed: charge if not returned by 7/25</div>
+      <div class="act"><b>7/22 7:42a</b> · engine verified actual M/O date in AppFolio matches keys-returned date</div>
+      <div class="act"><b>7/8 8:05a</b> · keys in drop box → VACANCY track opened in <span class="who">Brody's</span> box</div>
+      <div class="act"><b>6/16</b> · OWNER track complete → jacket left <span class="who">Jen's</span> box</div>
+      <div class="act"><b>6/8 2:31p</b> · AppFolio notice webhook → jacket created, 3 tracks opened</div>
+    </div>
+  </div>
+  <p class="note">The bounce is gone: ADVERTISING and VACANCY are open on two different desks <i>right now</i>, and the audit rail shows every handoff that used to be invisible folder-walking. The sync rail is verify-by-read live: green = AppFolio agrees, amber = a human step is queued.</p>
+</section>
+
+<!-- ========== B: FLOW VIEW ========== -->
+<section class="view" id="flow">
+  <p style="font-size:13px;color:var(--muted);margin-bottom:12px"><span class="exp">CONCEPT B</span>The route drawn as it actually flows — every gold card in the office is a dot on this map. Click a stage to see whose box those jackets are in. The SOP, the training doc, and the live status board become the same picture.</p>
+  <div class="flowwrap"><div class="flow">
+    <div class="fnode"><h4>NOTICE RECEIVED</h4><div class="who">webhook · auto</div><span class="cnt">2</span></div>
+    <div class="farrow"></div>
+    <div class="fnode sel" onclick=""><h4>TRACKS OPEN</h4><div class="who">Front Desk · PM · Leasing</div><span class="cnt hot">5</span></div>
+    <div class="farrow"></div>
+    <div class="fnode gate"><h4>⏳ KEYS RETURNED</h4><div class="who">event gate</div></div>
+    <div class="farrow"></div>
+    <div class="fnode"><h4>VACANCY / KEYS</h4><div class="who">Maintenance — Brody</div><span class="cnt">1</span></div>
+    <div class="farrow"></div>
+    <div class="fnode"><h4>MOVE-OUT INSPECT</h4><div class="who">PM box</div><span class="cnt">1</span></div>
+    <div class="farrow"></div>
+    <div class="fnode"><h4>TURNOVER BOARD</h4><div class="who">make-ready cycle</div><span class="cnt">3</span></div>
+    <div class="farrow"></div>
+    <div class="fnode"><h4>CLOSE OUT</h4><div class="who">Accounting — Penny</div><span class="cnt">1</span></div>
+    <div class="farrow"></div>
+    <div class="fnode"><h4>ARCHIVED</h4><div class="who">metrics captured</div></div>
+  </div></div>
+
+  <div class="dockets">
+    <h3>Jackets at “TRACKS OPEN” — 5 <span style="color:var(--muted);font-weight:400">(selected stage)</span></h3>
+    <div class="drow"><span class="gold"></span><span class="u">1398 Elk #1</span><span class="d">ADV open (Kim) · OWNER open (Jen)</span><button class="claim mine">In my box</button></div>
+    <div class="drow"><span class="gold"></span><span class="u">365 Loper #1</span><span class="d">TENANT open (Dana) · day 2</span><button class="claim">Open</button></div>
+    <div class="drow"><span class="gold"></span><span class="u">535 5th #4</span><span class="d late">OWNER track idle 4 days — tripwire fires tomorrow</span><button class="claim">Open</button></div>
+    <div class="drow"><span class="gold"></span><span class="u">130 Jefferson</span><span class="d">ADV open (Kim) · fee charged</span><button class="claim">Open</button></div>
+    <div class="drow"><span class="gold"></span><span class="u">2542 Elm Pl</span><span class="d">all tracks complete → waiting on gate</span><button class="claim">Open</button></div>
+  </div>
+  <p class="note">Dashed nodes are event gates — nobody works there; the world does (keys arrive, a lease signs). Red counts mean something inside is past its date. This is also the training view: a new hire learns the process by watching real jackets move through the same diagram the SOP is written in.</p>
+</section>
+
+<!-- ========== C: THE BUMP ========== -->
+<section class="view" id="bump">
+  <p style="font-size:13px;color:var(--muted);margin-bottom:12px"><span class="exp">CONCEPT C</span>The money interaction: flooring slips, so you bump it <b>here</b> — and the engine shows the full blast radius before you commit. Toggle the AppFolio write API on/off to see what changes.</p>
+  <div class="bumpwrap">
+    <div class="modebar">
+      <span style="font-weight:700;color:var(--dk)">AppFolio write API:</span>
+      <div class="toggle"><button id="woff" class="on">OFF — guided writes</button><button id="won">ON — auto writes (~$1/door/mo)</button></div>
+      <span class="price" id="pricenote">Writes become verified checklist steps for a human — still tracked, still gated.</span>
+    </div>
+
+    <div class="gantt">
+      <div class="g-head"><div style="background:var(--lt)"></div>
+        <div>M 20</div><div>T 21</div><div>W 22</div><div>T 23</div><div class="we">F 24</div><div class="we">S 25</div><div class="we">S 26</div><div>M 27</div><div>T 28</div><div>W 29</div><div>T 30</div><div class="we">F 31</div><div class="we">S 1</div><div>S 2</div>
+      </div>
+      <div class="g-row"><div class="lbl">Flooring<small>Carpet Smart</small></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell" id="fl-old"><div class="bar" style="background:var(--t-close)">was 7/22</div></div><div class="cell"></div><div class="cell we"></div><div class="cell we"></div><div class="cell we"></div><div class="cell" id="fl-new"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell we"></div><div class="cell we"></div><div class="cell"></div>
+      </div>
+      <div class="g-row"><div class="lbl">Clean<small>C&amp;E Cleaning</small></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell" id="cl-old"><div class="bar" style="background:var(--t-adv)">7/23</div></div><div class="cell we"></div><div class="cell we"></div><div class="cell we"></div><div class="cell"></div><div class="cell" id="cl-new"></div><div class="cell"></div><div class="cell"></div><div class="cell we"></div><div class="cell we"></div><div class="cell"></div>
+      </div>
+      <div class="g-row"><div class="lbl">Punchlist<small>HDMS crew</small></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell we" id="pu-old"><div class="bar" style="background:var(--gr)">7/24</div></div><div class="cell we"></div><div class="cell we"></div><div class="cell"></div><div class="cell"></div><div class="cell" id="pu-new"></div><div class="cell"></div><div class="cell we"></div><div class="cell we"></div><div class="cell"></div>
+      </div>
+      <div class="g-row"><div class="lbl">MOVE-IN 🔑<small>new tenant</small></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell we"></div><div class="cell we"></div><div class="cell we"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell we movein-cell" id="mi-old"><div class="bar">8/1</div></div><div class="cell we" id="mi-new"></div><div class="cell"></div>
+      </div>
+    </div>
+
+    <div class="btnrow">
+      <button class="bump" id="bumpbtn">⚠ Carpet Smart called — bump flooring +5 days</button>
+      <button class="reset" id="resetbtn">reset demo</button>
+    </div>
+
+    <div class="cascade" id="cascade">
+      <h3>Bump preview — flooring 7/22 → 7/27. Here's everything that moves:</h3>
+      <div class="cas-cols">
+        <div class="cas-col">
+          <h4>SCHEDULE CASCADE</h4>
+          <ul>
+            <li>Clean → <b>7/28</b> <small>C&amp;E confirmed available</small></li>
+            <li>Punchlist → <b>7/29</b> <small>HDMS crew ok</small></li>
+            <li class="warn">Rent-ready 7/25 → 7/30</li>
+            <li class="redt">Move-in 8/1 → held — 1 day of slack left</li>
+          </ul>
+        </div>
+        <div class="cas-col">
+          <h4>NOTIFICATIONS QUEUED</h4>
+          <ul>
+            <li>Chat: PM + leasing <small>"Maui Ln RDY slips to 7/30; move-in 8/1 now zero-slack"</small></li>
+            <li>C&amp;E Cleaning <small>reschedule confirmation request</small></li>
+            <li>Vendor rule check <small>✓ no Friday/blackout conflicts on new dates</small></li>
+          </ul>
+        </div>
+        <div class="cas-col" id="afcol">
+          <h4>APPFOLIO UPDATES</h4>
+          <ul id="aflist">
+            <li><span class="wtag2">GUIDED</span>WO 42386-3 date → 7/27 <small>deep link → Cheryl's queue, verify-by-read after</small></li>
+            <li><span class="wtag2">GUIDED</span>Unit available date → 7/30 <small>deep link → Kim's queue, verify-by-read after</small></li>
+          </ul>
+        </div>
+      </div>
+      <div class="cas-foot">
+        <button class="apply" id="applybtn">Apply bump</button>
+        <button class="cancel" id="cancelbtn">Cancel</button>
+        <span style="font-size:11.5px;color:var(--muted)">Nothing is written anywhere until Apply.</span>
+      </div>
+    </div>
+
+    <div class="applied" id="applied">
+      <b>Bump applied.</b> 3 tasks moved · 2 notifications sent · <span id="afsum">2 guided AppFolio steps queued (will verify-by-read when done)</span> · audit: <i>"7/22 10:02a — flooring +5d by Craig, reason: vendor delay (Carpet Smart)"</i>. The jacket's status dot flips to <span style="color:var(--red);font-weight:800">● behind</span> until Clean confirms.
+    </div>
+  </div>
+  <p class="note"><b>The API question, answered visually:</b> the tool works either way — the cascade, the alerts, and the audit trail don't need AppFolio's permission. The write API only changes the third column: GUIDED (a human does it from a deep link, engine verifies) becomes AUTO (engine writes it, then verifies anyway). At ~$1/door/mo (~$850 for HDPM), the API pays for itself if it saves ~30 staff-minutes a day — but it's an upgrade, not a prerequisite. Ship guided-mode first, buy the API when the volume justifies it.</p>
+</section>
+
+<!-- ========== D: PORTFOLIO GANTT ========== -->
+<section class="view" id="gantt">
+  <p style="font-size:13px;color:var(--muted);margin-bottom:12px"><span class="exp">CONCEPT D</span>The whole office's next six weeks on one screen — the Gantt that Microsoft Project promised but couldn't keep, because this one drives itself: bars sit where the work orders say, gates open when AppFolio events fire, and dragging a bar runs the Bump cascade from Concept C.</p>
+  <div class="pg-kpi">
+    <span><b>9</b> active jackets</span>
+    <span class="r"><b>2</b> behind</span>
+    <span class="a"><b>1</b> unscheduled task</span>
+    <span><b>4</b> move-ins next 14 days</span>
+    <span><b>2</b> projected turns (forecast)</span>
+  </div>
+  <div class="pg-ctrl">
+    <button id="pgOut">&minus;</button><button id="pgIn">+</button>
+    <button id="pgPrev">&#9664;</button><button id="pgNext">&#9654;</button>
+    <button id="pgReset">Reset</button>
+    <span class="rng" id="pgRange"></span>
+    <span class="hint">scroll to zoom at cursor &middot; &minus;/+ buttons &middot; &#9664;&#9654; to pan</span>
+  </div>
+  <div class="pg" id="pgRoot">
+    <div class="pg-head">
+      <div class="l">JACKET</div>
+      <div class="pg-ticks" id="pgTicks"></div>
+    </div>
+    <div id="pgBody"></div>
+  </div>
+  <div class="legend" style="margin-top:10px">
+    <span><b>&#9671;</b> event gate — opens when the world acts (keys, closing), not when a person does</span>
+    <span><b>striped</b> = unscheduled/at risk</span>
+    <span><b>ghost bar</b> = forecast from the route template</span>
+    <span style="color:var(--red);font-weight:700">| today</span>
+  </div>
+  <p class="note"><b>Why this Gantt lives when MS Project's died:</b> nobody maintains it. Every bar is a task record; every gate is a webhook; the ghost bars are the engine projecting future workload from route templates — Hartford's turn is already on the calendar three weeks before keys exist, which is how you see August's crunch (two turns landing inside Tri County's 8/7–11 blackout) in July. Zoom in to a single week for the morning huddle; zoom out to two months for capacity. Drag any bar and you get Concept C's cascade preview. Group by vendor instead of unit and this same data becomes next month's capacity plan.</p>
+
+<script>
+(function(){
+  // ---- data: day 0 = Mon Jul 20, 2026 ----
+  var BASE = new Date(2026,6,20);
+  var TODAY = 2; // Wed Jul 22
+  var C = {tenant:'#2c5f8a', adv:'#0e6e6e', vac:'#9a6a00', close:'#8a2c5f', owner:'#6a3d9a', gr:'#2f7d32', gray:'#555'};
+  var BLACKOUTS = [
+    {s:0,e:7,label:'BEST CLEANERS — FAIR',color:'#9a6a00',lane:0},
+    {s:4,e:6,label:'TRI CO',color:'#2c5f8a',lane:1},
+    {s:18,e:22,label:'TRI CO 8/7–11',color:'#2c5f8a',lane:1}
+  ];
+  var GROUPS = [
+    {title:'TURNOVERS — VACANCY TRACKING (7)', rows:[
+      {dot:'s-ok',    name:'2542 Elm Pl',      sub:'Dosier · RDY 7/23',   bars:[{s:1,e:1,l:'cln',c:C.adv,dn:1},{s:2,e:3,l:'punch',c:C.gr}], keys:[4]},
+      {dot:'s-behind',name:'822 SE Maui Ln',   sub:'Menendez · RDY 7/30', bars:[{s:7,e:7,l:'floor',c:C.close},{s:8,e:9,l:'clean',c:C.adv},{s:10,e:10,l:'punch',c:C.gr}], keys:[12], risks:[{d:13,t:'zero slack ⚠'}]},
+      {dot:'s-slight',name:'130 Jefferson',    sub:'Hunter · RDY 7/29',   bars:[{s:7,e:7,l:'paint',c:C.tenant},{s:8,e:8,l:'cln',c:C.adv},{s:9,e:9,l:'carpet',c:C.vac},{s:10,e:10,l:'punch',c:C.gr}], keys:[14]},
+      {dot:'s-ok',    name:'1398 Elk #1',      sub:'Mills · RDY 7/31',    bars:[{s:3,e:3,l:'floor',c:C.close},{s:9,e:9,l:'cln',c:C.adv},{s:11,e:11,l:'punch',c:C.gr}], keys:[16]},
+      {dot:'s-ok',    name:'365 Loper #1',     sub:'Ellis · RDY 8/4',     bars:[{s:3,e:3,l:'contr',c:C.owner},{s:9,e:10,l:'paint',c:C.gray},{s:11,e:11,l:'cln',c:C.adv},{s:14,e:14,l:'punch',c:C.gr}], keys:[18]},
+      {dot:'s-behind',name:'63020 OB Riley #9',sub:'Kau · RDY was 7/15',  bars:[{s:2,e:9,l:'flooring unscheduled — day 17 ⚠',warn:1}], risks:[{d:19,t:'move-in not set'}]},
+      {dot:'s-slight',name:'535 5th #4',       sub:'Boothe · RDY 8/1',    bars:[{s:3,e:3,l:'contr',c:C.owner},{s:8,e:8,l:'floor',c:C.close},{s:9,e:9,l:'paint',c:C.tenant},{s:10,e:10,l:'cln',c:C.adv},{s:11,e:11,l:'punch',c:C.gr}], keys:[15]}
+    ]},
+    {title:'INCOMING & OTHER ROUTES (2)', rows:[
+      {dot:'s-ok',  name:'1810 NW Hartford', sub:'notice 7/21 · M/O 8/20', bars:[{s:1,e:4,l:'tracks open',c:C.tenant},{s:32,e:40,l:'projected turn (template)',c:C.gr,ghost:1}], gates:[{d:31,t:'keys returned — event gate'}]},
+      {dot:'s-hold',name:'947 SW 14th A',    sub:'owner termination route', bars:[{s:2,e:26,l:'close-out & final accounting — Penny',c:C.close,op:.8}], gates:[{d:28,t:'ownership transfer — event gate'}]}
+    ]}
+  ];
+
+  var FULL_START = 0, FULL_SPAN = 42;
+  var vs = FULL_START, span = FULL_SPAN;
+  var SPANS = [7,14,28,42,63];
+  var fmt = function(d){ var dt = new Date(BASE.getTime()+d*864e5); return (dt.getMonth()+1)+'/'+dt.getDate(); };
+  var fmtLong = function(d){ var dt = new Date(BASE.getTime()+d*864e5); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()]+' '+dt.getDate(); };
+  var DAYS = ['S','M','T','W','T','F','S'];
+
+  function laneBg(n){ return 'repeating-linear-gradient(to right, transparent 0, transparent calc(100%/'+n+' - 1px), #eceeec calc(100%/'+n+' - 1px), #eceeec calc(100%/'+n+'))'; }
+  function pos(d){ return ((d - vs) / span * 100); }
+
+  function pointEl(cls, d, inner, title){
+    if(d < vs || d >= vs + span) return '';
+    return '<'+ (cls==='gate2'?'div':'span') +' class="'+cls+'" style="left:'+((d - vs + 0.15)/span*100).toFixed(2)+'%"'+(title?' title="'+title+'"':'')+'>'+(inner||'')+'</'+(cls==='gate2'?'div':'span')+'>';
+  }
+
+  function barsHtml(row){
+    var h = '';
+    (row.bars||[]).forEach(function(b){
+      var s = Math.max(b.s, vs), e = Math.min(b.e + 1, vs + span);
+      if(e <= s) return;
+      var left = ((s - vs)/span*100).toFixed(2), w = ((e - s)/span*100).toFixed(2);
+      var style = 'left:'+left+'%;width:'+w+'%;';
+      var cls = 'gb' + (b.dn ? ' dn' : '') + (b.warn ? ' warnb' : '');
+      if(!b.warn) style += 'background:'+b.c+';';
+      if(b.ghost) style += 'opacity:.35;';
+      if(b.op) style += 'opacity:'+b.op+';';
+      var label = (span <= 42 || (b.e - b.s) > 2) ? b.l : '';
+      h += '<div class="'+cls+'" style="'+style+'" title="'+b.l+' · '+fmt(b.s)+(b.e>b.s?'–'+fmt(b.e):'')+'">'+label+'</div>';
+    });
+    (row.gates||[]).forEach(function(g){ h += pointEl('gate2', g.d, '', g.t); });
+    (row.keys||[]).forEach(function(d){ h += pointEl('keymark', d, '🔑'); });
+    (row.risks||[]).forEach(function(r){ h += pointEl('risk2', r.d, r.t); });
+    if(TODAY >= vs && TODAY < vs + span){
+      var tl = ((TODAY + 0.5 - vs)/span*100).toFixed(2);
+      h += '<div class="todayline" style="left:'+tl+'%"></div>';
+    }
+    return h;
+  }
+
+  function render(){
+    // ticks
+    var ticks = document.getElementById('pgTicks'), th = '', n;
+    if(span <= 21){
+      n = span;
+      for(var d = vs; d < vs + span; d++){
+        var dt = new Date(BASE.getTime()+d*864e5), dow = dt.getDay();
+        th += '<div class="'+(d===TODAY?'today':(dow===0||dow===6?'we':''))+'">'+DAYS[dow]+' '+dt.getDate()+'</div>';
+      }
+    } else {
+      n = Math.ceil(span/7);
+      for(var w = 0; w < n; w++){ th += '<div>'+fmtLong(vs + w*7)+'</div>'; }
+    }
+    ticks.style.gridTemplateColumns = 'repeat('+n+',1fr)';
+    ticks.innerHTML = th;
+
+    // body
+    var b = '';
+    // blackout ribbon
+    b += '<div class="pg-black"><div class="l">VENDOR BLACKOUTS</div><div class="tl2">';
+    BLACKOUTS.forEach(function(bo){
+      var s = Math.max(bo.s, vs), e = Math.min(bo.e + 1, vs + span);
+      if(e <= s) return;
+      b += '<div class="bo" style="left:'+((s-vs)/span*100).toFixed(2)+'%;width:'+((e-s)/span*100).toFixed(2)+'%;top:'+(bo.lane?13:2)+'px;height:9px;background:'+bo.color+'">'+bo.label+'</div>';
+    });
+    if(TODAY >= vs && TODAY < vs+span) b += '<div class="todayline" style="left:'+((TODAY+0.5-vs)/span*100).toFixed(2)+'%"></div>';
+    b += '</div></div>';
+    GROUPS.forEach(function(g){
+      b += '<div class="pg-group">'+g.title+'</div>';
+      g.rows.forEach(function(r){
+        b += '<div class="pg-row"><div class="l"><span class="dot '+r.dot+'"></span><span><b>'+r.name+'</b><small>'+r.sub+'</small></span></div>'
+           + '<div class="pg-lane" style="background:'+laneBg(span<=21?span:Math.ceil(span/7))+'">'+barsHtml(r)+'</div></div>';
+      });
+    });
+    document.getElementById('pgBody').innerHTML = b;
+    document.getElementById('pgRange').textContent = fmtLong(vs)+' – '+fmtLong(vs+span-1)+'  ·  '+(span<=7?'1 week':span+' days');
+  }
+
+  function clamp(){ vs = Math.max(-7, Math.min(vs, FULL_START + FULL_SPAN + 28 - span)); }
+  function setSpan(newSpan, centerDay){
+    newSpan = Math.max(7, Math.min(63, newSpan));
+    if(centerDay === undefined) centerDay = vs + span/2;
+    span = newSpan; vs = Math.round(centerDay - span/2); clamp(); render();
+  }
+  document.getElementById('pgIn').onclick  = function(){ var i = SPANS.indexOf(span); setSpan(SPANS[Math.max(0,(i<0?2:i)-1)]); };
+  document.getElementById('pgOut').onclick = function(){ var i = SPANS.indexOf(span); setSpan(SPANS[Math.min(SPANS.length-1,(i<0?2:i)+1)]); };
+  document.getElementById('pgPrev').onclick = function(){ vs -= Math.ceil(span/2); clamp(); render(); };
+  document.getElementById('pgNext').onclick = function(){ vs += Math.ceil(span/2); clamp(); render(); };
+  document.getElementById('pgReset').onclick = function(){ vs = FULL_START; span = FULL_SPAN; render(); };
+  document.getElementById('pgRoot').addEventListener('wheel', function(e){
+    e.preventDefault();
+    var rect = this.getBoundingClientRect();
+    var laneLeft = rect.left + 210, laneW = rect.width - 210;
+    var frac = Math.max(0, Math.min(1, (e.clientX - laneLeft) / laneW));
+    var cursorDay = vs + frac * span;
+    var i = SPANS.indexOf(span); if(i < 0) i = 2;
+    if(e.deltaY < 0 && i > 0) i--; else if(e.deltaY > 0 && i < SPANS.length-1) i++; else return;
+    span = SPANS[i]; vs = Math.round(cursorDay - frac * span); clamp(); render();
+  }, {passive:false});
+  render();
+})();
+</script>
+</section>
+
+<!-- ========== E: MY DESK ========== -->
+<section class="view" id="desk">
+  <p style="font-size:13px;color:var(--muted);margin-bottom:12px"><span class="exp">CONCEPT E</span>The daily driver — one person's everything, always prioritized. Every open item in the office has one owner and one next-action date, so priority is <b>computed, not curated</b>: overdue first, then things whose delay cascades, then today, then claimable, then watching. Nobody configures this page — it assembles itself from whatever carries your name. <b>Switch desks to see the same engine build a different day:</b></p>
+
+  <div class="toggle" style="display:inline-flex;margin-bottom:12px">
+    <button id="deskC" class="on">Cheryl — Maintenance Coordinator</button>
+    <button id="deskJ">Jen — Property Manager</button>
+  </div>
+
+  <div class="deskwrap" id="desk-cheryl">
+    <div class="deskhead">
+      <div class="avatar">C</div>
+      <div><h2>Cheryl's Desk</h2><div style="font-size:11.5px;color:var(--muted)">Wednesday, July 22 · computed 9:14a · updates live</div></div>
+      <div class="cnts"><span class="cnt2 r">3 fix now</span><span class="cnt2 a">4 due today</span><span class="cnt2">2 claimable</span><span class="cnt2">5 watching</span></div>
+    </div>
+
+    <div class="dsec r">▌ FIX NOW — overdue or blocking someone</div>
+    <div class="ditem hot"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>OB Riley #9 — flooring unscheduled, day 17</b><span class="agechip ag-r">17d</span><span class="src" style="background:var(--red)">TRIPWIRE</span>
+      <div class="why"><span class="csq">Blocks: clean → punch → move-in (not yet set) · rent lost daily.</span> Carpet Smart hasn't committed; 2 declines on file. <i>Next: confirm or reassign today.</i></div>
+    </div><div class="acts"><button class="p">Call Carpet Smart</button><button>Reassign vendor</button></div></div>
+    <div class="ditem hot"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>822 SE Maui Ln — move-in 8/1 now zero-slack</b><span class="agechip ag-r">⚠</span><span class="src" style="background:var(--red)">CASCADE</span>
+      <div class="why"><span class="csq">Any further slip moves a tenant's move-in day.</span> C&amp;E hasn't confirmed the 7/28 clean. <i>Next: get C&amp;E confirmation in writing.</i></div>
+    </div><div class="acts"><button class="p">Text C&amp;E to confirm</button></div></div>
+    <div class="ditem hot"><div class="jc" style="background:#8a8f8a"></div><div class="bodyx">
+      <b>Roofer bid — Fall Creek 4-plex, day 6 silent</b><span class="agechip ag-r">6d</span><span class="src" style="background:var(--red)">TRIPWIRE</span>
+      <div class="why">Cascade Roofing unaccepted &gt;24h rule. Per Monday's decision: <i>last chance today, then roofer #3 + demote on scoreboard.</i></div>
+    </div><div class="acts"><button class="p">Call now</button><button>Move to roofer #3</button></div></div>
+
+    <div class="dsec g">▌ DUE TODAY</div>
+    <div class="ditem"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>2542 Elm Pl — punchlist &amp; final walk</b><span class="agechip ag-g">today</span><span class="src" style="background:var(--gr)">TURNOVER</span>
+      <div class="why">Keys go to the new tenant <b>Friday</b>. Garage openers still 0 of 2 — charge posts 7/25 if unreturned.</div>
+    </div><div class="acts"><button class="p">Open jacket</button><button>Mark walk done</button></div></div>
+    <div class="ditem"><div class="jc" style="background:#2c5f8a"></div><div class="bodyx">
+      <b>Approve triage — “Fridge not cooling, Brosterhous #4”</b><span class="agechip ag-g">new</span><span class="src" style="background:#2c5f8a">PROPOSAL</span>
+      <div class="why">Agent suggests: P2 · appliance · dispatch Alberto Thu AM. Approve, edit, or reject — your call is logged and trains the ladder.</div>
+    </div><div class="acts"><button class="p">Approve</button><button>Edit</button><button class="gray">Reject</button></div></div>
+    <div class="ditem"><div class="jc" style="background:#2c5f8a"></div><div class="bodyx">
+      <b>3 estimate-chase drafts ready in Outlook</b><span class="agechip ag-g">ready</span><span class="src" style="background:#2c5f8a">AGENT</span>
+      <div class="why">Chaser drafted follow-ups for Deschutes Electric (d3), Fine Line (d4), Cascade Roofing (escalated to phone — see Fix Now). Review &amp; send.</div>
+    </div><div class="acts"><button class="p">Review drafts</button></div></div>
+    <div class="ditem"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>1398 Elk #1 — confirm Sunrise clean for 7/29</b><span class="agechip ag-g">today</span><span class="src" style="background:var(--gr)">TURNOVER</span>
+      <div class="why">On schedule; confirmation keeps it that way. Tri County blackout starts Friday — no repaint window if the walk finds paint issues.</div>
+    </div><div class="acts"><button class="p">Text Sunrise</button></div></div>
+
+    <div class="dsec b">▌ IN YOUR BOXES — claimable</div>
+    <div class="ditem"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>535 5th #4 — OWNER track idle 4 days</b><span class="agechip ag-a">4d</span><span class="src" style="background:#2c5f8a">JACKET</span>
+      <div class="why">W/D removal decision + landscaping status unconfirmed. Tripwire fires tomorrow if unclaimed.</div>
+    </div><div class="acts"><button class="p">Claim</button></div></div>
+    <div class="ditem"><div class="jc" style="background:#0e6e6e"></div><div class="bodyx">
+      <b>Keys returned unlabeled — 2 keys, drop box</b><span class="agechip ag-a">this AM</span><span class="src" style="background:#2c5f8a">KEYS</span>
+      <div class="why">Not on the check-out sheet. Returned-keys triage: check move-out files → staff → vendors → record in Key Manager.</div>
+    </div><div class="acts"><button class="p">Start triage</button></div></div>
+
+    <div class="dsec m">▌ WATCHING — owned by others, on your radar</div>
+    <div class="ditem" style="opacity:.75"><div class="jc" style="background:#6a3d9a"></div><div class="bodyx">
+      <b>Window replacement — Couch Market · owner deciding, day 6</b><span class="src" style="background:var(--muted)">WAIT-OWNER</span>
+      <div class="why">Jen calls with photos today. Surfaces to your Fix Now if it passes day 7.</div>
+    </div></div>
+    <div class="ditem" style="opacity:.75"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>1810 NW Hartford — keys gate 8/20 · projected turn on your board 8/21</b><span class="src" style="background:var(--muted)">FORECAST</span>
+      <div class="why">Nothing to do yet — shown so August's workload isn't a surprise. Two turns land inside Tri County's 8/7–11 blackout.</div>
+    </div></div>
+  </div>
+
+  <div class="deskwrap" id="desk-jen" style="display:none">
+    <div class="deskhead">
+      <div class="avatar" style="background:#6a3d9a">J</div>
+      <div><h2>Jen's Desk</h2><div style="font-size:11.5px;color:var(--muted)">Wednesday, July 22 · computed 9:14a · updates live</div></div>
+      <div class="cnts"><span class="cnt2 r">3 fix now</span><span class="cnt2 a">4 due today</span><span class="cnt2">2 claimable</span><span class="cnt2">3 watching</span></div>
+    </div>
+
+    <div class="dsec r">▌ FIX NOW — overdue or blocking someone</div>
+    <div class="ditem hot"><div class="jc" style="background:#6a3d9a"></div><div class="bodyx">
+      <b>Couch Market — owner window decision, day 6 past due</b><span class="agechip ag-r">6d</span><span class="src" style="background:var(--red)">TRIPWIRE</span>
+      <div class="why"><span class="csq">Repair blocked; tenant waiting; next-action date 6/26 lapsed.</span> R. Simmons deciding vinyl vs. wood. Agent has the photo email drafted. <i>Next: call with photos + delay risk, log new date.</i></div>
+    </div><div class="acts"><button class="p">Call R. Simmons</button><button>Send drafted email</button></div></div>
+    <div class="ditem hot"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>OB Riley #9 — deposit accounting clock: 14 days left</b><span class="agechip ag-r">day 17/31</span><span class="src" style="background:var(--red)">COMPLIANCE</span>
+      <div class="why"><span class="csq">Oregon's 31-day final-accounting deadline (vacated 7/5) lands 8/5.</span> Blocked upstream: damages unknown until flooring resolves (on Cheryl's Fix Now). <i>Next: sync with Cheryl today; prep accounting shell now.</i></div>
+    </div><div class="acts"><button class="p">Open deposit jacket</button><button>Nudge Cheryl</button></div></div>
+    <div class="ditem hot"><div class="jc" style="background:#2c5f8a"></div><div class="bodyx">
+      <b>1398 Elk #1 — owner approval silent, day 3</b><span class="agechip ag-r">3d</span><span class="src" style="background:var(--red)">TRIPWIRE</span>
+      <div class="why"><span class="csq">Approved applicant may walk — every silent day risks the 8/5 move-in.</span> Screening passed 7/19; Mills hasn't tapped approve. <i>Next: resend one-tap approval, then phone.</i></div>
+    </div><div class="acts"><button class="p">Resend approval link</button><button>Call owner</button></div></div>
+
+    <div class="dsec g">▌ DUE TODAY</div>
+    <div class="ditem"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>1810 NW Hartford — verify move-out setup in AppFolio</b><span class="agechip ag-g">today</span><span class="src" style="background:var(--amber)">GUIDED ✓</span>
+      <div class="why">Notice 7/21 spawned the jacket; confirmation letter is drafted. Guided step: enter notice + M/O dates, prorate — <b>engine verifies by read before the jacket advances.</b></div>
+    </div><div class="acts"><button class="p">Open guided step</button></div></div>
+    <div class="ditem"><div class="jc" style="background:#2c5f8a"></div><div class="bodyx">
+      <b>Remaining-tenant requalification — approve release</b><span class="agechip ag-g">docs in</span><span class="src" style="background:#2c5f8a">PROPOSAL</span>
+      <div class="why">Paystubs + bank statements received (PDF ✓); income computes to 2.6× rent against the 2.5× policy. Agent recommends approve. Your decision is the record.</div>
+    </div><div class="acts"><button class="p">Approve</button><button>Edit</button><button class="gray">Reject</button></div></div>
+    <div class="ditem"><div class="jc" style="background:#6a3d9a"></div><div class="bodyx">
+      <b>Reasonable accommodation — ESA request, provider letter received</b><span class="agechip ag-g">today</span><span class="src" style="background:var(--gr)">COMPLIANCE</span>
+      <div class="why">Verification checks out per policy; decision letter pre-drafted both ways. Fair-housing rails on: this one never auto-sends.</div>
+    </div><div class="acts"><button class="p">Review &amp; decide</button></div></div>
+    <div class="ditem"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>130 Jefferson — owner walk packet for Saturday</b><span class="agechip ag-g">prep</span><span class="src" style="background:var(--gr)">TURNOVER</span>
+      <div class="why">Walk with owner 7/26. Packet auto-built: before/after photos, repair summary (one line per job), new listing rent from comps. Review before it goes.</div>
+    </div><div class="acts"><button class="p">Review packet</button></div></div>
+
+    <div class="dsec b">▌ IN YOUR BOXES — claimable</div>
+    <div class="ditem"><div class="jc" style="background:#8a2c5f"></div><div class="bodyx">
+      <b>947 SW 14th A — owner termination: transfer instructions needed</b><span class="agechip ag-a">2d</span><span class="src" style="background:#2c5f8a">JACKET</span>
+      <div class="why">Close-out letter drafted; waiting on written owner instructions for deposit transfer (must be in writing, per procedure).</div>
+    </div><div class="acts"><button class="p">Claim</button></div></div>
+    <div class="ditem"><div class="jc" style="background:#2c5f8a"></div><div class="bodyx">
+      <b>New owner lead — 2 duplexes NE Bend (call note from Matt)</b><span class="agechip ag-g">new</span><span class="src" style="background:#2c5f8a">SALES</span>
+      <div class="why">The "New Owner Call Note" born digital: contact, property details, and a drafted management packet cover email ready to go.</div>
+    </div><div class="acts"><button class="p">Claim</button></div></div>
+
+    <div class="dsec m">▌ WATCHING — owned by others, on your radar</div>
+    <div class="ditem" style="opacity:.75"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>822 SE Maui Ln — move-in 8/1 zero-slack (Cheryl driving)</b><span class="src" style="background:var(--muted)">CASCADE</span>
+      <div class="why">If it slips, your new tenant's move-in letter and prorate change — drafts will regenerate automatically.</div>
+    </div></div>
+    <div class="ditem" style="opacity:.75"><div class="jc" style="background:#0e6e6e"></div><div class="bodyx">
+      <b>1398 Elk #1 — 3 showings this week (Kim)</b><span class="src" style="background:var(--muted)">ADVERTISING</span>
+      <div class="why">Application volume feeds your approval queue if Mills approves (see Fix Now).</div>
+    </div></div>
+    <div class="ditem" style="opacity:.75"><div class="jc" style="background:var(--gold)"></div><div class="bodyx">
+      <b>2542 Elm Pl — keys Friday · move-in file complete</b><span class="src" style="background:var(--muted)">MOVE-IN</span>
+      <div class="why">New Tenant Checklist prefilled; nothing needed from you unless the final walk finds issues.</div>
+    </div></div>
+  </div>
+
+  <p class="note"><b>How this differs from a Process Street / LeadSimple task list:</b> those show your assigned tasks; the order is mostly yours to figure out. Here priority is computed from the data — overdue &gt; cascade consequence (does delay move a tenant's move-in?) &gt; due date &gt; age — because every item is guaranteed to have one owner and one next-action date. Every card says <i>why</i> it's ranked where it is, every button is logged as your decision, and the same list becomes the Morning Card push at 7:42am. Knock out the top section and the day is won.</p>
+</section>
+
+<script>
+  const dC=document.getElementById('deskC'),dJ=document.getElementById('deskJ');
+  if(dC&&dJ){
+    const show=(who)=>{document.getElementById('desk-cheryl').style.display=who==='c'?'':'none';
+      document.getElementById('desk-jen').style.display=who==='j'?'':'none';
+      dC.classList.toggle('on',who==='c');dJ.classList.toggle('on',who==='j');};
+    dC.onclick=()=>show('c');dJ.onclick=()=>show('j');
+  }
+  const nav=document.getElementById('nav');
+  nav.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||!b.dataset.v)return;
+    nav.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById(b.dataset.v).classList.add('active');});
+
+  // write API toggle
+  const woff=document.getElementById('woff'),won=document.getElementById('won'),
+        aflist=document.getElementById('aflist'),pricenote=document.getElementById('pricenote'),
+        afsum=document.getElementById('afsum');
+  let apiOn=false;
+  const renderAf=()=>{ aflist.innerHTML = apiOn
+    ? '<li><span class="wtag2 auto">AUTO</span>WO 42386-3 date → 7/27 <small>engine writes, then verifies</small></li><li><span class="wtag2 auto">AUTO</span>Unit available date → 7/30 <small>engine writes, then verifies</small></li>'
+    : '<li><span class="wtag2">GUIDED</span>WO 42386-3 date → 7/27 <small>deep link → Cheryl\'s queue, verify-by-read after</small></li><li><span class="wtag2">GUIDED</span>Unit available date → 7/30 <small>deep link → Kim\'s queue, verify-by-read after</small></li>';
+    pricenote.textContent = apiOn ? 'Engine writes both fields itself — and still verifies by read afterward. Humans only see the alert.'
+                                  : 'Writes become verified checklist steps for a human — still tracked, still gated.';
+    afsum.textContent = apiOn ? '2 AppFolio fields auto-written + verified' : '2 guided AppFolio steps queued (will verify-by-read when done)';};
+  woff.onclick=()=>{apiOn=false;woff.classList.add('on');won.classList.remove('on');renderAf();};
+  won.onclick=()=>{apiOn=true;won.classList.add('on');woff.classList.remove('on');renderAf();};
+
+  // bump demo
+  const cascade=document.getElementById('cascade'),applied=document.getElementById('applied'),
+        bumpbtn=document.getElementById('bumpbtn');
+  bumpbtn.onclick=()=>{cascade.classList.add('show');applied.classList.remove('show');bumpbtn.classList.add('done');};
+  document.getElementById('cancelbtn').onclick=()=>{cascade.classList.remove('show');bumpbtn.classList.remove('done');};
+  document.getElementById('applybtn').onclick=()=>{
+    cascade.classList.remove('show');applied.classList.add('show');
+    const mv=(oldId,newId,txt,bg)=>{const o=document.getElementById(oldId),n=document.getElementById(newId);
+      if(o&&o.firstElementChild){o.firstElementChild.classList.add('ghost');}
+      if(n&&!n.firstElementChild){const b=document.createElement('div');b.className='bar';b.style.background=bg;b.textContent=txt;n.appendChild(b);}};
+    mv('fl-old','fl-new','7/27','var(--t-close)');
+    mv('cl-old','cl-new','7/28','var(--t-adv)');
+    mv('pu-old','pu-new','7/29','var(--gr)');
+  };
+  document.getElementById('resetbtn').onclick=()=>{location.reload();};
+</script>
+</body>
+</html>

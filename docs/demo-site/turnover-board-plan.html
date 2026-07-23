@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Turnover Board Plan</title>
+  <style>body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;max-width:860px;margin:0 auto;padding:18px 24px;color:#1a1a1a;line-height:1.6;font-size:14.5px}h1{color:#1f5c22;font-size:22px;border-bottom:3px solid #2f7d32;padding-bottom:8px}h2{color:#1f5c22;font-size:16px;border-bottom:1px solid #c7cec7;padding-bottom:4px;margin-top:26px}h3{color:#1f5c22;font-size:14px}table{border-collapse:collapse;font-size:12.5px;margin:10px 0}th{background:#eef5ee;color:#1f5c22;text-align:left;padding:6px 9px;border:1px solid #c7cec7}td{padding:6px 9px;border:1px solid #c7cec7;vertical-align:top}code,pre{background:#f7faf7;border-radius:4px;font-size:12px}pre{padding:10px;border:1px solid #c7cec7;overflow-x:auto}blockquote{border-left:4px solid #e8b923;margin:10px 0;padding:6px 14px;background:#fdf6e0;font-size:13px}</style>
+</head>
+<body>
+<div style="background:#1f5c22;display:flex;gap:12px;align-items:center;padding:9px 16px;border-radius:0 0 10px 10px;margin:-0px 0 14px;font-size:12.5px;flex-wrap:wrap;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif"><span style="color:#e8b923;font-weight:800;letter-spacing:.5px">HDPM-OS DEMO</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="00-START-HERE.html">⌂ Home</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="form-inventory-team-review.html">Inventory</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="unit-turnover-board-mockup.html">Turnover Board</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="jackets-ui-explorations.html">Jackets UI</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="agents-summary.html">Agents</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="hdpm-home-explorations.html">Home Concepts</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="workflow-engine-concept.html">Concept Doc</a><span style="color:#fff;font-weight:800;background:#2f7d32;border-radius:6px;padding:3px 10px">Board Plan</span><span style="margin-left:auto;color:#9dbb9d;font-size:10.5px">sample data · concept site · July 2026</span></div>
+
+
+<h1 id="property-unit-tracker-hdpmchat-digital-board">Property Unit
+Tracker → hdpmchat Digital Board</h1>
+<p><strong>Planning document — v1 draft, 7/22/2026</strong></p>
+<h2 id="what-the-whiteboard-actually-is-reverse-engineering">1. What the
+whiteboard actually is (reverse-engineering)</h2>
+<p>The board is a <em>unit turnover pipeline tracker</em>. Every row is
+one vacancy event moving through make-ready. Decoded:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Board element</th>
+<th>Meaning</th>
+<th>Digital equivalent</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Row</td>
+<td>One unit currently in turnover</td>
+<td><code>TurnoverCycle</code> record (a unit can have many over
+time)</td>
+</tr>
+<tr class="even">
+<td>Unit column</td>
+<td>Address/unit ID</td>
+<td>Link to <code>Unit</code> (AppFolio property/unit code, e.g. 42101,
+42380)</td>
+</tr>
+<tr class="odd">
+<td>Status magnet</td>
+<td>Green = on schedule, yellow = slight delay, red = behind, orange =
+major issue</td>
+<td><strong>Computed</strong> health score — no more manual magnet
+moving</td>
+</tr>
+<tr class="even">
+<td>VAC</td>
+<td>Vacating tenant name + move-out date</td>
+<td>From notice-to-vacate (30-day notice)</td>
+</tr>
+<tr class="odd">
+<td>RDY</td>
+<td>Target rent-ready date</td>
+<td>Editable target; drives all downstream scheduling</td>
+</tr>
+<tr class="even">
+<td>Columns A–M</td>
+<td>Make-ready phases: move-out inspect, contractors, cleaners,
+flooring, paint, punchlist… each cell = scheduled date + vendor + done
+mark</td>
+<td><code>Task</code> records with type, vendor, scheduled window,
+status</td>
+</tr>
+<tr class="odd">
+<td>Vendor magnets</td>
+<td>Wafford, C&amp;E Cleaning, Sunrise, Carpet Smart, Firkus, 365
+Contracting, Best Cleaners, OR Deschutes Paint…</td>
+<td><code>Vendor</code> table</td>
+</tr>
+<tr class="even">
+<td>Margin notes (“Tri County no Fridays,” “Heavenly no Tuesdays,” “Tri
+County July 24–26”)</td>
+<td>Vendor availability rules &amp; blackout dates</td>
+<td><code>VendorAvailabilityRule</code> — weekly rules + date-range
+blackouts, enforced by the scheduler</td>
+</tr>
+<tr class="odd">
+<td>Lockbox tag / #</td>
+<td>Lockbox assignment &amp; code</td>
+<td>Field on the cycle; visible to authorized users only</td>
+</tr>
+<tr class="even">
+<td>ADVERTISED / PUNCHLIST tags</td>
+<td>Marketing + workflow flags</td>
+<td>Status flags on the cycle</td>
+</tr>
+<tr class="odd">
+<td>Notes (“Move in 7/24,” “Selling,” “Owner!”)</td>
+<td>Move-in date, disposition notes</td>
+<td>Structured fields: <code>moveInDate</code>,
+<code>disposition</code>, free-text notes</td>
+</tr>
+<tr class="even">
+<td>Sticky note</td>
+<td>Miscellaneous to-dos</td>
+<td>Board-level task list / pinned note</td>
+</tr>
+</tbody>
+</table>
+<p>Key insight: the status dot, the thing everyone glances at, is
+<em>derivable</em>. If today &gt; a task’s scheduled date and it isn’t
+done, the row is behind. That alone removes the most error-prone manual
+step.</p>
+<h2 id="automation-model-the-point-of-the-exercise">2. Automation model
+(the point of the exercise)</h2>
+<p>The lifecycle to automate end-to-end:</p>
+<ol type="1">
+<li><strong>Trigger — notice received.</strong> Tenant gives 30-day
+notice (already an HDPM process: “30 Day Ntc from Tenants Vacancy
+Tracking Form”). A turnover cycle is auto-created with unit, tenant,
+move-out date. No one “adds a row” anymore.</li>
+<li><strong>Template expansion.</strong> A make-ready template (the A–M
+columns, encoded once) auto-generates the task list: Move-out inspection
+→ contractor bids/repairs → flooring → paint → cleaning → carpets →
+punchlist → final walk. Each task type has a default duration and
+ordering.</li>
+<li><strong>Auto-scheduling.</strong> Working backward from move-out
+date (or forward to hit the RDY target), the scheduler proposes dates
+for each task, honoring vendor weekly rules (“no Fridays”), blackout
+ranges, and simple capacity (a vendor isn’t double-booked across units
+the same day). Staff confirm/adjust — the system does the tetris.</li>
+<li><strong>Status auto-computation.</strong> Green/yellow/red/orange
+from task states vs. today. “Behind” cascades: a late paint job pushes
+cleaning, which pushes RDY, which flags the move-in date at risk.</li>
+<li><strong>Notifications in hdpmchat.</strong> It’s a chat app — so the
+board talks: daily digest (“3 units behind, 2 move-ins this week”),
+instant alerts (“822 SE Maui: flooring slipped, move-in 7/24 at risk”),
+vendor-day-before reminders, lockbox code on request.</li>
+<li><strong>Close-out.</strong> Final walk done → cycle archived, unit
+flagged rent-ready, ADVERTISED workflow kicks in, move-in date
+confirmed.</li>
+</ol>
+<h3 id="feeding-it-from-appfolio">Feeding it from AppFolio</h3>
+<p><strong>hdpmchat already has AppFolio webhooks + read API
+access</strong>, so the board is event-driven from day one — no manual
+entry phase, no report-export workaround.</p>
+<p>Event flow:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>AppFolio signal</th>
+<th>Board reaction</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Notice to vacate recorded (move-out date set on tenancy)</td>
+<td>Auto-create <code>TurnoverCycle</code>; expand make-ready template
+into tasks; propose schedule</td>
+</tr>
+<tr class="even">
+<td>Move-out date changed</td>
+<td>Reslide dependent tasks; alert if RDY/move-in now at risk</td>
+</tr>
+<tr class="odd">
+<td>Work order created/updated/completed</td>
+<td>Sync to the matching <code>Task</code> (two-way reference via
+<code>workorder_ref</code>); completion advances the phase</td>
+</tr>
+<tr class="even">
+<td>Unit listed / marketing status</td>
+<td>Set/clear ADVERTISED flag</td>
+</tr>
+<tr class="odd">
+<td>Lease signed on the unit</td>
+<td>Set <code>moveInDate</code>; lock the RDY deadline; countdown
+alerts</td>
+</tr>
+<tr class="even">
+<td>Tenant moved in</td>
+<td>Close and archive the cycle; snapshot metrics (days-to-ready, cost
+per turn)</td>
+</tr>
+</tbody>
+</table>
+<p>The read API backs this up two ways: an <strong>initial
+backfill</strong> (current vacancies + open work orders → the board
+starts life matching reality, seeded against the whiteboard for
+validation) and a <strong>nightly reconciliation sweep</strong> that
+catches any webhook we missed, so the board can never silently drift
+from AppFolio — the failure mode that kills trust in a tool like
+this.</p>
+<p>What stays app-side (not in AppFolio): vendor availability rules and
+blackouts, the scheduling engine, lockbox assignments, phase template
+definitions, status computation, and chat notifications. AppFolio is the
+system of record for <em>facts</em> (tenants, dates, work orders);
+hdpmchat owns the <em>choreography</em>.</p>
+<p>One discovery task: enumerate exactly which webhook events our
+integration exposes and which read endpoints cover notices, work orders,
+and listings — the table above assumes the common set; the template
+expander keys off whatever the notice event actually carries.</p>
+<h2 id="data-model-sketch">3. Data model sketch</h2>
+<pre><code>Unit           id, appfolio_code, address, unit_label, property_group
+TurnoverCycle  id, unit_id, vacating_tenant, notice_date, moveout_date,
+               ready_target, movein_date, disposition (rent|sale|owner-occupy),
+               lockbox_code, flags[advertised, punchlist], status (computed), notes
+Task           id, cycle_id, type (inspect|contract|floor|paint|clean|carpet|punch|walk),
+               vendor_id, scheduled_start, scheduled_end, completed_at,
+               sequence, depends_on, est_cost, workorder_ref
+Vendor         id, name, trade[], phone, email, notes
+AvailabilityRule vendor_id, weekly (e.g. no_friday), blackout_start, blackout_end
+BoardNote      pinned board-level notes (the sticky note)
+AuditLog       who changed what, when (whiteboards forget; apps shouldn&#39;t)</code></pre>
+<h2 id="views">4. Views</h2>
+<ol type="1">
+<li><strong>Board view (v1 default)</strong> — digital twin of the
+whiteboard: units as rows, phase columns, computed status dots, click a
+cell to edit a task. Familiar on day one; zero retraining.</li>
+<li><strong>Calendar view</strong> — week/month; tasks as colored
+blocks, groupable by vendor (spot conflicts) or by unit (see one
+turnover’s arc). This is where “reverse-engineering it into a calendar”
+pays off.</li>
+<li><strong>Unit drawer</strong> — click a row: full timeline, notes,
+lockbox, tenant history, linked work orders.</li>
+<li><strong>Vendor view</strong> — one vendor’s week across all units;
+later becomes the vendor-facing portal.</li>
+<li><strong>Mobile/read-only</strong> — field techs get today’s tasks +
+lockbox codes.</li>
+<li><strong>TV mode</strong> — the wall-mounted replacement for the
+physical board: auto-refreshing board view on a monitor in the office.
+The whiteboard’s real virtue is ambient visibility; keep that.</li>
+</ol>
+<h2 id="phased-roadmap">5. Phased roadmap</h2>
+<p><strong>Phase 0 — Discovery (days, not weeks).</strong> Enumerate
+available webhook events + read endpoints; confirm the A–M column
+semantics with the board’s owner (20-minute interview); encode the
+make-ready template. Backfill current vacancies via read API and
+validate the generated board against the physical whiteboard — that
+side-by-side is the acceptance test.</p>
+<p><strong>Phase 1 — Live digital board.</strong> Board view + unit
+drawer in hdpmchat, fed by webhooks (cycles auto-created from notices,
+tasks synced to work orders), computed status dots, audit log, TV mode
+on the office wall. Vendor/schedule edits are manual here — but the rows
+and facts are automatic from day one. Success = staff stop reaching for
+the markers.</p>
+<p><strong>Phase 2 — Choreography.</strong> Auto-scheduler with vendor
+availability rules and blackouts, nightly reconciliation sweep, chat
+digests and at-risk alerts, calendar view grouped by vendor or unit.</p>
+<p><strong>Phase 3 — Outside the office.</strong> Vendor confirmations
+(text/email “confirm Thursday?” → one tap), tech mobile view with
+lockbox codes, metrics (avg days-to-ready, vendor turnaround, cost per
+turn — data the whiteboard erases every week).</p>
+<h2 id="open-questions">6. Open questions</h2>
+<ul>
+<li>hdpmchat stack &amp; repo location (determines how the module drops
+in — need this before Phase 1 build).</li>
+<li>Exact semantics of columns A–M (interview the board owner; the
+template must match reality, not our guess).</li>
+<li>Which webhook events + read endpoints the existing AppFolio
+integration exposes (drives the event table in §2).</li>
+<li>Can hdpmchat <em>write</em> work orders back to AppFolio, or
+read-only? (Read-only is fine for v1 — tasks live app-side with a
+reference; write access later closes the loop.)</li>
+<li>Lockbox codes: who’s allowed to see them in-app? (They’re on a
+public whiteboard today, so the app is already an upgrade.)</li>
+<li>Keep the Strive calendar joke going or finally recycle it.
+(Optional.)</li>
+</ul>
+</body>
+</html>

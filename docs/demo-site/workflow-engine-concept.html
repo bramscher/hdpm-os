@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Workflow Engine — Jackets Concept</title>
+  <style>body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;max-width:860px;margin:0 auto;padding:18px 24px;color:#1a1a1a;line-height:1.6;font-size:14.5px}h1{color:#1f5c22;font-size:22px;border-bottom:3px solid #2f7d32;padding-bottom:8px}h2{color:#1f5c22;font-size:16px;border-bottom:1px solid #c7cec7;padding-bottom:4px;margin-top:26px}h3{color:#1f5c22;font-size:14px}table{border-collapse:collapse;font-size:12.5px;margin:10px 0}th{background:#eef5ee;color:#1f5c22;text-align:left;padding:6px 9px;border:1px solid #c7cec7}td{padding:6px 9px;border:1px solid #c7cec7;vertical-align:top}code,pre{background:#f7faf7;border-radius:4px;font-size:12px}pre{padding:10px;border:1px solid #c7cec7;overflow-x:auto}blockquote{border-left:4px solid #e8b923;margin:10px 0;padding:6px 14px;background:#fdf6e0;font-size:13px}</style>
+</head>
+<body>
+<div style="background:#1f5c22;display:flex;gap:12px;align-items:center;padding:9px 16px;border-radius:0 0 10px 10px;margin:-0px 0 14px;font-size:12.5px;flex-wrap:wrap;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif"><span style="color:#e8b923;font-weight:800;letter-spacing:.5px">HDPM-OS DEMO</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="00-START-HERE.html">⌂ Home</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="form-inventory-team-review.html">Inventory</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="unit-turnover-board-mockup.html">Turnover Board</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="jackets-ui-explorations.html">Jackets UI</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="agents-summary.html">Agents</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="hdpm-home-explorations.html">Home Concepts</a><span style="color:#fff;font-weight:800;background:#2f7d32;border-radius:6px;padding:3px 10px">Concept Doc</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="turnover-board-plan.html">Board Plan</a><span style="margin-left:auto;color:#9dbb9d;font-size:10.5px">sample data · concept site · July 2026</span></div>
+
+
+<h1 id="jackets-an-hdpm-workflow-engine">“Jackets” — an HDPM Workflow
+Engine</h1>
+<p><strong>Concept exploration · 7/22/2026 · companion to the Unit
+Turnover Board plan</strong></p>
+<h2 id="the-idea-in-one-paragraph">1. The idea in one paragraph</h2>
+<p>Every paper process in the office is the same three things wearing
+different clothes: a <strong>route</strong> (the flowchart of who does
+what, in what order, with what branches), a <strong>packet</strong> (the
+form + attached documents traveling that route — today, an orange form
+in a yellow jacket folder), and a <strong>desk</strong> (wherever it’s
+sitting right now, waiting for a human). Build one engine with exactly
+those three primitives and every form digitizes into it: the Vacancy
+Tracking Form, Application Processing, the Owner Termination packet we
+just built, Move-Out Keys, Deposit Accounting. The whiteboard turnover
+board isn’t a separate product — it’s one <em>view</em> of jackets
+moving through one route. Working name for an instance: a
+<strong>Jacket</strong>, because that’s literally what it replaces.
+(Manufacturing has the same organism — the <strong>traveler
+packet</strong> that rides with a job through every station carrying
+routing and sign-offs. “Jacket” wins internally because HDPM staff
+already say it; “traveler” is the candidate outside name if this
+productizes.)</p>
+<p>Two physical behaviors the digital jacket must honor or paper
+survives alongside it:</p>
+<ul>
+<li><strong>Every jacket has a back.</strong> Paper forms accrete
+unstructured overflow — work orders handwritten on the back of the Gold
+sheet, phone numbers, “called 7/18 no answer.” The jacket’s front is the
+structured tracks; its <strong>back</strong> is first-class too: linked
+work orders (live AppFolio records, better than handwriting), freeform
+notes, attachments — all timestamped, nothing that needs a pen.</li>
+<li><strong>Color is the route.</strong> The office runs a folder color
+code today (yellow for 30-day/move-out packets; red and green meanings
+to be confirmed with the team — likely one more color). Digital jackets
+keep it: folder color = route color on the card border and chip, so a
+screen of jackets reads the way the shelf does. Action item: confirm the
+color taxonomy with staff before encoding it.</li>
+</ul>
+<h2 id="why-the-paper-version-works-and-what-it-costs">2. Why the paper
+version works, and what it costs</h2>
+<p>The yellow folder is a genuinely good system: it’s visible, it’s
+unambiguous (one folder, one process, one desk), and picking it up
+<em>is</em> claiming it. Keep all of that. What it can’t do: be in two
+places at once (PM’s box vs. front desk), remind anyone of anything,
+enforce that step 4’s follow-up call actually got calendared, survive
+being buried under other folders, produce metrics, or be seen from home.
+The digital version must preserve the pickup-ownership feel — a jacket
+sits in a queue until <em>someone</em> takes it, and then their name is
+on it — while fixing the physics.</p>
+<h2 id="why-not-leadsimple-or-realm-x">3. Why not LeadSimple or
+Realm-X</h2>
+<p>To be fair to both: LeadSimple is a capable process-automation layer
+for PM companies, and Realm-X is AppFolio’s own AI/automation surface
+and will keep improving inside AppFolio. The case for building
+anyway:</p>
+<ul>
+<li><strong>Form-native, not checklist-native.</strong> Our processes
+aren’t lists of to-dos; they’re <em>forms that accumulate data as they
+travel</em> (the Vacancy Tracking Form top section, the fee amounts, the
+forwarding address). We want the jacket to BE the form.</li>
+<li><strong>Our ground rules are opinions most tools don’t
+hold.</strong> From the Maintenance OS spec, already proven thinking:
+<em>every open item has one accountable owner and a next-action
+date</em>; tripwires fire on silence; a closure gate is server-side
+validation. A generic tool lets you skip these. Ours makes them
+physics.</li>
+<li><strong>Verify-by-read</strong> (see §5) — the pattern that makes
+“integrates with AppFolio but separate from it” actually honest.</li>
+<li><strong>Realm-X keeps us inside AppFolio’s product
+decisions</strong>; the ops plan’s ground rule is AppFolio stays the
+system of record but never becomes the workflow brain. LeadSimple is
+per-seat forever and generic where we want opinionated.</li>
+<li><strong>We already own the substrate:</strong> hdpm-chat has auth,
+Supabase, chat delivery, AppFolio webhooks + read API, and (per the
+maintenance-os docs) time/materials, invoicing, and routing modules to
+pattern-match.</li>
+</ul>
+<p>The honest caution: this is how companies accidentally rebuild
+ServiceNow badly. The defense is §7 — five primitives, no more.</p>
+<h2 id="architecture-three-layers">4. Architecture: three layers</h2>
+<p><strong>Layer 1 — Route definitions (the flowchart).</strong> Each
+process is a declarative definition (YAML/JSON in the repo, versioned
+like code): stages, who can act (person, role, or pool), form fields
+collected at each stage, branches, SLAs, tripwires. The flowchart is
+<em>generated from</em> the definition (Mermaid render) — you read it as
+a flowchart, you edit it as config. A visual drag-and-drop editor is a
+v3 luxury, not a prerequisite; resist building it first.</p>
+<p><strong>Layer 2 — The engine.</strong> A state machine per jacket:
+current stage, claimed-by, next-action date, field data, attachments,
+full audit trail. Queue semantics: a stage routes to a <em>person’s
+box</em> (the primary pattern — routing in the office is intentional,
+everyone has a named box), a <em>role</em>, or occasionally a
+<em>pool</em>. SLA timers per stage; silence past the timer = tripwire =
+chat escalation. Nothing can sit unowned or undated — the Maintenance OS
+ground rule, enforced at the schema level.</p>
+<p><strong>Tracks — the fix for the bouncing folder.</strong> Studying
+the Gold Vacancy Tracking form: it isn’t one checklist, it’s five
+sub-checklists owned by different desks — TENANT (front desk), OWNER
+(owner coordination), ADVERTISING, VACANCY (key return), CLOSE OUT
+(accounting) — and they complete out of order, gated by <em>events</em>,
+not by each other. OWNER work happens early; VACANCY can’t start until
+keys physically return; CLOSE OUT comes last. The folder bounces between
+boxes because paper can only be in one place at a time — the bounce is
+an artifact of physics, not a feature of the process. So a route is a
+set of <strong>tracks</strong>: parallel lanes, each owned by a desk,
+each activated by its trigger event (notice received → TENANT + OWNER +
+ADVERTISING tracks open; keys-returned → VACANCY track opens; actual
+move-out confirmed → CLOSE OUT opens). One jacket, visible in several
+boxes at once, but every <em>open task</em> still has exactly one owner
+and one date. The intentional routing is preserved; the bouncing
+evaporates.</p>
+<p>Genuine rework — the other kind of bounce, “this came back to me
+because something’s wrong” — stays, but as an explicit
+<strong>return-with-reason</strong> transition: sender, receiver,
+reason, timestamp. Which turns bouncing from an invisible annoyance into
+a measurable one: a jacket’s bounce count becomes a process-health
+metric, and the routes that bounce most are the ones to redesign
+first.</p>
+<p><strong>Layer 3 — Views, all generated from the definition.</strong>
+No per-process UI code: - <strong>Kanban</strong> — stages as columns,
+jackets as cards (this is the “ends up looking like a kanban” instinct,
+and it’s right — but the kanban is a <em>projection</em> of the
+flowchart, not the source of truth, which is how you get branches and
+rules a plain Trello board can’t hold). - <strong>My Desk</strong> —
+everything claimed by me + everything in pools I can claim, sorted by
+next-action date. The replacement for physically walking folders between
+rooms. - <strong>The Jacket view</strong> — the form itself, with its
+documents, history, and a progress strip. What you open when you “pick
+up the folder.” - <strong>Flowchart view</strong> — the live Mermaid
+diagram with a dot showing where this jacket is. Great for training; the
+SOP and the software stop being separate documents. - <strong>Boards
+like the Turnover Board</strong> — a custom projection over jackets of
+one type. The whiteboard mockup we built is exactly this.</p>
+<h2
+id="the-appfolio-seam-automate-reads-guide-writes-verify-everything">5.
+The AppFolio seam: automate reads, guide writes, verify everything</h2>
+<p>The 30-Day Notice process shows the real shape of the work: some
+steps are pure data entry <em>into AppFolio</em> (enter notice date, set
+move-out date, uncheck prorate for housing clients). We are not going to
+robot-click AppFolio, and (per the maintenance-os blocking unknown)
+write scope is unproven. So three step types:</p>
+<ol type="1">
+<li><strong>Auto steps</strong> — the engine does it: spawn the jacket
+from the notice-received webhook, prefill tenant/unit/lease-type from
+the read API, send the templated Remaining Tenant email, create the
+calendar hold, post the chat notification.</li>
+<li><strong>Guided steps</strong> — a human does it in AppFolio, from a
+checklist item with a deep link to the exact page and the exact values
+to enter (the screenshots in today’s SOP become the step’s help
+content).</li>
+<li><strong>Verified steps</strong> — after a guided step, the engine
+<em>reads AppFolio back</em> and confirms the notice date, move-out
+date, and charges actually match what the jacket expects. Green check
+appears only when reality agrees. This is the killer feature: today,
+step 5b done wrong is invisible until it bites; here, the jacket simply
+won’t advance.</li>
+</ol>
+<p>That trio is what “separate from AppFolio but integrates with it”
+means in practice — and it’s a moat neither LeadSimple nor Realm-X
+occupies: LeadSimple doesn’t verify AppFolio state field-by-field;
+Realm-X can’t, structurally, treat AppFolio as something to be
+audited.</p>
+<h2 id="worked-example-the-30-day-notice-route">6. Worked example: the
+30-Day Notice route</h2>
+<p>Sketch of the actual process as a definition (abbreviated):</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">route</span><span class="kw">:</span><span class="at"> 30-day-notice</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">trigger</span><span class="kw">:</span><span class="at"> appfolio.notice_to_vacate.received</span><span class="co">     # webhook spawns the jacket</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">branches</span><span class="kw">:</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">scope</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">all_tenants</span><span class="kw">,</span><span class="at"> one_tenant</span><span class="kw">]</span><span class="co">              # from notice vs. lease roster</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">lease</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">month_to_month</span><span class="kw">,</span><span class="at"> fixed_term</span><span class="kw">]</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">client</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">standard</span><span class="kw">,</span><span class="at"> housing</span><span class="kw">]</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">stages</span><span class="kw">:</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">intake</span><span class="kw">:</span><span class="co">            # AUTO — prefill tenant, unit, lease type, dates</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">auto</span><span class="kw">:</span><span class="at"> prefill_from_appfolio</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">next</span><span class="kw">:</span><span class="at"> vacancy_form</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">vacancy_form</span><span class="kw">:</span><span class="co">      # POOL: front desk — the orange form&#39;s top section</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">assign</span><span class="kw">:</span><span class="at"> pool:front_desk</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">fields</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">forwarding_address?</span><span class="kw">,</span><span class="at"> phone_confirmed</span><span class="kw">]</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">tripwire</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">no_forwarding_address</span><span class="kw">:</span><span class="at"> schedule_followup(+3d)</span><span class="kw">}</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">sla</span><span class="kw">:</span><span class="at"> 1d</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">early_term_fee</span><span class="kw">:</span><span class="co">    # only if lease == fixed_term</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">when</span><span class="kw">:</span><span class="at"> lease == fixed_term</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">auto</span><span class="kw">:</span><span class="at"> notify_accounting(fee = 1.5 * rent)</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">fields</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">fee_amount</span><span class="kw">]</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">appfolio_moveout</span><span class="kw">:</span><span class="co">  # GUIDED+VERIFIED — enter dates, prorate, 2nd Nature</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">assign</span><span class="kw">:</span><span class="at"> role:property_manager</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">guide</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">enter_notice_date</span><span class="kw">,</span><span class="at"> enter_moveout_date</span><span class="kw">,</span><span class="at"> prorate_unless_housing</span><span class="kw">,</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="at">              second_nature_charge</span><span class="kw">,</span><span class="at"> clear_unit_available</span><span class="kw">]</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">verify</span><span class="kw">:</span><span class="at"> appfolio.read(tenancy) matches jacket</span><span class="co">   # won&#39;t advance otherwise</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">sla</span><span class="kw">:</span><span class="at"> 1d</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">confirmations</span><span class="kw">:</span><span class="co">     # AUTO — move-out confirmation + auto-pay letter + save to tenant page</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">auto</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">send_moveout_confirmation</span><span class="kw">,</span><span class="at"> send_autopay_letter</span><span class="kw">,</span><span class="at"> calendar_inspection(+1d_after_keys)</span><span class="kw">]</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">remaining_tenants</span><span class="kw">:</span><span class="co"> # only if scope == one_tenant — requalify at 2.5x rent</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">when</span><span class="kw">:</span><span class="at"> scope == one_tenant</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">auto</span><span class="kw">:</span><span class="at"> send_remaining_tenant_email(deadline=+5bd)</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">assign</span><span class="kw">:</span><span class="at"> role:property_manager</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">fields</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">paystubs_received</span><span class="kw">,</span><span class="at"> qualifies</span><span class="kw">]</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">branch</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="fu">qualifies</span><span class="kw">:</span><span class="at"> close</span><span class="kw">,</span><span class="at"> </span><span class="fu">fails</span><span class="kw">:</span><span class="at"> escalate_to_pm</span><span class="kw">}</span></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">sla</span><span class="kw">:</span><span class="at"> 5bd</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">handoff</span><span class="kw">:</span><span class="co">           # the yellow folder moment — jacket lands in PM&#39;s queue</span></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">assign</span><span class="kw">:</span><span class="at"> pool:property_managers</span><span class="co">   # whoever picks it up</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">spawns</span><span class="kw">:</span><span class="at"> turnover-board.cycle</span><span class="co">     # the Unit Turnover Board takes it from here</span></span></code></pre></div>
+<p>One definition captures all three SOP variants (all-tenants /
+one-tenant / housing client) as branches instead of three near-duplicate
+documents — and the Mermaid flowchart, the kanban, the My Desk queue,
+and the audit trail all fall out of it for free.</p>
+<h2 id="b.-the-gold-form-mapped-to-tracks">6b. The Gold form, mapped to
+tracks</h2>
+<p>The real Vacancy Tracking form (11/2025 revision) decomposes cleanly
+— each boxed section is a track with an owner and a trigger:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Track</th>
+<th>Owner (box)</th>
+<th>Opens when</th>
+<th>Contents (from the form)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>TENANT</td>
+<td>Front desk</td>
+<td>Notice received</td>
+<td>M/O date saved in AppFolio, confirmation shared, prorated rent,
+inspection calendared, submitted to PM</td>
+</tr>
+<tr class="even">
+<td>OWNER</td>
+<td>PM / owner coord.</td>
+<td>Notice received</td>
+<td>Owner notified + initials, termination fee, new listing rent, W/D
+removal, utilities/landscaping paid, lease term, availability date</td>
+</tr>
+<tr class="odd">
+<td>ADVERTISING</td>
+<td>Leasing</td>
+<td>Availability date set</td>
+<td>Utilities/appliance info, AppFolio + website + Craigslist updated,
+posting attached, ad fee charged</td>
+</tr>
+<tr class="even">
+<td>VACANCY</td>
+<td>Maintenance office</td>
+<td><strong>Keys returned</strong> (the Move-Out Keys SOP)</td>
+<td>Key return date rules (drop box AM = day before, etc.),
+house/mail/garage/pool key counts vs. issued, holdover rent Y/N, actual
+M/O date corrected in AppFolio, keys + file → PM inspection box</td>
+</tr>
+<tr class="odd">
+<td>CLOSE OUT</td>
+<td>Accounting</td>
+<td>Actual move-out confirmed</td>
+<td>Early termination fee, holdover rent, credits, forwarding address
+entered, outstanding balances, final accounting, transfer funds, mgmt
+fees, vendor invoices, mail check to tenant</td>
+</tr>
+</tbody>
+</table>
+<p>Two things fall out of the mapping. First, every hand-written rule on
+the form is expressible as an engine rule (e.g. the key-return date
+logic in the Move-Out Keys SOP is a pure function of drop-box timing;
+holdover rent triggers a notify-accounting auto step — the form’s “Email
+to Penny Charge” line). Second, the <em>Returned Keys</em> SOP is a
+different species: not a track but a tiny <strong>triage route</strong>
+(keys arrive → on check-out sheet? → move-out? → else ask staff/vendors
+→ report to PM → record in AppFolio). Small enough to be the v0 spike’s
+warm-up: one afternoon, proves the engine on something with a branch and
+an AppFolio verify step, before the 30-Day Notice route proves the whole
+track model.</p>
+<h2 id="scope-discipline-how-we-dont-rebuild-servicenow">7. Scope
+discipline (how we don’t rebuild ServiceNow)</h2>
+<p>Five primitives, hard cap: <strong>Jacket, Stage, Assignment
+(person/role/pool), Field, Rule (SLA/tripwire/branch/verify)</strong>.
+No sub-workflows, no parallel gateways, no scripting language inside
+definitions, no visual editor in v1, no per-customer configurability —
+this is HDPM’s tool, opinionated on purpose. When a process doesn’t fit
+five primitives, we simplify the process before we extend the engine
+(usually the process was the problem). If this ever becomes a product
+for other PMs — and it might; every PM office has yellow folders —
+that’s a later fork, decided deliberately, not scope that leaks in
+now.</p>
+<h2 id="sequencing-the-sep-4-decision">8. Sequencing &amp; the Sep 4
+decision</h2>
+<ul>
+<li><strong>v0 (spike):</strong> engine schema + the 30-Day Notice
+route, internal only, run in parallel with paper folders for two real
+notices. Success = staff prefer the queue to the box.</li>
+<li><strong>v1:</strong> + Turnover Board as a projection (the mockup,
+live), chat digests, verify-by-read on the AppFolio move-out steps.</li>
+<li><strong>v2:</strong> 2–3 more routes (Application Processing, Owner
+Termination — the packet we just built becomes a route that
+<em>ends</em> with generating that packet), metrics.</li>
+<li>Wave-1 maintenance work continues unaffected; this engine is
+arguably the <em>generalization</em> of the Maintenance OS spec (a work
+order is a jacket with 8 stages and 12 tripwires). Fold that framing
+into the <strong>Sep 4 build-vs-Jobber-vs-Realm-X decision</strong>: the
+question becomes “do we want one engine under maintenance AND turnovers
+AND office processes,” which is a different — and stronger — case than
+build-vs-buy on maintenance alone.</li>
+</ul>
+<h2 id="open-questions">9. Open questions</h2>
+<ul>
+<li>Name the thing: “Jackets” is evocative internally; fine to rename
+before anyone outside sees it.</li>
+<li>v0 spike sequencing: Returned Keys as warm-up (an afternoon), then
+30-Day Notice with tracks as the real proof?</li>
+<li>Box mapping: confirm the actual desk/owner for each track (the table
+in §6b is inferred from the form — validate with the people whose boxes
+these are).</li>
+<li>AppFolio write scope (the maintenance-os blocking unknown) — if
+writes ever land, guided steps can become auto steps one at a time.</li>
+<li>Definitions live in the repo (versioned, code-reviewed) vs. a
+database (editable by office admin) — start repo, revisit when routes
+stabilize.</li>
+</ul>
+</body>
+</html>

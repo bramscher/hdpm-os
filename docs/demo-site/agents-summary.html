@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HDPM Agents — What's Built & What's Next</title>
+<style>
+  :root{--dk:#1f5c22;--gr:#2f7d32;--tint:#eef5ee;--lt:#f7faf7;--ink:#1a1a1a;--muted:#5b625b;--hair:#c7cec7;--red:#b3261e;--amber:#9a6a00;--blue:#2c5f8a;--purple:#6a3d9a;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;}
+  body{background:#fff;color:var(--ink);max-width:1080px;margin:0 auto;padding:24px 28px;}
+  header{display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--gr);padding-bottom:10px;margin-bottom:14px;flex-wrap:wrap;}
+  header h1{font-size:21px;color:var(--dk);}
+  header .sub{color:var(--muted);font-size:13px;}
+  header .badge{margin-left:auto;background:var(--tint);color:var(--dk);font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;}
+  h2{font-size:15px;color:var(--dk);margin:24px 0 10px;border-bottom:2px solid var(--gr);padding-bottom:5px;}
+  p.lead{font-size:13.5px;line-height:1.6;max-width:920px;}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:12px;margin:12px 0;}
+  .card{border:1px solid var(--hair);border-left:6px solid var(--st);border-radius:9px;padding:12px 14px;}
+  .card h3{font-size:13.5px;color:var(--dk);}
+  .card .who{font-size:11px;font-weight:800;color:var(--st);letter-spacing:.3px;margin-bottom:5px;}
+  .card p{font-size:12px;color:var(--muted);line-height:1.55;margin-top:5px;}
+  .card p b{color:var(--ink);}
+  .stag{float:right;font-size:10px;font-weight:800;letter-spacing:.4px;padding:2px 9px;border-radius:9px;color:#fff;}
+  .live{background:var(--gr);} .part{background:var(--amber);} .next{background:var(--blue);} .later{background:var(--muted);}
+  .ladder{display:flex;gap:0;margin:12px 0;border:1px solid var(--hair);border-radius:9px;overflow:hidden;}
+  .rung{flex:1;padding:10px 12px;font-size:11.5px;border-right:1px solid var(--hair);line-height:1.45;}
+  .rung:last-child{border-right:none;}
+  .rung b{display:block;font-size:12px;color:var(--dk);}
+  .rung.now{background:var(--tint);}
+  .walls{background:#fff7f6;border:1.5px solid var(--red);border-radius:9px;padding:11px 15px;font-size:12.5px;line-height:1.6;margin:12px 0;}
+  .walls b{color:var(--red);}
+  .note{font-size:12px;color:var(--muted);margin-top:16px;border-top:1px solid var(--hair);padding-top:8px;}
+</style>
+</head>
+<body>
+<div style="background:#1f5c22;display:flex;gap:12px;align-items:center;padding:9px 16px;border-radius:0 0 10px 10px;margin:-0px 0 14px;font-size:12.5px;flex-wrap:wrap;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif"><span style="color:#e8b923;font-weight:800;letter-spacing:.5px">HDPM-OS DEMO</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="00-START-HERE.html">⌂ Home</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="form-inventory-team-review.html">Inventory</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="unit-turnover-board-mockup.html">Turnover Board</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="jackets-ui-explorations.html">Jackets UI</a><span style="color:#fff;font-weight:800;background:#2f7d32;border-radius:6px;padding:3px 10px">Agents</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="hdpm-home-explorations.html">Home Concepts</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="workflow-engine-concept.html">Concept Doc</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="turnover-board-plan.html">Board Plan</a><span style="margin-left:auto;color:#9dbb9d;font-size:10.5px">sample data · concept site · July 2026</span></div>
+
+<header>
+  <h1>Agents — What's Built &amp; What's Next</h1>
+  <span class="sub">hdpm-chat agent layer · status as of 7/22/2026 · for team discussion</span>
+  <span class="badge">HIGH DESERT PROPERTY MANAGEMENT</span>
+</header>
+
+<p class="lead"><b>The one-sentence version:</b> we already run agents in two places. <b>Front of house</b>, Sally, Max, and Leesa talk with customers every day. <b>Back of house</b>, the system watches everything — 12 tripwires, the vendor scoreboard, AppFolio webhooks — and a new roster of assistants turns what it notices into <b>ready-to-act items in Slack and text</b> for a specific person. <b>Every back-office agent is an assistant to one of us, not a replacement for any of us</b> — it does the chasing, drafting, and reminding; you keep the judgment and the send button.</p>
+
+<h2>Front of house — already talking with customers</h2>
+<div class="cards">
+  <div class="card" style="--st:var(--purple)"><span class="stag live">LIVE</span><div class="who">RECEPTION</div><h3>Sally — backup &amp; after-hours reception</h3><p>Answers when we can't — overflow and after hours — and <b>transfers live calls to Zoom</b> when a human is needed. The first voice many tenants hear at night.</p></div>
+  <div class="card" style="--st:var(--purple)"><span class="stag live">LIVE</span><div class="who">MAINTENANCE</div><h3>Max — maintenance intake</h3><p>Takes maintenance calls and <b>builds the work order himself</b> — what/where/how-bad, straight into the pipeline — routing urgent items to a person via Zoom transfer.</p></div>
+  <div class="card" style="--st:var(--purple)"><span class="stag live">LIVE</span><div class="who">LEASING</div><h3>Leesa — leasing agent</h3><p>Our leasing department <i>is</i> Leesa — inquiries, qualifying questions, and she <b>schedules tour appointments with prospects herself</b>. Hands real prospects to staff via Zoom.</p></div>
+  <div class="card" style="--st:var(--purple)"><span class="stag next">ROLLING OUT</span><div class="who">SHOWINGS</div><h3>CodeBox — next up</h3><p>Automated access codes for showings — connecting Leesa's tour scheduling to the lockbox layer (and the Key Manager), so a qualified prospect gets a time <i>and</i> a door that opens.</p></div>
+</div>
+<p class="lead" style="font-size:12.5px"><b>What's being added:</b> the API connection to all three — transcripts, audio, and call events flowing into hdpm-chat. That's the bridge between the two layers: every Sally/Max/Leesa conversation becomes reviewable, searchable, and actionable by the back-office roster below (a Max call at 9pm becomes a structured work-order proposal by morning). And the same three personalities are coming to life on <b>social media</b> — the voices customers already know, out front of the brand.</p>
+
+<h2>Already running (the back-office sensors)</h2>
+<div class="cards">
+  <div class="card" style="--st:var(--gr)"><span class="stag live">LIVE</span><div class="who">SYSTEM-WIDE</div><h3>Tripwires &amp; exception board</h3><p>12 if-then rules watching every work order: past-due next actions, vendors silent &gt;24h, verified-but-unbilled jobs, aging buckets. Nothing waits silently — the daily sweep isn't done until exceptions read zero.</p></div>
+  <div class="card" style="--st:var(--gr)"><span class="stag live">LIVE</span><div class="who">SYSTEM-WIDE</div><h3>AppFolio webhook spine + syncs</h3><p>Work orders, vacancies, and (new) the Key Manager stay mirrored automatically. This is the event stream every agent listens to.</p></div>
+  <div class="card" style="--st:var(--gr)"><span class="stag live">LIVE</span><div class="who">MAINTENANCE</div><h3>AI triage proposals</h3><p>New maintenance requests get an AI-drafted triage (priority, category, suggested assignee) as a <b>proposal</b> — a human approves, edits, or rejects. Every decision is logged; that record is how agents earn more trust.</p></div>
+</div>
+
+<h2>Built and coming online (the first three agents)</h2>
+<div class="cards">
+  <div class="card" style="--st:var(--gr)"><span class="stag part">FIRST WAVE</span><div class="who">CHERYL</div><h3>Estimate Chaser</h3><p>Watches every estimate that's gone quiet, drafts the chase email into an Outlook drafts folder, escalates by age, and knows which vendors need a phone call instead. Cheryl reviews and sends — <b>the agent never emails a vendor on its own.</b></p></div>
+  <div class="card" style="--st:var(--gr)"><span class="stag part">FIRST WAVE</span><div class="who">CHERYL</div><h3>Morning Card</h3><p>One card at the start of the day: today's priorities, what slipped, what's waiting on whom, with tap-to-act buttons. Mirrors to email during rollout. The goal: start the day from one place instead of six tabs.</p></div>
+  <div class="card" style="--st:var(--gr)"><span class="stag part">FIRST WAVE</span><div class="who">CRAIG / LEADERSHIP</div><h3>Ops Brief</h3><p>Short daily 5pm summary + a deeper Monday brief: exception counts, vendor scoreboard movement, stuck estimates, unbilled work — and how the agents themselves are performing (proposals made vs. accepted). The Monday meeting, pre-written.</p></div>
+  <div class="card" style="--st:var(--gr)"><span class="stag part">FIRST WAVE</span><div class="who">CHERYL / OFFICE</div><h3>Vendor Chase (SMS)</h3><p>Two-way texting for vendor follow-ups from Cheryl's cards — send-on-tap, replies threaded back. Special rule: our own HDMS crew is handled through the vendor app, not nagged by text.</p></div>
+</div>
+
+<h2>The trust ladder (how autonomy is earned, never assumed)</h2>
+<div class="ladder">
+  <div class="rung"><b>L0 · Observe</b>Reports only.</div>
+  <div class="rung now"><b>L1 · Draft</b>Writes it; a human sends it. <i>← most agents start here</i></div>
+  <div class="rung now"><b>L2 · Act on tap</b>One button in Slack/text; the tap is logged as the human's decision.</div>
+  <div class="rung"><b>L3 · Act, then notify</b>Does it, tells you immediately. Earned after weeks of clean L2 history.</div>
+  <div class="rung"><b>L4 · Autonomous</b>Internal ops only (dates, assignments). Never customer-facing.</div>
+</div>
+<div class="walls"><b>Hard walls, regardless of level:</b> <b>written</b> messages to owners and tenants from the back-office roster are <b>always</b> human-approved — that cap never lifts. (Sally, Max, and Leesa's live conversations are their own scoped lane: reception, triage, and leasing scripts with a Zoom transfer to a human — and with the new API, every one of their conversations gets a transcript on the record.) No agent ever touches the accounting ledger. Owners see one clean summary line per job. Techs never see or set prices. Every agent message carries a "why" line and a one-tap "stop these" button. Promotion up the ladder requires ~4 weeks at the current level with a clean record — and it's proposed to Craig, never self-granted.</div>
+
+<h2>Likely next agents (rough order)</h2>
+<div class="cards">
+  <div class="card" style="--st:var(--blue)"><span class="stag next">NEXT</span><div class="who">ASHLEY + ALL PMs</div><h3>Email Triage</h3><p>Reads the <b>info@</b> inbox and classifies every email — maintenance request, leasing question, owner, vendor, payment, junk — routes it to the right person's card <b>with a drafted reply attached</b>, and turns maintenance emails into structured work-order proposals. (Needs a mailbox-permissions setup step first.)</p></div>
+  <div class="card" style="--st:var(--blue)"><span class="stag next">NEXT</span><div class="who">SALLY · MAX · LEESA</div><h3>Call Intake Bridge</h3><p>Connects the new transcript/audio API to the pipeline: Max's work orders arrive <b>with the call transcript attached</b> (the "why" behind the WO, on the record), Leesa's tours land as leads with full conversation context, Sally's calls get flagged follow-ups — and true emergencies page a human immediately. Built behind a generic adapter so the phone platform can change without rebuilding.</p></div>
+  <div class="card" style="--st:var(--blue)"><span class="stag next">NEXT</span><div class="who">ALBERTO</div><h3>Field Assistant</h3><p>Alberto runs his day in the vendor app; this agent reads that activity and <b>texts him only the gaps</b> — the missing time entry, the photo not attached, tomorrow's first stop. No new app to learn; his day stays vendor app + text.</p></div>
+  <div class="card" style="--st:var(--muted)"><span class="stag later">LATER</span><div class="who">BRODY</div><h3>Inspections Assistant</h3><p>Builds the inspection day: due list, optimized route, pre-filled notices, photo checklist — and files the report when the walk is done.</p></div>
+  <div class="card" style="--st:var(--muted)"><span class="stag later">LATER</span><div class="who">PENNY</div><h3>Billing Assistant</h3><p>Queues verified-but-unbilled work with the invoice pre-built from time + materials (1-hr minimum + markup, computed by the system — never by hand). Penny confirms every one; nothing bills itself.</p></div>
+  <div class="card" style="--st:var(--muted)"><span class="stag later">LATER</span><div class="who">TURNOVERS / JACKETS</div><h3>Turnover Choreographer</h3><p>Where today's meeting connects: the agent that runs the turnover board — proposes vendor schedules around blackout rules, bumps cascades when a date slips, and alerts when a move-in goes zero-slack. The routes and jackets from screens 1–3 are what this agent will work on.</p></div>
+</div>
+
+<p class="note"><b>How to read this page:</b> nothing here replaces a person — the roster is one assistant per desk, doing the part of the job that's chasing and retyping. The order of "next" is a proposal; if the room thinks a different agent would save more hours, that's exactly the input we want today.</p>
+</body>
+</html>

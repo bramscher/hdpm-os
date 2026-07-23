@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HDPM-OS Home — Two Explorations</title>
+<style>
+  :root{--dk:#1f5c22;--gr:#2f7d32;--tint:#eef5ee;--lt:#f7faf7;--ink:#1a1a1a;--muted:#5b625b;--hair:#c7cec7;--red:#b3261e;--amber:#9a6a00;
+        --l-lease:#2c5f8a;--l-turn:#c99e12;--l-maint:#2f7d32;--l-owner:#6a3d9a;--gold:#e8b923;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;}
+  body{background:#fff;color:var(--ink);padding:18px 22px;max-width:1220px;margin:0 auto;}
+  header{display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--gr);padding-bottom:10px;margin-bottom:14px;flex-wrap:wrap;}
+  header h1{font-size:20px;color:var(--dk);}
+  header .sub{color:var(--muted);font-size:13px;}
+  header .badge{margin-left:auto;background:var(--tint);color:var(--dk);font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;}
+  nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+  nav button{border:1px solid var(--hair);background:var(--lt);color:var(--dk);padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  nav button.active{background:var(--gr);color:#fff;border-color:var(--gr);}
+  .view{display:none;} .view.active{display:block;}
+  .exp{font-size:11px;font-weight:800;letter-spacing:.6px;color:#fff;background:var(--ink);border-radius:4px;padding:2px 8px;margin-right:8px;}
+  .note{font-size:12px;color:var(--muted);margin-top:12px;border-top:1px solid var(--hair);padding-top:8px;}
+  /* map */
+  .mapwrap{border:1px solid var(--hair);border-radius:12px;padding:8px 6px 2px;overflow-x:auto;background:linear-gradient(#fff,#fcfdfc);}
+  svg{min-width:1120px;width:100%;height:auto;display:block;}
+  svg text{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;}
+  .st-label{font-size:12.5px;font-weight:700;fill:var(--ink);}
+  .st-sub{font-size:10px;fill:#5b625b;}
+  .line-label{font-size:11px;font-weight:800;letter-spacing:1px;}
+  .cnt-b{font-size:11px;font-weight:800;fill:#fff;}
+  .station{cursor:pointer;}
+  .station:hover circle{stroke-width:5;}
+  .legend2{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin:8px 4px;}
+  .legend2 b{color:var(--ink);}
+  .dotl{display:inline-block;width:18px;height:5px;border-radius:3px;vertical-align:middle;margin-right:5px;}
+  /* hud */
+  .hudtop{display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap;}
+  .hudtop h2{font-size:18px;color:var(--dk);}
+  .hudtop .cfg{margin-left:auto;font-size:12px;color:var(--muted);border:1px dashed var(--hair);border-radius:8px;padding:5px 12px;cursor:pointer;}
+  .hud{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:12px;}
+  .w{border:1px solid var(--hair);border-radius:10px;padding:12px 14px;background:#fff;}
+  .w h3{font-size:11.5px;letter-spacing:.5px;color:var(--dk);border-bottom:2px solid var(--gr);padding-bottom:5px;margin-bottom:9px;display:flex;}
+  .w h3 .drag{margin-left:auto;color:var(--hair);cursor:grab;font-weight:400;}
+  .w.tall{grid-row:span 2;}
+  .fixit{border:1px solid #f3c9c5;background:#fffafa;border-radius:8px;padding:8px 10px;margin-bottom:7px;font-size:12px;}
+  .fixit b{display:block;font-size:12.5px;}
+  .fixit span{color:var(--muted);font-size:11px;}
+  .fixit button{float:right;border:1px solid var(--gr);background:var(--gr);color:#fff;font-size:10.5px;font-weight:700;border-radius:6px;padding:3px 9px;cursor:pointer;margin-left:6px;}
+  .statrow{display:flex;gap:8px;flex-wrap:wrap;}
+  .stat{flex:1;min-width:80px;text-align:center;background:var(--lt);border:1px solid var(--hair);border-radius:8px;padding:8px 4px;}
+  .stat .v{font-size:20px;font-weight:800;color:var(--dk);} .stat .l{font-size:10px;color:var(--muted);}
+  .stat.r .v{color:var(--red);}
+  .pin{display:flex;align-items:center;gap:9px;border:1px solid var(--hair);border-radius:8px;padding:8px 10px;margin-bottom:7px;font-size:12.5px;font-weight:700;color:var(--dk);cursor:pointer;}
+  .pin:hover{background:var(--lt);}
+  .pin .ic{width:10px;height:10px;border-radius:3px;}
+  .pin small{margin-left:auto;font-weight:400;color:var(--muted);font-size:10.5px;}
+  .feed{font-size:11.5px;color:var(--muted);line-height:1.5;border-left:2px solid var(--hair);padding-left:10px;margin-bottom:8px;}
+  .feed b{color:var(--ink);}
+  .mapmini{font-size:12px;color:var(--dk);font-weight:700;background:var(--tint);border-radius:8px;padding:9px 12px;text-align:center;cursor:pointer;}
+</style>
+</head>
+<body>
+<div style="background:#1f5c22;display:flex;gap:12px;align-items:center;padding:9px 16px;border-radius:0 0 10px 10px;margin:-0px 0 14px;font-size:12.5px;flex-wrap:wrap;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif"><span style="color:#e8b923;font-weight:800;letter-spacing:.5px">HDPM-OS DEMO</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="00-START-HERE.html">⌂ Home</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="form-inventory-team-review.html">Inventory</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="unit-turnover-board-mockup.html">Turnover Board</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="jackets-ui-explorations.html">Jackets UI</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="agents-summary.html">Agents</a><span style="color:#fff;font-weight:800;background:#2f7d32;border-radius:6px;padding:3px 10px">Home Concepts</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="workflow-engine-concept.html">Concept Doc</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="turnover-board-plan.html">Board Plan</a><span style="margin-left:auto;color:#9dbb9d;font-size:10.5px">sample data · concept site · July 2026</span></div>
+
+<header>
+  <h1>HDPM-OS Home — Two Explorations</h1>
+  <span class="sub">the QuickBooks-home question, answered our way · sample data · concepts F &amp; G</span>
+  <span class="badge">HIGH DESERT PROPERTY MANAGEMENT</span>
+</header>
+<nav id="nav">
+  <button data-v="map" class="active">F · The Office Map</button>
+  <button data-v="hud">G · My HUD</button>
+</nav>
+
+<!-- ============ F: OFFICE MAP ============ -->
+<section class="view active" id="map">
+  <p style="font-size:13px;color:var(--muted);margin-bottom:10px"><span class="exp">CONCEPT F</span>What QuickBooks' home page wanted to be: the whole company as a <b>live subway map</b>. Each line is a route; each station is a stage with a real count; interchanges are where lines meet (move-in is where leasing and turnover kiss). Click any station to go there. <b>Nobody draws this</b> — it's generated from the route definitions, and the counts are the same live data as every other view.</p>
+
+  <div class="mapwrap">
+  <svg viewBox="0 0 1160 520">
+    <!-- lines -->
+    <text x="6" y="94" class="line-label" fill="var(--l-lease)">LEASING</text>
+    <path d="M100,90 H700 Q760,90 790,140 L830,190 Q850,215 900,215" fill="none" stroke="var(--l-lease)" stroke-width="7" stroke-linecap="round"/>
+    <text x="6" y="219" class="line-label" fill="#a8860b">TURNOVER</text>
+    <path d="M100,215 H1100" fill="none" stroke="var(--l-turn)" stroke-width="7" stroke-linecap="round"/>
+    <text x="6" y="354" class="line-label" fill="var(--l-maint)">MAINT.</text>
+    <path d="M100,350 H1100" fill="none" stroke="var(--l-maint)" stroke-width="7" stroke-linecap="round"/>
+    <text x="6" y="464" class="line-label" fill="var(--l-owner)">OWNERS</text>
+    <path d="M100,460 H860 Q930,460 985,400 L1040,280 Q1060,215 1100,215" fill="none" stroke="var(--l-owner)" stroke-width="7" stroke-linecap="round"/>
+
+    <!-- helper: station = g.station -->
+    <!-- LEASING -->
+    <g class="station"><circle cx="100" cy="90" r="11" fill="#fff" stroke="var(--l-lease)" stroke-width="4"/><text x="100" y="62" text-anchor="middle" class="st-label">Leesa</text><text x="100" y="74" text-anchor="middle" class="st-sub">AI leasing · tours + CodeBox</text></g>
+    <g class="station"><circle cx="300" cy="90" r="11" fill="#fff" stroke="var(--l-lease)" stroke-width="4"/><text x="300" y="62" text-anchor="middle" class="st-label">Applications</text><text x="300" y="74" text-anchor="middle" class="st-sub">processing</text>
+      <circle cx="322" cy="72" r="11" fill="var(--l-lease)"/><text x="322" y="76" text-anchor="middle" class="cnt-b">4</text></g>
+    <g class="station"><circle cx="500" cy="90" r="11" fill="#fff" stroke="var(--l-lease)" stroke-width="4"/><text x="500" y="62" text-anchor="middle" class="st-label">Screening</text><text x="500" y="74" text-anchor="middle" class="st-sub">Rentzap + policy</text>
+      <circle cx="522" cy="72" r="11" fill="var(--l-lease)"/><text x="522" y="76" text-anchor="middle" class="cnt-b">2</text></g>
+    <g class="station"><circle cx="700" cy="90" r="11" fill="#fff" stroke="var(--l-lease)" stroke-width="4"/><text x="700" y="62" text-anchor="middle" class="st-label">Owner approval</text><text x="700" y="74" text-anchor="middle" class="st-sub">one-tap</text>
+      <circle cx="726" cy="72" r="11" fill="var(--red)"/><text x="726" y="76" text-anchor="middle" class="cnt-b">1</text></g>
+
+    <!-- TURNOVER -->
+    <g class="station"><circle cx="100" cy="215" r="11" fill="#fff" stroke="var(--l-turn)" stroke-width="4"/><text x="100" y="248" text-anchor="middle" class="st-label">Notice</text><text x="100" y="260" text-anchor="middle" class="st-sub">webhook · auto</text></g>
+    <g class="station"><circle cx="280" cy="215" r="11" fill="#fff" stroke="var(--l-turn)" stroke-width="4"/><text x="280" y="248" text-anchor="middle" class="st-label">Gold Cards</text><text x="280" y="260" text-anchor="middle" class="st-sub">5 tracks each</text>
+      <circle cx="303" cy="196" r="11" fill="var(--l-turn)"/><text x="303" y="200" text-anchor="middle" class="cnt-b">5</text></g>
+    <g class="station"><circle cx="480" cy="215" r="11" fill="#fff" stroke="var(--l-turn)" stroke-width="4"/><text x="480" y="248" text-anchor="middle" class="st-label">Make-ready board</text><text x="480" y="260" text-anchor="middle" class="st-sub">vendors + calendar</text>
+      <circle cx="503" cy="196" r="11" fill="var(--red)"/><text x="503" y="200" text-anchor="middle" class="cnt-b">8</text></g>
+    <g class="station"><circle cx="680" cy="215" r="11" fill="#fff" stroke="var(--l-turn)" stroke-width="4"/><text x="680" y="248" text-anchor="middle" class="st-label">Final walk</text>
+      <circle cx="703" cy="196" r="11" fill="var(--l-turn)"/><text x="703" y="200" text-anchor="middle" class="cnt-b">1</text></g>
+    <!-- MOVE-IN interchange -->
+    <g class="station"><circle cx="900" cy="215" r="16" fill="#fff" stroke="var(--ink)" stroke-width="5"/><circle cx="900" cy="215" r="7" fill="var(--ink)"/>
+      <text x="900" y="182" text-anchor="middle" class="st-label">MOVE-IN</text><text x="900" y="194" text-anchor="middle" class="st-sub">interchange · 3 this week</text></g>
+    <!-- CLOSE-OUT interchange -->
+    <g class="station"><circle cx="1100" cy="215" r="16" fill="#fff" stroke="var(--ink)" stroke-width="5"/><circle cx="1100" cy="215" r="7" fill="var(--ink)"/>
+      <text x="1100" y="182" text-anchor="middle" class="st-label">CLOSE-OUT</text><text x="1100" y="194" text-anchor="middle" class="st-sub">deposits · Penny · 31-day clock</text>
+      <circle cx="1128" cy="238" r="11" fill="var(--amber)"/><text x="1128" y="242" text-anchor="middle" class="cnt-b">3</text></g>
+
+    <!-- MAINTENANCE -->
+    <g class="station"><circle cx="100" cy="350" r="11" fill="#fff" stroke="var(--l-maint)" stroke-width="4"/><text x="100" y="383" text-anchor="middle" class="st-label">Max &amp; Sally</text><text x="100" y="395" text-anchor="middle" class="st-sub">calls → WOs, 24/7</text></g>
+    <g class="station"><circle cx="280" cy="350" r="11" fill="#fff" stroke="var(--l-maint)" stroke-width="4"/><text x="280" y="383" text-anchor="middle" class="st-label">Triage</text><text x="280" y="395" text-anchor="middle" class="st-sub">AI proposal → approve</text>
+      <circle cx="303" cy="331" r="11" fill="var(--l-maint)"/><text x="303" y="335" text-anchor="middle" class="cnt-b">2</text></g>
+    <g class="station"><circle cx="480" cy="350" r="11" fill="#fff" stroke="var(--l-maint)" stroke-width="4"/><text x="480" y="383" text-anchor="middle" class="st-label">Scheduled</text>
+      <circle cx="503" cy="331" r="11" fill="var(--l-maint)"/><text x="503" y="335" text-anchor="middle" class="cnt-b">3</text></g>
+    <g class="station"><circle cx="660" cy="350" r="11" fill="#fff" stroke="var(--l-maint)" stroke-width="4"/><text x="660" y="383" text-anchor="middle" class="st-label">In progress</text>
+      <circle cx="683" cy="331" r="11" fill="var(--l-maint)"/><text x="683" y="335" text-anchor="middle" class="cnt-b">2</text></g>
+    <g class="station"><circle cx="840" cy="350" r="11" fill="#fff" stroke="var(--l-maint)" stroke-width="4"/><text x="840" y="383" text-anchor="middle" class="st-label">Verify</text>
+      <circle cx="863" cy="331" r="11" fill="var(--l-maint)"/><text x="863" y="335" text-anchor="middle" class="cnt-b">2</text></g>
+    <g class="station"><circle cx="1020" cy="350" r="11" fill="#fff" stroke="var(--l-maint)" stroke-width="4"/><text x="1020" y="383" text-anchor="middle" class="st-label">Bill</text><text x="1020" y="395" text-anchor="middle" class="st-sub">1 at day 7 ⚠</text>
+      <circle cx="1043" cy="331" r="11" fill="var(--red)"/><text x="1043" y="335" text-anchor="middle" class="cnt-b">2</text></g>
+
+    <!-- OWNERS -->
+    <g class="station"><circle cx="100" cy="460" r="11" fill="#fff" stroke="var(--l-owner)" stroke-width="4"/><text x="100" y="493" text-anchor="middle" class="st-label">New owner leads</text><text x="100" y="505" text-anchor="middle" class="st-sub">call notes → packets</text>
+      <circle cx="123" cy="441" r="11" fill="var(--l-owner)"/><text x="123" y="445" text-anchor="middle" class="cnt-b">1</text></g>
+    <g class="station"><circle cx="300" cy="460" r="11" fill="#fff" stroke="var(--l-owner)" stroke-width="4"/><text x="300" y="493" text-anchor="middle" class="st-label">Onboarding</text><text x="300" y="505" text-anchor="middle" class="st-sub">agreement · W-9 · deposit</text>
+      <circle cx="323" cy="441" r="11" fill="var(--l-owner)"/><text x="323" y="445" text-anchor="middle" class="cnt-b">1</text></g>
+    <g class="station"><circle cx="520" cy="460" r="11" fill="#fff" stroke="var(--l-owner)" stroke-width="4"/><text x="520" y="493" text-anchor="middle" class="st-label">Owner care</text><text x="520" y="505" text-anchor="middle" class="st-sub">reports · walks · renewals</text></g>
+    <g class="station"><circle cx="740" cy="460" r="11" fill="#fff" stroke="var(--l-owner)" stroke-width="4"/><text x="740" y="493" text-anchor="middle" class="st-label">Termination</text><text x="740" y="505" text-anchor="middle" class="st-sub">packet → close-out</text>
+      <circle cx="763" cy="441" r="11" fill="var(--l-owner)"/><text x="763" y="445" text-anchor="middle" class="cnt-b">1</text></g>
+  </svg>
+  </div>
+  <div class="legend2">
+    <span><span class="dotl" style="background:var(--l-lease)"></span><b>Leasing</b> — Leesa's line</span>
+    <span><span class="dotl" style="background:var(--l-turn)"></span><b>Turnover</b> — the gold cards</span>
+    <span><span class="dotl" style="background:var(--l-maint)"></span><b>Maintenance</b> — Max's line</span>
+    <span><span class="dotl" style="background:var(--l-owner)"></span><b>Owners</b></span>
+    <span><b>◉ big stations</b> = interchanges</span>
+    <span style="color:var(--red);font-weight:700">red count = needs attention</span>
+  </div>
+  <p class="note"><b>Why this beats the QuickBooks page:</b> QB's map was the same for everyone and always static — a picture of software features. This one is a picture of <b>your company right now</b>: counts are live, red means a tripwire fired there, and the map is generated from the same route definitions the engine runs — so when a process changes, the map changes itself. It's the training view (new hires learn the company by riding the lines), the TV view for the office wall, and the "where is everything?" view for you. It is deliberately NOT the daily driver — that's the HUD →</p>
+</section>
+
+<!-- ============ G: MY HUD ============ -->
+<section class="view" id="hud">
+  <p style="font-size:13px;color:var(--muted);margin-bottom:10px"><span class="exp">CONCEPT G</span>The personal landing page — a configurable HUD where <b>My Desk is the centerpiece</b> and everything else is widgets you arrange: stats you care about, views you pin, things you're watching. Role presets give everyone a sensible default (front desk ≠ PM ≠ maintenance); the ⠿ handles drag. The Office Map is always one tap away.</p>
+
+  <div class="hudtop">
+    <h2>Good morning, Craig</h2>
+    <span style="font-size:12px;color:var(--muted)">Wednesday, July 23 · 3 things need you · office at a glance below</span>
+    <span class="cfg">⚙ Customize · preset: <b>Owner/Exec</b> ▾</span>
+  </div>
+
+  <div class="hud">
+    <div class="w tall">
+      <h3>MY DESK — TOP OF THE STACK <span class="drag">⠿</span></h3>
+      <div class="fixit"><button>Open</button><b>Sep 4 decision prep — write-path evidence</b><span>wo_event touch-count query ready · 38/wk avg vs. 40 threshold · brief drafts itself Monday</span></div>
+      <div class="fixit"><button>Review</button><b>Agent promotion proposal: Estimate Chaser L1 → L2</b><span>4 weeks clean · 3% edit rate · promotion needs your tap, never self-granted</span></div>
+      <div class="fixit"><button>Decide</button><b>OB Riley #9 — reassign flooring vendor?</b><span>Cheryl recommends switching after 17 days · scoreboard demotes Carpet Smart</span></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:6px">+ 4 due today · 2 watching → <b style="color:var(--dk)">open full My Desk</b></div>
+    </div>
+    <div class="w">
+      <h3>OFFICE PULSE <span class="drag">⠿</span></h3>
+      <div class="statrow">
+        <div class="stat r"><div class="v">3</div><div class="l">exceptions</div></div>
+        <div class="stat"><div class="v">8</div><div class="l">turns active</div></div>
+        <div class="stat"><div class="v">3</div><div class="l">move-ins this wk</div></div>
+        <div class="stat"><div class="v">13.5</div><div class="l">days-to-ready avg</div></div>
+      </div>
+    </div>
+    <div class="w">
+      <h3>PINNED VIEWS <span class="drag">⠿</span></h3>
+      <div class="pin"><span class="ic" style="background:var(--l-turn)"></span>Turnover Board <small>8 units</small></div>
+      <div class="pin"><span class="ic" style="background:var(--l-maint)"></span>Portfolio Gantt <small>6 wks</small></div>
+      <div class="pin"><span class="ic" style="background:#0e6e6e"></span>Key Manager <small>2 to triage</small></div>
+      <div class="pin"><span class="ic" style="background:var(--l-lease)"></span>Vendor Scoreboard <small>1 review</small></div>
+    </div>
+    <div class="w">
+      <h3>FRONT OF HOUSE — OVERNIGHT <span class="drag">⠿</span></h3>
+      <div class="feed"><b>Max</b> took 3 calls → 3 WOs created · 1 flagged urgent (dispatched ✓)</div>
+      <div class="feed"><b>Leesa</b> booked 2 tours for Thu · 1 CodeBox access issued</div>
+      <div class="feed"><b>Sally</b> handled 4 after-hours calls · 1 follow-up queued to Ashley</div>
+    </div>
+    <div class="w">
+      <h3>WATCHING <span class="drag">⠿</span></h3>
+      <div class="feed"><b>Maui Ln</b> move-in 8/1 — zero slack, C&amp;E confirmed 7/28 clean ✓</div>
+      <div class="feed"><b>August crunch</b> — 2 projected turns inside Tri County's blackout</div>
+      <div class="mapmini" onclick="document.querySelector('[data-v=map]').click()">🗺 Open the Office Map →</div>
+    </div>
+  </div>
+
+  <p class="note"><b>How F and G fit together:</b> the HUD is where each person lands (their desk, their pins, their pulse — presets per role, then drag to taste). The Map is the shared picture one tap away — same live data, office-wide. QuickBooks made everyone start at the map because it had nothing personal to offer; we can do better: <b>land on your day, glance at the whole railway when you need the big picture.</b> Both are projections of the same jackets/routes data as concepts A–E — nothing here is a new system, just two more lenses.</p>
+</section>
+
+<script>
+  const nav=document.getElementById('nav');
+  nav.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    nav.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById(b.dataset.v).classList.add('active');});
+</script>
+</body>
+</html>

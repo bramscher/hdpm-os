@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HDPM Form Inventory — Team Review</title>
+<style>
+  :root{--dk:#1f5c22;--gr:#2f7d32;--tint:#eef5ee;--lt:#f7faf7;--ink:#1a1a1a;--muted:#5b625b;--hair:#c7cec7;--red:#b3261e;--amber:#9a6a00;
+       --s1:#2c5f8a;--s2:#2f7d32;--s3:#6a3d9a;--s4:#b3541e;--s5:#5b625b;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;}
+  body{background:#fff;color:var(--ink);padding:20px 26px;max-width:1180px;margin:0 auto;}
+  header{display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--gr);padding-bottom:10px;margin-bottom:16px;flex-wrap:wrap;}
+  header h1{font-size:21px;color:var(--dk);}
+  header .sub{color:var(--muted);font-size:13px;}
+  header .badge{margin-left:auto;background:var(--tint);color:var(--dk);font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;}
+  h2{font-size:15px;color:var(--dk);margin:26px 0 10px;border-bottom:2px solid var(--gr);padding-bottom:5px;}
+  p.lead{font-size:13.5px;line-height:1.55;color:var(--ink);max-width:950px;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:16px 0;}
+  .kpi{border:1px solid var(--hair);border-radius:8px;padding:12px;text-align:center;background:var(--lt);}
+  .kpi .v{font-size:26px;font-weight:800;color:var(--dk);} .kpi .l{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.35;}
+  .kpi.hot .v{color:var(--red);}
+  .species{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin:14px 0;}
+  .sp{border:1px solid var(--hair);border-left:6px solid var(--sc);border-radius:8px;padding:12px 14px;}
+  .sp h3{font-size:13px;color:var(--sc);letter-spacing:.3px;}
+  .sp .cnt{float:right;background:var(--sc);color:#fff;border-radius:10px;font-size:12px;font-weight:800;padding:1px 10px;}
+  .sp p{font-size:12px;color:var(--muted);margin:6px 0;line-height:1.5;}
+  .sp .ex{font-size:11.5px;color:var(--ink);}
+  .sp .win{font-size:11.5px;color:var(--dk);font-weight:700;background:var(--tint);border-radius:6px;padding:5px 9px;margin-top:7px;}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 12px;}
+  .chip{border:1.5px solid var(--hair);background:#fff;border-radius:16px;padding:5px 13px;font-size:12px;font-weight:700;cursor:pointer;color:var(--ink);}
+  .chip .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;}
+  .chip.on{border-color:var(--ink);background:var(--lt);}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{background:var(--tint);color:var(--dk);text-align:left;padding:7px 9px;border:1px solid var(--hair);font-size:11px;position:sticky;top:0;}
+  td{padding:6px 9px;border:1px solid var(--hair);vertical-align:top;}
+  tr:nth-child(even) td{background:var(--lt);}
+  .stag{display:inline-block;min-width:88px;text-align:center;padding:1px 8px;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:.3px;color:#fff;}
+  .st1{background:var(--s1);} .st2{background:var(--s2);} .st3{background:var(--s3);} .st4{background:var(--s4);} .st5{background:var(--s5);}
+  .pf{font-weight:800;} .pf.hi{color:var(--gr);} .pf.md{color:var(--amber);} .pf.lo{color:var(--muted);}
+  .fate{color:var(--muted);}
+  .fate b{color:var(--ink);}
+  ul.clean{margin:8px 0 0 18px;font-size:12.5px;line-height:1.7;}
+  .who{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:12px 0;}
+  .who div{border:1px solid var(--hair);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.5;}
+  .who b{color:var(--dk);display:block;margin-bottom:3px;}
+  .q{background:var(--tint);border-radius:8px;padding:12px 16px;margin:10px 0;font-size:13px;line-height:1.7;}
+  .q b{color:var(--dk);}
+  .note{font-size:11.5px;color:var(--muted);margin-top:20px;border-top:1px solid var(--hair);padding-top:8px;}
+</style>
+</head>
+<body>
+<div style="background:#1f5c22;display:flex;gap:12px;align-items:center;padding:9px 16px;border-radius:0 0 10px 10px;margin:-0px 0 14px;font-size:12.5px;flex-wrap:wrap;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif"><span style="color:#e8b923;font-weight:800;letter-spacing:.5px">HDPM-OS DEMO</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="00-START-HERE.html">⌂ Home</a><span style="color:#fff;font-weight:800;background:#2f7d32;border-radius:6px;padding:3px 10px">Inventory</span><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="unit-turnover-board-mockup.html">Turnover Board</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="jackets-ui-explorations.html">Jackets UI</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="agents-summary.html">Agents</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="hdpm-home-explorations.html">Home Concepts</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="workflow-engine-concept.html">Concept Doc</a><a style="color:#d9ead9;font-weight:600;text-decoration:none;padding:3px 4px" href="turnover-board-plan.html">Board Plan</a><span style="margin-left:auto;color:#9dbb9d;font-size:10.5px">sample data · concept site · July 2026</span></div>
+
+<header>
+  <h1>Form Inventory — What We Found & What It Means</h1>
+  <span class="sub">Full HDPM document library (OneDrive) · reviewed 7/22/2026 · for team discussion</span>
+  <span class="badge">HIGH DESERT PROPERTY MANAGEMENT</span>
+</header>
+
+<p class="lead"><b>The question we asked:</b> can every form be pre-filled from AppFolio, completed by the right person, and filed back into AppFolio when done — no matter the process? <b>The answer after inventorying both folders: yes, and it's better than that.</b> About a third of our "forms" stop being forms at all — they become documents the system writes for us. The goal of this project is simple: less retyping, less folder-walking, less monotony — more time for owners, tenants, and judgment calls.</p>
+
+<div class="kpis">
+  <div class="kpi"><div class="v">~75</div><div class="l">unique working templates<br>(after removing duplicates & archives)</div></div>
+  <div class="kpi hot"><div class="v">124</div><div class="l">files that collapse into<br><b>2 templates + a directory</b></div></div>
+  <div class="kpi"><div class="v">~90%</div><div class="l">of header fields prefillable<br>from AppFolio today (read API)</div></div>
+  <div class="kpi"><div class="v">2,000+</div><div class="l">files in the full library —<br>and only 4 kinds of content</div></div>
+  <div class="kpi"><div class="v">5</div><div class="l">species — every form is<br>one of five kinds</div></div>
+</div>
+
+<h2>Zooming out — the whole library is only four kinds of content</h2>
+<p class="lead">Walking the entire OneDrive (not just the form folders) sorts every file into four buckets, and each bucket has a different destiny:</p>
+<table style="margin:10px 0 6px">
+  <tr><th>Content kind</th><th>Where it lives</th><th>Scale</th><th>What happens to it</th></tr>
+  <tr><td><b>1 · Templates</b> (the forms)</td><td>Tenant Forms, Owner Forms ×2, Admin Forms</td><td>~75 unique</td><td class="fate">Categorized below into the five species — this is the engine's food.</td></tr>
+  <tr><td><b>2 · Playbook</b> (the SOPs)</td><td>Procedures → <b>already migrated to Notion</b> (June 2026; OneDrive copies are the archive)</td><td>43 pages</td><td class="fate">Notion Knowledge Base is the human-readable layer (training, reading, policies). The engine adds the <b>executable layer</b> — route definitions that link back to their Notion SOP page, so the doc and the software describe the same process.</td></tr>
+  <tr><td><b>3 · Reference libraries</b></td><td>CCR's (343 files, per community), ESA/HUD guidance, utility allowances</td><td>~400 files</td><td class="fate">Attach to the property they govern + feed a knowledge base you can ask: <i>"Are RVs allowed at Aspen Creek?"</i> — answered with the page cited, not a folder dig.</td></tr>
+  <tr><td><b>4 · Records</b> (finished paperwork)</td><td>Owner Folder (405 owner dirs incl. 192 archived), Landscaping (89 contracts by year), Rent Increase workbooks, delinquency workbooks, photo folders</td><td>1,000+ files</td><td class="fate"><b>These are the outputs of processes, filed by hand.</b> When routes auto-file to AppFolio, this bucket stops growing. The Owner Folder is the audit trail the engine would have written for free.</td></tr>
+</table>
+<p class="lead" style="font-size:12.5px;color:var(--muted)">Notable finds along the way: <b>Z - Key List MASTER.xlsx</b> (the key-tracking database — first thing the Returned Keys route replaces) · <b>"Need NEW Form for Matt to USE - New Owner Call Note"</b> (a form whose filename is a work request — perfect candidate to be the first form born digital) · per-owner-group <b>Rent Increase workbooks</b> (generated species; pairs with the Rent Increases SOP) · <b>Landscaping contracts</b> filed by year with "CANCELED BY OWNER" / "SOLD" notes in filenames — renewal dates and status that should be tripwires, not filename edits · holiday flyers and logos, which are fine exactly where they are.</p>
+
+<h2>The five species (every form is one of these)</h2>
+<div class="species">
+  <div class="sp" style="--sc:var(--s1)"><span class="cnt">~13</span><h3>1 · DATA-CAPTURE → becomes a tracked process</h3>
+    <p>Forms that exist to collect fields as work moves between desks. These become live "jackets" — prefilled, on-screen, visible on every desk at once. The paper survives only as a PDF filed to AppFolio at the end.</p>
+    <div class="ex">Vacancy Tracking (Gold) · New/Acquired/Co-Tenant Set-Up · New Tenant Checklist · Remaining Tenant Screening · Key Pickups · Owner Information · Owner Close Out List · Owner Set-Up Checklist · Change of Ownership</div>
+    <div class="win">Win: no more retyping tenant/unit/rent data that AppFolio already knows — it arrives filled in.</div>
+  </div>
+  <div class="sp" style="--sc:var(--s2)"><span class="cnt">~10+</span><h3>2 · GENERATED — nobody fills anything</h3>
+    <p>Documents that are 100% derivable from data + a template. The system writes them; a human approves and sends.</p>
+    <div class="ex">Employment &amp; rental verification requests (<b>the 110-file folders!</b>) · Application denial letters + FCRA · Delinquency reports (11 spreadsheets/yr) · Monthly inspection schedules · Owner Close Out letter · Move-out confirmations · Seasonal tenant communications</div>
+    <div class="win">Win: the two "Can Delete" verification folders — 110 per-company copies of one letter — become 1 template + a contact list. That whole species of chore disappears.</div>
+  </div>
+  <div class="sp" style="--sc:var(--s3)"><span class="cnt">~12</span><h3>3 · SIGNATURE — prefill, then e-sign</h3>
+    <p>Agreements needing tenant/owner signatures. Prefilled by the system, routed for e-signature (or print-sign-scan as fallback), auto-filed on completion.</p>
+    <div class="ex">Payment Agreements (4 variants → <b>1 route with a frequency setting</b>) · One-Time Late/Partial Payment · Deposit to Hold · Utility Billing Addendum · Reasonable Accommodation · Owner Agency Agreement · Owner Approval of Applicant · Direct Deposit Auth · 30-Day Notice (resident form)</div>
+    <div class="win">Win: Owner Approval of Applicant becomes a one-tap approval on the owner's phone — hours off every application.</div>
+  </div>
+  <div class="sp" style="--sc:var(--s4)"><span class="cnt">~4</span><h3>4 · INSPECTION — mobile capture with photos</h3>
+    <p>Walk-around forms. Phone-first: tap through rooms, attach photos, PDF report generates itself and files to the unit page.</p>
+    <div class="ex">New Tenant Inspection · Owner Property Inspection Sheet · Cleaner Check-Off List · Move-Out Inspection</div>
+    <div class="win">Win: the report writes itself in the driveway, not back at the desk.</div>
+  </div>
+  <div class="sp" style="--sc:var(--s5)"><span class="cnt">~10</span><h3>5 · THIRD-PARTY — fill &amp; attach</h3>
+    <p>Forms whose format someone else owns. We prefill what we can onto their PDF, a human completes the rest, and it files to the right page. The format stays theirs.</p>
+    <div class="ex">HUD 5380/5382 · Golden Key (RFTA) packet · HAP contract · Housing Works change-of-ownership · Landlord utility agreements (Cascade, Pacific Power, Bend, Redmond) · W-9 · TDS authorization</div>
+    <div class="win">Win: name, address, and owner details land on the form before anyone opens it.</div>
+  </div>
+  <div class="sp" style="--sc:var(--hair)"><span class="cnt" style="background:var(--hair);color:var(--ink)">rest</span><h3>NOT FORMS — knowledge &amp; one-offs</h3>
+    <p>ESA/HUD guidance, NSPIRE prep, violation-writing guide → these belong in the team knowledge base (askable in chat, not stored in folders). Commercial leases are bespoke legal documents — a later chapter (document assembly), deliberately out of scope now.</p>
+  </div>
+</div>
+
+<h2>What this means for each desk</h2>
+<div class="who">
+  <div><b>Front Desk</b>No more copying names/addresses onto set-up forms and vacancy sheets — they arrive prefilled. Key pickups logged in two taps. The 30-Day Notice Box becomes a queue on screen.</div>
+  <div><b>Property Managers</b>Approvals and agreements go out prefilled and come back signed and filed. The folder that bounced to your box now sits open on every desk that needs it, with the next action and date always visible.</div>
+  <div><b>Maintenance</b>Inspections happen on the phone with photos; the Gold card's VACANCY section fills itself as you go; key counts check against the New Tenant Checklist automatically.</div>
+  <div><b>Accounting</b>Delinquency workbooks stop being hand-built — a live view replaces 11 spreadsheets a year. Fees, holdover rent, and close-out charges arrive as queued items, not sticky notes.</div>
+</div>
+
+<h2>Full inventory — filter by species</h2>
+<div class="chips" id="chips">
+  <button class="chip on" data-t="all"><span class="dot" style="background:var(--ink)"></span>All</button>
+  <button class="chip" data-t="1"><span class="dot" style="background:var(--s1)"></span>Data-capture</button>
+  <button class="chip" data-t="2"><span class="dot" style="background:var(--s2)"></span>Generated</button>
+  <button class="chip" data-t="3"><span class="dot" style="background:var(--s3)"></span>Signature</button>
+  <button class="chip" data-t="4"><span class="dot" style="background:var(--s4)"></span>Inspection</button>
+  <button class="chip" data-t="5"><span class="dot" style="background:var(--s5)"></span>Third-party</button>
+</div>
+<table id="inv">
+  <tr><th>Form / template</th><th>Folder</th><th>Species</th><th>Prefill</th><th>What happens to it</th></tr>
+  <tr data-t="1"><td><b>Vacancy Tracking (Gold)</b></td><td>Tenant Move Out</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~85%</td><td class="fate">Becomes the flagship jacket — five desk-owned tracks. PDF files to unit page at close.</td></tr>
+  <tr data-t="1"><td>New Tenant Set-Up Form</td><td>Move-In (branded ✓)</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~90%</td><td class="fate">Move-in route track; already redesigned in brand system.</td></tr>
+  <tr data-t="1"><td>Acquired Tenant Set-Up Form</td><td>Move-In (branded ✓)</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~90%</td><td class="fate">Acquisition onboarding route track.</td></tr>
+  <tr data-t="1"><td>New Co-Tenant Set-Up Form</td><td>Move-In</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~90%</td><td class="fate">Co-tenant route (pairs with Adding a Co-Tenant SOP).</td></tr>
+  <tr data-t="1"><td>New Tenant / Co-Tenant Checklists</td><td>Move-In (branded ✓)</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf md">~60%</td><td class="fate">Move-in day checklist on a tablet; keys/remotes issued counts feed later key-return check.</td></tr>
+  <tr data-t="1"><td>Remaining Tenant Screening Worksheet</td><td>Application Forms</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~80%</td><td class="fate">Track inside the one-tenant-vacating branch of the 30-Day Notice route.</td></tr>
+  <tr data-t="1"><td>Key Pickups Form (front desk)</td><td>Tenant Notices</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~80%</td><td class="fate">Two-tap log; pairs with Returned Keys triage route.</td></tr>
+  <tr data-t="1"><td>Owner Information Form</td><td>Owner Forms</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf md">~50%</td><td class="fate">Owner onboarding route; owner completes their part via link.</td></tr>
+  <tr data-t="1"><td>Owner Close Out List</td><td>Owner Forms</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~75%</td><td class="fate">Track inside the Owner Termination route (pairs with the packet we rebuilt).</td></tr>
+  <tr data-t="1"><td>Owner Set-Up Checklist</td><td>Owner Forms</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~75%</td><td class="fate">Owner onboarding route track.</td></tr>
+  <tr data-t="1"><td>Change of Ownership (HDPM)</td><td>Housing / Owner</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~85%</td><td class="fate">Ownership-transfer route; HW variant is species 5.</td></tr>
+  <tr data-t="2"><td><b>Employment Verification (61 files)</b></td><td>Application Forms</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate"><b>61 → 1</b> template + employer directory. Folder already marked "Can Delete."</td></tr>
+  <tr data-t="2"><td><b>Rental Reference (63 files)</b></td><td>Application Forms</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate"><b>63 → 1</b> template + landlord directory.</td></tr>
+  <tr data-t="2"><td>Application Denial Letter + FCRA rights</td><td>Application Forms</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate">Auto-drafted from denial reason; human reviews, one click sends + files. Compliance-critical wording locked in template.</td></tr>
+  <tr data-t="2"><td>Delinquency workbooks (11/yr)</td><td>Delinquent Rent</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate">Live delinquency view from AppFolio read API; monthly snapshot auto-archived.</td></tr>
+  <tr data-t="2"><td>Monthly inspection schedules</td><td>Inspection</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate">Generated from lease anniversaries + last-inspected dates.</td></tr>
+  <tr data-t="2"><td>Owner Close Out Letter</td><td>Owner Forms</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate">Auto-drafted when termination route reaches close-out.</td></tr>
+  <tr data-t="2"><td>Seasonal tenant communications</td><td>Tenant Communication</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate">Twice-yearly template merge; printed for inspection counters.</td></tr>
+  <tr data-t="2"><td>"Information Needed" letter</td><td>Tenant Notices</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate">Checkbox-driven generated letter.</td></tr>
+  <tr data-t="3"><td><b>Payment Agreements (weekly / bi-weekly / 10-day / 6-month)</b></td><td>Notices + Move Out</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf hi">~95%</td><td class="fate"><b>4 variants → 1 route</b> with a frequency parameter; e-sign; auto-files; payment dates feed tripwires.</td></tr>
+  <tr data-t="3"><td>One-Time Late / Partial Payment</td><td>Tenant Notices</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf hi">~95%</td><td class="fate">Prefilled, e-signed, filed; flags the ledger date to watch.</td></tr>
+  <tr data-t="3"><td>Deposit to Hold Agreement</td><td>Move-In (branded ✓)</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf hi">~90%</td><td class="fate">Application-approval route step (pairs with Deposit-to-Hold SOPs).</td></tr>
+  <tr data-t="3"><td>Utility Billing Addendum</td><td>Move-In (branded ✓)</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf hi">~90%</td><td class="fate">Lease packet step.</td></tr>
+  <tr data-t="3"><td>Reasonable Accommodation Form</td><td>Notices + Applications</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf md">~60%</td><td class="fate">Compliance route with its own SOP; provider verification tracked as a gate.</td></tr>
+  <tr data-t="3"><td>Owner Agency Agreement</td><td>Owner Forms</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf hi">~85%</td><td class="fate">Owner onboarding route anchor; e-sign.</td></tr>
+  <tr data-t="3"><td><b>Owner Approval of Applicant</b></td><td>Owner Forms</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf hi">~95%</td><td class="fate">Becomes a one-tap phone approval with applicant summary attached. Big cycle-time win.</td></tr>
+  <tr data-t="3"><td>Direct Deposit Authorization</td><td>Owner Forms</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf md">~70%</td><td class="fate">Owner onboarding step.</td></tr>
+  <tr data-t="3"><td>30-Day Notice From Tenant</td><td>Tenant Move Out</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf hi">~90%</td><td class="fate">Already digital via AppFolio resident forms — its completion webhook is what <b>spawns the whole 30-Day route</b>.</td></tr>
+  <tr data-t="3"><td>Temp Occupant Form</td><td>Application Forms</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf hi">~85%</td><td class="fate">Resident-form route.</td></tr>
+  <tr data-t="4"><td>New Tenant Inspection Form</td><td>Move-In (branded ✓)</td><td><span class="stag st4">INSPECTION</span></td><td class="pf hi">~80%</td><td class="fate">Mobile room-by-room with photos; PDF auto-files; baseline for move-out comparison.</td></tr>
+  <tr data-t="4"><td>Owner Property Inspection Sheet</td><td>Owner Forms</td><td><span class="stag st4">INSPECTION</span></td><td class="pf hi">~80%</td><td class="fate">Mobile capture → branded owner report generated (pairs with Routine Inspections SOP).</td></tr>
+  <tr data-t="4"><td>Cleaner Check-Off List</td><td>Inspection</td><td><span class="stag st4">INSPECTION</span></td><td class="pf md">~60%</td><td class="fate">Vendor-facing checklist; completion advances the turnover phase.</td></tr>
+  <tr data-t="4"><td>Move-Out Inspection (implied by SOPs)</td><td>—</td><td><span class="stag st4">INSPECTION</span></td><td class="pf hi">~80%</td><td class="fate">Compares against move-in baseline; feeds deposit accounting.</td></tr>
+  <tr data-t="5"><td>Golden Key (RFTA) packet · HAP contract · HUD 5380/5382</td><td>Housing Documents</td><td><span class="stag st5">THIRD-PARTY</span></td><td class="pf md">~50%</td><td class="fate">Prefill onto their PDFs; housing route tracks deadlines; attach to tenant page.</td></tr>
+  <tr data-t="5"><td>Housing Works Change of Ownership</td><td>Housing / Owner</td><td><span class="stag st5">THIRD-PARTY</span></td><td class="pf md">~60%</td><td class="fate">Fill &amp; attach inside ownership-transfer route.</td></tr>
+  <tr data-t="5"><td>Landlord utility agreements ×4 (Cascade, Pacific Power, Bend, Redmond)</td><td>Owner Forms</td><td><span class="stag st5">THIRD-PARTY</span></td><td class="pf md">~70%</td><td class="fate">Prefill owner/property; pairs with Utility Landlord Agreements SOP.</td></tr>
+  <tr data-t="5"><td>W-9 · TDS Installation Auth</td><td>Owner Forms / Move-In</td><td><span class="stag st5">THIRD-PARTY</span></td><td class="pf md">~60%</td><td class="fate">Fill &amp; attach steps in onboarding routes.</td></tr>
+  <tr data-t="5"><td>Housing Damage Detail Form</td><td>Housing Documents</td><td><span class="stag st5">THIRD-PARTY</span></td><td class="pf md">~50%</td><td class="fate">Fill &amp; attach; damage data mirrors into deposit accounting.</td></tr>
+  <tr data-t="1"><td><b>Z - Key List MASTER.xlsx</b></td><td>Owner Forms (HDPM)</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~80%</td><td class="fate"><b style="color:var(--gr)">✓ ALREADY BUILT</b> — the Key Manager shipped in hdpm-chat 7/20 (key registry + assignment history + AppFolio sync + import). The spreadsheet is retired; pickup/return routes plug into it next.</td></tr>
+  <tr data-t="1"><td>New Owner Call Note ("Need NEW Form for Matt")</td><td>Owner Forms (HDPM)</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf md">~40%</td><td class="fate">Doesn't properly exist yet — first form born digital: intake route from sales call → PM handoff.</td></tr>
+  <tr data-t="1"><td>Owner Mgmt Agreement Renewal / Updated Agreement checklists</td><td>Owner Forms (HDPM)</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~80%</td><td class="fate">Renewal route with anniversary tripwires — renewals stop depending on memory.</td></tr>
+  <tr data-t="1"><td>Property Data Sheet</td><td>Owner Forms (HDPM)</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf hi">~85%</td><td class="fate">Onboarding route track; most fields land in AppFolio, the rest in the engine.</td></tr>
+  <tr data-t="1"><td>Sign Receipt Form · Supplies Order · Timesheets · Penny's Board Sheet</td><td>Admin Forms</td><td><span class="stag st1">DATA-CAPTURE</span></td><td class="pf lo">varies</td><td class="fate">Small internal routes — low glamour, high monotony-removal per hour of build.</td></tr>
+  <tr data-t="2"><td>Rent Increase workbooks (per owner group)</td><td>2026 Rent Increase</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate">Generated from lease data + increase rules; pairs with the Rent Increases SOP; letters merge from the result.</td></tr>
+  <tr data-t="2"><td>Advertising Tracking Form</td><td>Advertising</td><td><span class="stag st2">GENERATED</span></td><td class="pf hi">100%</td><td class="fate">Live view of the ADVERTISING track across all vacancies.</td></tr>
+  <tr data-t="3"><td>Advertising Agreements (owner/seller) · Owner Selling Email</td><td>Owner Forms (HDPM)</td><td><span class="stag st3">SIGNATURE</span></td><td class="pf hi">~85%</td><td class="fate">Prefilled, e-signed steps inside the sale-disposition route.</td></tr>
+</table>
+
+<h2>Already live in hdpm-chat (this isn't starting from zero)</h2>
+<ul class="clean">
+  <li><b>Key Manager</b> (shipped 7/20) — replaces Z-Key List MASTER: permanent key numbers, assignment history that's never overwritten, AppFolio sync with a strict ownership split, spreadsheet import, stats. The Returned Keys / Key Pickup routes have their database waiting.</li>
+  <li><b>Maintenance OS foundations</b> — work-order routes, vendor chase SMS, estimate-chaser escalation, AI triage proposals, digest recipients. The tripwire pattern is already running in production.</li>
+  <li><b>AppFolio webhook log + sync infrastructure</b> — the event spine every route in this report plugs into.</li>
+  <li><b>Inspections tables</b> (Mar 2026) — species 4 has its schema started.</li>
+  <li><b>Advertising tooling</b> — Craigslist pages, cached vacancies, saved listings, lead events: much of the ADVERTISING track exists.</li>
+  <li><b>Staff registry, dashboards, KPI/metrics snapshots, reports, agent proposal outbox</b> — the desks, the TV-board bones, and the notification plumbing.</li>
+  <li><b>Notion Knowledge Base</b> — all 43 SOPs migrated (June 2026), plus roles/duties dashboard, personnel handbook, screening policy + decision guide, animal policy, fees configuration, and FAQ database. The knowledge layer exists; the engine links to it rather than duplicating it.</li>
+  <li><b>Digital Forms Project plan</b> (Notion, Jan 2026) — this initiative's ancestor, with decisions still standing: SurveyJS selected as the form renderer (MIT, JSON definitions in Supabase — a natural fit for rendering jacket tracks), and the honest ROI math this report inherits: <b>25 new tenant setups/month × 65–95 min each ≈ 31 hrs/month</b> on one process alone. Its copy/paste AppFolio workaround has since been superseded by the guided-step + verify-by-read pattern and the write-path decision teed up for Sep 4.</li>
+</ul>
+<p class="lead" style="font-size:12.5px">What this means: the engine work ahead is mostly the <b>jacket/route layer</b> (tracks, boxes, form rendering, e-sign, auto-filing) on top of plumbing that already exists — not a greenfield build.</p>
+
+<h2>Housekeeping found along the way</h2>
+<ul class="clean">
+  <li>Widespread .doc/.docx/.pdf/.pub duplicates of the same form, plus ".old" files — the inventory above counts each form once; a cleanup pass would cut both folders roughly in half.</li>
+  <li>Four forms still exist only as Publisher (.pub) files — already on the modernization path via the branded redesigns.</li>
+  <li>Six move-in forms are already rebuilt in the new brand system — that redesign work becomes the on-screen look of the digital versions.</li>
+  <li>ESA/HUD guidance, NSPIRE prep, and violation-writing references aren't forms — they belong in a searchable team knowledge base.</li>
+  <li>Commercial leases are bespoke legal documents — deliberately out of scope for the engine (a later document-assembly chapter, if ever).</li>
+</ul>
+
+<h2>Questions for the team</h2>
+<div class="q">
+  <b>1.</b> Which form eats the most of your week? (Our guess from the data: verification letters, delinquency workbooks, and the Gold card — but you know better.)<br>
+  <b>2.</b> The species table calls some forms "generated — nobody fills anything." What did we miss — where does human judgment actually live in those?<br>
+  <b>3.</b> Whose box does each Gold-card section really belong to? (We inferred owners from the form; the table needs your corrections.)<br>
+  <b>4.</b> If we could digitize only <i>one</i> process first, which would you pick — and would you run it side-by-side with paper for two weeks to prove it?<br>
+  <b>5.</b> What's on paper that isn't in these folders at all?<br>
+  <b>6.</b> The folder colors — yellow, red, green (and any others): what does each color mean today, and who decides which color a packet gets? (The digital version will keep the color code — a screen of jackets should read like the shelf does.)<br>
+  <b>7.</b> What gets handwritten on the <i>backs</i> of forms? (We know work orders land on the back of the Gold sheet — what else lives in the margins? Whatever it is, the digital jacket needs a home for it or paper survives.)
+</div>
+
+<p class="note">Prefill % = share of the form's fields available from AppFolio's read API today (estimates — to be validated per form). Species assignments are a starting point for discussion, not a verdict. Companion docs: "HDPM Workflow Engine — Jackets Concept" and "Jackets as a Product — Opportunity Brief" in the HDPM Processes project; UI explorations in the Cowork sidebar.</p>
+
+<script>
+  const chips=document.getElementById('chips');
+  chips.addEventListener('click',e=>{const c=e.target.closest('.chip');if(!c)return;
+    chips.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');
+    const t=c.dataset.t;
+    document.querySelectorAll('#inv tr[data-t]').forEach(r=>{r.style.display=(t==='all'||r.dataset.t===t)?'':'none';});});
+</script>
+</body>
+</html>
