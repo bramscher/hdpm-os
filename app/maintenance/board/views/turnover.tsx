@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import type { MaintWorkOrder, UnitTurn } from '@/lib/maintenance/types';
 import type { BoardData } from '../board-types';
@@ -56,6 +56,26 @@ function phaseKeyFor(wo: MaintWorkOrder): string {
     : 'Other';
 }
 
+type TurnSortKey = 'unit' | 'vacant' | 'target' | 'movein' | 'actual';
+
+/** First click on a column sorts it the way you'd want to read it. */
+const DEFAULT_DIR: Record<TurnSortKey, 'asc' | 'desc'> = {
+  unit: 'asc',
+  vacant: 'desc',
+  target: 'asc',
+  movein: 'asc',
+  actual: 'desc',
+};
+
+/** Compare with nulls/blanks always last, regardless of direction. */
+function cmpNullable(a: string | number | null, b: string | number | null, dir: 'asc' | 'desc'): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  const c = a < b ? -1 : a > b ? 1 : 0;
+  return dir === 'asc' ? c : -c;
+}
+
 export default function Turnover({
   board,
   onChanged,
@@ -65,6 +85,8 @@ export default function Turnover({
 }) {
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<TurnSortKey>('vacant');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showNew, setShowNew] = useState(false);
   const [draft, setDraft] = useState({
     property_name: '',
@@ -82,9 +104,48 @@ export default function Turnover({
     else byTurn.set(wo.unit_turn_id, [wo]);
   }
 
-  const rows = (board.unitTurns ?? [])
-    .slice()
-    .sort((a, b) => a.vacated_at.localeCompare(b.vacated_at));
+  function toggleSort(key: TurnSortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(DEFAULT_DIR[key]);
+    }
+  }
+
+  const rows = (board.unitTurns ?? []).slice().sort((a, b) => {
+    switch (sortKey) {
+      case 'unit': {
+        const c = turnWhere(a).localeCompare(turnWhere(b));
+        return sortDir === 'asc' ? c : -c;
+      }
+      case 'target':
+        return cmpNullable(a.target_ready, b.target_ready, sortDir);
+      case 'movein':
+        return cmpNullable(a.movein_date, b.movein_date, sortDir);
+      case 'actual':
+        return cmpNullable(
+          a.actual == null ? null : Number(a.actual),
+          b.actual == null ? null : Number(b.actual),
+          sortDir
+        );
+      case 'vacant':
+      default:
+        // Most days vacant = earliest vacated_at, so the direction inverts.
+        return cmpNullable(a.vacated_at, b.vacated_at, sortDir === 'desc' ? 'asc' : 'desc');
+    }
+  });
+
+  const sortTh = (key: TurnSortKey, label: string, style?: CSSProperties) => (
+    <th
+      onClick={() => toggleSort(key)}
+      style={{ cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none', ...style }}
+      title={`Sort by ${label.toLowerCase()}`}
+    >
+      {label}
+      {sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+    </th>
+  );
 
   // Phase columns: only render phases that have at least one WO on the board.
   const allTurnWos = rows.flatMap((t) => byTurn.get(t.id) ?? []);
@@ -242,17 +303,17 @@ export default function Turnover({
       <table className="mo-table">
         <thead>
           <tr>
-            <th style={{ minWidth: 190 }}>Unit</th>
-            <th>Vacant</th>
-            <th>Target ready</th>
-            <th>Move-in</th>
+            {sortTh('unit', 'Unit', { minWidth: 190 })}
+            {sortTh('vacant', 'Vacant')}
+            {sortTh('target', 'Target ready')}
+            {sortTh('movein', 'Move-in')}
             {visiblePhases.map((p) => (
               <th key={p.key} title={p.key}>
                 {p.label}
               </th>
             ))}
             <th style={{ minWidth: 180 }}>Current blocker</th>
-            <th>Budget / actual</th>
+            {sortTh('actual', 'Budget / actual')}
             <th></th>
           </tr>
         </thead>
