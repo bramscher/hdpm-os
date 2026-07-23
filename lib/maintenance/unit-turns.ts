@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { fetchAppFolioTenants } from '@/lib/appfolio';
+import { fetchUnitIdBridge, runReport } from '@/lib/appfolio-reports';
 import { recordEvents } from './events';
 import type { UnitTurn } from './types';
 
@@ -246,6 +247,28 @@ export async function syncUnitTurnsFromMirror(
     let turn = turnBySr.get(sr) ?? null;
     const anyOpen = wos.some((w) => w.stage !== 'CLOSED');
 
+    if (!turn && wos[0].unit_id) {
+      // Adopt an existing active turn on this unit that isn't SR-keyed yet
+      // (created manually or by the Reports-API true-up before any WOs
+      // existed) so all creation paths converge on one row per turn.
+      const { data: adoptable } = await supabase
+        .from('unit_turn')
+        .select('*')
+        .eq('status', 'active')
+        .is('af_service_request_id', null)
+        .eq('unit_id', wos[0].unit_id)
+        .limit(1);
+      if (adoptable?.[0]) {
+        const { data: adopted } = await supabase
+          .from('unit_turn')
+          .update({ af_service_request_id: sr })
+          .eq('id', (adoptable[0] as UnitTurn).id)
+          .select('*')
+          .single();
+        turn = (adopted as UnitTurn) ?? null;
+      }
+    }
+
     if (!turn) {
       moveOutsByUnit ??= await fetchMoveOutsByUnit();
       const first = wos[0];
@@ -303,4 +326,150 @@ export async function syncUnitTurnsFromMirror(
     console.log(`[UnitTurns] AppFolio turn sync: ${created} turns created, ${linked} WOs linked`);
   }
   return { created, linked };
+}
+
+// ============================================
+// Reports API true-up (20260725): unit_turn_detail.json
+//
+// AppFolio's Unit Turn Detail report carries the authoritative turn facts the
+// v0 API can't see: the AF turn id, move-out / expected-move-in dates, target
+// days, and the billed rollup from work orders. This trues up our unit_turn
+// rows against it (AF is the system of record for facts) and creates turns
+// that exist in AppFolio but have no WOs yet — the board's early warning.
+// ============================================
+
+interface UnitTurnDetailRow {
+  property?: string | null;
+  unit?: string | null;
+  unit_turn_id?: string | number | null;
+  move_out_date?: string | null;
+  turn_end_date?: string | null;
+  expected_move_in_date?: string | null;
+  target_days_to_complete?: number | null;
+  total_billed?: string | number | null;
+  billables_from_work_orders?: string | number | null;
+  /** NUMERIC web-app unit id — bridged to the v0 UUID via unit Link. */
+  unit_id?: number | string | null;
+}
+
+function parseAmount(v: string | number | null | undefined): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.-]/g, ''));
+  return Number.isNaN(n) ? null : n;
+}
+
+function addDays(iso: string, days: number): string {
+  return new Date(new Date(`${iso}T00:00:00Z`).getTime() + days * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function daysApart(a: string, b: string): number {
+  return Math.abs(new Date(`${a}T00:00:00Z`).getTime() - new Date(`${b}T00:00:00Z`).getTime()) / 86_400_000;
+}
+
+/**
+ * True up unit_turn rows from AppFolio's unit_turn_detail report (last 180
+ * days of move-outs). Matching: af_unit_turn_id first, else same unit UUID
+ * with vacated_at within 45 days of the report's move-out (non-closed rows
+ * preferred, then closest). Craig-owned fields (blocker, budget, notes, an
+ * already-set target_ready, status) are never touched.
+ */
+export async function trueUpUnitTurnsFromReport(): Promise<{
+  reportRows: number;
+  updated: number;
+  created: number;
+  unbridged: number;
+}> {
+  const supabase = getSupabaseAdmin();
+  const since = addDays(new Date().toISOString().slice(0, 10), -180);
+
+  const [report, bridge] = await Promise.all([
+    runReport<UnitTurnDetailRow>('unit_turn_detail', { move_out_date_from: since }),
+    fetchUnitIdBridge(),
+  ]);
+
+  const { data: oursRaw, error } = await supabase
+    .from('unit_turn')
+    .select('*')
+    .gte('vacated_at', addDays(since, -90));
+  if (error) throw new Error(`Turn true-up load failed: ${error.message}`);
+  const ours = (oursRaw ?? []) as UnitTurn[];
+
+  const byAfId = new Map<string, UnitTurn>();
+  const byUnitUuid = new Map<string, UnitTurn[]>();
+  for (const t of ours) {
+    if (t.af_unit_turn_id) byAfId.set(t.af_unit_turn_id, t);
+    if (t.unit_id) {
+      const list = byUnitUuid.get(t.unit_id) ?? [];
+      list.push(t);
+      byUnitUuid.set(t.unit_id, list);
+    }
+  }
+
+  let updated = 0;
+  let created = 0;
+  let unbridged = 0;
+
+  for (const row of report) {
+    if (!row.move_out_date || row.unit_turn_id == null) continue;
+    const afId = String(row.unit_turn_id);
+    const bridged = row.unit_id != null ? bridge.get(String(row.unit_id)) : undefined;
+    if (!bridged) unbridged++;
+
+    let target = byAfId.get(afId) ?? null;
+    if (!target && bridged) {
+      const candidates = (byUnitUuid.get(bridged.uuid) ?? [])
+        .filter((t) => !t.af_unit_turn_id && daysApart(t.vacated_at, row.move_out_date!) <= 45)
+        .sort(
+          (a, b) =>
+            (a.status === 'closed' ? 1 : 0) - (b.status === 'closed' ? 1 : 0) ||
+            daysApart(a.vacated_at, row.move_out_date!) - daysApart(b.vacated_at, row.move_out_date!)
+        );
+      target = candidates[0] ?? null;
+    }
+
+    const actual = parseAmount(row.total_billed) ?? parseAmount(row.billables_from_work_orders);
+    const targetReady =
+      row.target_days_to_complete != null
+        ? addDays(row.move_out_date, row.target_days_to_complete)
+        : null;
+
+    if (target) {
+      const patch: Record<string, unknown> = {};
+      if (!target.af_unit_turn_id) patch.af_unit_turn_id = afId;
+      if (target.vacated_at !== row.move_out_date) patch.vacated_at = row.move_out_date;
+      if (row.expected_move_in_date && target.movein_date !== row.expected_move_in_date) {
+        patch.movein_date = row.expected_move_in_date;
+      }
+      if (actual != null && Number(target.actual) !== actual) patch.actual = actual;
+      if (!target.target_ready && targetReady) patch.target_ready = targetReady;
+      if (Object.keys(patch).length > 0) {
+        const { error: upError } = await supabase.from('unit_turn').update(patch).eq('id', target.id);
+        if (upError) console.error(`[UnitTurns] True-up update failed for AF turn ${afId}: ${upError.message}`);
+        else updated++;
+      }
+    } else if (!row.turn_end_date && bridged) {
+      // In AppFolio but unknown to us and still in progress — create it so the
+      // board (and tripwire #12) see the vacancy before any WOs exist.
+      const { error: insError } = await supabase.from('unit_turn').insert({
+        property_name: row.property || bridged.name || 'Unknown Property',
+        unit_id: bridged.uuid,
+        unit_name: bridged.name ?? row.unit ?? null,
+        vacated_at: row.move_out_date,
+        movein_date: row.expected_move_in_date ?? null,
+        target_ready: targetReady,
+        actual,
+        status: 'active',
+        af_unit_turn_id: afId,
+      });
+      if (insError) console.error(`[UnitTurns] True-up create failed for AF turn ${afId}: ${insError.message}`);
+      else created++;
+    }
+  }
+
+  console.log(
+    `[UnitTurns] Report true-up: ${report.length} rows, ${updated} updated, ${created} created, ${unbridged} unbridged units`
+  );
+  return { reportRows: report.length, updated, created, unbridged };
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireStaffSession } from '@/lib/maintenance/api-auth';
 import {
   commitKeysReconcile,
+  fetchAfKeysDetailRows,
   getReconcileMeta,
   parseKeysDetailCsv,
   previewKeysReconcile,
@@ -19,12 +20,12 @@ export async function GET() {
 }
 
 /**
- * POST /api/keys/reconcile — reconcile the AppFolio "Keys Detail" CSV export.
+ * POST /api/keys/reconcile — reconcile the AppFolio "Keys Detail" report.
  *
- * Multipart form: file (csv), mode ('validate' | 'commit'). Validate returns a
- * per-row preview; commit replaces the key_af_checkout snapshot wholesale.
- * The export must include the "Unit ID" column (Customize → Columns) — rows
- * without it can't be joined to a key and are skipped.
+ * Multipart form: mode ('validate' | 'commit') plus EITHER file (a CSV export)
+ * OR source=appfolio (fetches the same rows live from the Reports API v2 — no
+ * CSV needed). Validate returns a per-row preview; commit replaces the
+ * key_af_checkout snapshot wholesale.
  */
 export async function POST(request: NextRequest) {
   const session = await requireStaffSession();
@@ -36,14 +37,22 @@ export async function POST(request: NextRequest) {
     const form = await request.formData();
     const file = form.get('file');
     const mode = String(form.get('mode') ?? 'validate');
+    const source = String(form.get('source') ?? '');
 
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'file is required' }, { status: 422 });
+    let rows;
+    if (source === 'appfolio') {
+      rows = await fetchAfKeysDetailRows();
+    } else {
+      if (!(file instanceof File)) {
+        return NextResponse.json({ error: 'file is required' }, { status: 422 });
+      }
+      rows = parseKeysDetailCsv(await file.text());
     }
-
-    const rows = parseKeysDetailCsv(await file.text());
     if (rows.length === 0) {
-      return NextResponse.json({ error: 'No checkout rows found in the CSV' }, { status: 422 });
+      return NextResponse.json(
+        { error: source === 'appfolio' ? 'AppFolio returned no checked-out keys' : 'No checkout rows found in the CSV' },
+        { status: 422 }
+      );
     }
 
     if (mode === 'validate') {

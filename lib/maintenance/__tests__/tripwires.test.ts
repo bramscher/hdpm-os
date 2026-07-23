@@ -511,6 +511,7 @@ describe('tripwire 12 — turn without next action', () => {
       actual: 1910,
       notes: null,
       af_service_request_id: null,
+      af_unit_turn_id: null,
       created_at: '2026-06-23T00:00:00Z',
       updated_at: '2026-06-23T00:00:00Z',
       ...overrides,

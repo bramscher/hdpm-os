@@ -12,6 +12,7 @@
 
 import Papa from 'papaparse';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { fetchUnitIdBridge, runReport } from '@/lib/appfolio-reports';
 import type {
   KeyAfCheckout,
   KeyReconcileCommitResult,
@@ -113,6 +114,56 @@ export function parseKeysDetailCsv(csvText: string): AfKeysDetailRow[] {
     }
     if (!row.assignee) continue;
     rows.push(row);
+  }
+  return rows;
+}
+
+// ============================================
+// Reports API source (no CSV): POST /api/v2/reports/keys_detail.json
+// ============================================
+
+interface AfKeysDetailReportRow {
+  key_name?: string | null;
+  description?: string | null;
+  key_quantity?: number | null;
+  checked_out_by?: string | null;
+  checked_out_type?: string | null;
+  checked_out?: number | null;
+  checked_out_date?: string | null;
+  keyable_name?: string | null;
+  /** NUMERIC web-app unit id — NOT the v0 UUID our tables store. */
+  unit_id?: number | string | null;
+}
+
+/**
+ * Fetch the same rows the CSV export carries, straight from the Reports API.
+ * Default report filters return checked-out rows only — the same set the CSV
+ * flow keeps (it skips assignee-less rows). The report's numeric unit ids are
+ * translated to v0 UUIDs via the unit Link bridge so the existing match/commit
+ * path works unchanged; unbridgeable rows keep a null unit id and land in the
+ * usual missing_unit_id bucket.
+ */
+export async function fetchAfKeysDetailRows(): Promise<AfKeysDetailRow[]> {
+  const [report, bridge] = await Promise.all([
+    runReport<AfKeysDetailReportRow>('keys_detail'),
+    fetchUnitIdBridge(),
+  ]);
+
+  const rows: AfKeysDetailRow[] = [];
+  for (const r of report) {
+    const assignee = (r.checked_out_by ?? '').trim();
+    if (!assignee) continue;
+    const bridged = r.unit_id != null ? bridge.get(String(r.unit_id)) : undefined;
+    rows.push({
+      key_name: r.key_name ?? null,
+      description: r.description ?? null,
+      assignee,
+      assignee_type: r.checked_out_type ?? null,
+      number_checked_out: typeof r.checked_out === 'number' ? r.checked_out : null,
+      checked_out_date: r.checked_out_date ? parseUsDate(String(r.checked_out_date)) : null,
+      unit: r.keyable_name ?? '',
+      appfolio_unit_id: bridged?.uuid ?? null,
+    });
   }
   return rows;
 }

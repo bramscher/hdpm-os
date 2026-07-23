@@ -115,6 +115,9 @@ interface V0Unit {
   Zip?: string;
   Status?: string;
   Name?: string;
+  /** Web-app URL (…/properties/{n}/units/{numericId}) — the trailing number is
+   * the numeric id the Reports API v2 uses for units (v0 Id is a UUID). */
+  Link?: string;
 }
 
 interface V0Vendor {
@@ -293,6 +296,8 @@ export interface UnitLite {
   id: string;
   name: string | null;
   address: string | null;
+  /** Web-app URL; its trailing number is the Reports-API numeric unit id. */
+  link: string | null;
 }
 
 /**
@@ -308,6 +313,7 @@ export async function fetchAllUnitsPublic(): Promise<UnitLite[]> {
     id: u.Id,
     name: u.Name || null,
     address: [u.Address1, u.Address2].filter(Boolean).join(' ') || null,
+    link: u.Link || null,
   }));
 }
 

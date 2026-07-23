@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { FileSpreadsheet, Loader2, CheckCircle2 } from "lucide-react";
+import { FileSpreadsheet, Loader2, CheckCircle2, CloudDownload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ModalShell } from "./ModalShell";
@@ -24,14 +24,21 @@ export function ReconcileAppfolioModal({
   const [result, setResult] = useState<KeyReconcileCommitResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Where the preview rows came from — commit must use the same source.
+  const [source, setSource] = useState<"csv" | "appfolio">("csv");
 
-  async function send(mode: "validate" | "commit") {
-    if (!file) return;
+  async function send(mode: "validate" | "commit", src: "csv" | "appfolio" = source) {
+    if (src === "csv" && !file) return;
     setBusy(true);
     setError(null);
+    setSource(src);
     try {
       const form = new FormData();
-      form.set("file", file);
+      if (src === "appfolio") {
+        form.set("source", "appfolio");
+      } else if (file) {
+        form.set("file", file);
+      }
       form.set("mode", mode);
       const res = await fetch("/api/keys/reconcile", { method: "POST", body: form });
       const data = await res.json();
@@ -51,6 +58,7 @@ export function ReconcileAppfolioModal({
 
   function pickFile(f: File | null) {
     setFile(f);
+    setSource("csv");
     setPreview(null);
     setResult(null);
     setError(null);
@@ -75,21 +83,23 @@ export function ReconcileAppfolioModal({
           </div>
         ) : (
           <>
-            <ol className="list-decimal ml-4 space-y-1 text-xs text-charcoal-500">
-              <li>
-                In AppFolio open <span className="font-medium text-charcoal-700">Reporting → Keys Detail</span>.
-              </li>
-              <li>
-                Click <span className="font-medium text-charcoal-700">Customize</span> and enable the{" "}
-                <span className="font-medium text-charcoal-700">Checked Out Date</span> and{" "}
-                <span className="font-medium text-charcoal-700">Unit ID</span> columns (Unit ID is how rows
-                match our keys).
-              </li>
-              <li>
-                <span className="font-medium text-charcoal-700">Actions → Export as CSV</span>, then upload
-                that file here.
-              </li>
-            </ol>
+            <button
+              type="button"
+              onClick={() => send("validate", "appfolio")}
+              disabled={busy}
+              className="w-full flex items-center justify-center gap-2 border border-terra-300 bg-terra-50/60 hover:bg-terra-50 rounded-xl p-4 text-sm font-medium text-charcoal-900 transition-colors"
+            >
+              {busy && source === "appfolio" ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CloudDownload className="w-4 h-4 text-terra-600" />
+              )}
+              Fetch live from AppFolio (no CSV needed)
+            </button>
+
+            <p className="text-center text-[10px] uppercase tracking-wide text-charcoal-400">
+              or upload the Keys Detail CSV export
+            </p>
 
             <button
               type="button"
