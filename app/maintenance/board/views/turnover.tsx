@@ -337,11 +337,7 @@ export default function Turnover({
                           title={wo.description}
                         >
                           <Link href={`/maintenance/board/wo/${wo.id}`}>
-                            {!wo.wo_number
-                              ? 'WO'
-                              : wo.wo_number.includes('-')
-                                ? `-${wo.wo_number.split('-')[1]}`
-                                : `#${wo.wo_number}`}
+                            {wo.wo_number ? `#${wo.wo_number}` : wo.description.slice(0, 14)}
                           </Link>{' '}
                           <span
                             className={
@@ -359,6 +355,17 @@ export default function Turnover({
                           >
                             ✕
                           </button>
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: 'var(--muted)',
+                              maxWidth: 140,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {wo.description.slice(0, 40)}
+                          </div>
                           {wo.stage !== 'CLOSED' && (wo.vendor_name || wo.assigned_tech) && (
                             <div style={{ fontSize: 10, color: 'var(--muted)' }}>
                               {(wo.vendor_name || wo.assigned_tech || '').slice(0, 18)}
