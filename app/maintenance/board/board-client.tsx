@@ -48,7 +48,7 @@ const VIEWS = [
   {
     key: 'turnover',
     label: 'Turnover',
-    hint: 'Unit-turn work orders — vacancy-critical work tracked against the move-in clock.',
+    hint: 'Unit turnover pipeline — every vacancy with all of its work orders, tracked against the move-in clock.',
   },
   {
     key: 'monday',
@@ -126,10 +126,7 @@ export default function BoardClient() {
     open: activeBoard?.open.length,
     wait: activeBoard?.open.filter((wo) => wo.stage === 'WAITING_ON').length,
     exceptions: exceptions?.exceptions.length,
-    turnover: activeBoard
-      ? activeBoard.turns.filter((t) => activeBoard.open.some((wo) => wo.id === t.work_order_id))
-          .length
-      : undefined,
+    turnover: activeBoard?.unitTurns?.length,
   };
 
   return (
@@ -205,7 +202,7 @@ export default function BoardClient() {
           {view === 'vendor' && <VendorScoreboard scoreboard={scoreboard} onRefresh={load} />}
           {view === 'aging' && <Aging board={activeBoard} onChanged={load} />}
           {view === 'exceptions' && <Exceptions data={exceptions} />}
-          {view === 'turnover' && <Turnover board={activeBoard} />}
+          {view === 'turnover' && <Turnover board={activeBoard} onChanged={load} />}
           {view === 'monday' && <MondayReview board={activeBoard} exceptions={exceptions} />}
         </>
       )}

@@ -186,6 +186,29 @@ export interface Turn {
   updated_at: string;
 }
 
+/**
+ * Unit-level turnover cycle (20260723). Groups MANY work_orders via
+ * work_orders.unit_turn_id. Supersedes the per-WO `turn` table, which is
+ * kept for tripwire #12 compatibility and bridged by the legacy endpoint.
+ */
+export interface UnitTurn {
+  id: string;
+  property_id: string | null;
+  property_name: string;
+  unit_id: string | null;
+  unit_name: string | null;
+  vacated_at: string;
+  target_ready: string | null;
+  movein_date: string | null;
+  status: 'active' | 'ready' | 'closed';
+  current_blocker: string | null;
+  budget: number | null;
+  actual: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** ai_triage_proposal row (Session B — batch triage proposals). */
 export interface TriageProposal {
   work_order_id: string;

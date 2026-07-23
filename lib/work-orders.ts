@@ -65,6 +65,8 @@ export interface WorkOrder {
   assigned_tech: string | null;
   origin: string;
   is_turn: boolean;
+  /** Unit-level turnover this WO belongs to (unit_turn.id) — 20260723 migration */
+  unit_turn_id: string | null;
   verified_by: string | null;
   verified_at: string | null;
   tenant_ping_sent: boolean;

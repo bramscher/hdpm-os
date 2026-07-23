@@ -74,11 +74,13 @@ export const HELP_GUIDES: Record<string, HelpGuide> = {
   },
   turnover: {
     title: 'Turnover',
-    intro: 'Vacant-unit turns — vacancy is rent lost daily, so every turn shows its single current blocker and who owns it.',
+    intro: 'The unit turnover pipeline — one row per vacancy, owning ALL of its work orders (paint, flooring, clean, punch…). Vacancy is rent lost daily.',
     bullets: [
-      <>Columns: days vacant · target-ready (<span className="ok">on track</span> / <span className="warn">at risk</span> / <span className="flag">slipping</span>) · current blocker · assignee · budget vs actual.</>,
-      <>To add a turn: open the work order&apos;s detail page → tick <b>&quot;This is a turn&quot;</b>, then set vacated date, target, and budget.</>,
-      <>Leasing reads target-ready dates from this view — keep them honest.</>,
+      <>Columns: days vacant · target-ready (<span className="ok">on track</span> / <span className="warn">at risk</span> / <span className="flag">slipping</span>) · move-in · linked work orders with stage + assignee · current blocker · budget vs actual.</>,
+      <><b>Start turn</b> creates a vacancy row; <b>+ link WO…</b> attaches any open work order on that property (✕ unlinks). Links and unlinks are logged to each work order&apos;s timeline.</>,
+      <><b>Sweep-edit inline:</b> dates save on change, blocker and budget/actual on click-away — same as Aging.</>,
+      <><b>Mark ready</b> when the unit is rentable; <b>Close</b> at move-in to archive the row. A work order&apos;s &quot;This is a turn&quot; action also auto-creates and links a unit turn.</>,
+      <>Leasing reads target-ready and move-in dates from this view — keep them honest.</>,
     ],
   },
   monday: {

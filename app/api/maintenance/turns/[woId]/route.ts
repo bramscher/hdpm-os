@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { requireStaffSession } from '@/lib/maintenance/api-auth';
 import { updateWorkOrderWorkflow } from '@/lib/maintenance/workflow-db';
+import { ensureUnitTurnForWorkOrder } from '@/lib/maintenance/unit-turns';
 
 /**
  * PUT /api/maintenance/turns/:woId
@@ -50,7 +51,22 @@ export async function PUT(
     // Flag the WO as a turn (audited via the workflow write path).
     await updateWorkOrderWorkflow(woId, { is_turn: true }, session.actor);
 
-    return NextResponse.json({ turn: data });
+    // Bridge (20260723): also ensure a unit-level turn exists for this WO's
+    // unit and that the WO is linked to it, so the Turnover board v2 (which
+    // reads unit_turn) stays in sync with the legacy per-WO flow.
+    const unitTurn = await ensureUnitTurnForWorkOrder(
+      woId,
+      {
+        vacated_at: body.vacated_at,
+        target_ready: body.target_ready ?? null,
+        current_blocker: body.current_blocker ?? null,
+        budget: body.budget ?? null,
+        actual: body.actual ?? null,
+      },
+      session.actor
+    );
+
+    return NextResponse.json({ turn: data, unit_turn: unitTurn });
   } catch (error) {
     console.error('[Maintenance] Turn upsert error:', error);
     const message = error instanceof Error ? error.message : 'Failed to save turn';

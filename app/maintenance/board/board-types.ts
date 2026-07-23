@@ -6,12 +6,16 @@ import type {
   Turn,
   Vendor,
   VendorAssignment,
+  UnitTurn,
 } from '@/lib/maintenance/types';
 
 export interface BoardData {
   open: MaintWorkOrder[];
   closedThisWeek: MaintWorkOrder[];
   turns: Turn[];
+  unitTurns: UnitTurn[];
+  /** ALL work orders linked to a unit turn, any stage (incl. CLOSED) */
+  turnWos: MaintWorkOrder[];
   assignments: VendorAssignment[];
   waitingSince: Record<string, string>;
   kpis: {

@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { requireStaffSession } from '@/lib/maintenance/api-auth';
 import { fetchAllRows } from '@/lib/maintenance/tripwire-engine';
 import { isDeferredRecurring } from '@/lib/maintenance/recurring';
-import type { MaintWorkOrder, Turn, VendorAssignment } from '@/lib/maintenance/types';
+import type { MaintWorkOrder, Turn, VendorAssignment, UnitTurn } from '@/lib/maintenance/types';
 
 /**
  * GET /api/maintenance/board
@@ -25,7 +25,7 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-    const [openRaw, closedRes, turnsRes, assignmentsRes] = await Promise.all([
+    const [openRaw, closedRes, turnsRes, unitTurnsRes, turnWosRes, assignmentsRes] = await Promise.all([
       fetchAllRows(
         () => supabase.from('work_orders').select('*').neq('stage', 'CLOSED'),
         'work_orders'
@@ -37,6 +37,8 @@ export async function GET() {
         .gte('closed_at', weekAgo)
         .order('closed_at', { ascending: false }),
       supabase.from('turn').select('*'),
+      supabase.from('unit_turn').select('*').neq('status', 'closed'),
+      supabase.from('work_orders').select('*').not('unit_turn_id', 'is', null),
       supabase
         .from('vendor_assignment')
         .select('*')
@@ -44,7 +46,7 @@ export async function GET() {
         .is('declined_at', null),
     ]);
 
-    for (const res of [closedRes, turnsRes, assignmentsRes]) {
+    for (const res of [closedRes, turnsRes, unitTurnsRes, turnWosRes, assignmentsRes]) {
       if (res.error) throw new Error(res.error.message);
     }
 
@@ -56,6 +58,8 @@ export async function GET() {
       .sort((a, b) => (a.next_action_date ?? '').localeCompare(b.next_action_date ?? ''));
     const closedThisWeek = (closedRes.data ?? []) as MaintWorkOrder[];
     const turns = (turnsRes.data ?? []) as Turn[];
+    const unitTurns = (unitTurnsRes.data ?? []) as UnitTurn[];
+    const turnWos = (turnWosRes.data ?? []) as MaintWorkOrder[];
     const assignments = (assignmentsRes.data ?? []) as VendorAssignment[];
 
     // How long has each WAITING_ON WO been waiting? (latest stage_change → WAITING_ON)
@@ -97,7 +101,7 @@ export async function GET() {
             ),
     };
 
-    return NextResponse.json({ open, closedThisWeek, turns, assignments, waitingSince, kpis });
+    return NextResponse.json({ open, closedThisWeek, turns, unitTurns, turnWos, assignments, waitingSince, kpis });
   } catch (error) {
     console.error('[Maintenance] Board fetch error:', error);
     const message = error instanceof Error ? error.message : 'Failed to load board';
