@@ -79,6 +79,8 @@ export interface BridgedUnit {
   /** v0 API UUID — what our tables store in *_unit_id columns. */
   uuid: string;
   name: string | null;
+  /** AppFolio web-app unit page URL (properties/{n}/units/{m}). */
+  link: string | null;
 }
 
 /**
@@ -92,7 +94,7 @@ export async function fetchUnitIdBridge(): Promise<Map<string, BridgedUnit>> {
   for (const u of units) {
     const m = /\/units\/(\d+)(?:[/?#]|$)/.exec(u.link ?? '');
     if (!m) continue;
-    map.set(m[1], { uuid: u.id, name: u.name });
+    map.set(m[1], { uuid: u.id, name: u.name, link: u.link });
   }
   return map;
 }

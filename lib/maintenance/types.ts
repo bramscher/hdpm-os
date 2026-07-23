@@ -209,6 +209,8 @@ export interface UnitTurn {
   af_service_request_id: string | null;
   /** AppFolio's own Unit Turn id from the unit_turn_detail report (20260725) */
   af_unit_turn_id: string | null;
+  /** AppFolio web-app unit page URL, filled by the daily true-up (20260726) */
+  af_unit_link: string | null;
   created_at: string;
   updated_at: string;
 }

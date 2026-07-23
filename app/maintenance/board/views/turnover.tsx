@@ -335,7 +335,20 @@ export default function Turnover({
             return (
               <tr key={turn.id}>
                 <td>
-                  <div>{turnWhere(turn)}</div>
+                  <div>
+                    {turnWhere(turn)}
+                    {turn.af_unit_link && (
+                      <a
+                        href={turn.af_unit_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open this unit in AppFolio"
+                        style={{ marginLeft: 4, fontSize: 11, textDecoration: 'none' }}
+                      >
+                        ↗
+                      </a>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: 'var(--muted)' }}>
                     vacated {fmtDate(turn.vacated_at)}
                     {turn.af_service_request_id && wos[0]?.wo_number && (
@@ -399,7 +412,18 @@ export default function Turnover({
                         >
                           <Link href={`/maintenance/board/wo/${wo.id}`}>
                             {wo.wo_number ? `#${wo.wo_number}` : wo.description.slice(0, 14)}
-                          </Link>{' '}
+                          </Link>
+                          {wo.appfolio_link && (
+                            <a
+                              href={wo.appfolio_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Open this work order in AppFolio"
+                              style={{ marginLeft: 3, fontSize: 11, textDecoration: 'none' }}
+                            >
+                              ↗
+                            </a>
+                          )}{' '}
                           <span
                             className={
                               wo.stage === 'CLOSED' ? 'ok' : wo.stage === 'WAITING_ON' ? 'warn' : ''

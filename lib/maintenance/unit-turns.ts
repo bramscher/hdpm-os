@@ -438,6 +438,7 @@ export async function trueUpUnitTurnsFromReport(): Promise<{
     if (target) {
       const patch: Record<string, unknown> = {};
       if (!target.af_unit_turn_id) patch.af_unit_turn_id = afId;
+      if (bridged?.link && target.af_unit_link !== bridged.link) patch.af_unit_link = bridged.link;
       if (target.vacated_at !== row.move_out_date) patch.vacated_at = row.move_out_date;
       if (row.expected_move_in_date && target.movein_date !== row.expected_move_in_date) {
         patch.movein_date = row.expected_move_in_date;
@@ -456,6 +457,7 @@ export async function trueUpUnitTurnsFromReport(): Promise<{
         property_name: row.property || bridged.name || 'Unknown Property',
         unit_id: bridged.uuid,
         unit_name: bridged.name ?? row.unit ?? null,
+        af_unit_link: bridged.link,
         vacated_at: row.move_out_date,
         movein_date: row.expected_move_in_date ?? null,
         target_ready: targetReady,
