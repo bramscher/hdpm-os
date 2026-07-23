@@ -51,10 +51,17 @@ type TechFilter = string;
 type SortField = "date" | "number" | "amount" | "property" | "tech";
 
 /** The date an invoice is filtered/sorted on: completed date, falling back to created. */
+/**
+ * The invoice's date for display, filtering, and sorting — the work-completed
+ * date when set, else record creation. Date-only strings are parsed as LOCAL
+ * (new Date("YYYY-MM-DD") is UTC midnight, which lands on the previous day in
+ * Pacific and made range boundaries filter off by one).
+ */
 function invoiceDate(inv: HdmsInvoice): Date | null {
   const raw = inv.completed_date || inv.created_at;
   if (!raw) return null;
-  const d = new Date(raw);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(raw);
   return isNaN(d.getTime()) ? null : d;
 }
 
@@ -752,8 +759,16 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
                       <p className="text-sm text-charcoal-600 truncate">
                         {invoice.property_name}
                       </p>
-                      <p className="text-xs text-charcoal-400">
-                        {formatDate(invoice.created_at)}
+                      <p
+                        className="text-xs text-charcoal-400"
+                        title="Work completed date (falls back to invoice creation) — the date the From/To filter and Date sort use"
+                      >
+                        {(() => {
+                          const d = invoiceDate(invoice);
+                          return d
+                            ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                            : formatDate(invoice.created_at);
+                        })()}
                         {lineItemCount > 0 && (
                           <span className="ml-2 text-charcoal-300">
                             • {lineItemCount} line item{lineItemCount !== 1 ? "s" : ""}
