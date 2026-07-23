@@ -687,6 +687,10 @@ interface V0WorkOrder {
   SmartMaintenanceUrgency?: string;
   Type?: string;
   Recurring?: boolean;
+  /** Set on WOs created from AppFolio's Unit Turn Board — the turn phase (Keys / Locks, Paint, …) */
+  UnitTurnCategory?: string;
+  /** One service request per unit turn — turn WOs share this UUID (also present on regular WOs) */
+  ServiceRequestId?: string;
 }
 
 export type WorkOrderStatus = 'open' | 'closed' | 'done';
@@ -715,6 +719,10 @@ export interface AppFolioWorkOrder {
   link: string | null;
   /** AppFolio auto-generates recurring WOs weeks ahead — used to defer them off the board */
   recurring: boolean;
+  /** Unit Turn Board phase — non-null iff the WO belongs to an AppFolio unit turn */
+  unitTurnCategory: string | null;
+  /** Service-request UUID; turn WOs share one per turn (the v0-visible turn grouping key) */
+  serviceRequestId: string | null;
 }
 
 // ============================================
@@ -832,6 +840,8 @@ export async function fetchAppFolioWorkOrders(
     lastUpdatedAt: wo.LastUpdatedAt || null,
     link: wo.Link || null,
     recurring: wo.Recurring === true,
+    unitTurnCategory: wo.UnitTurnCategory || null,
+    serviceRequestId: wo.ServiceRequestId || null,
   }));
 }
 
@@ -1016,6 +1026,8 @@ export async function fetchWorkOrderById(
       lastUpdatedAt: match.LastUpdatedAt || null,
       link: match.Link || null,
       recurring: match.Recurring === true,
+      unitTurnCategory: match.UnitTurnCategory || null,
+      serviceRequestId: match.ServiceRequestId || null,
     };
   } catch (err) {
     console.error(`[AppFolio] Error fetching work order ${entityId}:`, err);

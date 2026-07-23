@@ -16,7 +16,7 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase';
-import type { MaintWorkOrder, Turn, VendorAssignment } from './types';
+import type { MaintWorkOrder, UnitTurn, VendorAssignment } from './types';
 import type { TripwireRunResult } from './tripwire-engine';
 import { fetchAllRows, loadTripwireSnapshot, runTripwires } from './tripwire-engine';
 import { medianOf } from './vendors';
@@ -315,15 +315,15 @@ export function vendorMetric(
 // Turn time (available-data-only until Wave 2)
 // ============================================
 
-export function turnMetric(turns: Turn[], openWorkOrders: MaintWorkOrder[], now: Date): MetricRow {
-  const openIds = new Set(openWorkOrders.map((wo) => wo.id));
-  const openTurns = turns.filter((t) => openIds.has(t.work_order_id));
-  const daysVacant = openTurns.map(
+// 20260724: counts unit-level turns (unit_turn) — the snapshot already
+// filters to status='active', so every row is an open vacancy.
+export function turnMetric(turns: UnitTurn[], now: Date): MetricRow {
+  const daysVacant = turns.map(
     (t) => (now.getTime() - new Date(t.vacated_at).getTime()) / DAY_MS
   );
   return {
     metric: 'turns',
-    value: { openTurns: openTurns.length, medianDaysVacant: medianOf(daysVacant) },
+    value: { openTurns: turns.length, medianDaysVacant: medianOf(daysVacant) },
   };
 }
 
@@ -350,7 +350,7 @@ export async function computeAllMetrics(
     const snapshot = await loadTripwireSnapshot();
     rows.push(exceptionsMetric(runTripwires(snapshot)));
     rows.push(vendorMetric(snapshot.assignments, snapshot.openWorkOrders, now));
-    rows.push(turnMetric(snapshot.turns, snapshot.openWorkOrders, now));
+    rows.push(turnMetric(snapshot.unitTurns, now));
   } catch (err) {
     errors.snapshot = err instanceof Error ? err.message : String(err);
   }

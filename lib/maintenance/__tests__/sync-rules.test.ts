@@ -32,6 +32,8 @@ function afWo(overrides: Partial<AppFolioWorkOrder> = {}): AppFolioWorkOrder {
     lastUpdatedAt: '2026-07-01T12:00:00Z',
     link: 'https://highdesertpm.appfolio.com/maintenance/service_requests/1/work_orders/1',
     recurring: false,
+    unitTurnCategory: null,
+    serviceRequestId: null,
     ...overrides,
   };
 }
@@ -46,6 +48,7 @@ const WORKFLOW_COLUMNS = [
   'assigned_tech',
   'origin',
   'is_turn',
+  'unit_turn_id',
   'verified_by',
   'verified_at',
   'tenant_ping_sent',

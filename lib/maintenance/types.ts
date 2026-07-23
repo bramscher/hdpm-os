@@ -205,6 +205,8 @@ export interface UnitTurn {
   budget: number | null;
   actual: number | null;
   notes: string | null;
+  /** AppFolio service-request UUID for Turn-Board-synced turns; NULL for manual turns (20260724) */
+  af_service_request_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -264,7 +266,8 @@ export interface TripwireSnapshot {
   vendors: Vendor[];
   approvals: Approval[];
   recommendations: Recommendation[];
-  turns: Turn[];
+  /** ACTIVE unit turns (rule 12 — 20260724: reads unit_turn, not legacy turn). */
+  unitTurns: UnitTurn[];
   /** work_order_id values that have at least one non-void invoice linked */
   invoicedWorkOrderIds: Set<string>;
   /** Rule 6/7 inputs, keyed by work_order_id (open WOs only) */

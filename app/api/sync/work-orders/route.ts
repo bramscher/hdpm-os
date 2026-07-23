@@ -8,6 +8,7 @@ import {
 } from '@/lib/appfolio';
 import { bulkUpsertWorkOrders } from '@/lib/work-orders';
 import { syncVendors } from '@/lib/maintenance/vendors';
+import { syncUnitTurnsFromMirror } from '@/lib/maintenance/unit-turns';
 
 // Allow up to 300 seconds for the sync function (Vercel Pro supports up to 300s).
 // AppFolio v0 API is slow (~20s per page of 200 work orders), so we need headroom.
@@ -111,6 +112,16 @@ export async function POST(request: NextRequest) {
     // Step 4: Bulk upsert into work_orders table
     const count = await bulkUpsertWorkOrders(workOrders, propertyMap, unitMap);
 
+    // Step 5: Reconcile AppFolio Turn-Board WOs into unit_turn rows
+    // (auto-create + auto-link, audited). Non-fatal — the mirror sync
+    // above already succeeded.
+    let unitTurns: { created: number; linked: number } | null = null;
+    try {
+      unitTurns = await syncUnitTurnsFromMirror();
+    } catch (err) {
+      console.error('[Sync] Unit turn reconcile failed:', err);
+    }
+
     console.log(`[Sync] Work orders sync complete: ${count} work orders upserted`);
 
     return NextResponse.json({
@@ -120,6 +131,7 @@ export async function POST(request: NextRequest) {
       properties_mapped: propertyMap.size,
       units_mapped: unitMap.size,
       vendors_synced: vendorsSynced,
+      unit_turns: unitTurns,
       days,
     });
   } catch (error) {

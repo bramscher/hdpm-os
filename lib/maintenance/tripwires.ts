@@ -343,23 +343,36 @@ export function tripwire11(snapshot: TripwireSnapshot): TripwireException[] {
 }
 
 // ── #12: turn with no next action ──
+// 20260724: reads unit-level turns (unit_turn), which own many WOs. An active
+// turn is compliant when at least one of its open WOs carries a dated next
+// action; a turn with no open WOs at all is also flagged (nobody is obligated
+// to touch the vacancy).
 export function tripwire12(snapshot: TripwireSnapshot): TripwireException[] {
-  const woById = new Map(snapshot.openWorkOrders.map((wo) => [wo.id, wo]));
-  return snapshot.turns
-    .filter((t) => {
-      const wo = woById.get(t.work_order_id);
-      return wo ? !wo.next_action_date : false;
-    })
+  const wosByTurn = new Map<string, MaintWorkOrder[]>();
+  for (const wo of snapshot.openWorkOrders) {
+    if (!wo.unit_turn_id) continue;
+    const list = wosByTurn.get(wo.unit_turn_id);
+    if (list) list.push(wo);
+    else wosByTurn.set(wo.unit_turn_id, [wo]);
+  }
+  return snapshot.unitTurns
+    .filter((t) => t.status === 'active')
+    .filter((t) => !(wosByTurn.get(t.id) ?? []).some((wo) => wo.next_action_date))
     .map((t) => {
-      const wo = woById.get(t.work_order_id)!;
+      const wos = wosByTurn.get(t.id) ?? [];
       const daysVacant = daysBetween(new Date(t.vacated_at), snapshot.now);
+      const where = t.unit_name ? `${t.property_name} · ${t.unit_name}` : t.property_name;
       return {
         tripwire: 12 as const,
         label: TRIPWIRE_LABELS[12],
-        item: `${woLabel(wo)} — vacant ${daysVacant} days, no next action`,
-        fixRequired: 'Set the next action + date (vacancy is rent lost daily)',
-        owner: wo.owner_name || 'Cheryl',
-        workOrderId: wo.id,
+        item: wos.length
+          ? `${where} — vacant ${daysVacant} days, no dated next action on any turn WO`
+          : `${where} — vacant ${daysVacant} days, no open turn WOs`,
+        fixRequired: wos.length
+          ? 'Set the next action + date (vacancy is rent lost daily)'
+          : 'Schedule the next turn task, or mark the turn ready/closed',
+        owner: wos[0]?.owner_name || 'Cheryl',
+        workOrderId: wos[0]?.id,
         ageDays: daysVacant,
       };
     });

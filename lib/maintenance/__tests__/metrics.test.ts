@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { MaintWorkOrder, Turn, VendorAssignment } from '../types';
+import type { MaintWorkOrder, UnitTurn, VendorAssignment } from '../types';
 import type { TripwireRunResult } from '../tripwire-engine';
 import {
   exceptionsMetric,
@@ -269,12 +269,9 @@ describe('vendorMetric', () => {
 });
 
 describe('turnMetric', () => {
-  it('counts open turns and medians days vacant', () => {
-    const turns = [
-      { work_order_id: 'wo-1', vacated_at: '2026-07-08T12:00:00Z' } as Turn,
-      { work_order_id: 'wo-closed', vacated_at: '2026-06-01T00:00:00Z' } as Turn,
-    ];
-    const { value } = turnMetric(turns, [openWo('wo-1')], NOW);
+  it('counts active unit turns and medians days vacant', () => {
+    const turns = [{ id: 'turn-1', vacated_at: '2026-07-08T12:00:00Z' } as UnitTurn];
+    const { value } = turnMetric(turns, NOW);
     expect(value.openTurns).toBe(1);
     expect(value.medianDaysVacant).toBe(10);
   });

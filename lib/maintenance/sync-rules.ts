@@ -43,6 +43,8 @@ export interface MirrorRow {
   appfolio_recurring: boolean;
   appfolio_created_at: string | null;
   appfolio_last_updated_at: string | null;
+  unit_turn_category: string | null;
+  af_service_request_id: string | null;
   synced_at: string;
 }
 
@@ -80,6 +82,8 @@ export function buildMirrorRow(
     appfolio_recurring: wo.recurring,
     appfolio_created_at: wo.createdAt,
     appfolio_last_updated_at: wo.lastUpdatedAt,
+    unit_turn_category: wo.unitTurnCategory,
+    af_service_request_id: wo.serviceRequestId,
     synced_at: syncedAt.toISOString(),
   };
 }

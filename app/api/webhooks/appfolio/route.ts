@@ -10,6 +10,7 @@ import {
   getWorkOrderByAppfolioId,
   upsertSingleWorkOrder,
 } from '@/lib/work-orders';
+import { syncUnitTurnsFromMirror } from '@/lib/maintenance/unit-turns';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { upsertAfBillFromWebhook } from '@/lib/af-bills';
 
@@ -71,6 +72,15 @@ async function handleWorkOrderUpdate(entityId: string): Promise<void> {
 
   // 3. Upsert into our work_orders table
   await upsertSingleWorkOrder(wo, propertyName, propertyAddress, unitName);
+
+  // 4. Turn-Board WO? Make sure its unit turn exists and the WO is linked.
+  if (wo.unitTurnCategory && wo.serviceRequestId) {
+    try {
+      await syncUnitTurnsFromMirror();
+    } catch (err) {
+      console.error('[Webhook] Unit turn reconcile failed:', err);
+    }
+  }
 
   console.log(
     `[Webhook] Work order ${entityId} synced: ${wo.appfolioStatus} — ${wo.description.substring(0, 60)}`

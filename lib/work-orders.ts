@@ -49,6 +49,10 @@ export interface WorkOrder {
   appfolio_created_at: string | null;
   /** AppFolio's own LastUpdatedAt — seed clock for time-in-status */
   appfolio_last_updated_at: string | null;
+  /** Unit Turn Board phase (Keys / Locks, Paint, …) — non-null iff the WO is turn work (20260724) */
+  unit_turn_category: string | null;
+  /** AppFolio service-request UUID — turn WOs share one per turn; the auto-link key (20260724) */
+  af_service_request_id: string | null;
   synced_at: string;
   created_at: string;
   updated_at: string;

@@ -15,7 +15,7 @@ import type {
   TripwireException,
   TripwireNumber,
   TripwireSnapshot,
-  Turn,
+  UnitTurn,
   Vendor,
   VendorAssignment,
   WoDocs,
@@ -69,7 +69,7 @@ export async function loadTripwireSnapshot(): Promise<TripwireSnapshot> {
             .is('dismissed_reason', null),
         'recommendation'
       ),
-      supabase.from('turn').select('*'),
+      supabase.from('unit_turn').select('*').eq('status', 'active'),
     ]);
 
   if (turnRes.error) throw new Error(`Snapshot load failed: ${turnRes.error.message}`);
@@ -172,7 +172,7 @@ export async function loadTripwireSnapshot(): Promise<TripwireSnapshot> {
     vendors: vendors as Vendor[],
     approvals: approvals as Approval[],
     recommendations: recommendations as Recommendation[],
-    turns: (turnRes.data ?? []) as Turn[],
+    unitTurns: (turnRes.data ?? []) as UnitTurn[],
     invoicedWorkOrderIds,
     docsByWorkOrder,
     recentFailedAccessWoIds,

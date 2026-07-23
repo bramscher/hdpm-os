@@ -247,6 +247,9 @@ export default function Turnover({
                   <div>{turnWhere(turn)}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted)' }}>
                     vacated {fmtDate(turn.vacated_at)}
+                    {turn.af_service_request_id && wos[0]?.wo_number && (
+                      <> · #{wos[0].wo_number.split('-')[0]} AppFolio</>
+                    )}
                     {turn.status !== 'active' && <> · {turn.status}</>}
                   </div>
                 </td>
@@ -289,6 +292,11 @@ export default function Turnover({
                   {wos.map((wo) => (
                     <div key={wo.id} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                       <Link href={`/maintenance/board/wo/${wo.id}`}>{woLabel(wo)}</Link>{' '}
+                      {wo.unit_turn_category && (
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                          {wo.unit_turn_category.toLowerCase()}{' '}
+                        </span>
+                      )}
                       <span
                         className={
                           wo.stage === 'CLOSED' ? 'ok' : wo.stage === 'WAITING_ON' ? 'warn' : ''
@@ -415,8 +423,9 @@ export default function Turnover({
           {rows.length === 0 && (
             <tr>
               <td colSpan={8} style={{ color: 'var(--muted)' }}>
-                No active unit turns. Start one with the button above, or from a work
-                order&apos;s Turn action — it now creates a unit-level turn and links the WO.
+                No active unit turns. Turns started on AppFolio&apos;s Unit Turn Board appear
+                here automatically (within the 15-min sync); or start one manually with the
+                button above.
               </td>
             </tr>
           )}
@@ -424,10 +433,12 @@ export default function Turnover({
       </table>
       <p className="note">
         Vacancy is rent lost daily — every turn shows ALL of its work orders (any stage),
-        its single current blocker, and who owns each piece. Edits save on change/click-away;
-        WO links and unlinks are logged to each work order&apos;s timeline. <b>Mark ready</b>{' '}
-        when the unit is rentable, <b>Close</b> at move-in. Leasing sees target-ready and
-        move-in dates from this view.
+        its single current blocker, and who owns each piece. Turns Brody starts on
+        AppFolio&apos;s Unit Turn Board sync in automatically with their phase WOs
+        (&quot;AppFolio&quot; tag); manual turns and links still work alongside. Edits save
+        on change/click-away; links and unlinks are logged to each work order&apos;s
+        timeline. <b>Mark ready</b> when the unit is rentable, <b>Close</b> at move-in.
+        Leasing sees target-ready and move-in dates from this view.
       </p>
     </section>
   );

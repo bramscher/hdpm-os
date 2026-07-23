@@ -4,7 +4,7 @@ import type {
   MaintWorkOrder,
   Recommendation,
   TripwireSnapshot,
-  Turn,
+  UnitTurn,
   Vendor,
   VendorAssignment,
   WoDocs,
@@ -84,7 +84,7 @@ function snapshot(overrides: Partial<TripwireSnapshot> = {}): TripwireSnapshot {
     vendors: [],
     approvals: [],
     recommendations: [],
-    turns: [],
+    unitTurns: [],
     invoicedWorkOrderIds: new Set(),
     docsByWorkOrder: new Map(),
     recentFailedAccessWoIds: new Set(),
@@ -495,31 +495,48 @@ describe('tripwire 11 — approval pending > 3 business days', () => {
 });
 
 describe('tripwire 12 — turn without next action', () => {
-  function turn(workOrderId: string): Turn {
+  function unitTurn(overrides: Partial<UnitTurn> = {}): UnitTurn {
     return {
-      work_order_id: workOrderId,
+      id: 'turn-1',
+      property_id: 'prop-1',
+      property_name: '1398 Elk',
+      unit_id: 'unit-1',
+      unit_name: '#1',
       vacated_at: '2026-06-23',
       target_ready: '2026-07-08',
+      movein_date: null,
+      status: 'active',
       current_blocker: 'Paint in progress',
       budget: 2400,
       actual: 1910,
+      notes: null,
+      af_service_request_id: null,
       created_at: '2026-06-23T00:00:00Z',
       updated_at: '2026-06-23T00:00:00Z',
+      ...overrides,
     };
   }
 
-  it('fires for an open turn WO with no next_action_date', () => {
-    const theWo = wo({ is_turn: true, next_action_date: null });
-    const ex = tripwire12(snapshot({ openWorkOrders: [theWo], turns: [turn(theWo.id)] }));
+  it('fires when no open turn WO has a next_action_date', () => {
+    const theWo = wo({ is_turn: true, unit_turn_id: 'turn-1', next_action_date: null });
+    const ex = tripwire12(snapshot({ openWorkOrders: [theWo], unitTurns: [unitTurn()] }));
     expect(ex).toHaveLength(1);
     expect(ex[0].item).toContain('vacant');
+    expect(ex[0].workOrderId).toBe(theWo.id);
   });
 
-  it('does not fire with a date set or for closed WOs', () => {
-    const dated = wo({ is_turn: true, next_action_date: '2026-07-03' });
+  it('fires for an active turn with no open WOs at all', () => {
+    const ex = tripwire12(snapshot({ unitTurns: [unitTurn()] }));
+    expect(ex).toHaveLength(1);
+    expect(ex[0].item).toContain('no open turn WOs');
+  });
+
+  it('does not fire when any linked open WO carries a date, nor for non-active turns', () => {
+    const dated = wo({ is_turn: true, unit_turn_id: 'turn-1', next_action_date: '2026-07-03' });
+    const undated = wo({ is_turn: true, unit_turn_id: 'turn-1', next_action_date: null });
     const s = snapshot({
-      openWorkOrders: [dated],
-      turns: [turn(dated.id), turn('closed-wo-not-in-open-list')],
+      openWorkOrders: [dated, undated],
+      unitTurns: [unitTurn(), unitTurn({ id: 'turn-2', status: 'ready' })],
     });
     expect(tripwire12(s)).toHaveLength(0);
   });
