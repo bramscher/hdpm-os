@@ -355,17 +355,19 @@ export default function Turnover({
                           >
                             ✕
                           </button>
-                          <div
-                            style={{
-                              fontSize: 10,
-                              color: 'var(--muted)',
-                              maxWidth: 140,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {wo.description.slice(0, 40)}
-                          </div>
+                          {wo.stage !== 'CLOSED' && (
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: 'var(--muted)',
+                                maxWidth: 140,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {wo.description.slice(0, 40)}
+                            </div>
+                          )}
                           {wo.stage !== 'CLOSED' && (wo.vendor_name || wo.assigned_tech) && (
                             <div style={{ fontSize: 10, color: 'var(--muted)' }}>
                               {(wo.vendor_name || wo.assigned_tech || '').slice(0, 18)}
