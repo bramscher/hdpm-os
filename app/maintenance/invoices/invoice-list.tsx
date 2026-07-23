@@ -242,6 +242,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
+  const [afBilledOnly, setAfBilledOnly] = useState(false);
   const [techFilter, setTechFilter] = useState<TechFilter>("all");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -285,6 +286,9 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
       if (paidFilter === "paid" && !inv.payment_id) return false;
       if (paidFilter === "unpaid" && inv.payment_id) return false;
 
+      // AF-billed filter: only invoices with a matched AppFolio bill amount.
+      if (afBilledOnly && !((inv.af_billed_total ?? 0) > 0)) return false;
+
       // Assigned-staff filter.
       if (techFilter === "none" && inv.assigned_tech) return false;
       if (techFilter !== "all" && techFilter !== "none" && inv.assigned_tech !== techFilter)
@@ -321,7 +325,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [invoices, search, dateFrom, dateTo, paidFilter, techFilter, sortField, sortDir]);
+  }, [invoices, search, dateFrom, dateTo, paidFilter, afBilledOnly, techFilter, sortField, sortDir]);
 
   // ── Pagination over the filtered/sorted list ──────────
   const [page, setPage] = useState(1);
@@ -330,7 +334,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
   // Snap back to page 1 whenever the filter/sort inputs change.
   useEffect(() => {
     setPage(1);
-  }, [search, dateFrom, dateTo, paidFilter, techFilter, sortField, sortDir]);
+  }, [search, dateFrom, dateTo, paidFilter, afBilledOnly, techFilter, sortField, sortDir]);
 
   // Keep the page in range if the underlying list shrinks (e.g. after a delete).
   useEffect(() => {
@@ -545,6 +549,19 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={() => setAfBilledOnly((v) => !v)}
+                title="Only invoices with a matched AppFolio bill amount greater than $0.00"
+                className={cn(
+                  "px-2 py-1 text-[10px] font-medium rounded-lg border border-sand-200 transition-colors",
+                  afBilledOnly
+                    ? "bg-terra-500 text-white"
+                    : "bg-white text-charcoal-500 hover:text-charcoal-700"
+                )}
+              >
+                AF billed
+              </button>
               {techOptions.length > 0 && (
                 <>
                   <span className="mx-1 text-sand-300">|</span>
