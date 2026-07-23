@@ -242,7 +242,7 @@ export default function Turnover({
       <table className="mo-table">
         <thead>
           <tr>
-            <th>Unit</th>
+            <th style={{ minWidth: 190 }}>Unit</th>
             <th>Vacant</th>
             <th>Target ready</th>
             <th>Move-in</th>
