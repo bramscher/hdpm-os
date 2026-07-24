@@ -357,6 +357,13 @@ export function DashboardCanvas() {
             title="Open work orders — NEW through BILL"
           />
           <Tile
+            href="/maintenance/board?view=turnover"
+            icon={DoorOpen}
+            label="Turnovers"
+            tone="purple"
+            title="Unit turnover board"
+          />
+          <Tile
             href="/maintenance/board?view=triage"
             icon={ListTodo}
             label="Triage"
@@ -394,13 +401,6 @@ export function DashboardCanvas() {
             badge={boardKpis?.pastDue}
             badgeTone="red"
             title="Past-due next actions — each with an accountable owner"
-          />
-          <Tile
-            href="/maintenance/board?view=turnover"
-            icon={DoorOpen}
-            label="Turnovers"
-            tone="purple"
-            title="Unit turnover board"
           />
           <Tile
             href="/maintenance/board?view=monday"
