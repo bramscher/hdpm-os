@@ -123,7 +123,7 @@ export interface MorningCardRunResult {
   halted?: string;
   expired: number;
   items: number;
-  slack: { cheryl?: SendOutcome; craig?: SendOutcome };
+  slack: { cheryl?: SendOutcome; brody?: SendOutcome; matt?: SendOutcome };
   email?: SendOutcome;
   nudge?: 'sent' | 'not_needed' | 'no_card';
   dryRun: boolean;
@@ -244,10 +244,11 @@ export async function runMorningCard(opts: {
   }
   result.items = items.length;
 
-  // Slack: Cheryl interactive + Craig read-only.
-  const [cheryl, craig] = await Promise.all([
+  // Slack: Cheryl interactive + Brody/Matt read-only copies.
+  const [cheryl, brody, matt] = await Promise.all([
     resolveStaffByPersonOrEmail('Cheryl'),
-    resolveStaffByPersonOrEmail('Craig'),
+    resolveStaffByPersonOrEmail('Brody'),
+    resolveStaffByPersonOrEmail('Matt'),
   ]);
 
   const fallbackText = `Morning Action Card — ${cardDate}: ${items.length} items`;
@@ -267,17 +268,22 @@ export async function runMorningCard(opts: {
     result.slack.cheryl = { status: 'skipped', error: 'Cheryl has no slack_user_id in staff' };
   }
 
-  if (craig?.slack_user_id) {
-    await enqueueOutbox({
-      channel: 'slack',
-      recipient_person: 'Craig',
-      recipient_address: craig.slack_user_id,
-      subject: 'Morning Action Card (copy)',
-      body: fallbackText,
-      payload: { blocks: buildCardBlocks({ header, items, readOnly: true }), card_date: cardDate },
-    });
-  } else {
-    result.slack.craig = { status: 'skipped', error: 'Craig has no slack_user_id in staff' };
+  for (const [person, staff, key] of [
+    ['Brody', brody, 'brody'],
+    ['Matt', matt, 'matt'],
+  ] as const) {
+    if (staff?.slack_user_id) {
+      await enqueueOutbox({
+        channel: 'slack',
+        recipient_person: person,
+        recipient_address: staff.slack_user_id,
+        subject: 'Morning Action Card (copy)',
+        body: fallbackText,
+        payload: { blocks: buildCardBlocks({ header, items, readOnly: true }), card_date: cardDate },
+      });
+    } else {
+      result.slack[key] = { status: 'skipped', error: `${person} has no slack_user_id in staff` };
+    }
   }
 
   await dispatchOutbox({ channel: 'slack' });

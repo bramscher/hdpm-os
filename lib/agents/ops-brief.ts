@@ -2,11 +2,11 @@
  * Ops Brief — pure logic. Brief E, Agent #7 in
  * docs/agent-os/00-DRAFT-master-plan.md.
  *
- * Weekday 5 PM short brief + Monday 8 AM deep brief for Craig + Matt: the
+ * Weekday 5 PM short brief + Monday 8 AM deep brief for Brody + Matt: the
  * supervision surface for the agent team. Replaces the never-enabled digest
  * with something that ends in decisions — at most NEEDS_CRAIG_CAP
  * unacknowledged escalations, each with one [Acknowledge] button (on
- * Craig's copy; Matt's is read-only v1).
+ * Brody's copy; Matt's is read-only v1).
  *
  * Hard rule inherited from the data model: NEVER a dollar figure — estimate
  * and unbilled amounts do not exist in any reachable API; everything is
@@ -232,7 +232,7 @@ export function buildOpsBriefBlocks(
     ? `📊 Monday Ops Brief — ${data.briefDate}`
     : `📊 Ops Brief — ${data.briefDate}`;
   const openCount = data.needsCraig.filter((i) => !i.acknowledgedBy).length;
-  const text = `${title}: ${n(data.exceptions.total)} open exceptions · ${openCount} need${openCount === 1 ? 's' : ''} Craig`;
+  const text = `${title}: ${n(data.exceptions.total)} open exceptions · ${openCount} need${openCount === 1 ? 's' : ''} a decision`;
 
   const blocks: unknown[] = [mrkdwn(`*${title}*`)];
 
@@ -287,9 +287,9 @@ export function buildOpsBriefBlocks(
   const shown = data.needsCraig.slice(0, NEEDS_CRAIG_CAP);
   blocks.push(DIVIDER);
   if (unacked.length === 0) {
-    blocks.push(mrkdwn('*Needs Craig:* nothing 🎉'));
+    blocks.push(mrkdwn('*Needs decision:* nothing 🎉'));
   } else {
-    blocks.push(mrkdwn(`*Needs Craig (${unacked.length}):*`));
+    blocks.push(mrkdwn(`*Needs decision (${unacked.length}):*`));
     for (const item of shown) {
       blocks.push(escalationBlock(item, !opts.readOnly));
     }

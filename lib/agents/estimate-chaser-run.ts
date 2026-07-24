@@ -611,42 +611,52 @@ export async function runEstimateChaser(opts: {
         },
         rationale:
           item.reason === 'chased_3x'
-            ? `Chased ${item.chaseCount}× with no movement — needs Craig`
-            : `${item.candidate.ageCalendarDays} calendar days stuck — needs Craig`,
+            ? `Chased ${item.chaseCount}× with no movement — needs escalation`
+            : `${item.candidate.ageCalendarDays} calendar days stuck — needs escalation`,
       });
       escalateProposalIds.push(proposal.id);
     }
 
-    const craig = await resolveStaffByPersonOrEmail('Craig');
-    if (craig?.slack_user_id) {
-      const dm = buildEscalationSlack(escalations, chaseDate);
-      const outboxRow = await enqueueOutbox({
+    // Escalation DM goes to the maintenance leads (was Craig — rerouted 2026-07-23).
+    const recipients = ['Brody', 'Matt'] as const;
+    const staffRows = await Promise.all(recipients.map((p) => resolveStaffByPersonOrEmail(p)));
+    const dm = buildEscalationSlack(escalations, chaseDate);
+    const outboxIds: string[] = [];
+    for (let i = 0; i < recipients.length; i++) {
+      const staff = staffRows[i];
+      if (!staff?.slack_user_id) continue;
+      const row = await enqueueOutbox({
         channel: 'slack',
-        recipient_person: 'Craig',
-        recipient_address: craig.slack_user_id,
+        recipient_person: recipients[i],
+        recipient_address: staff.slack_user_id,
         subject: 'Estimate Chaser escalations',
         body: dm.text,
         payload: { blocks: dm.blocks, chase_date: chaseDate },
       });
+      outboxIds.push(row.id);
+    }
+
+    if (outboxIds.length === 0) {
+      result.escalationSlack = { status: 'skipped', error: 'Brody/Matt have no slack_user_id in staff' };
+    } else {
       await dispatchOutbox({ channel: 'slack', now });
-      const { data: sentRow } = await supabase
+      const { data: sentRows } = await supabase
         .from('agent_outbox')
         .select('status, message_id, error')
-        .eq('id', outboxRow.id)
-        .maybeSingle();
+        .in('id', outboxIds);
+      const sent = (sentRows ?? []).find((r) => r.status === 'sent');
+      const first = sentRows?.[0];
       result.escalationSlack = {
-        status: (sentRow?.status as SendOutcome['status']) ?? 'failed',
-        message_id: sentRow?.message_id ?? null,
-        error: sentRow?.error ?? null,
+        status: ((sent?.status ?? first?.status) as SendOutcome['status']) ?? 'failed',
+        message_id: sent?.message_id ?? null,
+        error: sent ? null : (first?.error ?? null),
       };
-      if (sentRow?.status === 'sent') {
+      if (sent) {
         await supabase
           .from('agent_proposal')
-          .update({ status: 'auto_applied', channel_message_id: sentRow.message_id })
+          .update({ status: 'auto_applied', channel_message_id: sent.message_id })
           .in('id', escalateProposalIds);
       }
-    } else {
-      result.escalationSlack = { status: 'skipped', error: 'Craig has no slack_user_id in staff' };
     }
   }
 

@@ -1,7 +1,7 @@
 /**
  * Ops Brief — orchestration (DB + channels). Pure logic lives in
  * ops-brief.ts; this file gathers metric deltas, agent stats, and open
- * escalations, renders the brief, and self-sends it to Craig + Matt
+ * escalations, renders the brief, and self-sends it to Brody + Matt
  * (L3 — one of the two sanctioned self-reporting exceptions).
  */
 
@@ -55,7 +55,7 @@ export interface OpsBriefRunResult {
   needsCraig: number;
   unacked: number;
   agentsReported: number;
-  slack: { craig?: SendOutcome; matt?: SendOutcome };
+  slack: { brody?: SendOutcome; matt?: SendOutcome };
 }
 
 function num(map: MetricMap, metric: string, field: string): number | null {
@@ -326,28 +326,28 @@ export async function runOpsBrief(opts: {
         needs_craig: needsCraig.length,
       },
     },
-    rationale: `${deep ? 'Monday deep' : 'Daily'} ops brief — ${needsCraig.length} needs-Craig item(s)`,
+    rationale: `${deep ? 'Monday deep' : 'Daily'} ops brief — ${needsCraig.length} needs-decision item(s)`,
   });
 
-  const [craig, matt] = await Promise.all([
-    resolveStaffByPersonOrEmail('Craig'),
+  const [brody, matt] = await Promise.all([
+    resolveStaffByPersonOrEmail('Brody'),
     resolveStaffByPersonOrEmail('Matt'),
   ]);
 
-  let craigOutboxId: string | null = null;
-  if (craig?.slack_user_id) {
+  let brodyOutboxId: string | null = null;
+  if (brody?.slack_user_id) {
     const row = await enqueueOutbox({
       proposal_id: proposal.id,
       channel: 'slack',
-      recipient_person: 'Craig',
-      recipient_address: craig.slack_user_id,
+      recipient_person: 'Brody',
+      recipient_address: brody.slack_user_id,
       subject: 'Ops Brief',
       body: interactive.text,
       payload: { blocks: interactive.blocks, brief_date: briefDate },
     });
-    craigOutboxId = row.id;
+    brodyOutboxId = row.id;
   } else {
-    result.slack.craig = { status: 'skipped', error: 'Craig has no slack_user_id in staff' };
+    result.slack.brody = { status: 'skipped', error: 'Brody has no slack_user_id in staff' };
   }
   if (matt?.slack_user_id) {
     await enqueueOutbox({
@@ -365,13 +365,13 @@ export async function runOpsBrief(opts: {
 
   await dispatchOutbox({ channel: 'slack', now });
 
-  if (craigOutboxId) {
+  if (brodyOutboxId) {
     const { data: sentRow } = await supabase
       .from('agent_outbox')
       .select('status, message_id, error')
-      .eq('id', craigOutboxId)
+      .eq('id', brodyOutboxId)
       .maybeSingle();
-    result.slack.craig = {
+    result.slack.brody = {
       status: (sentRow?.status as SendOutcome['status']) ?? 'failed',
       message_id: sentRow?.message_id ?? null,
       error: sentRow?.error ?? null,
