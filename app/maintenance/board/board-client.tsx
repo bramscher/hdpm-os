@@ -62,10 +62,18 @@ type ViewKey = (typeof VIEWS)[number]['key'];
 /** Views whose content is the open-WO list — the search/sort toolbar drives these. */
 const WO_LIST_VIEWS = new Set<ViewKey>(['open', 'wait', 'aging', 'turnover', 'monday']);
 
-export default function BoardClient() {
+export default function BoardClient({
+  embedded = false,
+  initialView = 'open',
+}: {
+  /** Canvas-pane mode: view state stays local and the URL is never touched. */
+  embedded?: boolean;
+  initialView?: string;
+} = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const view = (searchParams.get('view') as ViewKey) || 'open';
+  const [embedView, setEmbedView] = useState<ViewKey>(initialView as ViewKey);
+  const view = embedded ? embedView : (searchParams.get('view') as ViewKey) || 'open';
 
   const [board, setBoard] = useState<BoardData | null>(null);
   const [exceptions, setExceptions] = useState<ExceptionsData | null>(null);
@@ -100,13 +108,17 @@ export default function BoardClient() {
   }, [load]);
 
   // Deep links can prefill the search (e.g. the "P1 this week" KPI → ?q=P1).
-  const qParam = searchParams.get('q');
+  const qParam = embedded ? null : searchParams.get('q');
   useEffect(() => {
     if (qParam !== null) setQuery(qParam);
   }, [qParam]);
 
   const setView = (key: ViewKey) => {
-    router.replace(`/maintenance/board?view=${key}`, { scroll: false });
+    if (embedded) {
+      setEmbedView(key);
+    } else {
+      router.replace(`/maintenance/board?view=${key}`, { scroll: false });
+    }
   };
 
   // Apply the search + sort to the open-WO list, then hand the derived board to

@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { X, Send, Paperclip, FileText, Trash2, ArrowUp } from "lucide-react";
+import { X, Send, Paperclip, FileText, Trash2, ArrowUp, History } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Message, Source } from "@/components/Message";
 import { ConversationHistory, ConversationSummary } from "@/components/ConversationHistory";
 import { CitationsSidebar } from "@/components/CitationsSidebar";
+import { APP_EMBEDS, matchIntent, sopUrlToAppKey, type AppEmbedKey } from "@/lib/canvas-routes";
 import { cn } from "@/lib/utils";
 
 interface ChatMessage {
@@ -37,6 +38,12 @@ interface ChatWindowProps {
   isOpen: boolean;
   onClose: () => void;
   onMinimize: () => void;
+  /** 'full' = legacy full-page overlay; 'panel' = left panel of the agent interface. */
+  variant?: "full" | "panel";
+  /** Panel mode: open a cited source in the canvas. */
+  onOpenSource?: (source: Source) => void;
+  /** Panel mode: display an app view in the canvas. */
+  onOpenApp?: (appKey: AppEmbedKey) => void;
 }
 
 const WELCOME_MESSAGE: ChatMessage = {
@@ -46,8 +53,17 @@ const WELCOME_MESSAGE: ChatMessage = {
     "Hi! I'm the **HDPM Knowledge Chat**. I can help with:\n\n• **Oregon landlord-tenant law** (complete ORS Chapter 90, 163 sections)\n• **HDPM SOPs & procedures** (move-in/move-out, inspections, maintenance, key management, screening, and more from the Notion SOP library)\n• **Security deposits**, late fees, eviction notices and timelines\n• **How to use HDPM-OS** (board, inspections, invoices, Craigslist tool)\n\nAnswers cite their sources — click a citation to open the ORS section or the Notion SOP.\n\nWhat would you like to know?",
 };
 
-export function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowProps) {
+export function ChatWindow({
+  isOpen,
+  onClose,
+  onMinimize, // eslint-disable-line @typescript-eslint/no-unused-vars
+  variant = "full",
+  onOpenSource,
+  onOpenApp,
+}: ChatWindowProps) {
   const { data: session } = useSession();
+  const isPanel = variant === "panel";
+  const [showHistory, setShowHistory] = useState(false);
 
   // Conversation state
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -312,6 +328,12 @@ export function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowProps) {
     if (!trimmedInput) return;
     if (isLoading) return;
 
+    // "show me the board" — steer the canvas immediately; the answer still streams.
+    if (isPanel && onOpenApp) {
+      const intent = matchIntent(trimmedInput);
+      if (intent) onOpenApp(intent);
+    }
+
     const currentAttachment = attachment ? { ...attachment } : null;
     let conversationId = activeConversationId;
 
@@ -475,37 +497,87 @@ export function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="h-screen flex overflow-hidden bg-sand-50">
-      {/* Conversation History Sidebar */}
-      <ConversationHistory
-        conversations={conversations}
-        activeConversationId={activeConversationId}
-        currentUserEmail={session?.user?.email || undefined}
-        onSelectConversation={handleSelectConversation}
-        onNewConversation={handleNewConversation}
-        onDeleteConversation={handleDeleteConversation}
-        isLoading={isLoadingConversations}
-      />
+    <div
+      className={cn(
+        "flex overflow-hidden",
+        isPanel ? "relative h-full w-full bg-white" : "h-screen bg-sand-50"
+      )}
+    >
+      {/* Conversation History Sidebar (inline in full mode only) */}
+      {!isPanel && (
+        <ConversationHistory
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          currentUserEmail={session?.user?.email || undefined}
+          onSelectConversation={handleSelectConversation}
+          onNewConversation={handleNewConversation}
+          onDeleteConversation={handleDeleteConversation}
+          isLoading={isLoadingConversations}
+        />
+      )}
+
+      {/* Panel mode: history as a popover over the chat */}
+      {isPanel && showHistory && (
+        <div className="absolute left-3 top-16 bottom-24 z-30 flex overflow-hidden rounded-xl border border-sand-200 bg-white shadow-xl">
+          <ConversationHistory
+            conversations={conversations}
+            activeConversationId={activeConversationId}
+            currentUserEmail={session?.user?.email || undefined}
+            onSelectConversation={(id) => {
+              handleSelectConversation(id);
+              setShowHistory(false);
+            }}
+            onNewConversation={() => {
+              handleNewConversation();
+              setShowHistory(false);
+            }}
+            onDeleteConversation={handleDeleteConversation}
+            isLoading={isLoadingConversations}
+            defaultExpanded
+          />
+        </div>
+      )}
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Minimal header */}
         <div className="flex items-center justify-between px-6 h-14 border-b border-sand-200 bg-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-green-500" />
-            <h2 className="text-sm font-semibold text-charcoal-900 tracking-tight">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+            <h2 className="text-sm font-semibold text-charcoal-900 tracking-tight truncate">
               HDPM Knowledge Chat
             </h2>
-            <span className="text-xs text-charcoal-400 hidden sm:inline">
-              ORS Chapter 90 &middot; Notion SOP library
-            </span>
+            {!isPanel && (
+              <span className="text-xs text-charcoal-400 hidden sm:inline">
+                ORS Chapter 90 &middot; Notion SOP library
+              </span>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-charcoal-400 hover:text-charcoal-700 hover:bg-sand-100 transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            {isPanel && (
+              <button
+                onClick={() => setShowHistory((v) => !v)}
+                className={cn(
+                  "p-1.5 rounded-lg transition-colors",
+                  showHistory
+                    ? "text-terra-600 bg-terra-50"
+                    : "text-charcoal-400 hover:text-charcoal-700 hover:bg-sand-100"
+                )}
+                title="Conversation history"
+              >
+                <History className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className={cn(
+                "p-1.5 rounded-lg text-charcoal-400 hover:text-charcoal-700 hover:bg-sand-100 transition-colors",
+                isPanel && "lg:hidden"
+              )}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -523,20 +595,38 @@ export function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowProps) {
               }
 
               return (
-                <Message
-                  key={message.id}
-                  role={message.role}
-                  content={message.content}
-                  sources={message.sources}
-                  isStreaming={message.id === streamingMessageId}
-                  attachment={message.attachment}
-                  relatedDocument={relatedDocument}
-                  onCitationClick={handleCitationClick}
-                  showInlineSources={false}
-                  senderName={message.sender_name}
-                  senderEmail={message.sender_email}
-                  createdAt={message.created_at}
-                />
+                <React.Fragment key={message.id}>
+                  <Message
+                    role={message.role}
+                    content={message.content}
+                    sources={message.sources}
+                    isStreaming={message.id === streamingMessageId}
+                    attachment={message.attachment}
+                    relatedDocument={relatedDocument}
+                    onCitationClick={(i) => {
+                      handleCitationClick(i);
+                      // In panel mode a citation click also opens that source
+                      // in the canvas (indices are per-message, 0-based).
+                      if (isPanel && message.sources?.[i]) {
+                        onOpenSource?.(message.sources[i]);
+                      }
+                    }}
+                    showInlineSources={false}
+                    senderName={message.sender_name}
+                    senderEmail={message.sender_email}
+                    createdAt={message.created_at}
+                  />
+                  {isPanel &&
+                    message.role === "assistant" &&
+                    !!message.sources?.length &&
+                    message.id !== streamingMessageId && (
+                      <SourcePillsRow
+                        sources={message.sources}
+                        onOpenSource={onOpenSource}
+                        onOpenApp={onOpenApp}
+                      />
+                    )}
+                </React.Fragment>
               );
             })}
           </div>
@@ -703,12 +793,69 @@ export function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowProps) {
         </div>
       </div>
 
-      {/* Citations Sidebar */}
-      <CitationsSidebar
-        sources={currentSources}
-        highlightedCitation={highlightedCitation}
-        onCitationClick={handleCitationClick}
-      />
+      {/* Citations Sidebar (full mode only — the canvas replaces it in panel mode) */}
+      {!isPanel && (
+        <CitationsSidebar
+          sources={currentSources}
+          highlightedCitation={highlightedCitation}
+          onCitationClick={handleCitationClick}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Compact source pills under an assistant answer (panel mode): one pill per
+ * unique cited source (click → view it in the canvas), plus "Open <app> →"
+ * chips when a cited SOP documents an app view.
+ */
+function SourcePillsRow({
+  sources,
+  onOpenSource,
+  onOpenApp,
+}: {
+  sources: Source[];
+  onOpenSource?: (source: Source) => void;
+  onOpenApp?: (appKey: AppEmbedKey) => void;
+}) {
+  const unique: Source[] = [];
+  const seen = new Set<string>();
+  for (const s of sources) {
+    if (!seen.has(s.url)) {
+      seen.add(s.url);
+      unique.push(s);
+    }
+  }
+
+  const appKeys: AppEmbedKey[] = [];
+  for (const s of unique) {
+    const key = s.type === "notion_sop" ? sopUrlToAppKey(s.url) : null;
+    if (key && !appKeys.includes(key)) appKeys.push(key);
+  }
+
+  return (
+    <div className="px-6 pb-4 -mt-1 flex flex-wrap gap-1.5">
+      {unique.map((s) => (
+        <button
+          key={s.url}
+          onClick={() => onOpenSource?.(s)}
+          className="inline-flex max-w-[240px] items-center gap-1 rounded-full border border-sand-200 bg-sand-50 px-2.5 py-1 text-2xs text-charcoal-600 transition-colors hover:border-terra-300 hover:bg-white hover:text-charcoal-900"
+          title={`View "${s.title}" in the canvas`}
+        >
+          <span className="shrink-0">{s.icon}</span>
+          <span className="truncate">{s.title}</span>
+        </button>
+      ))}
+      {appKeys.map((key) => (
+        <button
+          key={key}
+          onClick={() => onOpenApp?.(key)}
+          className="inline-flex items-center gap-1 rounded-full bg-charcoal-900 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-charcoal-800"
+        >
+          Open {APP_EMBEDS[key].title} →
+        </button>
+      ))}
     </div>
   );
 }

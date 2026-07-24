@@ -21,6 +21,8 @@ interface ConversationHistoryProps {
   onNewConversation: () => void;
   onDeleteConversation: (id: string) => void;
   isLoading: boolean;
+  /** Start expanded (e.g. when hosted in the chat panel's history popover). */
+  defaultExpanded?: boolean;
 }
 
 function getInitials(name?: string, email?: string): string {
@@ -67,8 +69,9 @@ export function ConversationHistory({
   onNewConversation,
   onDeleteConversation,
   isLoading,
+  defaultExpanded = false,
 }: ConversationHistoryProps) {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(!defaultExpanded);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {

@@ -1,538 +1,72 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
-import Link from "next/link";
-import {
-  FileText,
-  BarChart3,
-  TrendingUp,
-  Clock,
-  ClipboardCheck,
-  Route,
-  MapPin,
-  AlertTriangle,
-  CalendarDays,
-  Car,
-  Megaphone,
-  Wrench,
-  Activity,
-  Phone,
-  KeyRound,
-  ListTodo,
-  Hourglass,
-  Users,
-  DoorOpen,
-  Upload,
-  FileSpreadsheet,
-  Bot,
-  type LucideIcon,
-} from "lucide-react";
+import { useCallback, useState } from "react";
+import { MessageCircle } from "lucide-react";
+import { ChatWindow } from "@/components/ChatWindow";
+import { Canvas } from "@/components/canvas/Canvas";
+import { CanvasContext, type CanvasState } from "@/components/canvas/types";
+import type { Source } from "@/components/Message";
+import type { AppEmbedKey } from "@/lib/canvas-routes";
 import { cn } from "@/lib/utils";
 
-function getGreeting() {
-  // Force Pacific Time for Central Oregon
-  const now = new Date();
-  const pacificTime = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-  );
-  const hour = pacificTime.getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
-}
-
-interface InspectionStats {
-  total: number;
-  overdue: number;
-  this_week: number;
-  upcoming: number;
-  geocoded: number;
-}
-
-interface RouteStats {
-  total_routes: number;
-  dispatched: number;
-}
-
-interface BoardKpis {
-  open: number;
-  pastDue: number;
-  aging30Plus: number;
-  p1ThisWeek: number;
-}
-
-interface TodayRouteStop {
-  work_order_id: string;
-  stop_order: number;
-  address: string;
-  lat: number | null;
-  lng: number | null;
-  work_orders: {
-    wo_number: string | null;
-    property_name: string;
-    unit_name: string | null;
-  } | null;
-}
-
-interface TodayRoute {
-  id: string;
-  route_date: string;
-  assigned_tech: string | null;
-  total_drive_minutes: number;
-  total_service_minutes: number;
-  stop_count: number;
-  stops: TodayRouteStop[];
-}
-
-const HDPM_OFFICE = { lat: 44.256798, lng: -121.184346 };
-
-function fmtMins(mins: number): string {
-  const m = Math.round(mins);
-  if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
-// ────────────────────────────────────────────────
-// Streamdeck tiles
-// ────────────────────────────────────────────────
-
-type Tone = "terra" | "amber" | "green" | "blue" | "purple" | "red" | "charcoal";
-
-const ICON_TONES: Record<Tone, string> = {
-  terra: "bg-terra-100 text-terra-600",
-  amber: "bg-amber-100 text-amber-600",
-  green: "bg-green-100 text-green-600",
-  blue: "bg-blue-100 text-blue-600",
-  purple: "bg-purple-100 text-purple-600",
-  red: "bg-red-100 text-red-600",
-  charcoal: "bg-charcoal-100 text-charcoal-600",
-};
-
-const BADGE_TONES: Record<Tone, string> = {
-  terra: "bg-terra-500 text-white",
-  amber: "bg-amber-500 text-white",
-  green: "bg-green-500 text-white",
-  blue: "bg-blue-500 text-white",
-  purple: "bg-purple-500 text-white",
-  red: "bg-red-500 text-white",
-  charcoal: "bg-charcoal-700 text-white",
-};
-
-function Tile({
-  href,
-  icon: Icon,
-  label,
-  tone,
-  badge,
-  badgeTone,
-  title,
-}: {
-  href: string;
-  icon: LucideIcon;
-  label: string;
-  tone: Tone;
-  badge?: number | null;
-  badgeTone?: Tone;
-  title?: string;
-}) {
-  return (
-    <Link
-      href={href}
-      title={title}
-      className="group relative flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-sand-200 bg-sand-50/60 p-2 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-card"
-    >
-      {badge != null && badge > 0 && (
-        <span
-          className={cn(
-            "absolute right-1.5 top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
-            BADGE_TONES[badgeTone ?? "charcoal"]
-          )}
-        >
-          {badge > 99 ? "99+" : badge}
-        </span>
-      )}
-      <span
-        className={cn(
-          "flex h-10 w-10 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110",
-          ICON_TONES[tone]
-        )}
-      >
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="text-center text-[11px] font-medium leading-tight text-charcoal-700">
-        {label}
-      </span>
-    </Link>
-  );
-}
-
-function TileSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <section className="mb-5 rounded-xl border border-sand-200 bg-white p-4 shadow-card">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-charcoal-400">
-        {label}
-      </p>
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
-        {children}
-      </div>
-    </section>
-  );
-}
-
+/**
+ * The agent interface: HDPM Knowledge Chat as a persistent left panel and a
+ * contextual canvas on the right. The canvas rests on the tile dashboard and
+ * swaps to cited sources or embedded app views as the conversation steers it.
+ * Below lg the canvas is full-width and the chat opens from a FAB.
+ */
 export default function Home() {
-  const { data: session } = useSession();
-  // Admin tile section is Craig-only by request (the admin pages themselves
-  // stay isAdmin-gated in middleware).
-  const showAdminSection =
-    session?.user?.email?.toLowerCase() === "craig@highdesertpm.com";
-  const [inspectionStats, setInspectionStats] = useState<InspectionStats | null>(null);
-  const [routeStats, setRouteStats] = useState<RouteStats | null>(null);
-  const [vacancyCount, setVacancyCount] = useState<number | null>(null);
-  const [boardKpis, setBoardKpis] = useState<BoardKpis | null>(null);
-  const [todayRoutes, setTodayRoutes] = useState<TodayRoute[]>([]);
+  const [canvas, setCanvas] = useState<CanvasState>({ mode: "dashboard" });
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
-  const firstName = (() => {
-    const n = session?.user?.name;
-    if (n) return n.trim().split(/\s+/)[0];
-    const e = session?.user?.email;
-    if (e) {
-      const local = e.split("@")[0];
-      return local.charAt(0).toUpperCase() + local.slice(1);
-    }
-    return null;
-  })();
+  const handleOpenSource = useCallback((source: Source) => {
+    setCanvas({ mode: "source", source });
+    setMobileChatOpen(false); // reveal the canvas on mobile
+  }, []);
 
-  useEffect(() => {
-    // Fetch maintenance board KPIs
-    fetch("/api/maintenance/board")
-      .then((r) => r.json())
-      .then((data) => setBoardKpis(data.kpis ?? null))
-      .catch(() => {});
-
-    // Fetch inspection stats
-    fetch("/api/inspections/stats")
-      .then((r) => r.json())
-      .then((data) => setInspectionStats(data))
-      .catch(() => {});
-
-    // Fetch route stats
-    fetch("/api/inspections/routes")
-      .then((r) => r.json())
-      .then((data) => {
-        const routes = data.routes || [];
-        setRouteStats({
-          total_routes: routes.length,
-          dispatched: routes.filter((r: { status: string }) => r.status === "dispatched").length,
-        });
-      })
-      .catch(() => {});
-
-    // Fetch today's published maintenance day route(s)
-    fetch("/api/maintenance/routes")
-      .then((r) => r.json())
-      .then((data) => setTodayRoutes(data.routes ?? []))
-      .catch(() => {});
-
-    // Fetch cached vacancy count
-    fetch("/api/cached-vacancies")
-      .then((r) => r.json())
-      .then((data) => setVacancyCount(data.units?.length ?? 0))
-      .catch(() => {});
+  const handleOpenApp = useCallback((appKey: AppEmbedKey) => {
+    setCanvas({ mode: "app", appKey });
+    setMobileChatOpen(false);
   }, []);
 
   return (
-    <>
-      <div className="px-8 py-8 max-w-5xl">
-        {/* Header */}
-        <div className="mb-6 animate-slide-up">
-          <p className="text-xs font-semibold text-terra-500 uppercase tracking-widest mb-1">
-            Dashboard
-          </p>
-          <h1 className="text-2xl font-bold text-charcoal-900 tracking-tight">
-            {getGreeting()}
-            {firstName ? `, ${firstName}` : ""}
-          </h1>
-          <p className="text-sm text-charcoal-400 mt-1">
-            Your automation tools are ready.
-          </p>
-        </div>
-
-        {/* Today's field route (published from the maintenance board) */}
-        {todayRoutes.map((route) => {
-          const coords = route.stops
-            .filter((s) => s.lat != null && s.lng != null)
-            .map((s) => `${s.lat},${s.lng}`);
-          const mapsUrl =
-            coords.length > 0
-              ? `https://www.google.com/maps/dir/${HDPM_OFFICE.lat},${HDPM_OFFICE.lng}/${coords.join("/")}`
-              : null;
-          return (
-            <div
-              key={route.id}
-              className="mb-6 bg-white rounded-xl border border-terra-200 p-5 shadow-card relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-terra-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60" />
-              <div className="relative">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-terra-100 rounded-xl flex items-center justify-center">
-                      <Route className="w-5 h-5 text-terra-600" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-terra-500 uppercase tracking-widest">
-                        Today&apos;s field route
-                      </p>
-                      <h3 className="text-base font-semibold text-charcoal-900">
-                        {route.assigned_tech ?? "HDMS crew"} · {route.stop_count} stops
-                      </h3>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {mapsUrl && (
-                      <a
-                        href={mapsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-medium text-terra-600 hover:text-terra-700"
-                      >
-                        Open in Google Maps ↗
-                      </a>
-                    )}
-                    <Link
-                      href="/maintenance/board"
-                      className="text-xs font-medium text-charcoal-400 hover:text-charcoal-600"
-                    >
-                      Board →
-                    </Link>
-                  </div>
-                </div>
-                <ol className="list-decimal pl-5 text-sm text-charcoal-600 space-y-0.5">
-                  {route.stops.map((s) => (
-                    <li key={s.work_order_id}>
-                      <span className="font-medium text-charcoal-900">
-                        {s.work_orders?.property_name ?? s.address}
-                      </span>
-                      {s.work_orders?.unit_name ? ` · ${s.work_orders.unit_name}` : ""}
-                      <span className="text-charcoal-400">
-                        {" "}
-                        — {s.address}
-                        {s.work_orders?.wo_number ? ` · #${s.work_orders.wo_number}` : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-                <div className="mt-3 flex items-center gap-4 text-xs text-charcoal-400">
-                  <span className="flex items-center gap-1.5">
-                    <Car className="w-3 h-3" />
-                    drive {fmtMins(route.total_drive_minutes)}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-3 h-3" />
-                    on-site {fmtMins(route.total_service_minutes)}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <CalendarDays className="w-3 h-3" />
-                    starts 8:00 AM at the office
-                  </span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Streamdeck grid — every feature, one small tile each */}
-        <div className="stagger-children">
-          <TileSection label="Maintenance OS">
-            <Tile
-              href="/maintenance/board"
-              icon={Wrench}
-              label="WO Board"
-              tone="terra"
-              badge={boardKpis?.open}
-              badgeTone="terra"
-              title="Open work orders — NEW through BILL"
-            />
-            <Tile
-              href="/maintenance/board?view=triage"
-              icon={ListTodo}
-              label="Triage"
-              tone="blue"
-              title="Review and classify incoming work orders"
-            />
-            <Tile
-              href="/maintenance/board?view=wait"
-              icon={Hourglass}
-              label="Waiting On"
-              tone="amber"
-              title="Work orders blocked on tenants, owners, parts, or vendors"
-            />
-            <Tile
-              href="/maintenance/board?view=vendor"
-              icon={Users}
-              label="Vendors"
-              tone="charcoal"
-              title="Vendor scoreboard"
-            />
-            <Tile
-              href="/maintenance/board?view=aging"
-              icon={Clock}
-              label="Aging"
-              tone="amber"
-              badge={boardKpis?.aging30Plus}
-              badgeTone="amber"
-              title="Open work orders created 30+ days ago"
-            />
-            <Tile
-              href="/maintenance/board?view=exceptions"
-              icon={AlertTriangle}
-              label="Exceptions"
-              tone="red"
-              badge={boardKpis?.pastDue}
-              badgeTone="red"
-              title="Past-due next actions — each with an accountable owner"
-            />
-            <Tile
-              href="/maintenance/board?view=turnover"
-              icon={DoorOpen}
-              label="Turnovers"
-              tone="purple"
-              title="Unit turnover board"
-            />
-            <Tile
-              href="/maintenance/board?view=monday"
-              icon={CalendarDays}
-              label="Monday Review"
-              tone="green"
-              title="Weekly review sweep"
-            />
-          </TileSection>
-
-          <TileSection label="Inspections">
-            <Tile
-              href="/maintenance/inspections"
-              icon={ClipboardCheck}
-              label="Inspections"
-              tone="amber"
-              badge={inspectionStats?.overdue}
-              badgeTone="red"
-              title="Biannual inspection queue — badge is overdue count"
-            />
-            <Tile
-              href="/maintenance/inspections/candidates"
-              icon={MapPin}
-              label="Candidates"
-              tone="blue"
-              title="Units due for inspection from the AppFolio sync"
-            />
-            <Tile
-              href="/maintenance/inspections/routes"
-              icon={Route}
-              label="Route Builder"
-              tone="green"
-              badge={routeStats?.total_routes}
-              badgeTone="green"
-              title="Inspection day routes — build, optimize, dispatch"
-            />
-            <Tile
-              href="/maintenance/inspections/import"
-              icon={Upload}
-              label="Import"
-              tone="charcoal"
-              title="CSV/XLSX inspection import"
-            />
-          </TileSection>
-
-          <TileSection label="Tools">
-            <Tile
-              href="/maintenance/invoices"
-              icon={FileText}
-              label="Invoices"
-              tone="terra"
-              title="Generate invoices from work orders, CSVs, or scanned PDFs"
-            />
-            <Tile
-              href="/comps"
-              icon={BarChart3}
-              label="Rent Comps"
-              tone="blue"
-              title="Central Oregon rent comparisons — AppFolio, Rentometer, HUD"
-            />
-            <Tile
-              href="/keys"
-              icon={KeyRound}
-              label="Key Manager"
-              tone="terra"
-              title="Physical key registry and history"
-            />
-            <Tile
-              href="/craigslist"
-              icon={Megaphone}
-              label="Craigslist Ads"
-              tone="purple"
-              badge={vacancyCount}
-              badgeTone="purple"
-              title="Vacant units → AI listing copy — badge is vacancy count"
-            />
-            <Tile
-              href="/reports/owner"
-              icon={FileSpreadsheet}
-              label="Owner Reports"
-              tone="green"
-              title="Owner-facing reports"
-            />
-            <Tile
-              href="/agents"
-              icon={Bot}
-              label="Agents"
-              tone="charcoal"
-              title="Agent-OS briefs and automations"
-            />
-          </TileSection>
-
-          {showAdminSection && (
-            <TileSection label="Admin">
-              <Tile
-                href="/dashboard"
-                icon={Activity}
-                label="KPI Dashboard"
-                tone="terra"
-                title="Owner goals, delinquency, vacancy, cycle time"
-              />
-              <Tile
-                href="/dashboard/trends"
-                icon={TrendingUp}
-                label="Trends"
-                tone="blue"
-                title="KPI trends over time"
-              />
-              <Tile
-                href="/admin/zoom-sync"
-                icon={Phone}
-                label="Zoom Sync"
-                tone="blue"
-                title="AppFolio contacts → Zoom Phone"
-              />
-            </TileSection>
+    <CanvasContext.Provider value={{ state: canvas, setState: setCanvas }}>
+      <div className="flex h-screen overflow-hidden">
+        {/* Chat panel — persistent ≥lg, full-screen overlay below lg */}
+        <div
+          className={cn(
+            "shrink-0 border-r border-sand-200 bg-white",
+            "lg:static lg:z-auto lg:flex lg:w-[380px] xl:w-[420px] 2xl:w-[480px]",
+            mobileChatOpen ? "fixed inset-0 z-40 flex w-full" : "hidden"
           )}
+        >
+          <ChatWindow
+            isOpen
+            variant="panel"
+            onOpenSource={handleOpenSource}
+            onOpenApp={handleOpenApp}
+            onClose={() => setMobileChatOpen(false)}
+            onMinimize={() => setMobileChatOpen(false)}
+          />
         </div>
 
-        {/* Quick Stats / Status */}
-        <div className="mt-8 animate-slide-up" style={{ animationDelay: "200ms" }}>
-          <div className="bg-white rounded-xl border border-sand-200 p-5 shadow-card">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-green-400" />
-                <span className="text-sm font-medium text-charcoal-900">All systems operational</span>
-              </div>
-              <div className="flex items-center gap-6 text-xs text-charcoal-400">
-                <span>AppFolio API: <span className="text-green-600 font-medium">Connected</span></span>
-                <span>Rentometer: <span className="text-green-600 font-medium">Active</span></span>
-              </div>
-            </div>
-          </div>
+        {/* Canvas */}
+        <div className="min-w-0 flex-1">
+          <Canvas
+            state={canvas}
+            onBackToDashboard={() => setCanvas({ mode: "dashboard" })}
+          />
         </div>
+
+        {/* Mobile chat FAB (bottom-left; HelpButton owns bottom-right) */}
+        <button
+          onClick={() => setMobileChatOpen(true)}
+          aria-label="Open Knowledge Chat"
+          className="fixed bottom-5 left-5 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-charcoal-900 text-white shadow-card-hover lg:hidden"
+        >
+          <MessageCircle className="h-5 w-5" />
+        </button>
       </div>
-    </>
+    </CanvasContext.Provider>
   );
 }
