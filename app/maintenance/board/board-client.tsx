@@ -21,6 +21,11 @@ const VIEWS = [
     hint: 'Every open work order — By Property, By Vendor, Kanban, or Route Builder layouts, with the shared staff/HDMS filter.',
   },
   {
+    key: 'turnover',
+    label: 'Turnover',
+    hint: 'Unit turnover pipeline — every vacancy with all of its work orders, tracked against the move-in clock.',
+  },
+  {
     key: 'triage',
     label: '✦ Triage Review',
     hint: 'AI-proposed priority, owner, and next-action date for un-triaged work orders — review, edit, and apply (every apply is audited).',
@@ -44,11 +49,6 @@ const VIEWS = [
     key: 'exceptions',
     label: 'Exceptions',
     hint: "Today's tripwire hits grouped by accountable owner, the needs-a-date backlog, and the digest-recipients panel.",
-  },
-  {
-    key: 'turnover',
-    label: 'Turnover',
-    hint: 'Unit turnover pipeline — every vacancy with all of its work orders, tracked against the move-in clock.',
   },
   {
     key: 'monday',
