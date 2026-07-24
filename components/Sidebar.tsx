@@ -194,13 +194,13 @@ export function Sidebar({ collapsed = false, onToggleChat, isChatOpen = false }:
                 : "text-charcoal-400 hover:text-white hover:bg-white/[0.05]"
             )}
             onClick={onToggleChat}
-            title={collapsed ? "ORS 90 Chat" : undefined}
+            title={collapsed ? "HDPM Knowledge Chat" : undefined}
           >
             {isChatOpen && (
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-terra-500 rounded-r-full" />
             )}
             <MessageCircle className={cn("w-[18px] h-[18px] flex-shrink-0", isChatOpen ? "text-terra-400" : "")} />
-            {!collapsed && <span className="flex-1">ORS 90 Chat</span>}
+            {!collapsed && <span className="flex-1">Knowledge Chat</span>}
             {!collapsed && <span className="w-2 h-2 rounded-full bg-green-400 opacity-75" />}
           </button>
         </div>

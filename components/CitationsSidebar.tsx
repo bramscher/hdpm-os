@@ -70,7 +70,7 @@ export function CitationsSidebar({
             <BookOpen className="h-6 w-6 mx-auto text-charcoal-200 mb-2" />
             <p className="text-xs text-charcoal-400">No sources yet</p>
             <p className="text-2xs text-charcoal-300 mt-1">
-              Ask a question to see ORS 90 citations
+              Ask a question to see ORS 90 and SOP citations
             </p>
           </div>
         ) : (

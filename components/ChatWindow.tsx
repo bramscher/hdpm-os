@@ -43,7 +43,7 @@ const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
   role: "assistant",
   content:
-    "Hi! I'm the **High Desert Property Management** assistant. I can help with:\n\n• **Oregon landlord-tenant law** (ORS Chapter 90)\n• **Security deposits** and move-out procedures\n• **Late fees** and rent collection\n• **Eviction notices** and timelines\n• **Tenant rights** and landlord obligations\n• **Manufactured dwelling parks** and marinas\n\n*Complete ORS Chapter 90 loaded (163 sections)*\n\nWhat would you like to know?",
+    "Hi! I'm the **HDPM Knowledge Chat**. I can help with:\n\n• **Oregon landlord-tenant law** (complete ORS Chapter 90, 163 sections)\n• **HDPM SOPs & procedures** (move-in/move-out, inspections, maintenance, key management, screening, and more from the Notion SOP library)\n• **Security deposits**, late fees, eviction notices and timelines\n• **How to use HDPM-OS** (board, inspections, invoices, Craigslist tool)\n\nAnswers cite their sources — click a citation to open the ORS section or the Notion SOP.\n\nWhat would you like to know?",
 };
 
 export function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowProps) {
@@ -494,10 +494,10 @@ export function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowProps) {
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-green-500" />
             <h2 className="text-sm font-semibold text-charcoal-900 tracking-tight">
-              ORS 90 Chat
+              HDPM Knowledge Chat
             </h2>
             <span className="text-xs text-charcoal-400 hidden sm:inline">
-              ORS Chapter 90 &middot; 163 sections
+              ORS Chapter 90 &middot; Notion SOP library
             </span>
           </div>
           <button
@@ -685,7 +685,7 @@ export function ChatWindow({ isOpen, onClose, onMinimize }: ChatWindowProps) {
                   placeholder={
                     attachment
                       ? "Ask about this document..."
-                      : "Ask about Oregon landlord-tenant law..."
+                      : "Ask about landlord-tenant law or HDPM procedures..."
                   }
                   disabled={isLoading}
                   className="w-full h-11 text-sm pl-4 pr-12 rounded-xl border border-sand-300 bg-sand-50 focus:outline-none focus:ring-2 focus:ring-terra-500/30 focus:border-terra-400 focus:bg-white transition-all placeholder:text-charcoal-300 disabled:opacity-50"

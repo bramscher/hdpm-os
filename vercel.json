@@ -17,6 +17,10 @@
       "schedule": "0 15 * * *"
     },
     {
+      "path": "/api/sync/knowledge",
+      "schedule": "0 10 * * 0"
+    },
+    {
       "path": "/api/sync/hud",
       "schedule": "0 10 1 1 *"
     },

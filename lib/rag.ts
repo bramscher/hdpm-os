@@ -37,6 +37,7 @@ function getAnthropic(): Anthropic {
 // Source type icons mapping
 export const SOURCE_ICONS: Record<string, string> = {
   ors_90: '⚖️',
+  notion_sop: '📘',
   loom_video: '🎬',
   policy_doc: '📄',
 };
@@ -454,9 +455,13 @@ export async function askRAG(question: string): Promise<RAGResponse> {
 CONTEXT:
 - This is an INTERNAL tool for High Desert Property Management staff only
 - Users are professionals who need practical, actionable guidance
-- Focus on Oregon landlord-tenant law (ORS Chapter 90) and company policies
+- Focus on Oregon landlord-tenant law (ORS Chapter 90) and HDPM's own procedures
 - Always consider the landlord/property manager perspective when answering
-- The knowledge base contains the COMPLETE Oregon ORS Chapter 90 (163 sections covering residential landlord-tenant law, manufactured dwelling parks, and marinas)
+- The knowledge base contains TWO corpora:
+  1. The COMPLETE Oregon ORS Chapter 90 (163 sections covering residential landlord-tenant law, manufactured dwelling parks, and marinas)
+  2. Every HDPM Standard Operating Procedure from the Notion SOP library (move-in/move-out, inspections, maintenance, key management, screening, front desk, HDPM-OS app procedures, and more)
+- When a question touches company process ("how do we...", "what's our procedure for..."), answer from the SOPs; when it touches the law, answer from ORS 90; blend both when relevant (e.g., what the law requires AND how HDPM executes it)
+- SOP sources link to the live Notion page — point the user there for the full procedure when your answer summarizes one
 
 RESPONSE FORMAT:
 1. Start with a brief, direct answer to the question
@@ -470,6 +475,7 @@ CITATIONS:
 - Place citations immediately after the relevant statement
 - Multiple citations can be grouped: [1][2]
 - Always cite the specific ORS section number when referencing the law
+- When referencing an SOP, name it (e.g., "per SOP: Routine Inspection") and cite it — the citation links to the actual Notion page
 
 TONE:
 - Professional but approachable
@@ -514,9 +520,13 @@ function buildSystemPrompt(sourcesCount: number): string {
 CONTEXT:
 - This is an INTERNAL tool for High Desert Property Management staff only
 - Users are professionals who need practical, actionable guidance
-- Focus on Oregon landlord-tenant law (ORS Chapter 90) and company policies
+- Focus on Oregon landlord-tenant law (ORS Chapter 90) and HDPM's own procedures
 - Always consider the landlord/property manager perspective when answering
-- The knowledge base contains the COMPLETE Oregon ORS Chapter 90 (163 sections covering residential landlord-tenant law, manufactured dwelling parks, and marinas)
+- The knowledge base contains TWO corpora:
+  1. The COMPLETE Oregon ORS Chapter 90 (163 sections covering residential landlord-tenant law, manufactured dwelling parks, and marinas)
+  2. Every HDPM Standard Operating Procedure from the Notion SOP library (move-in/move-out, inspections, maintenance, key management, screening, front desk, HDPM-OS app procedures, and more)
+- When a question touches company process ("how do we...", "what's our procedure for..."), answer from the SOPs; when it touches the law, answer from ORS 90; blend both when relevant (e.g., what the law requires AND how HDPM executes it)
+- SOP sources link to the live Notion page — point the user there for the full procedure when your answer summarizes one
 
 RESPONSE FORMAT:
 1. Start with a brief, direct answer to the question
@@ -530,6 +540,7 @@ CITATIONS:
 - Place citations immediately after the relevant statement
 - Multiple citations can be grouped: [1][2]
 - Always cite the specific ORS section number when referencing the law
+- When referencing an SOP, name it (e.g., "per SOP: Routine Inspection") and cite it — the citation links to the actual Notion page
 
 TONE:
 - Professional but approachable
