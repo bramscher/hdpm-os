@@ -343,7 +343,7 @@ export default function Turnover({
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Open this unit in AppFolio"
-                        style={{ marginLeft: 4, fontSize: 10, fontWeight: 700, textDecoration: 'none' }}
+                        style={{ marginLeft: 4, fontSize: 10, fontWeight: 700, textDecoration: 'none', color: '#2563eb' }}
                       >
                         AF↗
                       </a>
@@ -419,7 +419,7 @@ export default function Turnover({
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Open this work order in AppFolio"
-                              style={{ marginLeft: 3, fontSize: 10, fontWeight: 700, textDecoration: 'none' }}
+                              style={{ marginLeft: 3, fontSize: 10, fontWeight: 700, textDecoration: 'none', color: '#2563eb' }}
                             >
                               AF↗
                             </a>
