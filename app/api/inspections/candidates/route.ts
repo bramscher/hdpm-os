@@ -27,7 +27,12 @@ export async function GET(request: NextRequest) {
         'id, appfolio_property_id, appfolio_unit_id, name, address_1, address_2, city, state, zip, region, owner_name, latitude, longitude, geocode_status, uses_custom_inspection_date, last_inspection_date, candidate_status, local_skip_reason, last_appfolio_sync_at',
         { count: 'exact' }
       )
-      .eq('uses_custom_inspection_date', true);
+      // Candidate rows are the ones the sync has classified. Do NOT filter on
+      // uses_custom_inspection_date: that flag is a web-app-only form field the
+      // v0 API can't see, so the sync writes it false everywhere — filtering on
+      // it starved this page to zero rows (fixed 2026-07-23; same rule as the
+      // schedule route).
+      .not('candidate_status', 'is', null);
 
     if (status) {
       query = query.eq('candidate_status', status);
@@ -53,7 +58,7 @@ export async function GET(request: NextRequest) {
     const { data: summaryRows } = await supabase
       .from('inspection_properties')
       .select('candidate_status')
-      .eq('uses_custom_inspection_date', true);
+      .not('candidate_status', 'is', null);
 
     const counts = { skip_recent: 0, defer: 0, eligible: 0, scheduled: 0, dismissed: 0 };
     for (const row of summaryRows || []) {

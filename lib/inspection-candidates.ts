@@ -310,13 +310,21 @@ export async function persistCandidates(
   candidates: JoinedCandidateRecord[],
   syncTimestamp: string
 ): Promise<{ inserted: number; updated: number; geocode_pending: number }> {
-  // Load existing rows once for matching: by appfolio_unit_id and by normalized address
-  const { data: existing, error: loadErr } = await supabase
-    .from('inspection_properties')
-    .select('id, address_1, address_2, city, zip, appfolio_unit_id, candidate_status, last_inspection_date');
-
-  if (loadErr) {
-    throw new Error(`Failed to load inspection_properties: ${loadErr.message}`);
+  // Load existing rows once for matching: by appfolio_unit_id and by normalized
+  // address. Paginated — Supabase caps single reads at 1000 rows and the table
+  // is past that; a truncated load makes known units look new (duplicate inserts).
+  const existing: InspectionPropertyRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error: loadErr } = await supabase
+      .from('inspection_properties')
+      .select('id, address_1, address_2, city, zip, appfolio_unit_id, candidate_status, last_inspection_date')
+      .order('id')
+      .range(from, from + 999);
+    if (loadErr) {
+      throw new Error(`Failed to load inspection_properties: ${loadErr.message}`);
+    }
+    existing.push(...((data ?? []) as InspectionPropertyRow[]));
+    if ((data ?? []).length < 1000) break;
   }
 
   const byUnit = new Map<string, InspectionPropertyRow>();
