@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatWindow } from "@/components/ChatWindow";
+import { HelpButton } from "@/components/HelpButton";
 import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -54,6 +55,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           />
         )}
       </main>
+
+      {/* Per-page help → Notion SOP */}
+      {!isChatOpen && <HelpButton />}
     </div>
   );
 }

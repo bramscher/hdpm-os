@@ -2,13 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   FileText,
   BarChart3,
-  ArrowUpRight,
-  Zap,
   TrendingUp,
   Clock,
   ClipboardCheck,
@@ -18,12 +15,20 @@ import {
   CalendarDays,
   Car,
   Megaphone,
-  Home as HomeIcon,
   Wrench,
   Activity,
   Phone,
   KeyRound,
+  ListTodo,
+  Hourglass,
+  Users,
+  DoorOpen,
+  Upload,
+  FileSpreadsheet,
+  Bot,
+  type LucideIcon,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function getGreeting() {
   // Force Pacific Time for Central Oregon
@@ -47,10 +52,7 @@ interface InspectionStats {
 
 interface RouteStats {
   total_routes: number;
-  draft: number;
-  optimized: number;
   dispatched: number;
-  total_stops: number;
 }
 
 interface BoardKpis {
@@ -85,26 +87,97 @@ interface TodayRoute {
 
 const HDPM_OFFICE = { lat: 44.256798, lng: -121.184346 };
 
-/**
- * Instant hover tooltip for the flagship card's stat chips (native title is
- * too slow). Scoped to the chip's own named group (group/stat) — the card
- * itself is also a Tailwind group for its arrow animation, and a bare
- * group-hover here would pop every tooltip at once on card hover. Renders
- * ABOVE the chip: the chips sit at the card's bottom edge and the card is
- * overflow-hidden, so a below-the-chip tooltip gets clipped.
- */
-function StatTip({ text }: { text: string }) {
-  return (
-    <span className="pointer-events-none absolute left-0 bottom-full mb-2 z-30 hidden group-hover/stat:block w-64 rounded-lg bg-charcoal-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-lg">
-      {text}
-    </span>
-  );
-}
-
 function fmtMins(mins: number): string {
   const m = Math.round(mins);
   if (m < 60) return `${m}m`;
   return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// ────────────────────────────────────────────────
+// Streamdeck tiles
+// ────────────────────────────────────────────────
+
+type Tone = "terra" | "amber" | "green" | "blue" | "purple" | "red" | "charcoal";
+
+const ICON_TONES: Record<Tone, string> = {
+  terra: "bg-terra-100 text-terra-600",
+  amber: "bg-amber-100 text-amber-600",
+  green: "bg-green-100 text-green-600",
+  blue: "bg-blue-100 text-blue-600",
+  purple: "bg-purple-100 text-purple-600",
+  red: "bg-red-100 text-red-600",
+  charcoal: "bg-charcoal-100 text-charcoal-600",
+};
+
+const BADGE_TONES: Record<Tone, string> = {
+  terra: "bg-terra-500 text-white",
+  amber: "bg-amber-500 text-white",
+  green: "bg-green-500 text-white",
+  blue: "bg-blue-500 text-white",
+  purple: "bg-purple-500 text-white",
+  red: "bg-red-500 text-white",
+  charcoal: "bg-charcoal-700 text-white",
+};
+
+function Tile({
+  href,
+  icon: Icon,
+  label,
+  tone,
+  badge,
+  badgeTone,
+  title,
+}: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  tone: Tone;
+  badge?: number | null;
+  badgeTone?: Tone;
+  title?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      title={title}
+      className="group relative flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-sand-200 bg-white p-2 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover"
+    >
+      {badge != null && badge > 0 && (
+        <span
+          className={cn(
+            "absolute right-1.5 top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
+            BADGE_TONES[badgeTone ?? "charcoal"]
+          )}
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
+      <span
+        className={cn(
+          "flex h-10 w-10 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110",
+          ICON_TONES[tone]
+        )}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="text-center text-[11px] font-medium leading-tight text-charcoal-700">
+        {label}
+      </span>
+    </Link>
+  );
+}
+
+function TileSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-6">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-charcoal-400">
+        {label}
+      </p>
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -115,15 +188,17 @@ export default function Home() {
   const [vacancyCount, setVacancyCount] = useState<number | null>(null);
   const [boardKpis, setBoardKpis] = useState<BoardKpis | null>(null);
   const [todayRoutes, setTodayRoutes] = useState<TodayRoute[]>([]);
-  const router = useRouter();
 
-  // The flagship card is one big <Link>; stat chips inside it deep-link to
-  // their specific board view without triggering the card's own navigation.
-  const goToBoard = (params: string) => (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    router.push(`/maintenance/board${params ? `?${params}` : ""}`);
-  };
+  const firstName = (() => {
+    const n = session?.user?.name;
+    if (n) return n.trim().split(/\s+/)[0];
+    const e = session?.user?.email;
+    if (e) {
+      const local = e.split("@")[0];
+      return local.charAt(0).toUpperCase() + local.slice(1);
+    }
+    return null;
+  })();
 
   useEffect(() => {
     // Fetch maintenance board KPIs
@@ -145,10 +220,7 @@ export default function Home() {
         const routes = data.routes || [];
         setRouteStats({
           total_routes: routes.length,
-          draft: routes.filter((r: { status: string }) => r.status === "draft").length,
-          optimized: routes.filter((r: { status: string }) => r.status === "optimized").length,
           dispatched: routes.filter((r: { status: string }) => r.status === "dispatched").length,
-          total_stops: routes.reduce((sum: number, r: { total_stops?: number }) => sum + (r.total_stops || 0), 0),
         });
       })
       .catch(() => {});
@@ -170,87 +242,18 @@ export default function Home() {
     <>
       <div className="px-8 py-8 max-w-5xl">
         {/* Header */}
-        <div className="mb-8 animate-slide-up">
+        <div className="mb-6 animate-slide-up">
           <p className="text-xs font-semibold text-terra-500 uppercase tracking-widest mb-1">
             Dashboard
           </p>
           <h1 className="text-2xl font-bold text-charcoal-900 tracking-tight">
             {getGreeting()}
+            {firstName ? `, ${firstName}` : ""}
           </h1>
           <p className="text-sm text-charcoal-400 mt-1">
             Your automation tools are ready.
           </p>
         </div>
-
-        {/* Maintenance OS — flagship */}
-        <Link
-          href="/maintenance/board"
-          className="group mb-5 block relative overflow-hidden rounded-xl border border-terra-200 bg-gradient-to-br from-terra-500 to-terra-700 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5"
-        >
-          <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-bl-[120px] -mr-6 -mt-6" />
-          <div className="relative">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center">
-                  <Wrench className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-white/70 uppercase tracking-widest">
-                    Maintenance OS
-                  </p>
-                  <h3 className="text-lg font-semibold text-white">Work Order Board</h3>
-                </div>
-              </div>
-              <ArrowUpRight className="w-5 h-5 text-white/60 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
-            </div>
-            <p className="text-sm text-white/80 leading-relaxed max-w-2xl">
-              Triage, assign, and drive every AppFolio work order to completion — with tripwires,
-              vendor scoreboards, and aging alerts.
-            </p>
-            {boardKpis && (
-              <div className="mt-5 flex flex-wrap items-center gap-6">
-                <div
-                  className="relative group/stat flex items-center gap-2 text-white cursor-pointer hover:underline"
-                  onClick={goToBoard("")}
-                >
-                  <span className="text-xl font-bold">{boardKpis.open}</span>
-                  <span className="text-xs text-white/70">open</span>
-                  <StatTip text="Work orders not yet CLOSED — NEW through BILL. Click for the live board." />
-                </div>
-                {boardKpis.pastDue > 0 && (
-                  <div
-                    className="relative group/stat flex items-center gap-1.5 text-sm text-white font-medium cursor-pointer hover:underline"
-                    onClick={goToBoard("view=exceptions")}
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>{boardKpis.pastDue} past due</span>
-                    <StatTip text="Open work orders whose next-action date has passed — each one is an exception with an accountable owner. Click for the Exceptions view." />
-                  </div>
-                )}
-                {boardKpis.aging30Plus > 0 && (
-                  <div
-                    className="relative group/stat flex items-center gap-1.5 text-sm text-white/80 cursor-pointer hover:underline"
-                    onClick={goToBoard("view=aging")}
-                  >
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>{boardKpis.aging30Plus} aging 30+ days</span>
-                    <StatTip text="Open work orders created 30+ days ago (AppFolio creation date). Click for the Aging view." />
-                  </div>
-                )}
-                {boardKpis.p1ThisWeek > 0 && (
-                  <div
-                    className="relative group/stat flex items-center gap-1.5 text-sm text-white/80 cursor-pointer hover:underline"
-                    onClick={goToBoard("view=open&q=P1")}
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>{boardKpis.p1ThisWeek} P1 this week</span>
-                    <StatTip text="P1 (emergency) work orders created in the last 7 days, including any already closed. Click to filter the board to P1." />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </Link>
 
         {/* Today's field route (published from the maintenance board) */}
         {todayRoutes.map((route) => {
@@ -264,13 +267,13 @@ export default function Home() {
           return (
             <div
               key={route.id}
-              className="mb-5 bg-white rounded-xl border border-terra-200 p-6 shadow-card relative overflow-hidden"
+              className="mb-6 bg-white rounded-xl border border-terra-200 p-5 shadow-card relative overflow-hidden"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-terra-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60" />
               <div className="relative">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 bg-terra-100 rounded-xl flex items-center justify-center">
+                    <div className="w-10 h-10 bg-terra-100 rounded-xl flex items-center justify-center">
                       <Route className="w-5 h-5 text-terra-600" />
                     </div>
                     <div>
@@ -335,296 +338,179 @@ export default function Home() {
           );
         })}
 
-        {/* Tool Cards */}
-        <div className="grid lg:grid-cols-2 gap-5 stagger-children">
-          {/* Inspections */}
-          <Link
-            href="/maintenance/inspections"
-            className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-            <div className="relative">
-              <div className="flex items-start justify-between mb-5">
-                <div className="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center">
-                  <ClipboardCheck className="w-5 h-5 text-amber-600" />
-                </div>
-                <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-amber-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
-              </div>
-              <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
-                Inspections
-              </h3>
-              <p className="text-sm text-charcoal-400 leading-relaxed">
-                Manage biannual property inspections, track due dates, and build optimized routes.
-              </p>
-              {inspectionStats && (
-                <div className="mt-4 flex items-center gap-4">
-                  <div className="flex items-center gap-1.5 text-xs text-charcoal-400">
-                    <MapPin className="w-3 h-3" />
-                    <span>{inspectionStats.total} total</span>
-                  </div>
-                  {inspectionStats.overdue > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-500 font-medium">
-                      <AlertTriangle className="w-3 h-3" />
-                      <span>{inspectionStats.overdue} overdue</span>
-                    </div>
-                  )}
-                  {inspectionStats.this_week > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-amber-500">
-                      <Clock className="w-3 h-3" />
-                      <span>{inspectionStats.this_week} this week</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </Link>
+        {/* Streamdeck grid — every feature, one small tile each */}
+        <div className="stagger-children">
+          <TileSection label="Maintenance OS">
+            <Tile
+              href="/maintenance/board"
+              icon={Wrench}
+              label="WO Board"
+              tone="terra"
+              badge={boardKpis?.open}
+              badgeTone="terra"
+              title="Open work orders — NEW through BILL"
+            />
+            <Tile
+              href="/maintenance/board?view=triage"
+              icon={ListTodo}
+              label="Triage"
+              tone="blue"
+              title="Review and classify incoming work orders"
+            />
+            <Tile
+              href="/maintenance/board?view=wait"
+              icon={Hourglass}
+              label="Waiting On"
+              tone="amber"
+              title="Work orders blocked on tenants, owners, parts, or vendors"
+            />
+            <Tile
+              href="/maintenance/board?view=vendor"
+              icon={Users}
+              label="Vendors"
+              tone="charcoal"
+              title="Vendor scoreboard"
+            />
+            <Tile
+              href="/maintenance/board?view=aging"
+              icon={Clock}
+              label="Aging"
+              tone="amber"
+              badge={boardKpis?.aging30Plus}
+              badgeTone="amber"
+              title="Open work orders created 30+ days ago"
+            />
+            <Tile
+              href="/maintenance/board?view=exceptions"
+              icon={AlertTriangle}
+              label="Exceptions"
+              tone="red"
+              badge={boardKpis?.pastDue}
+              badgeTone="red"
+              title="Past-due next actions — each with an accountable owner"
+            />
+            <Tile
+              href="/maintenance/board?view=turnover"
+              icon={DoorOpen}
+              label="Turnovers"
+              tone="purple"
+              title="Unit turnover board"
+            />
+            <Tile
+              href="/maintenance/board?view=monday"
+              icon={CalendarDays}
+              label="Monday Review"
+              tone="green"
+              title="Weekly review sweep"
+            />
+          </TileSection>
 
-          {/* Route Builder */}
-          <Link
-            href="/maintenance/inspections/routes"
-            className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-green-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-            <div className="relative">
-              <div className="flex items-start justify-between mb-5">
-                <div className="w-11 h-11 bg-green-100 rounded-xl flex items-center justify-center">
-                  <Route className="w-5 h-5 text-green-600" />
-                </div>
-                <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-green-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
-              </div>
-              <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
-                Route Builder
-              </h3>
-              <p className="text-sm text-charcoal-400 leading-relaxed">
-                Schedule inspection routes, optimize driving paths, and dispatch to inspectors.
-              </p>
-              {routeStats && (
-                <div className="mt-4 flex items-center gap-4">
-                  {routeStats.total_routes > 0 ? (
-                    <>
-                      <div className="flex items-center gap-1.5 text-xs text-charcoal-400">
-                        <CalendarDays className="w-3 h-3" />
-                        <span>{routeStats.total_routes} routes</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-charcoal-400">
-                        <Car className="w-3 h-3" />
-                        <span>{routeStats.total_stops} stops</span>
-                      </div>
-                      {routeStats.dispatched > 0 && (
-                        <div className="flex items-center gap-1.5 text-xs text-green-500 font-medium">
-                          <Zap className="w-3 h-3" />
-                          <span>{routeStats.dispatched} dispatched</span>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                      <CalendarDays className="w-3 h-3" />
-                      <span>No routes scheduled</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </Link>
+          <TileSection label="Inspections">
+            <Tile
+              href="/maintenance/inspections"
+              icon={ClipboardCheck}
+              label="Inspections"
+              tone="amber"
+              badge={inspectionStats?.overdue}
+              badgeTone="red"
+              title="Biannual inspection queue — badge is overdue count"
+            />
+            <Tile
+              href="/maintenance/inspections/candidates"
+              icon={MapPin}
+              label="Candidates"
+              tone="blue"
+              title="Units due for inspection from the AppFolio sync"
+            />
+            <Tile
+              href="/maintenance/inspections/routes"
+              icon={Route}
+              label="Route Builder"
+              tone="green"
+              badge={routeStats?.total_routes}
+              badgeTone="green"
+              title="Inspection day routes — build, optimize, dispatch"
+            />
+            <Tile
+              href="/maintenance/inspections/import"
+              icon={Upload}
+              label="Import"
+              tone="charcoal"
+              title="CSV/XLSX inspection import"
+            />
+          </TileSection>
 
-          {/* Invoice Generator */}
-          <Link
-            href="/maintenance/invoices"
-            className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-terra-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-            <div className="relative">
-              <div className="flex items-start justify-between mb-5">
-                <div className="w-11 h-11 bg-terra-100 rounded-xl flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-terra-600" />
-                </div>
-                <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-terra-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
-              </div>
-              <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
-                Invoice Generator
-              </h3>
-              <p className="text-sm text-charcoal-400 leading-relaxed">
-                Generate invoices from AppFolio work orders, CSV uploads, or scanned PDFs.
-              </p>
-              <div className="mt-4 flex items-center gap-4">
-                <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                  <Zap className="w-3 h-3" />
-                  <span>Auto-extract</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                  <Clock className="w-3 h-3" />
-                  <span>PDF export</span>
-                </div>
-              </div>
-            </div>
-          </Link>
+          <TileSection label="Tools">
+            <Tile
+              href="/maintenance/invoices"
+              icon={FileText}
+              label="Invoices"
+              tone="terra"
+              title="Generate invoices from work orders, CSVs, or scanned PDFs"
+            />
+            <Tile
+              href="/comps"
+              icon={BarChart3}
+              label="Rent Comps"
+              tone="blue"
+              title="Central Oregon rent comparisons — AppFolio, Rentometer, HUD"
+            />
+            <Tile
+              href="/keys"
+              icon={KeyRound}
+              label="Key Manager"
+              tone="terra"
+              title="Physical key registry and history"
+            />
+            <Tile
+              href="/craigslist"
+              icon={Megaphone}
+              label="Craigslist Ads"
+              tone="purple"
+              badge={vacancyCount}
+              badgeTone="purple"
+              title="Vacant units → AI listing copy — badge is vacancy count"
+            />
+            <Tile
+              href="/reports/owner"
+              icon={FileSpreadsheet}
+              label="Owner Reports"
+              tone="green"
+              title="Owner-facing reports"
+            />
+            <Tile
+              href="/agents"
+              icon={Bot}
+              label="Agents"
+              tone="charcoal"
+              title="Agent-OS briefs and automations"
+            />
+          </TileSection>
 
-          {/* Rent Comps */}
-          <Link
-            href="/comps"
-            className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-            <div className="relative">
-              <div className="flex items-start justify-between mb-5">
-                <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <BarChart3 className="w-5 h-5 text-blue-600" />
-                </div>
-                <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-blue-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
-              </div>
-              <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
-                Rent Comps
-              </h3>
-              <p className="text-sm text-charcoal-400 leading-relaxed">
-                Compare rental rates across Central Oregon with AppFolio, Rentometer, and HUD FMR data.
-              </p>
-              <div className="mt-4 flex items-center gap-4">
-                <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                  <TrendingUp className="w-3 h-3" />
-                  <span>Market analysis</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                  <BarChart3 className="w-3 h-3" />
-                  <span>PDF reports</span>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          {/* Key Manager */}
-          <Link
-            href="/keys"
-            className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-terra-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-            <div className="relative">
-              <div className="flex items-start justify-between mb-5">
-                <div className="w-11 h-11 bg-terra-100 rounded-xl flex items-center justify-center">
-                  <KeyRound className="w-5 h-5 text-terra-600" />
-                </div>
-                <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-terra-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
-              </div>
-              <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
-                Key Manager
-              </h3>
-              <p className="text-sm text-charcoal-400 leading-relaxed">
-                Physical key registry — assignments, copies out, vacancy workflow, and full history per key number.
-              </p>
-              <div className="mt-4 flex items-center gap-4">
-                <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                  <KeyRound className="w-3 h-3" />
-                  <span>AppFolio-synced</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                  <Clock className="w-3 h-3" />
-                  <span>Never overwritten</span>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          {/* Craigslist Ad Creator */}
-          <Link
-            href="/craigslist"
-            className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-            <div className="relative">
-              <div className="flex items-start justify-between mb-5">
-                <div className="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <Megaphone className="w-5 h-5 text-purple-600" />
-                </div>
-                <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-purple-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
-              </div>
-              <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
-                Craigslist Ad Creator
-              </h3>
-              <p className="text-sm text-charcoal-400 leading-relaxed">
-                Pull vacant units from AppFolio, generate HTML-formatted listing copy, and post to Craigslist.
-              </p>
-              <div className="mt-4 flex items-center gap-4">
-                {vacancyCount !== null && vacancyCount > 0 ? (
-                  <div className="flex items-center gap-1.5 text-xs text-purple-500 font-medium">
-                    <HomeIcon className="w-3 h-3" />
-                    <span>{vacancyCount} vacant units</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                    <HomeIcon className="w-3 h-3" />
-                    <span>Sync to pull vacancies</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                  <Zap className="w-3 h-3" />
-                  <span>AI-generated copy</span>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          {/* KPI Dashboard (admin) */}
           {isAdmin && (
-            <Link
-              href="/dashboard"
-              className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-terra-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-              <div className="relative">
-                <div className="flex items-start justify-between mb-5">
-                  <div className="w-11 h-11 bg-terra-100 rounded-xl flex items-center justify-center">
-                    <Activity className="w-5 h-5 text-terra-600" />
-                  </div>
-                  <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-terra-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
-                </div>
-                <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
-                  KPI Dashboard
-                </h3>
-                <p className="text-sm text-charcoal-400 leading-relaxed">
-                  Track owner goals, delinquency, vacancy, work order cycle time, and maintenance economics.
-                </p>
-                <div className="mt-4 flex items-center gap-4">
-                  <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                    <TrendingUp className="w-3 h-3" />
-                    <span>Business metrics</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                    <BarChart3 className="w-3 h-3" />
-                    <span>Trends</span>
-                  </div>
-                </div>
-              </div>
-            </Link>
-          )}
-
-          {/* Zoom Sync (admin) */}
-          {isAdmin && (
-            <Link
-              href="/admin/zoom-sync"
-              className="group bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover transition-all duration-200 hover:-translate-y-0.5 block relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-              <div className="relative">
-                <div className="flex items-start justify-between mb-5">
-                  <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <Phone className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <ArrowUpRight className="w-4 h-4 text-charcoal-300 group-hover:text-blue-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
-                </div>
-                <h3 className="text-base font-semibold text-charcoal-900 mb-1.5">
-                  Zoom Sync
-                </h3>
-                <p className="text-sm text-charcoal-400 leading-relaxed">
-                  Sync AppFolio tenant and vendor contacts into Zoom Phone for click-to-call and caller ID.
-                </p>
-                <div className="mt-4 flex items-center gap-4">
-                  <div className="flex items-center gap-1.5 text-xs text-charcoal-300">
-                    <Phone className="w-3 h-3" />
-                    <span>Contact sync</span>
-                  </div>
-                </div>
-              </div>
-            </Link>
+            <TileSection label="Admin">
+              <Tile
+                href="/dashboard"
+                icon={Activity}
+                label="KPI Dashboard"
+                tone="terra"
+                title="Owner goals, delinquency, vacancy, cycle time"
+              />
+              <Tile
+                href="/dashboard/trends"
+                icon={TrendingUp}
+                label="Trends"
+                tone="blue"
+                title="KPI trends over time"
+              />
+              <Tile
+                href="/admin/zoom-sync"
+                icon={Phone}
+                label="Zoom Sync"
+                tone="blue"
+                title="AppFolio contacts → Zoom Phone"
+              />
+            </TileSection>
           )}
         </div>
 
