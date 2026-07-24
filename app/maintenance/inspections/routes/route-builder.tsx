@@ -24,6 +24,7 @@ import {
   Square,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StaffSelect, DEFAULT_INSPECTOR } from "@/components/StaffSelect";
 import { RouteCalendar } from "./route-calendar";
 
 // ────────────────────────────────────────────────
@@ -117,7 +118,7 @@ export function RouteBuilder() {
   const [genSuccess, setGenSuccess] = useState<number | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
   const [routeDate, setRouteDate] = useState(getDefaultRouteDate);
-  const [assignee, setAssignee] = useState("");
+  const [assignee, setAssignee] = useState(DEFAULT_INSPECTOR);
   const [maxStops, setMaxStops] = useState(10);
 
   // Manual pick mode state
@@ -239,7 +240,7 @@ export function RouteBuilder() {
     setGenSuccess(null);
     setGenError(null);
     setRouteDate(getDefaultRouteDate());
-    setAssignee("");
+    setAssignee(DEFAULT_INSPECTOR);
     setMaxStops(10);
     setPickMode("auto");
     setSelectedIds(new Set());
@@ -534,16 +535,11 @@ export function RouteBuilder() {
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-charcoal-400 pointer-events-none" />
-                    <select
+                    <StaffSelect
                       value={assignee}
-                      onChange={(e) => setAssignee(e.target.value)}
+                      onChange={setAssignee}
                       className="w-full appearance-none bg-white border border-charcoal-300 rounded-lg pl-9 pr-8 py-2 text-sm text-charcoal-700 focus:outline-none focus:ring-2 focus:ring-terra-400 focus:border-transparent"
-                    >
-                      <option value="">-- Select assignee --</option>
-                      <option value="brody@highdesertpm.com">Brody</option>
-                      <option value="matt@highdesertpm.com">Matt</option>
-                      <option value="craig@highdesertpm.com">Craig</option>
-                    </select>
+                    />
                   </div>
                 </div>
 

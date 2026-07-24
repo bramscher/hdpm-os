@@ -13,6 +13,7 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StaffSelect, DEFAULT_INSPECTOR } from "@/components/StaffSelect";
 
 interface Candidate {
   id: string;
@@ -444,7 +445,7 @@ function ScheduleModal({
 
   const [startDate, setStartDate] = useState(sevenDaysOut.toISOString().split("T")[0]);
   const [endDate, setEndDate] = useState(thirtyDaysOut.toISOString().split("T")[0]);
-  const [assignedTo, setAssignedTo] = useState("craig@highdesertpm.com");
+  const [assignedTo, setAssignedTo] = useState(DEFAULT_INSPECTOR);
   const [maxStops, setMaxStops] = useState(10);
   const [scheduling, setScheduling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -510,11 +511,10 @@ function ScheduleModal({
           </div>
           <div>
             <label className="block text-xs font-medium text-charcoal-700 mb-1">Assigned inspector</label>
-            <input
-              type="email"
+            <StaffSelect
               value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              className="w-full px-3 py-2 border border-charcoal-300 rounded-lg text-sm"
+              onChange={setAssignedTo}
+              className="w-full px-3 py-2 border border-charcoal-300 rounded-lg text-sm bg-white"
             />
           </div>
           <div>
