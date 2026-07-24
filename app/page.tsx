@@ -140,7 +140,7 @@ function Tile({
     <Link
       href={href}
       title={title}
-      className="group relative flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-sand-200 bg-white p-2 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover"
+      className="group relative flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-sand-200 bg-sand-50/60 p-2 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-card"
     >
       {badge != null && badge > 0 && (
         <span
@@ -169,20 +169,23 @@ function Tile({
 
 function TileSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="mb-6">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-charcoal-400">
+    <section className="mb-5 rounded-xl border border-sand-200 bg-white p-4 shadow-card">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-charcoal-400">
         {label}
       </p>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
         {children}
       </div>
-    </div>
+    </section>
   );
 }
 
 export default function Home() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.isAdmin === true;
+  // Admin tile section is Craig-only by request (the admin pages themselves
+  // stay isAdmin-gated in middleware).
+  const showAdminSection =
+    session?.user?.email?.toLowerCase() === "craig@highdesertpm.com";
   const [inspectionStats, setInspectionStats] = useState<InspectionStats | null>(null);
   const [routeStats, setRouteStats] = useState<RouteStats | null>(null);
   const [vacancyCount, setVacancyCount] = useState<number | null>(null);
@@ -487,7 +490,7 @@ export default function Home() {
             />
           </TileSection>
 
-          {isAdmin && (
+          {showAdminSection && (
             <TileSection label="Admin">
               <Tile
                 href="/dashboard"
