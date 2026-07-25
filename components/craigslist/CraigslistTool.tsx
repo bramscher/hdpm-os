@@ -160,6 +160,10 @@ export function CraigslistTool() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [listingFilter, setListingFilter] = useState<"active" | "posted" | "draft" | "archived">("active");
 
+  // Inline mark-posted on a vacancy card (list view)
+  const [listPostUnitId, setListPostUnitId] = useState<string | null>(null);
+  const [listPostUrl, setListPostUrl] = useState("");
+
   // Publish lifecycle state
   const [activeListing, setActiveListing] = useState<SavedListing | null>(null);
   const [postUrl, setPostUrl] = useState("");
@@ -304,6 +308,60 @@ export function CraigslistTool() {
       }
     },
     [patchListing, applyListingUpdate]
+  );
+
+  /**
+   * Mark a unit's post live straight from the vacancy list. Reuses the unit's
+   * latest non-archived listing; if none exists (posted without the
+   * generator), a minimal listing row is created first so the URL is tracked.
+   */
+  const handleMarkPostedUnit = useCallback(
+    async (unit: VacantUnit, url: string) => {
+      try {
+        let listing = savedListings.find(
+          (l) => l.appfolio_unit_id === unit.appfolio_unit_id && l.status !== "archived"
+        );
+        if (!listing) {
+          const res = await fetch("/api/saved-listings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              appfolio_unit_id: unit.appfolio_unit_id,
+              address: unit.address,
+              city: unit.city,
+              state: unit.state,
+              zip: unit.zip,
+              bedrooms: unit.bedrooms,
+              bathrooms: unit.bathrooms,
+              sqft: unit.sqft,
+              monthly_rent: unit.rent,
+              unit_type: unit.unit_type,
+              amenities: unit.amenities,
+              available_date: unit.available_date,
+              listing_title: `${unit.address}, ${unit.city}`,
+              listing_body: unit.marketing_description || unit.address,
+              rently_enabled: false,
+              created_by: "staff@highdesertpm.com",
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Failed to create listing");
+          listing = data.listing as SavedListing;
+          setSavedListings((prev) => [listing!, ...prev]);
+        }
+        const updated = await patchListing({
+          id: listing.id,
+          action: "posted",
+          craigslist_url: url.trim(),
+        });
+        applyListingUpdate(updated);
+        setListPostUnitId(null);
+        setListPostUrl("");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to mark posted");
+      }
+    },
+    [savedListings, patchListing, applyListingUpdate]
   );
 
   const handleArchive = useCallback(
@@ -1114,7 +1172,7 @@ export function CraigslistTool() {
 
         {/* Unit cards */}
         {!loading && displayedUnits.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {displayedUnits.map((unit) => {
               const rentlyOn = rentlyToggles[unit.appfolio_unit_id] || false;
               const isReady = unit.ready_for_posting;
@@ -1128,9 +1186,9 @@ export function CraigslistTool() {
                     !isReady && "opacity-80"
                   )}
                 >
-                  <div className="p-5">
-                    {/* Top row: address + generate button */}
-                    <div className="flex items-start justify-between gap-4">
+                  <div className="px-4 py-3">
+                    {/* Top row: address + compact actions */}
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-sm font-bold text-charcoal-900 truncate">
@@ -1172,26 +1230,50 @@ export function CraigslistTool() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-charcoal-500 mt-0.5">
-                          {unit.city}, {unit.state} {unit.zip}
-                        </p>
                       </div>
-                      <Button
-                        onClick={() => handleGenerate(unit)}
-                        disabled={!isReady}
-                        size="sm"
-                        className="bg-terra-600 hover:bg-terra-700 text-white flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                        title={isReady ? undefined : "Unit is not posted to website in AppFolio"}
-                      >
-                        <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                        Format for HDPM Craigslist
-                      </Button>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {isReady && !postedListing && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setListPostUnitId(
+                                listPostUnitId === unit.appfolio_unit_id
+                                  ? null
+                                  : unit.appfolio_unit_id
+                              );
+                              setListPostUrl("");
+                            }}
+                            className={cn(
+                              "flex h-8 w-8 items-center justify-center rounded-lg border transition-colors",
+                              listPostUnitId === unit.appfolio_unit_id
+                                ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+                                : "border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                            )}
+                            title="Already posted on Craigslist? Paste the live post URL"
+                          >
+                            <Megaphone className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleGenerate(unit)}
+                          disabled={!isReady}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-terra-600 text-white transition-colors hover:bg-terra-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          title={
+                            isReady
+                              ? "Format for HDPM Craigslist"
+                              : "Unit is not posted to website in AppFolio"
+                          }
+                        >
+                          <Sparkles className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Stats row */}
-                    <div className="flex flex-wrap items-center gap-3 mt-3">
+                    {/* Stats row — one compact line */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
                       {unit.rent > 0 && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-terra-50 text-terra-700 text-xs font-semibold">
+                        <span className="text-xs font-semibold text-terra-700">
                           ${unit.rent.toLocaleString()}/mo
                         </span>
                       )}
@@ -1211,24 +1293,38 @@ export function CraigslistTool() {
                           Avail: {formatDate(unit.available_date)}
                         </span>
                       )}
+                      <span className="text-xs text-charcoal-400">
+                        {unit.city}, {unit.state} {unit.zip}
+                      </span>
+                      {unit.amenities.length > 0 && (
+                        <span
+                          className="text-2xs text-charcoal-300"
+                          title={unit.amenities.join(" · ")}
+                        >
+                          {unit.amenities.length} amenities
+                        </span>
+                      )}
                     </div>
 
-                    {/* Amenities preview */}
-                    {unit.amenities.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {unit.amenities.slice(0, 6).map((a) => (
-                          <span
-                            key={a}
-                            className="text-2xs px-2 py-0.5 rounded-full bg-sand-100 text-charcoal-600"
-                          >
-                            {a}
-                          </span>
-                        ))}
-                        {unit.amenities.length > 6 && (
-                          <span className="text-2xs px-2 py-0.5 rounded-full bg-sand-100 text-charcoal-400">
-                            +{unit.amenities.length - 6} more
-                          </span>
-                        )}
+                    {/* Inline mark-posted (from the Megaphone action) */}
+                    {listPostUnitId === unit.appfolio_unit_id && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Input
+                          value={listPostUrl}
+                          onChange={(e) => setListPostUrl(e.target.value)}
+                          placeholder="https://bend.craigslist.org/apa/…"
+                          className="flex-1 h-8 text-xs bg-white/70"
+                          autoFocus
+                        />
+                        <Button
+                          onClick={() => handleMarkPostedUnit(unit, listPostUrl)}
+                          disabled={!/^https?:\/\//.test(listPostUrl.trim())}
+                          size="sm"
+                          className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                          Mark posted
+                        </Button>
                       </div>
                     )}
 
@@ -1236,7 +1332,7 @@ export function CraigslistTool() {
                         actually post. Internal field names (rently*) are legacy
                         from the previous self-tour vendor. */}
                     {isReady && (
-                      <div className="flex items-center gap-3 mt-3 pt-3 border-t border-charcoal-100">
+                      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-charcoal-100">
                         <button
                           type="button"
                           onClick={() => toggleRently(unit.appfolio_unit_id)}
