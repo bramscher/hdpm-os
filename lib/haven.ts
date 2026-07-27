@@ -127,20 +127,27 @@ export async function fetchReceptionistMetrics(
   periodStart: string,
   periodEnd: string
 ): Promise<HavenMetrics> {
-  return havenGet<HavenMetrics>('/v1/metrics', { periodStart, periodEnd });
+  // Live response nests the payload under `metrics` (verified 2026-07-27).
+  const res = await havenGet<{ metrics?: HavenMetrics } & HavenMetrics>('/v1/metrics', {
+    periodStart,
+    periodEnd,
+  });
+  return res.metrics ?? res;
 }
 
 // ── Event direction inference ───────────────────────────────────
-// The reference doesn't enumerate event `type` values, so classify
-// defensively: prospect-originated vs firm/AI-originated.
+// Live event `type` vocabulary (verified 2026-07-27): 'userMessage' =
+// prospect-originated, 'assistantMessage' = Haven AI / firm-originated,
+// across sms/email/voice channels. Regex fallback for any future types.
 
-const INBOUND_RE = /in(bound)?|receiv|prospect|incoming|from_(lead|prospect)/i;
-const OUTBOUND_RE = /out(bound)?|sent|repl|agent|ai|follow|response|to_(lead|prospect)/i;
+const INBOUND_RE = /^user|in(bound)?|receiv|prospect|incoming/i;
+const OUTBOUND_RE = /^assistant|^agent|out(bound)?|sent|repl|follow|response/i;
 
 export function classifyEventDirection(ev: HavenEvent): 'inbound' | 'outbound' | 'unknown' {
-  const t = `${ev.type} ${ev.channel || ''}`;
-  if (INBOUND_RE.test(t) && !OUTBOUND_RE.test(t)) return 'inbound';
-  if (OUTBOUND_RE.test(t) && !INBOUND_RE.test(t)) return 'outbound';
+  if (ev.type === 'userMessage') return 'inbound';
+  if (ev.type === 'assistantMessage') return 'outbound';
+  if (INBOUND_RE.test(ev.type) && !OUTBOUND_RE.test(ev.type)) return 'inbound';
+  if (OUTBOUND_RE.test(ev.type) && !INBOUND_RE.test(ev.type)) return 'outbound';
   return 'unknown';
 }
 

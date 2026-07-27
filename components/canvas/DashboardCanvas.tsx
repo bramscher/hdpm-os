@@ -27,6 +27,7 @@ import {
   FileSpreadsheet,
   Bot,
   Home,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -477,6 +478,13 @@ export function DashboardCanvas() {
             badge={vacancyCount}
             badgeTone="purple"
             title="Vacant units → AI listing copy — badge is vacancy count"
+          />
+          <Tile
+            href="/haven"
+            icon={Sparkles}
+            label="Haven"
+            tone="blue"
+            title="AI leasing pipeline, escalations, tours, and reception metrics"
           />
           <Tile
             href="/properties/map"
