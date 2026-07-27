@@ -26,6 +26,7 @@ import {
   Upload,
   FileSpreadsheet,
   Bot,
+  Home,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -476,6 +477,13 @@ export function DashboardCanvas() {
             badge={vacancyCount}
             badgeTone="purple"
             title="Vacant units → AI listing copy — badge is vacancy count"
+          />
+          <Tile
+            href="/properties/map"
+            icon={Home}
+            label="Property Map"
+            tone="green"
+            title="All managed properties on a map — green active, yellow offboarding, red lost"
           />
           <Tile
             href="/reports/owner"

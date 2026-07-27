@@ -51,6 +51,7 @@ declare namespace google.maps {
     class AdvancedMarkerElement {
       constructor(options: AdvancedMarkerElementOptions);
       map: Map | null;
+      addListener(eventName: string, handler: () => void): void;
     }
 
     interface AdvancedMarkerElementOptions {
