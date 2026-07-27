@@ -11,6 +11,7 @@ import {
   Home,
   Phone,
   Mail,
+  MessageSquareText,
   ExternalLink,
 } from "lucide-react";
 
@@ -153,6 +154,16 @@ function ContactLinks({ flag }: { flag: Flag }) {
       {flag.phone && (
         <a href={`tel:${flag.phone}`} className={linkClass} title={`Call ${flag.phone}`} aria-label="Call">
           <Phone className="w-3.5 h-3.5" />
+        </a>
+      )}
+      {flag.phone && (
+        <a
+          href={`zoomphonesms://${flag.phone.replace(/[^\d+]/g, "")}`}
+          className={linkClass}
+          title={`Text ${flag.phone} via Zoom Phone`}
+          aria-label="Text via Zoom Phone"
+        >
+          <MessageSquareText className="w-3.5 h-3.5" />
         </a>
       )}
       {flag.email && (
@@ -380,14 +391,20 @@ export function HavenDashboard() {
                 <MessageCircleWarning className="w-4 h-4" style={{ color: STATUS.warning }} />
                 Pending follow-ups ({data.followUps.length})
               </h2>
-              <ul className="mt-3 space-y-2">
+              <ul className="mt-2.5 divide-y divide-slate-50">
                 {data.followUps.slice(0, 6).map((f) => (
-                  <li key={f.conversation_id} className="text-xs flex items-baseline justify-between gap-2">
-                    <span className="truncate">
+                  <li
+                    key={f.conversation_id}
+                    className="text-xs flex items-center gap-2 py-1 border-l-2 pl-2"
+                    style={{ borderLeftColor: STATUS.warning }}
+                    title={f.property || undefined}
+                  >
+                    <span className="min-w-0 flex-1 truncate">
                       <span className="font-medium text-slate-700">{f.name}</span>
                       {f.property && <span className="text-slate-400"> · {f.property}</span>}
                     </span>
-                    <span className="text-slate-400 whitespace-nowrap">{timeAgo(f.last_activity_at)}</span>
+                    <span className="text-slate-300 whitespace-nowrap">{timeAgo(f.last_activity_at)}</span>
+                    <ContactLinks flag={f} />
                   </li>
                 ))}
               </ul>
