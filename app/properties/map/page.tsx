@@ -19,8 +19,8 @@ export default async function PropertyMapPage() {
         <div className="mb-4">
           <h1 className="text-xl font-semibold text-slate-800">Property Map</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Every managed property — green is actively managed, yellow is on the
-            way out, red is a lost listing. Click a house to change its status.
+            Every managed property — green is actively managed, yellow is
+            leaving management. Click a house for details and its AppFolio page.
           </p>
         </div>
         <PropertyMap />

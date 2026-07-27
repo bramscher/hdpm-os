@@ -483,7 +483,7 @@ export function DashboardCanvas() {
             icon={Home}
             label="Property Map"
             tone="green"
-            title="All managed properties on a map — green active, yellow offboarding, red lost"
+            title="All managed properties on a map — green active, yellow leaving management"
           />
           <Tile
             href="/reports/owner"

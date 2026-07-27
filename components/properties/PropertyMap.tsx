@@ -18,7 +18,7 @@ const STATUS_CONFIG: Record<
     chipOff: "bg-white text-slate-400 border-slate-200",
   },
   offboarding: {
-    label: "On the way out",
+    label: "Leaving management",
     color: "#EAB308",
     chipOn: "bg-yellow-100 text-yellow-800 border-yellow-300",
     chipOff: "bg-white text-slate-400 border-slate-200",
@@ -31,7 +31,8 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const STATUS_ORDER: PropertyMgmtStatus[] = ["active", "offboarding", "lost"];
+// Lost (red) stays out of the UI for now — future revision gets its own map.
+const STATUS_ORDER: PropertyMgmtStatus[] = ["active", "offboarding"];
 
 const HDPM_OFFICE = { lat: 44.256798, lng: -121.184346 };
 
@@ -165,6 +166,7 @@ export function PropertyMap() {
 
     const bounds = new google.maps.LatLngBounds();
     for (const prop of properties) {
+      if (prop.status === "lost") continue;
       const config = STATUS_CONFIG[prop.status];
       const title = `${prop.name || prop.address} — ${config.label}${
         prop.unit_count > 1 ? ` · ${prop.unit_count} units` : ""
@@ -294,6 +296,27 @@ export function PropertyMap() {
                 {selected.address}, {selected.city}
                 {selected.unit_count > 1 ? ` · ${selected.unit_count} units` : ""}
               </div>
+              {selected.management_end_date && (
+                <div className="text-xs text-amber-700 mt-1">
+                  Management ends {selected.management_end_date}
+                  {selected.management_end_reason
+                    ? ` — ${selected.management_end_reason}`
+                    : ""}
+                </div>
+              )}
+              {selected.appfolio_url && (
+                <a
+                  href={selected.appfolio_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 mt-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
+                >
+                  Open in AppFolio
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M4 2h6v6M10 2 5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </a>
+              )}
             </div>
             <button
               onClick={() => setSelectedKey(null)}

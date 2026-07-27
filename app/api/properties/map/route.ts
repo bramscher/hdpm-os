@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { runReport, reportsApiConfigured } from '@/lib/appfolio-reports';
 
 export type PropertyMgmtStatus = 'active' | 'offboarding' | 'lost';
 
@@ -16,6 +17,45 @@ export interface MapProperty {
   unit_count: number;
   status: PropertyMgmtStatus;
   note: string | null;
+  /** Web-app property page, when the numeric id is known */
+  appfolio_url: string | null;
+  management_end_date: string | null;
+  management_end_reason: string | null;
+}
+
+interface DirectoryRow {
+  property_id: number | string | null;
+  property_integration_id: string | null;
+  management_end_date: string | null;
+  management_end_reason: string | null;
+}
+
+/**
+ * Property-directory lookup keyed by v0 UUID: numeric web-app id (for links)
+ * and management end date/reason (visible property + end date = offboarding).
+ * Report covers visible properties only — hidden (lost) ones are deliberately
+ * off the map for now.
+ */
+async function fetchDirectoryByUuid(): Promise<Map<string, DirectoryRow>> {
+  const byUuid = new Map<string, DirectoryRow>();
+  if (!reportsApiConfigured()) return byUuid;
+  try {
+    const rows = await runReport<DirectoryRow>('property_directory', {
+      columns: [
+        'property_id',
+        'property_integration_id',
+        'management_end_date',
+        'management_end_reason',
+      ],
+    });
+    for (const row of rows) {
+      if (row.property_integration_id) byUuid.set(row.property_integration_id, row);
+    }
+  } catch (err) {
+    // Links and derived yellows are enhancements — the map works without them.
+    console.error('[properties/map] property_directory fetch failed:', err);
+  }
+  return byUuid;
 }
 
 interface UnitRow {
@@ -64,9 +104,10 @@ export async function GET() {
 
     // Management statuses — table may not exist until migration 20260727 runs.
     const statusMap = new Map<string, { status: PropertyMgmtStatus; note: string | null }>();
-    const { data: statuses, error: statusError } = await supabase
-      .from('property_mgmt_status')
-      .select('appfolio_property_id, status, note');
+    const [{ data: statuses, error: statusError }, directory] = await Promise.all([
+      supabase.from('property_mgmt_status').select('appfolio_property_id, status, note'),
+      fetchDirectoryByUuid(),
+    ]);
     if (!statusError) {
       for (const s of statuses || []) {
         statusMap.set(s.appfolio_property_id, { status: s.status, note: s.note });
@@ -84,6 +125,11 @@ export async function GET() {
         continue;
       }
       const mgmt = row.appfolio_property_id ? statusMap.get(row.appfolio_property_id) : undefined;
+      const dir = row.appfolio_property_id ? directory.get(row.appfolio_property_id) : undefined;
+      // Manual status wins; else an AppFolio management end date means the
+      // owner is on the way out; else actively managed.
+      const status: PropertyMgmtStatus =
+        mgmt?.status || (dir?.management_end_date ? 'offboarding' : 'active');
       grouped.set(key, {
         key,
         appfolio_property_id: row.appfolio_property_id,
@@ -93,8 +139,13 @@ export async function GET() {
         lat: row.latitude,
         lng: row.longitude,
         unit_count: 1,
-        status: mgmt?.status || 'active',
+        status,
         note: mgmt?.note || null,
+        appfolio_url: dir?.property_id
+          ? `https://highdesertpm.appfolio.com/properties/${dir.property_id}`
+          : null,
+        management_end_date: dir?.management_end_date || null,
+        management_end_reason: dir?.management_end_reason || null,
       });
     }
 
