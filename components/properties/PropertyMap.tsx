@@ -85,6 +85,7 @@ export function PropertyMap() {
     lost: true,
   });
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [showCitySummary, setShowCitySummary] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -214,6 +215,27 @@ export function PropertyMap() {
     [properties, selectedKey]
   );
 
+  // Per-city rollup for the ⓘ summary, excluding lost (not shown on the map)
+  const citySummary = useMemo(() => {
+    const byCity = new Map<
+      string,
+      { city: string; properties: number; units: number; leaving: number }
+    >();
+    for (const p of properties) {
+      if (p.status === "lost") continue;
+      const cityKey = p.city.trim().toLowerCase();
+      let entry = byCity.get(cityKey);
+      if (!entry) {
+        entry = { city: p.city.trim(), properties: 0, units: 0, leaving: 0 };
+        byCity.set(cityKey, entry);
+      }
+      entry.properties++;
+      entry.units += p.unit_count;
+      if (p.status === "offboarding") entry.leaving++;
+    }
+    return [...byCity.values()].sort((a, b) => b.units - a.units);
+  }, [properties]);
+
   const setStatus = useCallback(
     async (prop: MapProperty, status: PropertyMgmtStatus) => {
       if (!prop.appfolio_property_id || prop.status === status) return;
@@ -279,7 +301,71 @@ export function PropertyMap() {
             Status table missing — apply migration 20260727 to enable yellow/red tagging
           </span>
         )}
+        <button
+          onClick={() => setShowCitySummary((v) => !v)}
+          aria-label="Summary by city"
+          title="Summary by city"
+          className={`ml-auto w-7 h-7 rounded-full border flex items-center justify-center text-sm font-serif italic font-semibold transition-colors ${
+            showCitySummary
+              ? "bg-slate-700 border-slate-700 text-white"
+              : "bg-white border-slate-300 text-slate-500 hover:bg-slate-100"
+          }`}
+        >
+          i
+        </button>
       </div>
+
+      {/* City summary panel */}
+      {showCitySummary && (
+        <div className="absolute top-12 right-0 z-10 w-72 max-w-[calc(100%-1rem)] bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-semibold text-slate-800">By city</div>
+            <button
+              onClick={() => setShowCitySummary(false)}
+              className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-slate-400">
+                <th className="text-left font-medium pb-1">City</th>
+                <th className="text-right font-medium pb-1">Props</th>
+                <th className="text-right font-medium pb-1">Units</th>
+                <th className="text-right font-medium pb-1 text-yellow-600">Leaving</th>
+              </tr>
+            </thead>
+            <tbody>
+              {citySummary.map((row) => (
+                <tr key={row.city} className="border-t border-slate-100">
+                  <td className="py-1 text-slate-700">{row.city}</td>
+                  <td className="py-1 text-right tabular-nums text-slate-700">
+                    {row.properties}
+                  </td>
+                  <td className="py-1 text-right tabular-nums text-slate-700">{row.units}</td>
+                  <td className="py-1 text-right tabular-nums text-yellow-700">
+                    {row.leaving || ""}
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-t border-slate-200 font-semibold text-slate-800">
+                <td className="py-1">Total</td>
+                <td className="py-1 text-right tabular-nums">
+                  {citySummary.reduce((n, r) => n + r.properties, 0)}
+                </td>
+                <td className="py-1 text-right tabular-nums">
+                  {citySummary.reduce((n, r) => n + r.units, 0)}
+                </td>
+                <td className="py-1 text-right tabular-nums text-yellow-700">
+                  {citySummary.reduce((n, r) => n + r.leaving, 0) || ""}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Map */}
       <div ref={mapRef} className="h-[72vh] w-full rounded-xl overflow-hidden bg-slate-100" />
