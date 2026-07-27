@@ -8,6 +8,7 @@ import {
   CalendarCheck,
   PhoneCall,
   MessageCircleWarning,
+  Home,
 } from "lucide-react";
 
 // ────────────────────────────────────────────────
@@ -24,6 +25,7 @@ interface Flag {
   flag_type: string | null;
   flag_date: string | null;
   last_activity_at: string | null;
+  appfolio_link: string | null;
 }
 
 interface HotLead extends Flag {
@@ -62,6 +64,12 @@ interface Overview {
     aiResolutionRate: number | null;
     knowledgeGapCount: number;
   } | null;
+  conversions?: {
+    converted90d: number;
+    matched90d: number;
+    convertedAllTime: number;
+    bySource: Array<{ source: string; count: number }>;
+  };
   synced: boolean;
 }
 
@@ -136,7 +144,7 @@ function StatTile({
 
 function ContactLinks({ flag }: { flag: Flag }) {
   return (
-    <span className="flex gap-2 text-xs">
+    <span className="flex gap-2 text-xs whitespace-nowrap">
       {flag.phone && (
         <a href={`tel:${flag.phone}`} className="text-emerald-700 hover:underline">
           call
@@ -145,6 +153,16 @@ function ContactLinks({ flag }: { flag: Flag }) {
       {flag.email && (
         <a href={`mailto:${flag.email}`} className="text-emerald-700 hover:underline">
           email
+        </a>
+      )}
+      {flag.appfolio_link && (
+        <a
+          href={flag.appfolio_link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-emerald-700 hover:underline"
+        >
+          AppFolio ↗
         </a>
       )}
     </span>
@@ -369,7 +387,7 @@ export function HavenDashboard() {
         </section>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6">
         {/* Upcoming tours */}
         <section className="bg-white rounded-xl border border-slate-200 p-5">
           <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
@@ -409,6 +427,40 @@ export function HavenDashboard() {
                 ))}
               </tbody>
             </table>
+          )}
+        </section>
+
+        {/* Conversions */}
+        <section className="bg-white rounded-xl border border-slate-200 p-5">
+          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+            <Home className="w-4 h-4 text-emerald-600" />
+            Became tenants
+          </h2>
+          {!data.conversions || data.conversions.convertedAllTime === 0 ? (
+            <p className="text-xs text-slate-400 mt-2">
+              No conversions attributed yet — populated by the AppFolio lead match
+              (migration 20260727_haven_af_lead_link + next sync).
+            </p>
+          ) : (
+            <>
+              <p className="text-2xl font-semibold text-slate-800 mt-2">
+                {data.conversions.converted90d}
+                <span className="text-sm font-normal text-slate-400"> in 90 days</span>
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {data.conversions.convertedAllTime} all-time from Haven conversations
+              </p>
+              {data.conversions.bySource.length > 0 && (
+                <ul className="mt-3 space-y-1">
+                  {data.conversions.bySource.map((s) => (
+                    <li key={s.source} className="flex justify-between text-xs">
+                      <span className="text-slate-600 truncate">{s.source}</span>
+                      <span className="text-slate-700 tabular-nums font-medium">{s.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </section>
 

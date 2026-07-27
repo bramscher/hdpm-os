@@ -41,6 +41,8 @@ interface ConversationRow {
   flag_date: string | null;
   flag_resolved: boolean | null;
   pending_follow_up: boolean;
+  appfolio_lead_link: string | null;
+  af_lead_status: string | null;
 }
 
 function prospectName(r: ConversationRow): string {
@@ -58,6 +60,7 @@ function toFlag(r: ConversationRow) {
     flag_type: r.flag_type,
     flag_date: r.flag_date,
     last_activity_at: r.last_activity_at,
+    appfolio_link: r.appfolio_lead_link,
   };
 }
 
@@ -77,16 +80,26 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
+    const baseColumns =
+      'conversation_id, first_name, last_name, email, phone_number, lead_source, property_address, lead_classification, pipeline_phase, tour_status, scheduled_tour_start, assigned_leasing_agent, first_contact_at, last_activity_at, escalation_flag, flag_type, flag_date, flag_resolved, pending_follow_up';
+    // appfolio_lead_link/af_lead_status arrive with migration
+    // 20260727_haven_af_lead_link — fall back gracefully if not applied yet.
+    let columns = `${baseColumns}, appfolio_lead_link, af_lead_status`;
     const rows: ConversationRow[] = [];
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('haven_conversation')
-        .select(
-          'conversation_id, first_name, last_name, email, phone_number, lead_source, property_address, lead_classification, pipeline_phase, tour_status, scheduled_tour_start, assigned_leasing_agent, first_contact_at, last_activity_at, escalation_flag, flag_type, flag_date, flag_resolved, pending_follow_up'
-        )
+        .select(columns)
         .range(from, from + 999);
+      if (error && from === 0 && /appfolio_lead_link|af_lead_status/.test(error.message)) {
+        columns = baseColumns;
+        ({ data, error } = await supabase
+          .from('haven_conversation')
+          .select(columns)
+          .range(from, from + 999));
+      }
       if (error) throw new Error(`haven_conversation read failed: ${error.message}`);
-      rows.push(...((data || []) as ConversationRow[]));
+      rows.push(...((data || []) as unknown as ConversationRow[]));
       if (!data || data.length < 1000) break;
     }
 
@@ -139,6 +152,30 @@ export async function GET() {
         agent: r.assigned_leasing_agent,
       }));
 
+    // Conversion attribution — AppFolio lead status flowed back via the
+    // identity match ('converted_to_tenant' = became a tenant).
+    const isConverted = (r: ConversationRow) =>
+      (r.af_lead_status || '').includes('converted_to_tenant');
+    const window90 = rows.filter(
+      (r) => r.first_contact_at && new Date(r.first_contact_at) >= ninetyDaysAgo
+    );
+    const matched90 = window90.filter((r) => r.af_lead_status != null);
+    const converted90 = window90.filter(isConverted);
+    const bySource = new Map<string, number>();
+    for (const r of rows.filter(isConverted)) {
+      const src = r.lead_source || 'Unknown';
+      bySource.set(src, (bySource.get(src) || 0) + 1);
+    }
+    const conversions = {
+      converted90d: converted90.length,
+      matched90d: matched90.length,
+      convertedAllTime: rows.filter(isConverted).length,
+      bySource: [...bySource.entries()]
+        .map(([source, count]) => ({ source, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6),
+    };
+
     const responseTime = await havenResponseMetrics(supabase, ninetyDaysAgo);
 
     // Reception metrics — live, last 30 days (best-effort).
@@ -177,6 +214,7 @@ export async function GET() {
         tours,
         responseTime,
         reception,
+        conversions,
         lastActivityAt: lastSync,
         synced: rows.length > 0,
       },

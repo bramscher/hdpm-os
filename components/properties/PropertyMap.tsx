@@ -402,6 +402,16 @@ export function PropertyMap() {
                     : ""}
                 </div>
               )}
+              {selected.prospects > 0 && (
+                <div className="text-xs text-slate-600 mt-1">
+                  {selected.prospects} leasing prospect{selected.prospects === 1 ? "" : "s"}
+                  {selected.hot_prospects > 0 && (
+                    <span className="text-orange-600 font-medium">
+                      {" "}· {selected.hot_prospects} hot
+                    </span>
+                  )}
+                </div>
+              )}
               {selected.appfolio_url && (
                 <a
                   href={selected.appfolio_url}

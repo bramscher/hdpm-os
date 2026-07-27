@@ -21,6 +21,9 @@ export interface MapProperty {
   appfolio_url: string | null;
   management_end_date: string | null;
   management_end_reason: string | null;
+  /** Active Haven leasing prospects interested in this property */
+  prospects: number;
+  hot_prospects: number;
 }
 
 interface DirectoryRow {
@@ -69,6 +72,39 @@ interface UnitRow {
 }
 
 /**
+ * Active Haven leasing prospects per AppFolio property (via the lead match
+ * in haven_conversation). Empty map if the sync/migration isn't live yet.
+ */
+async function fetchProspectCounts(
+  supabase: ReturnType<typeof getSupabaseAdmin>
+): Promise<Map<string, { total: number; hot: number }>> {
+  const counts = new Map<string, { total: number; hot: number }>();
+  try {
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from('haven_conversation')
+        .select('appfolio_property_id, pipeline_phase, lead_classification')
+        .not('appfolio_property_id', 'is', null)
+        .neq('pipeline_phase', 'Inactive')
+        .range(from, from + 999);
+      if (error) return counts;
+      for (const row of data || []) {
+        const entry = counts.get(row.appfolio_property_id) || { total: 0, hot: 0 };
+        entry.total++;
+        if (row.lead_classification === 'Ready to Apply' || row.lead_classification === 'Urgency to Move') {
+          entry.hot++;
+        }
+        counts.set(row.appfolio_property_id, entry);
+      }
+      if (!data || data.length < 1000) break;
+    }
+  } catch {
+    // Haven table/columns not present yet — demand overlay just stays empty.
+  }
+  return counts;
+}
+
+/**
  * GET /api/properties/map
  *
  * One pin per property (units grouped by appfolio_property_id, falling back
@@ -104,9 +140,10 @@ export async function GET() {
 
     // Management statuses — table may not exist until migration 20260727 runs.
     const statusMap = new Map<string, { status: PropertyMgmtStatus; note: string | null }>();
-    const [{ data: statuses, error: statusError }, directory] = await Promise.all([
+    const [{ data: statuses, error: statusError }, directory, prospectMap] = await Promise.all([
       supabase.from('property_mgmt_status').select('appfolio_property_id, status, note'),
       fetchDirectoryByUuid(),
+      fetchProspectCounts(supabase),
     ]);
     if (!statusError) {
       for (const s of statuses || []) {
@@ -146,6 +183,12 @@ export async function GET() {
           : null,
         management_end_date: dir?.management_end_date || null,
         management_end_reason: dir?.management_end_reason || null,
+        prospects: row.appfolio_property_id
+          ? prospectMap.get(row.appfolio_property_id)?.total || 0
+          : 0,
+        hot_prospects: row.appfolio_property_id
+          ? prospectMap.get(row.appfolio_property_id)?.hot || 0
+          : 0,
       });
     }
 

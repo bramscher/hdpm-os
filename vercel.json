@@ -41,6 +41,10 @@
       "schedule": "45 13 * * *"
     },
     {
+      "path": "/api/haven/cron/digest",
+      "schedule": "15 14 * * 1-5"
+    },
+    {
       "path": "/api/kpi/cron",
       "schedule": "0 14 * * *"
     },

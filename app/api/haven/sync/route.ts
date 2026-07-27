@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { havenConfigured, syncHavenConversations } from '@/lib/haven';
+import { matchConversationsToAppFolioLeads } from '@/lib/haven-af-match';
 
 export const maxDuration = 300;
 
@@ -37,12 +38,24 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseAdmin();
     const result = await syncHavenConversations(supabase);
 
+    // AppFolio lead identity join — ?af_lookback=240 for the one-time backfill
+    // (default 30d keeps the daily cron light). Failure here shouldn't fail
+    // the conversation sync.
+    const lookbackDays = Number(new URL(request.url).searchParams.get('af_lookback')) || 30;
+    let afMatch = null;
+    try {
+      afMatch = await matchConversationsToAppFolioLeads(supabase, { lookbackDays });
+    } catch (err) {
+      console.error('[Haven Sync] AppFolio lead match failed:', err);
+    }
+
     console.log(
       `[Haven Sync] ${result.conversations} conversations, ${result.historiesFetched} histories, ` +
-        `${result.escalationsOpen} open escalations, ${result.pendingFollowUps} pending follow-ups`
+        `${result.escalationsOpen} open escalations, ${result.pendingFollowUps} pending follow-ups, ` +
+        `af match: ${afMatch ? `${afMatch.matched} new / ${afMatch.statusRefreshed} refreshed` : 'failed'}`
     );
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, afMatch });
   } catch (error) {
     console.error('[Haven Sync] error:', error);
     const message = error instanceof Error ? error.message : 'Haven sync failed';
