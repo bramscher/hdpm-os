@@ -75,6 +75,9 @@ export async function buildHavenDigest(
 
   const dayAgo = new Date(now.getTime() - 24 * 3600000);
   const threeDaysAgo = new Date(now.getTime() - 3 * 86400000);
+  // "Going cold" band: quiet 3-10 days. Older than that is cold, not cooling —
+  // without the upper bound the whole hot pool floods the digest (203 rows).
+  const tenDaysAgo = new Date(now.getTime() - 10 * 86400000);
 
   const openEscalations = rows.filter((r) => r.escalation_flag && r.flag_resolved !== true);
   const newEscalations = openEscalations
@@ -87,10 +90,16 @@ export async function buildHavenDigest(
         HOT.has(r.lead_classification) &&
         r.pipeline_phase !== 'Inactive' &&
         r.last_activity_at &&
-        new Date(r.last_activity_at) < threeDaysAgo
+        new Date(r.last_activity_at) < threeDaysAgo &&
+        new Date(r.last_activity_at) >= tenDaysAgo
     )
     .sort((a, b) => (a.last_activity_at || '').localeCompare(b.last_activity_at || ''));
   const followUps = rows.filter((r) => r.pending_follow_up);
+
+  // Haven bulk-stamps last_activity_at on provisioning/system events (e.g.
+  // 203 hot leads all "went quiet" on the same day). A going-cold set that
+  // large is an artifact, not a work list — collapse it to a summary line.
+  const staleHotIsArtifact = staleHot.length > 25;
 
   const counts = {
     newEscalations: newEscalations.length,
@@ -99,7 +108,9 @@ export async function buildHavenDigest(
     pendingFollowUps: followUps.length,
   };
   const shouldSend =
-    counts.newEscalations > 0 || counts.staleHotLeads > 0 || counts.pendingFollowUps > 0;
+    counts.newEscalations > 0 ||
+    (counts.staleHotLeads > 0 && !staleHotIsArtifact) ||
+    counts.pendingFollowUps > 0;
 
   const sections: string[] = [];
   if (newEscalations.length > 0) {
@@ -110,9 +121,9 @@ export async function buildHavenDigest(
   } else if (openEscalations.length > 0) {
     sections.push(`🚨 No new escalations — ${openEscalations.length} still open.`);
   }
-  if (staleHot.length > 0) {
+  if (staleHot.length > 0 && !staleHotIsArtifact) {
     sections.push(
-      `*🔥 Hot leads going cold (3+ days quiet): ${staleHot.length}*\n` +
+      `*🔥 Hot leads going cold (3-10 days quiet): ${staleHot.length}*\n` +
         staleHot
           .slice(0, 5)
           .map((r) =>
@@ -124,6 +135,10 @@ export async function buildHavenDigest(
             )
           )
           .join('\n')
+    );
+  } else if (staleHotIsArtifact) {
+    sections.push(
+      `🔥 ${staleHot.length} hot leads show no recent activity — too many to be real (bulk timestamp from Haven); see the board for the live list.`
     );
   }
   if (followUps.length > 0) {

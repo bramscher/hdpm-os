@@ -9,6 +9,9 @@ import {
   PhoneCall,
   MessageCircleWarning,
   Home,
+  Phone,
+  Mail,
+  ExternalLink,
 } from "lucide-react";
 
 // ────────────────────────────────────────────────
@@ -143,16 +146,18 @@ function StatTile({
 }
 
 function ContactLinks({ flag }: { flag: Flag }) {
+  const linkClass =
+    "p-1 rounded text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors";
   return (
-    <span className="flex gap-2 text-xs whitespace-nowrap">
+    <span className="flex items-center whitespace-nowrap">
       {flag.phone && (
-        <a href={`tel:${flag.phone}`} className="text-emerald-700 hover:underline">
-          call
+        <a href={`tel:${flag.phone}`} className={linkClass} title={`Call ${flag.phone}`} aria-label="Call">
+          <Phone className="w-3.5 h-3.5" />
         </a>
       )}
       {flag.email && (
-        <a href={`mailto:${flag.email}`} className="text-emerald-700 hover:underline">
-          email
+        <a href={`mailto:${flag.email}`} className={linkClass} title={`Email ${flag.email}`} aria-label="Email">
+          <Mail className="w-3.5 h-3.5" />
         </a>
       )}
       {flag.appfolio_link && (
@@ -160,9 +165,11 @@ function ContactLinks({ flag }: { flag: Flag }) {
           href={flag.appfolio_link}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-emerald-700 hover:underline"
+          className={linkClass}
+          title="Open guest card in AppFolio"
+          aria-label="Open in AppFolio"
         >
-          AppFolio ↗
+          <ExternalLink className="w-3.5 h-3.5" />
         </a>
       )}
     </span>
@@ -338,17 +345,19 @@ export function HavenDashboard() {
               <p className="text-xs text-slate-400 mt-2">Nothing flagged — all clear.</p>
             ) : (
               <>
-                <ul className="mt-3 space-y-2.5">
+                <ul className="mt-2.5 divide-y divide-slate-50">
                   {escalationsShown.map((f) => (
-                    <li key={f.conversation_id} className="text-xs border-l-2 pl-2.5" style={{ borderColor: STATUS.critical }}>
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="font-medium text-slate-700 truncate">{f.name}</span>
-                        <span className="text-slate-400 whitespace-nowrap">{timeAgo(f.flag_date)}</span>
-                      </div>
-                      <div className="text-slate-500">
-                        {f.flag_type || "Escalated"}
-                        {f.property ? ` · ${f.property}` : ""}
-                      </div>
+                    <li
+                      key={f.conversation_id}
+                      className="text-xs flex items-center gap-2 py-1 border-l-2 pl-2"
+                      style={{ borderLeftColor: STATUS.critical }}
+                      title={`${f.flag_type || "Escalated"}${f.property ? ` · ${f.property}` : ""}`}
+                    >
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="font-medium text-slate-700">{f.name}</span>
+                        <span className="text-slate-400"> · {f.flag_type || "Escalated"}</span>
+                      </span>
+                      <span className="text-slate-300 whitespace-nowrap">{timeAgo(f.flag_date)}</span>
                       <ContactLinks flag={f} />
                     </li>
                   ))}
@@ -356,7 +365,7 @@ export function HavenDashboard() {
                 {data.escalations.length > 8 && (
                   <button
                     onClick={() => setShowAllEscalations((v) => !v)}
-                    className="mt-3 text-xs font-medium text-emerald-700 hover:underline"
+                    className="mt-2 text-xs font-medium text-emerald-700 hover:underline"
                   >
                     {showAllEscalations ? "Show fewer" : `Show all ${data.escalations.length}`}
                   </button>
