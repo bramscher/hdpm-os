@@ -205,8 +205,15 @@ export function PropertyMap() {
   }, [visible, properties]);
 
   const counts = useMemo(() => {
-    const c: Record<PropertyMgmtStatus, number> = { active: 0, offboarding: 0, lost: 0 };
-    for (const p of properties) c[p.status]++;
+    const c: Record<PropertyMgmtStatus, { props: number; units: number }> = {
+      active: { props: 0, units: 0 },
+      offboarding: { props: 0, units: 0 },
+      lost: { props: 0, units: 0 },
+    };
+    for (const p of properties) {
+      c[p.status].props++;
+      c[p.status].units += p.unit_count;
+    }
     return c;
   }, [properties]);
 
@@ -291,7 +298,12 @@ export function PropertyMap() {
                 style={{ background: on ? config.color : "#CBD5E1" }}
               />
               {config.label}
-              <span className="tabular-nums">{counts[status]}</span>
+              <span
+                className="tabular-nums"
+                title={`${counts[status].props} properties / ${counts[status].units} units`}
+              >
+                {counts[status].props}/{counts[status].units}
+              </span>
             </button>
           );
         })}

@@ -13,6 +13,7 @@ import {
 import { syncUnitTurnsFromMirror } from '@/lib/maintenance/unit-turns';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { upsertAfBillFromWebhook } from '@/lib/af-bills';
+import { handleLeadUpdate } from '@/lib/lead-webhook';
 
 // ============================================
 // Webhook Payload Type
@@ -179,6 +180,11 @@ export async function POST(request: NextRequest) {
         await handleWorkOrderUpdate(entityId);
         break;
 
+      case 'leads':
+      case 'lead_updates': // legacy/alias
+        await handleLeadUpdate(entityId);
+        break;
+
       default:
         // Inspection phase: log financial topics (bills / journal entries / GL /
         // charges) with the fetched entity; ignore the noisy rest (units, etc.).
@@ -205,7 +211,7 @@ export async function GET() {
   return NextResponse.json({
     status: 'ok',
     endpoint: '/api/webhooks/appfolio',
-    topics: ['work_order_updates', 'bills / journal entries / GL / charges (inspection log)'],
+    topics: ['work_orders', 'leads', 'bills / journal entries / GL / charges (inspection log)'],
     message: 'AppFolio webhook receiver is active',
   });
 }

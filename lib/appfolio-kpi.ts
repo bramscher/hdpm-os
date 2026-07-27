@@ -108,19 +108,24 @@ async function v0FetchAll<T>(
   maxPages = 50
 ): Promise<T[]> {
   const all: T[] = [];
-  let pageNumber = 1;
+  let nextPath = path;
+  let nextParams: Record<string, string> = {
+    ...params,
+    'page[number]': '1',
+    'page[size]': String(pageSize),
+  };
 
-  while (true) {
-    const res = await v0Fetch<T>(
-      path,
-      { ...params, 'page[number]': String(pageNumber), 'page[size]': String(pageSize) },
-      config
-    );
-
+  for (let page = 1; page <= maxPages; page++) {
+    const res = await v0Fetch<T>(nextPath, nextParams, config);
     all.push(...(res.data || []));
-    if ((res.data || []).length < pageSize || !res.next_page_path) break;
-    pageNumber++;
-    if (pageNumber > maxPages) break;
+
+    // The server may cap page[size] below what we asked for (e.g. /leads caps
+    // at 100 as of 2026-05), so a short page does NOT mean the last page —
+    // next_page_path is the only reliable end-of-data signal. Follow it
+    // verbatim; it carries its own query string.
+    if (!res.next_page_path) break;
+    nextPath = res.next_page_path.replace(/^\/api\/v0/, '');
+    nextParams = {};
     // Small delay between pages to avoid 429 rate limits
     await new Promise((r) => setTimeout(r, 200));
   }
@@ -819,6 +824,8 @@ interface V0Lead {
   CreatedAt: string;
   Source: string | null;
   Status: string;
+  /** Since the 2026-05 API change: 'converted_to_tenant' marks a conversion */
+  InactiveReason: string | null;
   PropertyId: string | null;
   RentalApplicationId: string | null;
   RentalApplicationGroupId: string | null;
@@ -1007,6 +1014,13 @@ export interface LeasingFunnelKpi {
     pctNeverContacted: number | null;
     dataSource: 'showings' | 'communications' | 'unavailable';
   };
+  /** Since the 2026-05 AppFolio change most leads never get linked to an
+   * application or conversion, so stages 2-4 undercount. tenantMoveIns is the
+   * authoritative move-in count from tenant records for the same window. */
+  dataQuality: {
+    tenantMoveIns: number;
+    leadLinkageSparse: boolean;
+  };
 }
 
 export async function fetchLeasingFunnelKpi(): Promise<LeasingFunnelKpi> {
@@ -1024,6 +1038,7 @@ export async function fetchLeasingFunnelKpi(): Promise<LeasingFunnelKpi> {
       pctContactedUnder24Hours: null, pctNeverContacted: null,
       dataSource: 'unavailable',
     },
+    dataQuality: { tenantMoveIns: 0, leadLinkageSparse: false },
   };
 
   if (!config) return emptyResult;
@@ -1031,51 +1046,84 @@ export async function fetchLeasingFunnelKpi(): Promise<LeasingFunnelKpi> {
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - 90);
 
-  // Fetch leads and rental applications in parallel
-  const [leads, rentalApps] = await Promise.all([
+  // Tenants give the authoritative move-in count — since the 2026-05 change
+  // AppFolio rarely links leads to their eventual tenancy, so the lead-cohort
+  // stages below undercount and tenantMoveIns is the ground truth.
+  const [leads, tenantsForMoveIns] = await Promise.all([
     v0FetchAll<V0Lead>(
       '/leads',
       { 'filters[LastUpdatedAtFrom]': sinceDate.toISOString() },
       config
     ),
-    v0FetchAll<V0RentalApplication>(
-      '/rental_applications',
-      { 'filters[SubmittedAtFrom]': sinceDate.toISOString() },
+    v0FetchAll<V0Tenant>(
+      '/tenants',
+      { 'filters[LastUpdatedAtFrom]': sinceDate.toISOString() },
       config
     ),
   ]);
+  const tenantMoveIns = tenantsForMoveIns.filter(
+    (t) => !t.HiddenAt && t.MoveInOn && new Date(t.MoveInOn) >= sinceDate
+  ).length;
 
   // Anchor every stage on the same cohort (leads created in last 90 days),
   // so the funnel is monotonically narrowing rather than four independent metrics.
   const recentLeads = leads.filter((l) => new Date(l.CreatedAt) >= sinceDate);
 
-  const approvedAppIds = new Set(
-    rentalApps.filter((a) => a.Status === 'approved').map((a) => a.Id)
-  );
-  const rentalAppById = new Map(rentalApps.map((a) => [a.Id, a]));
+  // Since the 2026-05 API change, lead Status is only active/inactive: the
+  // application linkage moved to RentalApplicationGroupId and the conversion
+  // signal to InactiveReason='converted_to_tenant'. The legacy Status values
+  // are kept as fallbacks in case AppFolio re-emits them.
+  const isConverted = (l: V0Lead) =>
+    l.Status === 'converted' || l.InactiveReason === 'converted_to_tenant';
+  const isApplication = (l: V0Lead) =>
+    !!l.RentalApplicationGroupId ||
+    !!l.RentalApplicationId ||
+    LEAD_APPLIED_STATUSES.has(l.Status) ||
+    isConverted(l);
 
   // Stage 1: Guest Cards = recent leads.
   const guestCards = recentLeads.length;
 
-  // Stage 2: Applications = lead reached the application stage. AppFolio sets
-  // Status to applied_review/applied_canceled/applied_denied/converted once an
-  // application is submitted; we also count any lead with a linked rental_app
-  // in case the status flag lags the linkage.
-  const isApplication = (l: V0Lead) =>
-    !!l.RentalApplicationId || LEAD_APPLIED_STATUSES.has(l.Status);
+  // Stage 2: Applications = lead reached the application stage.
   const applications = recentLeads.filter(isApplication).length;
 
-  // Stage 3: Approvals = the linked rental_app is approved, or the lead has
-  // already converted (which implies approval).
+  // Stage 3: Approvals. Bulk /rental_applications queries return no rows
+  // since the 2026-05 change; applications are only reachable per GroupId,
+  // so fetch each distinct group linked from the cohort (paced for the ~60
+  // req/min v0 rate limit; v0Fetch retries 429s).
+  const groupIds = [
+    ...new Set(
+      recentLeads
+        .map((l) => l.RentalApplicationGroupId)
+        .filter((id): id is string => !!id)
+    ),
+  ];
+  const groupApps = new Map<string, V0RentalApplication[]>();
+  for (const groupId of groupIds) {
+    try {
+      const res = await v0Fetch<V0RentalApplication>(
+        '/rental_applications',
+        { 'filters[GroupId]': groupId, 'page[size]': '100' },
+        config
+      );
+      groupApps.set(groupId, res.data || []);
+    } catch (err) {
+      console.warn(`[KPI] rental_applications GroupId=${groupId} failed:`, err);
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  const isGroupApproved = (groupId: string | null) => {
+    if (!groupId) return false;
+    const apps = groupApps.get(groupId) || [];
+    return apps.some((a) => (a.Status || '').toLowerCase().includes('approved'));
+  };
   const isApproval = (l: V0Lead) =>
-    l.Status === 'converted' ||
-    (l.RentalApplicationId != null && approvedAppIds.has(l.RentalApplicationId));
+    isConverted(l) || isGroupApproved(l.RentalApplicationGroupId);
   const approvals = recentLeads.filter(isApproval).length;
 
-  // Stage 4: Move-Ins = lead Status is 'converted' (AppFolio's authoritative
-  // signal that the applicant became a tenant). Always a subset of approvals
-  // by construction.
-  const moveIns = recentLeads.filter((l) => l.Status === 'converted').length;
+  // Stage 4: Move-Ins = converted leads (AppFolio's authoritative signal that
+  // the applicant became a tenant). Always a subset of approvals by construction.
+  const moveIns = recentLeads.filter(isConverted).length;
 
   const safeDiv = (num: number, den: number) =>
     den > 0 ? Math.round((num / den) * 1000) / 10 : 0;
@@ -1092,9 +1140,11 @@ export async function fetchLeasingFunnelKpi(): Promise<LeasingFunnelKpi> {
   let totalDays = 0;
   let countWithDates = 0;
   for (const lead of recentLeads) {
-    if (lead.Status !== 'converted') continue;
-    const app = lead.RentalApplicationId ? rentalAppById.get(lead.RentalApplicationId) : null;
-    const endIso = app?.StatusChangedAt ?? lead.LastUpdatedAt;
+    if (!isConverted(lead)) continue;
+    const apps = lead.RentalApplicationGroupId
+      ? groupApps.get(lead.RentalApplicationGroupId) || []
+      : [];
+    const endIso = apps.find((a) => a.StatusChangedAt)?.StatusChangedAt ?? lead.LastUpdatedAt;
     if (!endIso) continue;
     const days = (new Date(endIso).getTime() - new Date(lead.CreatedAt).getTime()) / 86400000;
     if (days >= 0 && days <= 180) {
@@ -1131,6 +1181,10 @@ export async function fetchLeasingFunnelKpi(): Promise<LeasingFunnelKpi> {
       pctContactedUnder24Hours: null,
       pctNeverContacted: null,
       dataSource: 'unavailable',
+    },
+    dataQuality: {
+      tenantMoveIns,
+      leadLinkageSparse: tenantMoveIns > moveIns * 2,
     },
   };
 }

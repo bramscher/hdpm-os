@@ -189,16 +189,21 @@ async function fetchAllProperties(
   const allProperties: V0Property[] = [];
   let pageNumber = 1;
   const pageSize = 1000;
+  // Follow next_page_path — a short page is not an end-of-data signal because
+  // the server may cap page[size] below what we requested.
+  let nextPath: string | null = null;
 
   while (true) {
     console.log(`[AppFolio] Fetching properties page ${pageNumber}...`);
-    const res = await v0Fetch<V0Property>(
-      '/properties',
-      {
-        'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z',
-        'page[number]': String(pageNumber),
-        'page[size]': String(pageSize),
-      },
+    const res: V0ListResponse<V0Property> = await v0Fetch<V0Property>(
+      nextPath ?? '/properties',
+      nextPath
+        ? {}
+        : {
+            'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z',
+            'page[number]': '1',
+            'page[size]': String(pageSize),
+          },
       clientId,
       clientSecret,
       developerId
@@ -208,10 +213,8 @@ async function fetchAllProperties(
     allProperties.push(...properties);
     console.log(`[AppFolio] Page ${pageNumber}: ${properties.length} properties`);
 
-    // If we got fewer than pageSize, we're done
-    if (properties.length < pageSize || !res.next_page_path) {
-      break;
-    }
+    if (!res.next_page_path) break;
+    nextPath = res.next_page_path.replace(/^\/api\/v0/, '');
     pageNumber++;
 
     // Safety: max 10 pages (10,000 properties)
@@ -234,7 +237,7 @@ async function fetchUnitsForProperty(
   clientSecret: string,
   developerId: string
 ): Promise<V0Unit[]> {
-  const res = await v0Fetch<V0Unit>(
+  const res: V0ListResponse<V0Unit> = await v0Fetch<V0Unit>(
     '/units',
     {
       'filters[PropertyId]': propertyId,
@@ -262,15 +265,18 @@ async function fetchAllUnits(
   const allUnits: V0Unit[] = [];
   let pageNumber = 1;
   const pageSize = 1000;
+  let nextPath: string | null = null;
 
   while (true) {
-    const res = await v0Fetch<V0Unit>(
-      '/units',
-      {
-        'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z',
-        'page[number]': String(pageNumber),
-        'page[size]': String(pageSize),
-      },
+    const res: V0ListResponse<V0Unit> = await v0Fetch<V0Unit>(
+      nextPath ?? '/units',
+      nextPath
+        ? {}
+        : {
+            'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z',
+            'page[number]': '1',
+            'page[size]': String(pageSize),
+          },
       clientId,
       clientSecret,
       developerId
@@ -279,7 +285,8 @@ async function fetchAllUnits(
     const units = res.data || [];
     allUnits.push(...units);
 
-    if (units.length < pageSize || !res.next_page_path) break;
+    if (!res.next_page_path) break;
+    nextPath = res.next_page_path.replace(/^\/api\/v0/, '');
     pageNumber++;
     // Safety: max 20 pages (20,000 units)
     if (pageNumber > 20) {
@@ -547,14 +554,17 @@ export async function fetchAllVendors(): Promise<Map<string, string>> {
   // Fetch all vendors since the beginning of time
   const sinceDate = '2000-01-01T00:00:00Z';
 
+  let nextPath: string | null = null;
   while (true) {
-    const res = await v0Fetch<V0Vendor>(
-      '/vendors',
-      {
-        'filters[LastUpdatedAtFrom]': sinceDate,
-        'page[number]': String(pageNumber),
-        'page[size]': '200',
-      },
+    const res: V0ListResponse<V0Vendor> = await v0Fetch<V0Vendor>(
+      nextPath ?? '/vendors',
+      nextPath
+        ? {}
+        : {
+            'filters[LastUpdatedAtFrom]': sinceDate,
+            'page[number]': '1',
+            'page[size]': '200',
+          },
       clientId,
       clientSecret,
       developerId
@@ -570,7 +580,8 @@ export async function fetchAllVendors(): Promise<Map<string, string>> {
       vendorMap.set(v.Id, name);
     }
 
-    if (vendors.length < 200 || !res.next_page_path) break;
+    if (!res.next_page_path) break;
+    nextPath = res.next_page_path.replace(/^\/api\/v0/, '');
     pageNumber++;
     if (pageNumber > 20) break; // safety limit
   }
@@ -768,16 +779,18 @@ export async function fetchAppFolioWorkOrders(
   const MAX_RETRIES = 3;
   const RETRY_DELAY_MS = 3000;
 
-  async function fetchPage(pageNumber: number): Promise<V0ListResponse<V0WorkOrder>> {
+  async function fetchPage(pageNumber: number, pagePath?: string): Promise<V0ListResponse<V0WorkOrder>> {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         return await v0Fetch<V0WorkOrder>(
-          '/work_orders',
-          {
-            'filters[LastUpdatedAtFrom]': lastUpdatedFrom,
-            'page[number]': String(pageNumber),
-            'page[size]': String(pageSize),
-          },
+          pagePath ?? '/work_orders',
+          pagePath
+            ? {}
+            : {
+                'filters[LastUpdatedAtFrom]': lastUpdatedFrom,
+                'page[number]': String(pageNumber),
+                'page[size]': String(pageSize),
+              },
           clientId,
           clientSecret,
           developerId
@@ -804,22 +817,22 @@ export async function fetchAppFolioWorkOrders(
   let pageNumber = 1;
   console.log(`[AppFolio] Page 1: ${allWorkOrders.length} work orders`);
 
-  // Continue pagination if first page was full
-  if (allWorkOrders.length >= pageSize && firstPage.next_page_path) {
-    while (true) {
-      pageNumber++;
-      console.log(`[AppFolio] Fetching work orders page ${pageNumber}...`);
-      const res = await fetchPage(pageNumber);
+  // Follow next_page_path — the server may cap page[size] below what we
+  // requested, so a short page does not mean the last page.
+  let nextPath = firstPage.next_page_path;
+  while (nextPath) {
+    pageNumber++;
+    console.log(`[AppFolio] Fetching work orders page ${pageNumber}...`);
+    const res = await fetchPage(pageNumber, nextPath.replace(/^\/api\/v0/, ''));
 
-      const orders = res.data || [];
-      allWorkOrders.push(...orders);
-      console.log(`[AppFolio] Page ${pageNumber}: ${orders.length} work orders`);
+    const orders = res.data || [];
+    allWorkOrders.push(...orders);
+    console.log(`[AppFolio] Page ${pageNumber}: ${orders.length} work orders`);
 
-      if (orders.length < pageSize || !res.next_page_path) break;
-      if (pageNumber > 50) {
-        console.warn('[AppFolio] Hit max page limit (50), stopping pagination');
-        break;
-      }
+    nextPath = res.next_page_path;
+    if (pageNumber > 50) {
+      console.warn('[AppFolio] Hit max page limit (50), stopping pagination');
+      break;
     }
   }
 
@@ -1056,7 +1069,7 @@ export async function fetchPropertyById(
 
   try {
     // Fetch page 1 of properties (most PM companies have < 1000)
-    const res = await v0Fetch<V0Property>(
+    const res: V0ListResponse<V0Property> = await v0Fetch<V0Property>(
       '/properties',
       {
         'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z',
@@ -1149,15 +1162,18 @@ export async function fetchAppFolioTenants(): Promise<AppFolioTenant[]> {
   let pageNumber = 1;
   const pageSize = 200;
 
+  let nextPath: string | null = null;
   while (true) {
     console.log(`[AppFolio] Fetching tenants page ${pageNumber}...`);
-    const res = await v0Fetch<V0Tenant>(
-      '/tenants',
-      {
-        'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z',
-        'page[number]': String(pageNumber),
-        'page[size]': String(pageSize),
-      },
+    const res: V0ListResponse<V0Tenant> = await v0Fetch<V0Tenant>(
+      nextPath ?? '/tenants',
+      nextPath
+        ? {}
+        : {
+            'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z',
+            'page[number]': '1',
+            'page[size]': String(pageSize),
+          },
       clientId,
       clientSecret,
       developerId
@@ -1192,7 +1208,8 @@ export async function fetchAppFolioTenants(): Promise<AppFolioTenant[]> {
       });
     }
 
-    if (tenants.length < pageSize || !res.next_page_path) break;
+    if (!res.next_page_path) break;
+    nextPath = res.next_page_path.replace(/^\/api\/v0/, '');
     pageNumber++;
     if (pageNumber > 50) {
       console.warn('[AppFolio] Hit max tenant page limit (50), stopping');
@@ -1230,15 +1247,18 @@ export async function fetchAppFolioUnits(): Promise<AppFolioUnit[]> {
   let pageNumber = 1;
   const pageSize = 200;
 
+  let nextPath: string | null = null;
   while (true) {
     console.log(`[AppFolio] Fetching units page ${pageNumber}...`);
-    const res = await v0Fetch<V0Unit>(
-      '/units',
-      {
-        'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z',
-        'page[number]': String(pageNumber),
-        'page[size]': String(pageSize),
-      },
+    const res: V0ListResponse<V0Unit> = await v0Fetch<V0Unit>(
+      nextPath ?? '/units',
+      nextPath
+        ? {}
+        : {
+            'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z',
+            'page[number]': '1',
+            'page[size]': String(pageSize),
+          },
       clientId,
       clientSecret,
       developerId
@@ -1264,7 +1284,8 @@ export async function fetchAppFolioUnits(): Promise<AppFolioUnit[]> {
       });
     }
 
-    if (units.length < pageSize || !res.next_page_path) break;
+    if (!res.next_page_path) break;
+    nextPath = res.next_page_path.replace(/^\/api\/v0/, '');
     pageNumber++;
     if (pageNumber > 50) {
       console.warn('[AppFolio] Hit max unit page limit (50), stopping');
@@ -1413,22 +1434,26 @@ async function fetchAllRaw(path: string): Promise<RawRecord[]> {
   const all: RawRecord[] = [];
   let pageNumber = 1;
   const pageSize = 200;
+  let nextPath: string | null = null;
 
   while (true) {
-    const res = await v0Fetch<RawRecord>(
-      path,
-      {
-        'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z',
-        'page[number]': String(pageNumber),
-        'page[size]': String(pageSize),
-      },
+    const res: V0ListResponse<RawRecord> = await v0Fetch<RawRecord>(
+      nextPath ?? path,
+      nextPath
+        ? {}
+        : {
+            'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z',
+            'page[number]': '1',
+            'page[size]': String(pageSize),
+          },
       clientId,
       clientSecret,
       developerId
     );
     const rows = res.data || [];
     all.push(...rows);
-    if (rows.length < pageSize || !res.next_page_path) break;
+    if (!res.next_page_path) break;
+    nextPath = res.next_page_path.replace(/^\/api\/v0/, '');
     pageNumber++;
     if (pageNumber > 50) {
       console.warn(`[AppFolio] Hit max page limit (50) on ${path}, stopping`);
@@ -1556,15 +1581,18 @@ export async function fetchAppFolioPropertiesWithCustomFields(): Promise<
   let pageNumber = 1;
   const pageSize = 1000;
 
+  let nextPath: string | null = null;
   while (true) {
     console.log(`[AppFolio] Fetching properties (with CustomValues) page ${pageNumber}...`);
-    const res = await v0Fetch<V0PropertyWithCustomValues>(
-      '/properties',
-      {
-        'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z',
-        'page[number]': String(pageNumber),
-        'page[size]': String(pageSize),
-      },
+    const res: V0ListResponse<V0PropertyWithCustomValues> = await v0Fetch<V0PropertyWithCustomValues>(
+      nextPath ?? '/properties',
+      nextPath
+        ? {}
+        : {
+            'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z',
+            'page[number]': '1',
+            'page[size]': String(pageSize),
+          },
       clientId,
       clientSecret,
       developerId
@@ -1574,7 +1602,8 @@ export async function fetchAppFolioPropertiesWithCustomFields(): Promise<
     allProperties.push(...props);
     console.log(`[AppFolio] Page ${pageNumber}: ${props.length} properties`);
 
-    if (props.length < pageSize || !res.next_page_path) break;
+    if (!res.next_page_path) break;
+    nextPath = res.next_page_path.replace(/^\/api\/v0/, '');
     pageNumber++;
     if (pageNumber > 10) {
       console.warn('[AppFolio] Hit max property page limit (10), stopping');
@@ -1625,7 +1654,7 @@ export async function fetchAppFolioPropertyOwnerMap(
   async function lookup(propertyId: string): Promise<void> {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        const res = await v0Fetch<RawRecord>(
+        const res: V0ListResponse<RawRecord> = await v0Fetch<RawRecord>(
           '/owners',
           {
             'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z',

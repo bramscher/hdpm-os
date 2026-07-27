@@ -1083,6 +1083,9 @@ function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
   const funnel = latest.value.funnel as unknown as Record<string, number> | undefined;
   const convRates = latest.value.conversionRates as unknown as Record<string, number> | undefined;
   const contact = latest.value.timeToFirstContact as unknown as Record<string, number | string | null> | undefined;
+  const dataQuality = latest.value.dataQuality as unknown as
+    | { tenantMoveIns: number; leadLinkageSparse: boolean }
+    | undefined;
 
   const funnelStages: FunnelStage[] = funnel ? [
     { name: 'Guest Cards', count: funnel.guestCards ?? 0, rate: '—', color: '#0284c7' },
@@ -1139,6 +1142,14 @@ function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
             <FunnelBars stages={funnelStages} maxCount={funnelStages[0].count} />
           ) : (
             <p className="text-xs text-charcoal-400 py-8 text-center">No funnel data available</p>
+          )}
+          {dataQuality?.leadLinkageSparse && (
+            <p className="mt-2 text-xs text-amber-700">
+              Actual move-ins from tenant records: <span className="font-semibold">{dataQuality.tenantMoveIns}</span>.
+              Since May 2026 AppFolio rarely links leads to applications or
+              tenancies, so the Applications/Approvals/Move-Ins stages above
+              undercount lead outcomes.
+            </p>
           )}
           {/* Response time breakdown */}
           <div className="mt-4 pt-3 border-t border-sand-100">

@@ -139,15 +139,21 @@ export async function fetchVacantUnits(): Promise<VacantUnit[]> {
   ): Promise<T[]> {
     const all: T[] = [];
     let page = 1;
+    // Follow next_page_path — the server may cap page[size] below what we
+    // requested, so a short page is not an end-of-data signal.
+    let nextPath: string | null = null;
     while (true) {
-      const res = await v0Fetch<T>(
-        path,
-        { ...filters, 'page[number]': String(page), 'page[size]': String(pageSize) },
+      const res: V0ListResponse<T> = await v0Fetch<T>(
+        nextPath ?? path,
+        nextPath
+          ? {}
+          : { ...filters, 'page[number]': '1', 'page[size]': String(pageSize) },
         auth,
         devId
       );
       all.push(...(res.data || []));
-      if ((res.data || []).length < pageSize || !res.next_page_path) break;
+      if (!res.next_page_path) break;
+      nextPath = res.next_page_path.replace(/^\/api\/v0/, '');
       page++;
       if (page > maxPages) break;
     }
