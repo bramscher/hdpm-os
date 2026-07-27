@@ -23,6 +23,7 @@
 
 import { getSupabaseAdmin } from './supabase';
 import { getDashboardConfig } from './dashboard-config';
+import { havenResponseMetrics } from './haven';
 
 const APPFOLIO_V0_BASE = 'https://api.appfolio.com/api/v0';
 
@@ -1012,7 +1013,7 @@ export interface LeasingFunnelKpi {
     pctContactedUnder1Hour: number | null;
     pctContactedUnder24Hours: number | null;
     pctNeverContacted: number | null;
-    dataSource: 'showings' | 'communications' | 'unavailable';
+    dataSource: 'showings' | 'communications' | 'haven' | 'unavailable';
   };
   /** Since the 2026-05 AppFolio change most leads never get linked to an
    * application or conversion, so stages 2-4 undercount. tenantMoveIns is the
@@ -1156,32 +1157,38 @@ export async function fetchLeasingFunnelKpi(): Promise<LeasingFunnelKpi> {
     ? Math.round((totalDays / countWithDates) * 10) / 10
     : 0;
 
-  // Time to first contact — UNAVAILABLE from AppFolio v0 for this portfolio.
-  //
-  // Probed 2026-05-20:
-  //   /showings  → returns 200 but 0 rows (HDPM doesn't log showings here)
-  //   /communications, /messages, /conversations, /lead_contacts,
-  //   /lead_communications, /lead_notes, /tour_requests, /leasing_activities,
-  //   /lead_activities, /inquiries — all 404
-  //   Lead.LastUpdatedAt is unreliable as a first-response proxy: median
-  //   gap to CreatedAt is ~670 days because updates fire on later status
-  //   changes (apply, inactive), not first contact.
-  //
-  // To make this live, capture inbound lead timestamps + first staff
-  // touch in Supabase (webhook or manual button) and read from there.
+  // Time to first contact — from the Haven PMC leasing-conversations sync
+  // (haven_conversation, response_seconds computed from history events).
+  // AppFolio v0 has no usable source: /showings returns 0 rows and the
+  // communications-style endpoints are all 404 (probed 2026-05-20).
+  let timeToFirstContact: LeasingFunnelKpi['timeToFirstContact'] = {
+    avgHoursToFirstContact: null,
+    pctContactedUnder1Hour: null,
+    pctContactedUnder24Hours: null,
+    pctNeverContacted: null,
+    dataSource: 'unavailable',
+  };
+  try {
+    const haven = await havenResponseMetrics(getSupabaseAdmin(), sinceDate);
+    if (haven) {
+      timeToFirstContact = {
+        avgHoursToFirstContact: haven.avgHoursToFirstContact,
+        pctContactedUnder1Hour: haven.pctContactedUnder1Hour,
+        pctContactedUnder24Hours: haven.pctContactedUnder24Hours,
+        pctNeverContacted: haven.pctNeverContacted,
+        dataSource: 'haven',
+      };
+    }
+  } catch (err) {
+    console.warn('[KPI] Haven response metrics unavailable:', err);
+  }
 
   return {
     period: 'last_90_days',
     funnel: { guestCards, applications, approvals, moveIns },
     conversionRates,
     avgDaysLeadToLease,
-    timeToFirstContact: {
-      avgHoursToFirstContact: null,
-      pctContactedUnder1Hour: null,
-      pctContactedUnder24Hours: null,
-      pctNeverContacted: null,
-      dataSource: 'unavailable',
-    },
+    timeToFirstContact,
     dataQuality: {
       tenantMoveIns,
       leadLinkageSparse: tenantMoveIns > moveIns * 2,

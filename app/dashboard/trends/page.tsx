@@ -1156,9 +1156,9 @@ function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
             <p className="text-xs font-medium text-charcoal-500 mb-2">Response Time</p>
             {contactDataSource === 'unavailable' ? (
               <p className="text-xs text-charcoal-400 italic">
-                Response time data not available. The AppFolio v0 /showings endpoint
-                returns no results, and /communications is not exposed. Enable the Leads
-                webhook topic to begin capturing response metrics via lead_events.
+                Response time data not available yet. It comes from the Haven
+                leasing-conversation sync (/api/haven/sync) — requires a valid
+                HAVEN_API_KEY and the 20260727 haven_conversation migration.
               </p>
             ) : (
               <div className="flex gap-2">

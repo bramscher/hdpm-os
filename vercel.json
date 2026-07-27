@@ -37,6 +37,10 @@
       "schedule": "15 9 * * *"
     },
     {
+      "path": "/api/haven/sync",
+      "schedule": "45 13 * * *"
+    },
+    {
       "path": "/api/kpi/cron",
       "schedule": "0 14 * * *"
     },
