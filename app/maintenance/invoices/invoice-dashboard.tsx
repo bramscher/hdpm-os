@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { WorkOrderRow, HdmsInvoice, displayAssignee, TECHNICIANS } from "@/lib/invoices";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ import { WorkOrderTable } from "./work-order-table";
 import { InvoiceForm } from "./invoice-form";
 import { InvoiceList } from "./invoice-list";
 import { BillableReport } from "./billable-report";
+import { DailyReport } from "./daily-report";
 import { SelectionReport } from "./selection-report";
 import { ReconcileTab } from "./reconcile-tab";
 import { PaymentReconcileModal } from "./payment-reconcile-modal";
@@ -170,8 +172,13 @@ interface InvoiceDashboardProps {
 
 export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps) {
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  // Profit/markup reports (selection report, daily labor & markup) are gated
+  // to the ADMIN_EMAILS allowlist — same gate as the KPI dashboard.
+  const isAdmin = session?.user?.isAdmin === true;
   const [view, setView] = useState<View>("main");
   const [activeTab, setActiveTab] = useState<Tab>("work-orders");
+  const [reportView, setReportView] = useState<"billable" | "daily">("billable");
   const [parsedRows, setParsedRows] = useState<WorkOrderRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<WorkOrderRow | null>(null);
   const [editInvoice, setEditInvoice] = useState<HdmsInvoice | null>(null);
@@ -1025,7 +1032,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 invoices={invoices}
                 onRefresh={fetchInvoices}
                 onEdit={handleEditInvoice}
-                onRunReport={setReportInvoices}
+                onRunReport={isAdmin ? setReportInvoices : undefined}
                 onReconcile={setReconcileInvoices}
                 isLoading={isLoadingInvoices}
               />
@@ -1035,7 +1042,34 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           {/* ============================== */}
           {/* Report Tab                     */}
           {/* ============================== */}
-          {activeTab === "report" && <BillableReport />}
+          {activeTab === "report" && (
+            <div className="space-y-4">
+              {isAdmin && (
+                <div className="inline-flex rounded-lg border border-sand-200 overflow-hidden">
+                  {(
+                    [
+                      { id: "billable", label: "Billable" },
+                      { id: "daily", label: "Daily Labor & Markup" },
+                    ] as const
+                  ).map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setReportView(v.id)}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                        reportView === v.id
+                          ? "bg-terra-500 text-white"
+                          : "bg-white text-charcoal-500 hover:text-charcoal-700"
+                      }`}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {isAdmin && reportView === "daily" ? <DailyReport /> : <BillableReport />}
+            </div>
+          )}
 
           {/* ============================== */}
           {/* Reconcile Tab                  */}
@@ -1070,8 +1104,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
         />
       )}
 
-      {/* Selection markup report (modal over the Invoices tab) */}
-      {reportInvoices && (
+      {/* Selection markup report (modal over the Invoices tab — admin only) */}
+      {isAdmin && reportInvoices && (
         <SelectionReport
           invoices={reportInvoices}
           onClose={() => setReportInvoices(null)}
