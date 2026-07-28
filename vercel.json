@@ -49,6 +49,10 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/reception/sync",
+      "schedule": "20 14 * * *"
+    },
+    {
       "path": "/api/sync/zoom-contacts",
       "schedule": "0 11 * * *"
     },

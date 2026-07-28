@@ -77,6 +77,24 @@ interface Overview {
   synced: boolean;
 }
 
+interface ReceptionDay {
+  date: string;
+  total: number;
+  ashley: number;
+  staff: number;
+  haven: number;
+  havenDirect: number;
+  havenOverflow: number;
+  missed: number;
+  transfers: number;
+  transferLeasing: number;
+  transferMaintenance: number;
+  transferHuman: number;
+  transferStaff: number;
+  aiLeasing: number;
+  aiOther: number;
+}
+
 // ────────────────────────────────────────────────
 // Display config
 // ────────────────────────────────────────────────
@@ -196,6 +214,7 @@ export function HavenDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [hoverPhase, setHoverPhase] = useState<string | null>(null);
   const [showAllEscalations, setShowAllEscalations] = useState(false);
+  const [receptionDaily, setReceptionDaily] = useState<ReceptionDay[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,6 +226,17 @@ export function HavenDashboard() {
         if (!cancelled) setData(json);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
+      }
+    })();
+    // Daily reception report is separate and non-fatal — the section just
+    // hides until reception_call has data.
+    (async () => {
+      try {
+        const res = await fetch("/api/reception/report?days=14");
+        const json = await res.json();
+        if (res.ok && !cancelled) setReceptionDaily(json.daily || []);
+      } catch {
+        /* section stays hidden */
       }
     })();
     return () => {
@@ -524,6 +554,82 @@ export function HavenDashboard() {
           )}
         </section>
       </div>
+
+      {/* Daily reception call report */}
+      {receptionDaily && receptionDaily.length > 0 && (
+        <section className="bg-white rounded-xl border border-slate-200 p-5">
+          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+            <PhoneCall className="w-4 h-4 text-emerald-600" />
+            Reception — daily call report
+          </h2>
+          <p className="text-xs text-slate-400 mt-0.5 mb-3">
+            Main-line calls by who answered (from Zoom Phone), and where Haven sent callers
+            who needed a human.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-slate-500 border-b border-slate-200">
+                  <th className="text-left py-1.5 pr-3 font-medium">Date</th>
+                  <th className="text-right py-1.5 px-2 font-medium">Calls</th>
+                  <th className="text-right py-1.5 px-2 font-medium">Ashley</th>
+                  <th className="text-right py-1.5 px-2 font-medium">Haven AI</th>
+                  <th className="text-right py-1.5 px-2 font-medium text-slate-400">
+                    after-hours / overflow
+                  </th>
+                  <th className="text-right py-1.5 px-2 font-medium">Missed</th>
+                  <th className="text-right py-1.5 px-2 font-medium border-l border-slate-200">
+                    → Leasing
+                  </th>
+                  <th className="text-right py-1.5 px-2 font-medium">→ Maintenance</th>
+                  <th className="text-right py-1.5 px-2 font-medium">→ Human / staff</th>
+                </tr>
+              </thead>
+              <tbody>
+                {receptionDaily.map((d) => (
+                  <tr key={d.date} className="border-b border-slate-100 text-slate-700">
+                    <td className="py-1.5 pr-3 whitespace-nowrap">
+                      {new Date(`${d.date}T12:00:00`).toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </td>
+                    <td className="text-right py-1.5 px-2 font-medium">{d.total}</td>
+                    <td className="text-right py-1.5 px-2 text-emerald-700 font-medium">
+                      {d.ashley}
+                      {d.staff > 0 && (
+                        <span className="text-slate-400 font-normal"> +{d.staff} staff</span>
+                      )}
+                    </td>
+                    <td className="text-right py-1.5 px-2 text-sky-700 font-medium">{d.haven}</td>
+                    <td className="text-right py-1.5 px-2 text-slate-400">
+                      {d.havenDirect} / {d.havenOverflow}
+                    </td>
+                    <td
+                      className="text-right py-1.5 px-2"
+                      style={{ color: d.missed > 0 ? STATUS.serious : undefined }}
+                    >
+                      {d.missed}
+                    </td>
+                    <td className="text-right py-1.5 px-2 border-l border-slate-200">
+                      {d.transferLeasing}
+                    </td>
+                    <td className="text-right py-1.5 px-2">{d.transferMaintenance}</td>
+                    <td className="text-right py-1.5 px-2">{d.transferHuman + d.transferStaff}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-400 mt-2">
+            “→” columns are live transfers Haven placed back to the team (leasing = Approved
+            Application queue, maintenance = Existing Tenant queue). Haven calls it resolved
+            without a transfer aren’t split by topic — its API only exposes leasing
+            conversations.
+          </p>
+        </section>
+      )}
 
       <p className="text-xs text-slate-400 flex items-center gap-1">
         <Clock className="w-3 h-3" />

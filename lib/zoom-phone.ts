@@ -88,7 +88,7 @@ async function getAccessToken(): Promise<string> {
 // Low-level request helper
 // ============================================
 
-async function zoomFetch(
+export async function zoomFetch(
   path: string,
   init: RequestInit = {},
   retryOn429 = true,
