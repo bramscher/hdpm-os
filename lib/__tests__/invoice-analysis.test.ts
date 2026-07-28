@@ -31,7 +31,7 @@ function inv(over: Partial<HdmsInvoice>): HdmsInvoice {
 }
 
 describe('aggregate + chargedSplit', () => {
-  it('splits a payment into labor / materials(+appliance) / other charged', () => {
+  it('splits a payment into labor / materials / appliance / other charged', () => {
     const invoices = [
       inv({
         total_amount: 200,
@@ -45,9 +45,12 @@ describe('aggregate + chargedSplit', () => {
     ];
     const split = chargedSplit(aggregate(invoices));
     expect(split.labor).toBe(120);
-    expect(split.materials).toBe(72); // 50 materials + 22 appliance (charged)
+    expect(split.materials).toBe(50);
+    expect(split.appliance).toBe(22);
     expect(split.other).toBe(8);
     expect(split.total).toBe(200);
+    // The buckets must tie out to the invoice total exactly.
+    expect(split.labor + split.materials + split.appliance + split.other).toBe(split.total);
   });
 
   it('excludes void invoices from every dollar figure but counts them', () => {
@@ -67,6 +70,7 @@ describe('aggregate + chargedSplit', () => {
     const split = chargedSplit(aggregate(invoices));
     expect(split.labor).toBe(100);
     expect(split.materials).toBe(50);
+    expect(split.appliance).toBe(0);
     expect(split.total).toBe(150);
   });
 

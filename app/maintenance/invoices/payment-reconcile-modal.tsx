@@ -107,6 +107,12 @@ export function PaymentReconcileModal({
   // Charged split of the selected invoices (void excluded by aggregate()).
   const totals = useMemo(() => aggregate(invoices), [invoices]);
   const split = useMemo(() => chargedSplit(totals), [totals]);
+  // Buckets must reconstruct the invoice totals exactly, or something is off
+  // in the line items (e.g. a legacy invoice whose columns don't sum).
+  const tieDiff =
+    Math.round((split.total - (split.labor + split.materials + split.appliance + split.other)) * 100) /
+    100;
+  const tiesOut = Math.abs(tieDiff) < 0.01;
   const alreadyPaid = useMemo(() => invoices.filter((i) => i.payment_id), [invoices]);
 
   const selectedPayment = payments.find((p) => p.id === selectedPaymentId) || null;
@@ -346,10 +352,11 @@ export function PaymentReconcileModal({
           )}
 
           {/* Split cards for the selection */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
               { label: "Labor", value: split.labor, color: "text-blue-600" },
               { label: "Materials", value: split.materials, color: "text-amber-600" },
+              { label: "Appliances", value: split.appliance, color: "text-terra-600" },
               { label: "Other", value: split.other, color: "text-charcoal-500" },
               { label: "This selection", value: split.total, color: "text-charcoal-900" },
             ].map((c) => (
@@ -359,6 +366,21 @@ export function PaymentReconcileModal({
               </div>
             ))}
           </div>
+
+          {/* Tie-out: labor + materials + appliances + other must equal the selection total */}
+          {liveCount === 0 ? null : tiesOut ? (
+            <p className="flex items-center gap-1.5 text-[11px] text-green-700">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Labor + Materials + Appliances + Other ties out to the selection total.
+            </p>
+          ) : (
+            <p className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Line items are off by {formatCurrency(Math.abs(tieDiff))}{" "}
+              {tieDiff > 0 ? "under" : "over"} the invoice totals — check the selected
+              invoices&rsquo; line items before reconciling.
+            </p>
+          )}
 
           {/* Variance banner */}
           <div

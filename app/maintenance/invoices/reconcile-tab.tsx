@@ -403,6 +403,7 @@ export function ReconcileTab({
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Inv.</th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Labor</th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Materials</th>
+                  <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Appliances</th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Billed</th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Received</th>
                   <th className="text-right px-3 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">Variance</th>
@@ -442,6 +443,7 @@ export function ReconcileTab({
                         <td className="px-3 py-2.5 text-right text-xs text-charcoal-600">{p.invoice_count}</td>
                         <td className="px-3 py-2.5 text-right text-xs text-blue-600">{formatCurrency(Number(p.labor_total))}</td>
                         <td className="px-3 py-2.5 text-right text-xs text-amber-600">{formatCurrency(Number(p.materials_total))}</td>
+                        <td className="px-3 py-2.5 text-right text-xs text-terra-600">{formatCurrency(Number(p.appliance_total ?? 0))}</td>
                         <td className="px-3 py-2.5 text-right text-xs font-medium text-charcoal-800">{formatCurrency(Number(p.invoice_total))}</td>
                         <td className="px-3 py-2.5 text-right text-xs font-semibold text-charcoal-900">{formatCurrency(amt)}</td>
                         <td className="px-3 py-2.5 text-right">
@@ -502,7 +504,7 @@ export function ReconcileTab({
                       {isOpen && (
                         <tr className="bg-charcoal-50/40">
                           <td />
-                          <td colSpan={10} className="px-3 py-3">
+                          <td colSpan={11} className="px-3 py-3">
                             {detailLoading ? (
                               <div className="flex items-center text-charcoal-400 text-xs py-2">
                                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />

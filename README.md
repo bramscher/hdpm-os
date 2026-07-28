@@ -377,14 +377,28 @@ Creates maintenance invoices from three input sources:
 3. **PDF Scan** — extract invoice data from scanned/photographed PDFs using Claude AI
 
 **Features:**
-- Line items with Type (Labor/Materials/Other), Qty, Price, Extended (auto-calculated)
+- Line items with Type (Labor/Materials/Appliance/Other), Qty, Price, Extended (auto-calculated)
+- Internal cost + markup model: materials/appliance lines carry internal cost with default markup (**25% materials, 10% appliances**); the owner-facing PDF is cost-blind (shows only the marked-up price)
 - Default labor rate $95/hr with after-hours/emergency toggle (1.5x = $142.50/hr)
 - Claude AI rewrites work descriptions into professional invoice language
 - Auto-extracts materials and line items from descriptions
 - PDF export with HDMS branding (Qty/Price/Extended columns, subtotals, totals)
 - Auto-save with 2-second debounce
 - Internal notes pre-populated with full work order reference data
-- Status tracking: Draft > Submitted > Paid
+- Status tracking: Draft → Generated → Attached (Void to cancel); "paid" is separate — an invoice is paid once it's linked to a payment in the Reconcile tab
+- **Markup report** — select invoices on the Invoices tab → "Report from selection" for an internal cost/markup/charged breakdown (materials vs appliances), with CSV export and print
+
+### Payment Reconciliation (Reconcile tab)
+
+AppFolio pays HDMS out of the Client Trust Account as lump ACHs covering many invoices. The Reconcile tab is the ledger that ties those payments back to individual invoices:
+
+- **Capture ACH payment** — record a trust-account payment (date, amount, payee, reference) as an "open" payment, with or without invoices attached yet
+- **New reconciliation** — select the invoices a payment covered and attach them. Attaching sets `payment_id` on each invoice (that link *is* the paid state) and snapshots the payment's totals: labor / materials / appliances / other / invoice total. Snapshots are recomputed only on attach/detach so the ledger stays stable as an audit record even if an invoice is edited later
+- **Reconcile Payment modal** — shows the selection split as five cards (Labor / Materials / Appliances / Other / Total) plus a **tie-out check**: the buckets must reconstruct the invoice totals to the cent, or an amber warning shows the exact variance before you record. Variance vs the payment amount (short/over/balanced) is shown live
+- **AppFolio billing view** — HDMS-vendor bills synced from AppFolio (`af_bills`), auto-matched to invoices by reference (~91%); work the unmatched/mismatched remainder by hand
+- Payments are fully reversible: deleting a payment (or detaching invoices) reverts the invoices to unpaid and re-snapshots
+
+One-time backfill after schema changes: `npx tsx scripts/recompute-payment-snapshots.ts` re-splits every payment's snapshot from its linked invoices' line items (idempotent).
 
 ---
 
@@ -581,7 +595,9 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `kpi_snapshots` | Daily-captured KPI values backing the dashboard sparklines and trends charts |
 | `saved_listings` | Saved Craigslist listing drafts with generated HTML |
 | `cached_vacancies` | Cached AppFolio vacancy data for instant page load |
-| `hdms_invoices` | Maintenance invoices (JSONB line items, PDF storage, WO link) |
+| `hdms_invoices` | Maintenance invoices (JSONB line items, PDF storage, WO link, `payment_id` = paid) |
+| `hdms_payments` | Trust-account payment ledger (ACH/check) with snapshotted labor/materials/appliance/other totals |
+| `af_bills` | AppFolio HDMS-vendor bill snapshot, auto-matched to invoices by reference |
 | `work_orders` | AppFolio work-order mirror **plus** Maintenance OS workflow columns (stage, HDPM owner, next-action date, P1–P4, verify/closure fields) |
 | `wo_event` | Append-only work-order audit trail (trigger-enforced) — every stage change, note, exception, sync update |
 | `vendor` / `vendor_assignment` | Vendor profiles (license, insurance, rates, demote flag) + acceptance/performance tracking |

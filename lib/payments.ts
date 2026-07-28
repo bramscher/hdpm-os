@@ -28,6 +28,7 @@ export interface Payment {
   invoice_count: number;
   labor_total: number;
   materials_total: number;
+  appliance_total: number;
   other_total: number;
   invoice_total: number; // sum of linked invoice total_amount (live invoices)
 
@@ -123,9 +124,10 @@ export async function getPaymentById(id: string): Promise<PaymentWithInvoices | 
 
 /**
  * Recompute a payment's snapshot totals from the invoices currently linked to
- * it and persist them. Returns the refreshed Payment.
+ * it and persist them. Returns the refreshed Payment. Exported so
+ * scripts/recompute-payment-snapshots.ts can re-split existing ledger rows.
  */
-async function recomputeSnapshot(paymentId: string): Promise<Payment> {
+export async function recomputeSnapshot(paymentId: string): Promise<Payment> {
   const supabase = getSupabaseAdmin();
 
   const { data: linked, error } = await supabase
@@ -146,6 +148,7 @@ async function recomputeSnapshot(paymentId: string): Promise<Payment> {
       invoice_count: liveCount,
       labor_total: split.labor,
       materials_total: split.materials,
+      appliance_total: split.appliance,
       other_total: split.other,
       invoice_total: split.total,
     })
@@ -182,6 +185,7 @@ export async function capturePayment(input: CapturePaymentInput): Promise<Paymen
       invoice_count: 0,
       labor_total: 0,
       materials_total: 0,
+      appliance_total: 0,
       other_total: 0,
       invoice_total: 0,
       created_by: input.created_by,

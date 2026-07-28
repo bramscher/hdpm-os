@@ -113,16 +113,22 @@ export function aggregate(invoices: HdmsInvoice[]): Totals {
   return t;
 }
 
-/** The labor / materials(+appliance) / other charged split that makes up a payment. */
+/** The labor / materials / appliance / other charged split that makes up a payment. */
 export interface ChargedSplit {
   labor: number;
-  materials: number; // materials.charged + appliance.charged
+  materials: number; // materials.charged only (appliances broken out separately)
+  appliance: number; // appliance.charged
   other: number;
-  total: number; // labor + materials + other (= sum of live total_amount)
+  total: number; // sum of live total_amount
 }
 
 /** Reduce Totals to the owner-charged split used for payment reconciliation. */
 export function chargedSplit(t: Totals): ChargedSplit {
-  const materials = t.materials.charged + t.appliance.charged;
-  return { labor: t.labor, materials, other: t.other, total: t.grand };
+  return {
+    labor: t.labor,
+    materials: t.materials.charged,
+    appliance: t.appliance.charged,
+    other: t.other,
+    total: t.grand,
+  };
 }
