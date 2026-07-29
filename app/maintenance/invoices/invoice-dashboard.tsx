@@ -689,18 +689,21 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 </span>
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("report")}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                activeTab === "report"
-                  ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
-                  : "text-charcoal-400 hover:text-charcoal-600"
-              }`}
-            >
-              <TrendingUp className="h-4 w-4" />
-              Report
-            </button>
+            {/* Reporting is admin-only (ADMIN_EMAILS) — hidden for all other staff. */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("report")}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  activeTab === "report"
+                    ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
+                    : "text-charcoal-400 hover:text-charcoal-600"
+                }`}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Report
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setActiveTab("reconcile")}
@@ -1042,10 +1045,9 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           {/* ============================== */}
           {/* Report Tab                     */}
           {/* ============================== */}
-          {activeTab === "report" && (
+          {activeTab === "report" && isAdmin && (
             <div className="space-y-4">
-              {isAdmin && (
-                <div className="inline-flex rounded-lg border border-sand-200 overflow-hidden">
+              <div className="inline-flex rounded-lg border border-sand-200 overflow-hidden">
                   {(
                     [
                       { id: "billable", label: "Billable" },
@@ -1065,9 +1067,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                       {v.label}
                     </button>
                   ))}
-                </div>
-              )}
-              {isAdmin && reportView === "daily" ? <DailyReport /> : <BillableReport />}
+              </div>
+              {reportView === "daily" ? <DailyReport /> : <BillableReport />}
             </div>
           )}
 
