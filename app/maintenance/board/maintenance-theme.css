@@ -96,6 +96,25 @@
   background: var(--tint); padding: 6px 10px; border-radius: 6px;
 }
 
+/* ── Monday Review item lists (one row per WO, not run-on prose) ── */
+.maint-os ul.mo-items { list-style: none; margin: 0; padding: 0; }
+.maint-os ul.mo-items li {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 4px 0; border-bottom: 1px dashed var(--hair);
+}
+.maint-os ul.mo-items li:last-child { border-bottom: 0; }
+.maint-os .mi-desc {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.maint-os .mi-where {
+  flex: 0 0 auto; font-weight: 600; color: var(--dk); font-size: 12px;
+  background: var(--tint); padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+}
+.maint-os .mi-meta { flex: 0 0 auto; color: var(--muted); font-size: 12px; white-space: nowrap; text-align: right; }
+.maint-os .mo-more { display: inline-block; margin-top: 5px; font-size: 12px; font-weight: 600; }
+.maint-os .mo-hint { display: block; margin-top: 3px; color: var(--muted); font-size: 11.5px; font-weight: 400; }
+
 /* ── Board layout toggle (Kanban / By Property) ── */
 .maint-os .mo-seg { display: inline-flex; gap: 4px; margin-bottom: 12px; }
 .maint-os .mo-seg button {
