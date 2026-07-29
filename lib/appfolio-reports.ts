@@ -63,8 +63,11 @@ export async function runReport<T = Record<string, unknown>>(
     }
     rows.push(...(parsed.results ?? []));
     if (!parsed.next_page_url) break;
-    // next_page_url references cached results: POST with no filters.
-    url = parsed.next_page_url;
+    // next_page_url references cached results: POST with no filters. It may
+    // come back host-relative ("/api/v2/reports/...") — absolutize it.
+    url = parsed.next_page_url.startsWith('/')
+      ? `https://highdesertpm.appfolio.com${parsed.next_page_url}`
+      : parsed.next_page_url;
     body = undefined;
     if (page > 100) throw new Error(`Reports API ${name}: runaway pagination`);
   }

@@ -76,7 +76,7 @@ export interface SyncResult {
 // Matching
 // ============================================
 
-interface MatchTarget {
+export interface MatchTarget {
   id: string;
   invoice_number: number;
   wo_reference: string | null;
@@ -89,7 +89,7 @@ interface MatchTarget {
  *   2. Reference is a WO reference — "41548-1" (must be unique among invoices)
  *   3. Description starts with a WO reference — "42017-1 - Purchase new …"
  */
-function matchBill(
+export function matchBill(
   bill: Pick<AfBill, 'reference' | 'description'>,
   byNumber: Map<number, MatchTarget>,
   byWoRef: Map<string, MatchTarget[]>
@@ -120,7 +120,7 @@ function matchBill(
   return null;
 }
 
-async function loadMatchTargets(): Promise<{
+export async function loadMatchTargets(): Promise<{
   byNumber: Map<number, MatchTarget>;
   byWoRef: Map<string, MatchTarget[]>;
 }> {

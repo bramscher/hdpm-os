@@ -16,6 +16,7 @@ import {
   Receipt,
   Link2,
   Unlink,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HdmsInvoice } from "@/lib/invoices";
@@ -77,6 +78,8 @@ export function ReconcileTab({
   const [afSummary, setAfSummary] = useState<AfBillSummary | null>(null);
   const [afSyncing, setAfSyncing] = useState(false);
   const [afSyncMessage, setAfSyncMessage] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -128,6 +131,37 @@ export function ReconcileTab({
       setAfSyncMessage(err instanceof Error ? err.message : "Sync failed");
     } finally {
       setAfSyncing(false);
+    }
+  }
+
+  async function handleImport() {
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const res = await fetch("/api/payments/import-appfolio", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Import failed");
+      const r = data.result as {
+        created: number;
+        adopted: number;
+        existing: number;
+        attachedTotal: number;
+        disbursements: Array<{ unmatchedRefs: string[]; conflicts: string[] }>;
+      };
+      const unmatched = r.disbursements.reduce((s, d) => s + d.unmatchedRefs.length, 0);
+      const conflicts = r.disbursements.reduce((s, d) => s + d.conflicts.length, 0);
+      setImportMessage(
+        `${r.created} new, ${r.adopted} adopted, ${r.existing} already imported · ` +
+          `${r.attachedTotal} invoices attached` +
+          (unmatched ? ` · ${unmatched} bill refs unmatched` : "") +
+          (conflicts ? ` · ${conflicts} conflicts` : "")
+      );
+      await fetchPayments();
+      onRefreshInvoices();
+    } catch (err) {
+      setImportMessage(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -265,6 +299,21 @@ export function ReconcileTab({
           <Button
             size="sm"
             variant="outline"
+            onClick={handleImport}
+            disabled={importing}
+            title="Pull HDMS disbursements from the AppFolio check register and attach the invoices their bills covered"
+            className="text-xs h-9"
+          >
+            {importing ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Import from AppFolio
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => setMode("billing")}
             className="text-xs h-9"
           >
@@ -295,6 +344,12 @@ export function ReconcileTab({
           </Button>
         </div>
       </div>
+
+      {importMessage && (
+        <p className="text-[11px] text-charcoal-500 bg-charcoal-50/80 border border-sand-200 rounded-lg px-3 py-2">
+          {importMessage}
+        </p>
+      )}
 
       {/* Billing check strip: our invoiced total vs what AppFolio has billed */}
       <div className="bg-white rounded-xl border border-sand-200 shadow-card px-4 py-3">
