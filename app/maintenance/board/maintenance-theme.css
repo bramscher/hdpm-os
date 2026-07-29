@@ -97,21 +97,31 @@
 }
 
 /* ── Monday Review item lists (one row per WO, not run-on prose) ── */
-.maint-os ul.mo-items { list-style: none; margin: 0; padding: 0; }
+/* mo-fixed pins the column widths so long descriptions ellipsize instead of
+   stretching the table and pushing the property/owner chips off-screen. */
+.maint-os table.mo-fixed { table-layout: fixed; }
+.maint-os ul.mo-items { list-style: none; margin: 4px 0 0; padding: 0; }
 .maint-os ul.mo-items li {
-  display: flex; align-items: baseline; gap: 10px;
-  padding: 4px 0; border-bottom: 1px dashed var(--hair);
+  padding: 5px 0; border-bottom: 1px dashed var(--hair);
 }
 .maint-os ul.mo-items li:last-child { border-bottom: 0; }
+.maint-os .mi-row { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .maint-os .mi-desc {
   flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.maint-os .mi-wonum { color: var(--muted); font-size: 11.5px; font-weight: 700; }
 .maint-os .mi-where {
   flex: 0 0 auto; font-weight: 600; color: var(--dk); font-size: 12px;
   background: var(--tint); padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+  max-width: 260px; overflow: hidden; text-overflow: ellipsis;
+}
+.maint-os .mi-owner {
+  flex: 0 0 auto; font-weight: 600; color: var(--muted); font-size: 11.5px;
+  border: 1px solid var(--hair); padding: 0 7px; border-radius: 999px; white-space: nowrap;
 }
 .maint-os .mi-meta { flex: 0 0 auto; color: var(--muted); font-size: 12px; white-space: nowrap; text-align: right; }
+.maint-os .mi-reason { display: block; width: 100%; max-width: 560px; margin-top: 3px; font-size: 12px; }
 .maint-os .mo-more { display: inline-block; margin-top: 5px; font-size: 12px; font-weight: 600; }
 .maint-os .mo-hint { display: block; margin-top: 3px; color: var(--muted); font-size: 11.5px; font-weight: 400; }
 

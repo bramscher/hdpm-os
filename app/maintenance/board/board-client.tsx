@@ -215,7 +215,9 @@ export default function BoardClient({
           {view === 'aging' && <Aging board={activeBoard} onChanged={load} />}
           {view === 'exceptions' && <Exceptions data={exceptions} />}
           {view === 'turnover' && <Turnover board={activeBoard} onChanged={load} />}
-          {view === 'monday' && <MondayReview board={activeBoard} exceptions={exceptions} />}
+          {view === 'monday' && (
+            <MondayReview board={activeBoard} exceptions={exceptions} onChanged={load} />
+          )}
         </>
       )}
     </div>
