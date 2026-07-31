@@ -45,6 +45,10 @@ function formatCurrencyShort(amount: number): string {
 function billableDate(inv: HdmsInvoice): Date | null {
   const raw = inv.completed_date || inv.created_at;
   if (!raw) return null;
+  // completed_date is a Postgres DATE ("YYYY-MM-DD") — parse it as local
+  // midnight; new Date(raw) would treat it as UTC and shift it a day earlier.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (dateOnly) return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
   const d = new Date(raw);
   return isNaN(d.getTime()) ? null : d;
 }

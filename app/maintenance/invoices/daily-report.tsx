@@ -31,6 +31,9 @@ function formatHours(h: number): string {
 function invoiceDay(inv: HdmsInvoice): string | null {
   const raw = inv.completed_date || inv.created_at;
   if (!raw) return null;
+  // completed_date is a Postgres DATE ("YYYY-MM-DD") — use it verbatim;
+  // new Date() would parse it as UTC midnight and shift it a day earlier locally.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   const d = new Date(raw);
   if (isNaN(d.getTime())) return null;
   const mm = String(d.getMonth() + 1).padStart(2, "0");
