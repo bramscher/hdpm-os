@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const AI_LEASING_PHONE = '(541) 406-6409';
 
+// Rentzap apply pages live at /apply/<integer listing id> — Rentzap's own id,
+// NOT our AppFolio unit UUID (those render an empty criteria page with no
+// Apply button). The public feed below is the same unauthenticated Xano API
+// Rentzap's site uses; we match our unit to their listing by street address
+// and, for multi-unit buildings, by unit number from the detail endpoint.
+const RENTZAP_FEED_URL = 'https://xdw0-sipj-awhp.n7.xano.io/api:bnW68mc9/public-listings';
+const RENTZAP_DETAIL_URL = 'https://xdw0-sipj-awhp.n7.xano.io/api:9leauqIl/listings';
+const RENTZAP_COMPANY_SLUG = 'highdesert';
+// Public AppFolio listings page — applicants can still find the unit and apply
+// there when we can't resolve a Rentzap listing id.
+const APPLY_FALLBACK_URL = 'https://highdesertpm.appfolio.com/listings';
+
 interface UnitInput {
   appfolio_unit_id: string;
   address: string;
@@ -22,6 +34,117 @@ interface GenerateRequest {
   unit: UnitInput;
   rently_enabled: boolean;
   rently_url: string;
+}
+
+interface RentzapListing {
+  id: number;
+  formatted_address: string | null;
+  listing_rent_price: number | null;
+  listing_is_on_market: boolean;
+  is_draft: boolean;
+  listing_is_demo: boolean;
+  status: string;
+  _providers?: { _provider_companies?: { slug?: string } };
+}
+
+const STREET_SUFFIXES = new Set([
+  'ave', 'avenue', 'st', 'street', 'dr', 'drive', 'ln', 'lane', 'lp', 'loop',
+  'ct', 'court', 'pl', 'place', 'rd', 'road', 'way', 'blvd', 'boulevard',
+  'ter', 'terrace', 'cir', 'circle', 'hwy', 'highway',
+]);
+
+/** Lowercase, strip punctuation, collapse whitespace. */
+function normalizeAddress(addr: string): string {
+  return addr.toLowerCase().replace(/[.,#]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Street-address prefix used for matching: house number + street name, minus
+ * any unit designator and minus a trailing suffix word so "36th Lp" still
+ * matches Rentzap's "36th Loop".
+ */
+function streetMatchKey(addr: string): string {
+  const base = normalizeAddress(addr.split('#')[0].replace(/\b(unit|apt|ste)\b.*$/i, ''));
+  const words = base.split(' ');
+  if (words.length > 2 && STREET_SUFFIXES.has(words[words.length - 1])) {
+    words.pop();
+  }
+  return words.join(' ');
+}
+
+/** "171 SW C St. #7" → "7"; also handles "Unit 7" / "Apt 7". */
+function extractUnitNumber(addr: string): string | null {
+  const m = addr.match(/#\s*([\w-]+)/) || addr.match(/\b(?:unit|apt)\.?\s+([\w-]+)/i);
+  return m ? m[1] : null;
+}
+
+/**
+ * Resolve the Rentzap apply URL for a unit, or fall back to our public
+ * AppFolio listings page with a warning the UI can surface.
+ */
+async function resolveApplyUrl(
+  unit: UnitInput
+): Promise<{ url: string; warning?: string }> {
+  const fallback = (why: string) => ({
+    url: APPLY_FALLBACK_URL,
+    warning: `Couldn't find this unit's Rentzap apply link (${why}) — the listing links to the general AppFolio listings page instead. If the unit has a Rentzap listing, paste its apply link in manually.`,
+  });
+
+  try {
+    const res = await fetch(RENTZAP_FEED_URL, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return fallback(`Rentzap feed returned ${res.status}`);
+    const feed: RentzapListing[] = await res.json();
+
+    const key = streetMatchKey(unit.address);
+    const candidates = feed.filter(
+      (l) =>
+        l._providers?._provider_companies?.slug === RENTZAP_COMPANY_SLUG &&
+        l.listing_is_on_market &&
+        !l.is_draft &&
+        !l.listing_is_demo &&
+        l.status !== 'leased' &&
+        l.formatted_address &&
+        normalizeAddress(l.formatted_address).startsWith(key)
+    );
+
+    if (candidates.length === 1) {
+      return { url: `https://www.rentzap.com/apply/${candidates[0].id}` };
+    }
+    if (candidates.length === 0) return fallback('no listing matches this address');
+
+    // Multi-unit building: disambiguate via the detail endpoint's unit number.
+    const unitNumber = extractUnitNumber(unit.address);
+    if (unitNumber) {
+      const details = await Promise.all(
+        candidates.slice(0, 6).map(async (c) => {
+          try {
+            const r = await fetch(`${RENTZAP_DETAIL_URL}/${c.id}`, {
+              signal: AbortSignal.timeout(8000),
+            });
+            if (!r.ok) return null;
+            const d = await r.json();
+            return { id: c.id, unitNumber: d?._unit?.unit_number as string | undefined };
+          } catch {
+            return null;
+          }
+        })
+      );
+      const hit = details.find(
+        (d) => d?.unitNumber?.toLowerCase() === unitNumber.toLowerCase()
+      );
+      if (hit) return { url: `https://www.rentzap.com/apply/${hit.id}` };
+    }
+
+    // Last resort: unique rent match among the candidates.
+    const byRent = candidates.filter((c) => c.listing_rent_price === unit.rent);
+    if (byRent.length === 1) {
+      return { url: `https://www.rentzap.com/apply/${byRent[0].id}` };
+    }
+
+    return fallback('several Rentzap listings share this address');
+  } catch {
+    return fallback('Rentzap feed unreachable');
+  }
 }
 
 function generateTitle(unit: UnitInput): string {
@@ -103,7 +226,7 @@ function parseDescription(raw: string): { intro: string; bullets: string[]; agre
  * blockquote. h2 renders as visually distinct bold, blockquote gives an
  * indented stats block, and ul bullets render cleanly.
  */
-function formatListing(unit: UnitInput, rentlyEnabled: boolean, rentlyUrl: string): string {
+function formatListing(unit: UnitInput, rentlyEnabled: boolean, rentlyUrl: string, applyUrl: string): string {
   const rentlyBlock = rentlyEnabled
     ? `
 <h2>Tour On Your Schedule</h2>
@@ -147,8 +270,8 @@ ${introHtml}
 ${bulletsHtml}
 
 <h2>Ready to Make This Home Yours?</h2>
-<p><b><a href="https://www.rentzap.com/apply/${unit.appfolio_unit_id}">Apply Online Now</a></b></p>
-<p>https://www.rentzap.com/apply/${unit.appfolio_unit_id}</p>
+<p><b><a href="${applyUrl}">Apply Online Now</a></b></p>
+<p>${applyUrl}</p>
 
 <h2>Questions? We're Available 24/7</h2>
 <p>Our AI leasing agent Leesa is ready to help any time — no office hours, no waiting.</p>
@@ -187,8 +310,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const apply = await resolveApplyUrl(unit);
   const title = generateTitle(unit);
-  const listingBody = formatListing(unit, rently_enabled, rently_url);
+  const listingBody = formatListing(unit, rently_enabled, rently_url, apply.url);
 
-  return NextResponse.json({ title, body: listingBody });
+  return NextResponse.json({
+    title,
+    body: listingBody,
+    warnings: apply.warning ? [apply.warning] : [],
+  });
 }

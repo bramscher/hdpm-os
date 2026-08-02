@@ -138,6 +138,7 @@ export function CraigslistTool() {
   const [rentlyUrls, setRentlyUrls] = useState<Record<string, string>>({});
 
   // Editor state
+  const [genWarnings, setGenWarnings] = useState<string[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<VacantUnit | null>(null);
   const [generating, setGenerating] = useState(false);
   const [title, setTitle] = useState("");
@@ -387,6 +388,7 @@ export function CraigslistTool() {
       setGenerating(true);
       setTitle("");
       setBody("");
+      setGenWarnings([]);
       setShowSource(false);
       setCopied(false);
       setSaved(false);
@@ -414,6 +416,7 @@ export function CraigslistTool() {
 
         setTitle(data.title || "");
         setBody(data.body || "");
+        setGenWarnings(data.warnings || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to format listing");
         setView("list");
@@ -514,6 +517,7 @@ export function CraigslistTool() {
   const handleLoadSaved = useCallback((listing: SavedListing) => {
     setTitle(listing.listing_title);
     setBody(listing.listing_body);
+    setGenWarnings([]);
     setEditorRentlyUrl(listing.rently_url || "");
     setActiveListing(listing);
     setPostUrl(listing.craigslist_url || "");
@@ -1426,6 +1430,14 @@ export function CraigslistTool() {
           >
             <X className="h-3.5 w-3.5 inline" />
           </button>
+        </div>
+      )}
+
+      {!generating && genWarnings.length > 0 && (
+        <div className="p-4 bg-amber-50/80 border border-amber-200/50 rounded-xl text-amber-800 text-sm mb-4">
+          {genWarnings.map((w) => (
+            <p key={w}>{w}</p>
+          ))}
         </div>
       )}
 
