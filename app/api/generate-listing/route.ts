@@ -47,29 +47,25 @@ interface RentzapListing {
   _providers?: { _provider_companies?: { slug?: string } };
 }
 
-const STREET_SUFFIXES = new Set([
-  'ave', 'avenue', 'st', 'street', 'dr', 'drive', 'ln', 'lane', 'lp', 'loop',
-  'ct', 'court', 'pl', 'place', 'rd', 'road', 'way', 'blvd', 'boulevard',
-  'ter', 'terrace', 'cir', 'circle', 'hwy', 'highway',
-]);
-
 /** Lowercase, strip punctuation, collapse whitespace. */
 function normalizeAddress(addr: string): string {
   return addr.toLowerCase().replace(/[.,#]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 /**
- * Street-address prefix used for matching: house number + street name, minus
- * any unit designator and minus a trailing suffix word so "36th Lp" still
- * matches Rentzap's "36th Loop".
+ * Match keys for an AppFolio unit address, most-specific first. AppFolio unit
+ * addresses often carry a property nickname after the street ("2853 SW
+ * Umatilla Ave Garabedian 2853 - 474") and abbreviate suffixes differently
+ * than Rentzap ("Lp" vs "Loop"), so suffix-aware prefix matching is fragile.
+ * The house number plus the next word (usually the directional) is selective
+ * enough within one company's listings; house number alone is the fallback.
  */
-function streetMatchKey(addr: string): string {
-  const base = normalizeAddress(addr.split('#')[0].replace(/\b(unit|apt|ste)\b.*$/i, ''));
-  const words = base.split(' ');
-  if (words.length > 2 && STREET_SUFFIXES.has(words[words.length - 1])) {
-    words.pop();
-  }
-  return words.join(' ');
+function streetMatchKeys(addr: string): string[] {
+  const words = normalizeAddress(addr.split('#')[0]).split(' ');
+  const keys: string[] = [];
+  if (words.length >= 2) keys.push(`${words[0]} ${words[1]}`);
+  if (words[0]) keys.push(words[0]);
+  return keys;
 }
 
 /** "171 SW C St. #7" → "7"; also handles "Unit 7" / "Apt 7". */
@@ -95,17 +91,30 @@ async function resolveApplyUrl(
     if (!res.ok) return fallback(`Rentzap feed returned ${res.status}`);
     const feed: RentzapListing[] = await res.json();
 
-    const key = streetMatchKey(unit.address);
-    const candidates = feed.filter(
+    const company = feed.filter(
       (l) =>
         l._providers?._provider_companies?.slug === RENTZAP_COMPANY_SLUG &&
         l.listing_is_on_market &&
         !l.is_draft &&
         !l.listing_is_demo &&
         l.status !== 'leased' &&
-        l.formatted_address &&
-        normalizeAddress(l.formatted_address).startsWith(key)
+        l.formatted_address
     );
+
+    let candidates: RentzapListing[] = [];
+    for (const key of streetMatchKeys(unit.address)) {
+      candidates = company.filter((l) =>
+        normalizeAddress(l.formatted_address!).startsWith(`${key} `)
+      );
+      // House-number-only key is loose — require the city to agree too.
+      if (candidates.length > 0 && unit.city) {
+        const byCity = candidates.filter((l) =>
+          normalizeAddress(l.formatted_address!).includes(normalizeAddress(unit.city))
+        );
+        if (byCity.length > 0) candidates = byCity;
+      }
+      if (candidates.length > 0) break;
+    }
 
     if (candidates.length === 1) {
       return { url: `https://www.rentzap.com/apply/${candidates[0].id}` };
