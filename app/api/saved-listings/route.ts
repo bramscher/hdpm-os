@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import {
   saveListing,
   listSavedListings,
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     // Attribute to the signed-in user rather than trusting the client value.
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (session?.user?.email) body.created_by = session.user.email;
     const listing = await saveListing(body);
     return NextResponse.json({ listing });
@@ -59,7 +60,7 @@ export async function PATCH(req: NextRequest) {
           { status: 400 }
         );
       }
-      const session = await getServerSession();
+      const session = await getServerSession(authOptions);
       const listing = await markListingPosted(
         id,
         craigslist_url,

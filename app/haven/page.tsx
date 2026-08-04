@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { HavenDashboard } from "@/components/haven/HavenDashboard";
 
@@ -7,7 +8,7 @@ export const metadata = {
 };
 
 export default async function HavenPage() {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
 
   if (!session?.user?.email?.endsWith("@highdesertpm.com")) {
     redirect("/login");

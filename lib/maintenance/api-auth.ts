@@ -6,6 +6,8 @@
  */
 
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { isCompanyEmail } from '@/lib/require-role';
 import type { NextRequest } from 'next/server';
 import { isAgentActor, parseAgentActor } from '@/lib/agents/actor';
 import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
@@ -17,10 +19,10 @@ export interface StaffSession {
 }
 
 export async function requireStaffSession(): Promise<StaffSession | null> {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
   const email = session?.user?.email;
-  if (!email || !email.endsWith('@highdesertpm.com')) return null;
-  return { email, actor: session?.user?.name || email };
+  if (!isCompanyEmail(email)) return null;
+  return { email: email!, actor: session?.user?.name || email! };
 }
 
 // ============================================

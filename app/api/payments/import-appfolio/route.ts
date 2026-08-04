@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { importAppfolioPayments } from '@/lib/af-payment-import';
 import { reportsApiConfigured } from '@/lib/appfolio-reports';
 
@@ -9,7 +10,7 @@ export const maxDuration = 120;
 // attach the invoices their bills covered (see lib/af-payment-import.ts).
 export async function POST() {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
         { error: 'Unauthorized. Please sign in with your company Microsoft account.' },

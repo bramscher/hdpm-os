@@ -1,18 +1,20 @@
 /**
- * Admin identity for HDPM-OS.
+ * Bootstrap admin allowlist (Phase 0, Brief A: demoted from source of truth).
  *
- * Admins are an env allowlist: ADMIN_EMAILS = comma/space/newline-separated
- * @highdesertpm.com addresses. Admin status gates the financial dashboards
- * (the whole KPI dashboard + its APIs + config + financials).
+ * Authorization now lives in staff.access_role (see lib/roles.ts). The
+ * ADMIN_EMAILS env var remains only as a bootstrap/disaster-recovery
+ * fallback: it can grant admin when the staff table has no active admin or
+ * the lookup fails — and lib/roles.ts logs every fallback use.
  *
- * This is the single source of truth — used by the auth callbacks (to stamp an
- * isAdmin claim on the session/JWT), the middleware, and per-route guards.
+ * Do not add new callers of isAdmin(); use getRoleForEmail()/isAdminEmail()
+ * from lib/roles.ts or the session's user.role claim instead.
  */
 
 let cachedSet: Set<string> | null = null;
 let cachedRaw: string | undefined;
 
-function adminSet(): Set<string> {
+/** The ADMIN_EMAILS env allowlist, parsed (comma/space/newline separated). */
+export function envAdminEmails(): Set<string> {
   const raw = process.env.ADMIN_EMAILS ?? '';
   if (cachedSet && cachedRaw === raw) return cachedSet;
   cachedRaw = raw;
@@ -25,8 +27,10 @@ function adminSet(): Set<string> {
   return cachedSet;
 }
 
-/** True if the email is in the ADMIN_EMAILS allowlist (case-insensitive). */
+/**
+ * @deprecated Env-only check kept for back-compat; prefer lib/roles.ts.
+ */
 export function isAdmin(email: string | null | undefined): boolean {
   if (!email) return false;
-  return adminSet().has(email.toLowerCase());
+  return envAdminEmails().has(email.toLowerCase());
 }

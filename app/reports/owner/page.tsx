@@ -1,9 +1,10 @@
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { OwnerReportDashboard } from "./owner-report-dashboard";
 
 export default async function OwnerReportPage() {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
 
   if (!session?.user?.email?.endsWith("@highdesertpm.com")) {
     redirect("/login");

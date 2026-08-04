@@ -5,7 +5,22 @@
 > four session briefs, executed in order, one per session, plan mode first.
 > No product features in any of these.
 
-## Brief A — DB-backed roles & centralized guards  ⟵ FIRST
+## Brief A — DB-backed roles & centralized guards  ⟵ SHIPPED 2026-08-03
+
+> **Execution notes (deviations from plan):**
+> - Column is **`staff.access_role`**, not `staff.role` — `staff.role`
+>   already exists holding job titles (display/routing); left untouched.
+> - The "known two" bare `getServerSession()` calls turned out to be **82
+>   files**; all codemodded to `getServerSession(authOptions)` with the
+>   import added. Zero bare calls remain (acceptance met).
+> - `staff` already had RLS from `20260719_staff.sql`; migration only adds
+>   the column + constraint + admin seed + email index.
+> - Migration `20260803_staff_access_role.sql` **pending Craig's SQL-editor
+>   run**; until then the env fallback keeps admin working (logged).
+> - Domain-check consolidation: `isCompanyEmail()` lives in
+>   `lib/require-role.ts`; `api-auth.ts` uses it; the 80-odd inline
+>   `endsWith('@highdesertpm.com')` route checks still work and migrate to
+>   `requireCompanySession()` opportunistically as routes are touched.
 
 **Objective:** authorization stops depending on an env string; one source of
 truth for "who can do what," auditable in the database.

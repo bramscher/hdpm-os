@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { receptionDailyReport } from '@/lib/reception';
 
@@ -11,7 +12,7 @@ import { receptionDailyReport } from '@/lib/reception';
  * split by intent (leasing / maintenance / human requested / direct staff).
  */
 export async function GET(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
   if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

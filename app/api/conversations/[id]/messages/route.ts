@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { addMessage, SourceInfo, AttachmentInfo } from '@/lib/supabase';
 
 // POST - Add a message to a conversation
@@ -8,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     const userEmail = session?.user?.email;
 
     if (!userEmail?.endsWith('@highdesertpm.com')) {

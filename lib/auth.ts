@@ -1,6 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
 import AzureADProvider from "next-auth/providers/azure-ad";
-import { isAdmin } from "@/lib/admin";
+import { getRoleForEmail } from "@/lib/roles";
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
@@ -35,9 +35,10 @@ export const authOptions: NextAuthOptions = {
       if (token.accessToken) {
         session.accessToken = token.accessToken as string;
       }
-      // Surface admin status (gates the financial dashboards)
+      // Surface role + admin status (gates the financial dashboards)
       if (session.user) {
         session.user.isAdmin = token.isAdmin === true;
+        session.user.role = token.role;
       }
       return session;
     },
@@ -45,8 +46,11 @@ export const authOptions: NextAuthOptions = {
       if (account) {
         token.accessToken = account.access_token;
       }
-      // Stamp admin status from the env allowlist on every token refresh
-      token.isAdmin = isAdmin(token.email);
+      // Stamp the access role from staff.access_role on every token refresh
+      // (60s-cached lookup; ADMIN_EMAILS survives only as bootstrap fallback).
+      const role = await getRoleForEmail(token.email);
+      token.role = role;
+      token.isAdmin = role === "admin";
       return token;
     },
   },

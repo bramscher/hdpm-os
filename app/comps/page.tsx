@@ -1,9 +1,10 @@
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { CompsDashboard } from "./comps-dashboard";
 
 export default async function CompsPage() {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
 
   if (!session?.user?.email?.endsWith("@highdesertpm.com")) {
     redirect("/login");

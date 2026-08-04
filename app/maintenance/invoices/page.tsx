@@ -1,9 +1,10 @@
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { InvoiceDashboard } from "./invoice-dashboard";
 
 export default async function InvoicesPage() {
-  const session = await getServerSession();
+  const session = await getServerSession(authOptions);
 
   if (!session?.user?.email?.endsWith("@highdesertpm.com")) {
     redirect("/login");

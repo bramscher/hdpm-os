@@ -33,8 +33,9 @@ export default withAuth(
     const { pathname } = req.nextUrl;
     const token = req.nextauth.token;
 
-    // Admin gating for financial dashboards.
-    if (isAdminPath(pathname) && token?.isAdmin !== true) {
+    // Admin gating for financial dashboards (role claim from staff.access_role;
+    // isAdmin kept for tokens minted before the role claim existed).
+    if (isAdminPath(pathname) && token?.role !== "admin" && token?.isAdmin !== true) {
       if (pathname.startsWith("/api/")) {
         return NextResponse.json(
           { error: "Admin access required" },
