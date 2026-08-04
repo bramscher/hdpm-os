@@ -13,6 +13,7 @@ import { getSupabaseAdmin } from '../../lib/supabase';
 import { logAudit } from '../../lib/audit';
 
 // name → { roles, person (staff.person), reportsTo (seat name) }
+// Occupancy per Craig, 2026-08-04. Reports-to lines are still provisional.
 const SEATS: Record<
   string,
   { roles: string[]; person?: string; reportsTo?: string; sort: number }
@@ -27,39 +28,59 @@ const SEATS: Record<
     reportsTo: 'Visionary', // open seat — confirm with Craig
     sort: 1,
   },
-  'Maintenance Coordinator': {
-    roles: ['WO intake & dispatch', 'Vendor follow-up', 'Estimate queue'],
-    person: 'Cheryl',
+  'Finance & Operations': {
+    roles: ['Trust accounting (AppFolio)', 'Owner statements', 'AP/AR', 'Office operations'],
+    person: 'Penny',
     reportsTo: 'Integrator',
     sort: 2,
   },
-  Inspections: {
-    roles: ['Move-in/out & cadence inspections', 'Turn scoping'],
-    person: 'Brody',
+  'Sr. Property Manager & Maintenance': {
+    roles: ['Senior PM portfolio', 'Maintenance oversight', 'Vendor relationships'],
+    person: 'Matt',
     reportsTo: 'Integrator',
     sort: 3,
   },
-  'Front Desk / Reception': {
+  'Property Manager': {
+    roles: ['PM portfolio', 'Owner & tenant relations', 'Leasing & renewals'],
+    person: 'Jen',
+    reportsTo: 'Sr. Property Manager & Maintenance',
+    sort: 4,
+  },
+  'Assistant Property Manager': {
+    roles: ['Supports the PM lane', 'Applications & screening', 'Move-in/out logistics'],
+    person: 'Kennedy',
+    reportsTo: 'Sr. Property Manager & Maintenance',
+    sort: 5,
+  },
+  'Maintenance Coordinator': {
+    roles: ['WO intake & dispatch', 'Vendor follow-up', 'Estimate queue'],
+    person: 'Cheryl',
+    reportsTo: 'Sr. Property Manager & Maintenance',
+    sort: 6,
+  },
+  'Inspections & Maintenance': {
+    roles: ['Move-in/out & cadence inspections', 'Turn scoping', 'Maintenance support'],
+    person: 'Brody',
+    reportsTo: 'Sr. Property Manager & Maintenance',
+    sort: 7,
+  },
+  'Maintenance Tech': {
+    roles: ['In-house repairs', 'Turn work', 'Field response'],
+    person: 'Alberto',
+    reportsTo: 'Maintenance Coordinator',
+    sort: 8,
+  },
+  'Front Office Support': {
     roles: ['Main line & walk-ins', 'Tenant first contact', 'Key checkout'],
     person: 'Ashley',
-    reportsTo: 'Integrator',
-    sort: 4,
+    reportsTo: 'Finance & Operations',
+    sort: 9,
   },
   'License & Oversight': {
     roles: ['CCB license holder', 'High-level compliance oversight'],
     person: 'Bryce',
     reportsTo: 'Visionary',
-    sort: 5,
-  },
-  Finance: {
-    roles: ['Trust accounting (AppFolio)', 'Owner statements', 'AP/AR'],
-    reportsTo: 'Integrator', // open seat — confirm with Craig
-    sort: 6,
-  },
-  Leasing: {
-    roles: ['Listings & showings', 'Applications & screening', 'Move-ins'],
-    reportsTo: 'Integrator', // open seat — confirm with Craig
-    sort: 7,
+    sort: 10,
   },
 };
 
@@ -111,6 +132,19 @@ async function main() {
     const to = seatIds.get(def.reportsTo);
     if (id && to) {
       await supabase.from('seat').update({ reports_to_seat_id: to }).eq('id', id);
+    }
+  }
+
+  // Retire seats no longer in this file (renames leave old rows behind).
+  const { data: stale } = await supabase
+    .from('seat')
+    .select('id, name')
+    .eq('org_id', 'hdpm')
+    .eq('active', true);
+  for (const row of stale ?? []) {
+    if (!(row.name in SEATS)) {
+      await supabase.from('seat').update({ active: false }).eq('id', row.id);
+      console.log(`seat ${row.name} retired (not in seed)`);
     }
   }
 
