@@ -63,7 +63,20 @@ existing RAG sources with a distinct source icon; answers render gaps.
 Notion SOP corpus stays in `knowledge_chunks` (already synced) — the chat
 queries both stores; no re-ingestion.
 
-## Brief 1C — Nightly consolidation ("dream cycle")
+## Brief 1C — Nightly consolidation ("dream cycle")  ⟵ SHIPPED 2026-08-04
+
+> Shipped: `lib/brain/evolve.ts` — one pairwise scan feeds both stages
+> (dupes ≥0.95 → supersede lower-ranked; 0.78–0.95 statement-kind cross-doc
+> band → one batched Claude call, capped at 15 pairs/night; cleared pairs
+> recorded as `dismissed` so the window advances); new contradictions get a
+> clarification question (surfaced on /agents); salience decays ×0.98 toward
+> 0.5 for chunks unseen 30+ days (corrections never decay); report logged to
+> brain_ingest_log (source 'evolve'). Route `/api/brain/cron/evolve`
+> (CRON_SECRET, ?dryRun=1) + vercel.json 10:00 UTC + PUBLIC_PREFIXES entry.
+> First live run: 225 scanned, 0 dupes, 77 band candidates, 15 checked,
+> 1 real contradiction found (autonomy-ladder start levels) + question queued.
+> Note: the cron activates when the branch merges to main (Vercel crons run
+> from production only). Manual trigger: scripts/brain/run-evolve.ts.
 
 `lib/brain/evolve.ts` (port soul-brain C3 pattern): incremental dedup
 (collapse ≥0.95 cosine near-dupes via supersede), bounded LLM contradiction

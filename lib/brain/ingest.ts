@@ -67,6 +67,9 @@ export async function ingestChunk(input: IngestInput, source = 'manual'): Promis
             source_id: input.sourceId ?? null,
             node_id: input.nodeId ?? null,
             salience: input.salience ?? 1.0,
+            // Content changed: any dedup supersede from the old content no
+            // longer applies (the evolve cron re-evaluates nightly).
+            superseded_by: null,
             last_seen_at: new Date().toISOString(),
           })
           .eq('id', existing.id);

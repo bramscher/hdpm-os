@@ -24,7 +24,7 @@ interface MetricValue {
 async function loadData() {
   const supabase = getSupabaseAdmin();
 
-  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes] = await Promise.all([
+  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes, clarificationsRes] = await Promise.all([
     listAgentConfig(),
     isGloballyKilled(),
     supabase
@@ -49,6 +49,12 @@ async function loadData() {
       .eq('metric', 'baseline_freeze')
       .order('captured_at', { ascending: true })
       .limit(1),
+    supabase
+      .from('brain_clarification')
+      .select('id, question, context_ref, status, created_at')
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(20),
   ]);
 
   const proposals = (proposalsRes.data ?? []) as AgentProposal[];
@@ -69,7 +75,16 @@ async function loadData() {
     outbox,
     latest,
     baseline: baselineRes.data?.[0] ?? null,
+    clarifications: (clarificationsRes.data ?? []) as BrainClarification[],
   };
+}
+
+interface BrainClarification {
+  id: string;
+  question: string;
+  context_ref: string | null;
+  status: string;
+  created_at: string;
 }
 
 function proposalStats(proposals: AgentProposal[]) {
@@ -133,7 +148,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 export default async function AgentsPage() {
-  const { config, killed, proposals, outbox, latest, baseline } = await loadData();
+  const { config, killed, proposals, outbox, latest, baseline, clarifications } = await loadData();
   const stats = proposalStats(proposals);
 
   const retype = latest.get('appfolio_retype_touches')?.value;
@@ -281,6 +296,34 @@ export default async function AgentsPage() {
             ) : null}
           </tbody>
         </table>
+      </div>
+
+      {/* Brain clarification queue (Brief 1C) */}
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+        🧠 Brain clarification queue{' '}
+        <span className="font-normal normal-case text-gray-400">
+          (open questions from the nightly consolidation — answer in chat or a doc; corrections
+          supersede)
+        </span>
+      </h2>
+      <div className="mb-8 rounded-lg border border-gray-200 bg-white">
+        {clarifications.length === 0 ? (
+          <p className="px-3 py-6 text-center text-sm text-gray-400">
+            No open questions — the brain has nothing it is unsure about.
+          </p>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {clarifications.map((c) => (
+              <li key={c.id} className="px-3 py-3">
+                <div className="text-sm text-gray-900">{c.question}</div>
+                <div className="mt-0.5 text-xs text-gray-400">
+                  {fmtDate(c.created_at)}
+                  {c.context_ref ? ` · ${c.context_ref}` : ''}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Outbox */}

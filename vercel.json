@@ -91,6 +91,10 @@
     {
       "path": "/api/agents/cron/ops-brief?deep=1",
       "schedule": "0 15 * * 1"
+    },
+    {
+      "path": "/api/brain/cron/evolve",
+      "schedule": "0 10 * * *"
     }
   ]
 }
