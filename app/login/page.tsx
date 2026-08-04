@@ -120,7 +120,7 @@ function LoginContent() {
 
           {/* Sign In Button */}
           <Button
-            onClick={() => signIn("azure-ad", { callbackUrl: "/" })}
+            onClick={() => signIn("azure-ad", { redirectTo: "/" })}
             className="w-full bg-charcoal-900 hover:bg-charcoal-800 h-12 text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 rounded-xl text-white"
           >
             <svg

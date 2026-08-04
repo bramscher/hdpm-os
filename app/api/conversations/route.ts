@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { getConversations, createConversation } from '@/lib/supabase';
 
 // GET - List all conversations for the authenticated user
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const userEmail = session?.user?.email;
 
     if (!userEmail?.endsWith('@highdesertpm.com')) {
@@ -32,7 +31,7 @@ export async function GET() {
 // POST - Create a new conversation
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const userEmail = session?.user?.email;
 
     if (!userEmail?.endsWith('@highdesertpm.com')) {

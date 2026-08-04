@@ -65,7 +65,7 @@ documented); bootstrap fallback prevents lockout if the seed is missed.
 
 ---
 
-## Brief B — Auth.js v5 + middleware→proxy migration
+## Brief B — Auth.js v5 + middleware→proxy migration  ⟵ SHIPPED 2026-08-03
 
 next-auth v4 (maintenance mode) → Auth.js v5; replace deprecated
 `middleware.ts` `withAuth` with the proxy convention Next 16 wants; verify
@@ -73,6 +73,26 @@ Azure AD provider config, JWT/session callbacks, 8h maxAge, domain gate, and
 the delegated Graph token flow (`route-calendar.ts` consumer). Staging pass
 required (login, admin gate, calendar publish, chat). **Risk:** biggest
 regression surface in Phase 0 — isolated on purpose.
+
+> **Execution notes (2026-08-03):**
+> - `next-auth@5.0.0-beta.32`; `lib/auth.ts` now exports
+>   `{ handlers, auth, signIn, signOut }`; 87-file codemod
+>   `getServerSession(authOptions)` → `auth()`; stale direct `@auth/core`
+>   dep removed.
+> - **Provider id pinned to `"azure-ad"`** on the MicrosoftEntraID provider
+>   so the OAuth callback URL is unchanged — no Azure app-registration edit
+>   needed (verified via `/api/auth/providers`).
+> - `middleware.ts` deleted → `proxy.ts` (edge-safe: decodes the session
+>   cookie via `next-auth/jwt` getToken, does NOT import lib/auth). Same
+>   public prefixes + admin gating; improvement: unauthenticated API calls
+>   now get 401 JSON instead of a redirect.
+> - Secret: `AUTH_SECRET ?? NEXTAUTH_SECRET` — no env change required.
+> - Smoke-tested on dev: page redirect w/ callbackUrl, API 401s, /login 200,
+>   providers endpoint. Build clean (deprecation warning gone), 359 tests.
+> - **Rollout caveats:** v5's cookie rename logs everyone out once (8h
+>   sessions anyway); the real Entra login can only be verified in prod
+>   (prod-only redirect URI) — verify sign-in + calendar publish right after
+>   the eventual deploy; client signIn/signOut now use `redirectTo`.
 
 ## Brief C — Schema capture, secrets hygiene, service tokens
 

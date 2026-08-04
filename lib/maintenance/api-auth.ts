@@ -5,8 +5,7 @@
  * and resolves the actor string for audit events.
  */
 
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { isCompanyEmail } from '@/lib/require-role';
 import type { NextRequest } from 'next/server';
 import { isAgentActor, parseAgentActor } from '@/lib/agents/actor';
@@ -19,7 +18,7 @@ export interface StaffSession {
 }
 
 export async function requireStaffSession(): Promise<StaffSession | null> {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   const email = session?.user?.email;
   if (!isCompanyEmail(email)) return null;
   return { email: email!, actor: session?.user?.name || email! };

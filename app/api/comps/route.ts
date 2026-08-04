@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { createComp, getComps } from '@/lib/comps';
 import type { CompsFilter, Town, PropertyType, DataSource } from '@/types/comps';
 
@@ -12,7 +11,7 @@ import type { CompsFilter, Town, PropertyType, DataSource } from '@/types/comps'
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
         { error: 'Unauthorized. Please sign in with your company Microsoft account.' },
@@ -67,7 +66,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
         { error: 'Unauthorized. Please sign in with your company Microsoft account.' },

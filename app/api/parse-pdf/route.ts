@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { extractText } from 'unpdf';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -65,7 +64,7 @@ async function extractWithVision(arrayBuffer: ArrayBuffer, fileName: string): Pr
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
         { error: 'Unauthorized' },

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { getWorkOrders, getWorkOrderStats } from '@/lib/work-orders';
 import type { WorkOrderFilter } from '@/lib/work-orders';
 
@@ -12,7 +11,7 @@ import type { WorkOrderFilter } from '@/lib/work-orders';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
         { error: 'Unauthorized. Please sign in with your company Microsoft account.' },

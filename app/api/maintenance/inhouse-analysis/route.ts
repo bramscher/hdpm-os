@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { buildInhouseAnalysis } from '@/lib/inhouse-analysis';
 import { reportsApiConfigured } from '@/lib/appfolio-reports';
 
@@ -9,7 +8,7 @@ export const maxDuration = 120;
 // In-house vs vendor analysis — vendor spend + margin strategy, admin only.
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user?.email || session.user.isAdmin !== true) {
       return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
     }

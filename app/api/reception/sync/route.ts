@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { syncReceptionCalls } from '@/lib/reception';
 import { isZoomConfigured } from '@/lib/zoom-phone';
@@ -27,7 +26,7 @@ export async function POST(request: NextRequest) {
     const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
 
     if (!isCron) {
-      const session = await getServerSession(authOptions);
+      const session = await auth();
       if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }

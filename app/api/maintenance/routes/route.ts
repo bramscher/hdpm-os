@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { routeWorkflowPatch } from '@/lib/maintenance/route-publish';
 import { updateWorkOrderWorkflow, WorkflowValidationError } from '@/lib/maintenance/workflow-db';
@@ -26,7 +25,7 @@ const todayPacific = () =>
   new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
 
 async function requireSession() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   const email = session?.user?.email;
   if (!email || !email.endsWith('@highdesertpm.com')) return null;
   return {

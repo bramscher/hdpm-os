@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import Anthropic from '@anthropic-ai/sdk';
 import { updateConversationTitle } from '@/lib/supabase';
 
@@ -18,7 +17,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const userEmail = session?.user?.email;
 
     if (!userEmail?.endsWith('@highdesertpm.com')) {

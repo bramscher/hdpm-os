@@ -16,8 +16,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { getRoleForEmail, type AccessRole } from '@/lib/roles';
 
 export const COMPANY_EMAIL_DOMAIN = '@highdesertpm.com';
@@ -35,7 +34,7 @@ function deny(status: number, error: string): Guard {
 }
 
 export async function requireCompanySession(): Promise<Guard> {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   const email = session?.user?.email;
   if (!isCompanyEmail(email)) {
     return deny(401, 'Unauthorized. Please sign in with your company Microsoft account.');
