@@ -23,6 +23,9 @@ import {
   buildNudge,
   pickDailySeven,
   todayPacific,
+  buildCardExclusions,
+  applyCardExclusions,
+  type PriorCardDecision,
   type CardHeader,
   type CardItem,
 } from './morning-card';
@@ -192,7 +195,32 @@ export async function runMorningCard(opts: {
     console.error('[Agents] route summary failed:', err instanceof Error ? err.message : String(err));
   }
 
-  const seven = pickDailySeven(tripwireResult.exceptions);
+  // Cool-off: recent card decisions suppress the same (WO, tripwire) pair —
+  // snoozes until their snooze date, Done/date/reassign for 3 business days.
+  // Survivors past the window return tagged "still unresolved".
+  const priorProposals = await listProposals({ agent: MORNING_CARD_AGENT, limit: 200 });
+  const priorDecisions: PriorCardDecision[] = priorProposals
+    .filter(
+      (p) =>
+        p.action_type === MORNING_CARD_ACTION &&
+        (p.status === 'approved' || p.status === 'edited') &&
+        p.subject_id
+    )
+    .map((p) => {
+      const pl = p.payload as Record<string, unknown>;
+      return {
+        workOrderId: p.subject_id!,
+        tripwire: typeof pl.tripwire === 'number' ? pl.tripwire : 0,
+        status: p.status,
+        decidedAt: p.decided_at ?? p.created_at,
+        snoozedTo: typeof pl.snoozed_to === 'string' ? pl.snoozed_to : null,
+        resolution: typeof pl.resolution === 'string' ? pl.resolution : null,
+      };
+    });
+  const exclusions = buildCardExclusions(priorDecisions);
+  const eligible = applyCardExclusions(tripwireResult.exceptions, exclusions, cardDate);
+
+  const seven = pickDailySeven(eligible);
   const header: CardHeader = {
     dateStr: cardDate,
     totalExceptions: tripwireResult.exceptions.length,
