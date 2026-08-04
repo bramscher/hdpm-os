@@ -14,6 +14,9 @@ import {
   buildCardBlocks,
   buildNudge,
   buildCardEmailHtml,
+  buildCardExclusions,
+  applyCardExclusions,
+  type PriorCardDecision,
   type CardItem,
   type CardHeader,
 } from '../morning-card';
@@ -285,5 +288,69 @@ describe('splitSlackMessageId', () => {
     expect(splitSlackMessageId('nocolon')).toBeNull();
     expect(splitSlackMessageId(':leading')).toBeNull();
     expect(splitSlackMessageId('trailing:')).toBeNull();
+  });
+});
+
+describe('card decision cool-off', () => {
+  const ex = (workOrderId: string, tripwire: number, item = 'Fix the thing'): TripwireException =>
+    ({ tripwire, label: `#${tripwire}`, item, fixRequired: 'do it', owner: 'Cheryl', workOrderId } as TripwireException);
+
+  // decidedAt Wed 2026-07-29 17:00 UTC → +3 business days ⇒ until 2026-08-03 (Mon)
+  const doneWed: PriorCardDecision = {
+    workOrderId: 'wo-1',
+    tripwire: 3,
+    status: 'approved',
+    decidedAt: '2026-07-29T17:00:00Z',
+    resolution: 'Done by Cheryl 9:14 AM',
+  };
+
+  it('suppresses a Done (WO, tripwire) pair during the cool-off window', () => {
+    const exclusions = buildCardExclusions([doneWed]);
+    const kept = applyCardExclusions([ex('wo-1', 3), ex('wo-2', 3)], exclusions, '2026-07-30');
+    expect(kept.map((e) => e.workOrderId)).toEqual(['wo-2']);
+  });
+
+  it('does not suppress a different tripwire on the same WO', () => {
+    const exclusions = buildCardExclusions([doneWed]);
+    const kept = applyCardExclusions([ex('wo-1', 5)], exclusions, '2026-07-30');
+    expect(kept).toHaveLength(1);
+  });
+
+  it('resurfaces after the window with a still-unresolved tag', () => {
+    const exclusions = buildCardExclusions([doneWed]);
+    const kept = applyCardExclusions([ex('wo-1', 3)], exclusions, '2026-08-03');
+    expect(kept).toHaveLength(1);
+    expect(kept[0].item).toContain('still unresolved');
+    expect(kept[0].item).toContain('marked done 2026-07-29');
+  });
+
+  it('suppresses snoozes until the snooze date, no tag after', () => {
+    const snooze: PriorCardDecision = {
+      workOrderId: 'wo-9',
+      tripwire: 2,
+      status: 'approved',
+      decidedAt: '2026-07-29T17:00:00Z',
+      snoozedTo: '2026-08-05',
+      resolution: 'Snoozed to 2026-08-05 (vendor) by Cheryl',
+    };
+    const exclusions = buildCardExclusions([snooze]);
+    expect(applyCardExclusions([ex('wo-9', 2)], exclusions, '2026-08-04')).toHaveLength(0);
+    const after = applyCardExclusions([ex('wo-9', 2)], exclusions, '2026-08-05');
+    expect(after).toHaveLength(1);
+    expect(after[0].item).not.toContain('still unresolved');
+  });
+
+  it('ignores proposed/rejected/expired decisions', () => {
+    const exclusions = buildCardExclusions([
+      { ...doneWed, status: 'proposed' },
+      { ...doneWed, workOrderId: 'wo-3', status: 'expired' },
+    ]);
+    expect(exclusions.size).toBe(0);
+  });
+
+  it('keeps the latest window when a pair was decided twice', () => {
+    const older: PriorCardDecision = { ...doneWed, decidedAt: '2026-07-20T17:00:00Z' };
+    const exclusions = buildCardExclusions([older, doneWed]);
+    expect(exclusions.get('wo-1:3')?.until).toBe('2026-08-03');
   });
 });

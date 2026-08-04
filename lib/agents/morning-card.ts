@@ -63,6 +63,87 @@ export function pickDailySeven(exceptions: TripwireException[]): TripwireExcepti
 }
 
 // ============================================
+// Decision cool-off
+//
+// A card decision must have a visible effect on tomorrow's card, or taps
+// erode trust. Snooze/date/reassign change the work order, so their
+// exceptions clear naturally — but ✅ Done changes nothing operational (the
+// human did the work outside the system, and the mirror may take days to
+// reflect it). So decided (WO, tripwire) pairs are suppressed: snoozes
+// until their snooze date, everything else for DONE_COOLOFF business days.
+// If the same tripwire still fires after the window, the item returns
+// tagged "(marked done <date> — still unresolved)" — honest, not amnesiac.
+// ============================================
+
+export const DONE_COOLOFF_BUSINESS_DAYS = 3;
+
+export interface PriorCardDecision {
+  workOrderId: string;
+  tripwire: number;
+  status: string;            // only approved/edited suppress
+  decidedAt: string;         // ISO timestamp
+  snoozedTo?: string | null; // YYYY-MM-DD when the decision was a snooze
+  resolution?: string | null;
+}
+
+export interface CardExclusion {
+  until: string;             // YYYY-MM-DD; suppressed while today < until
+  doneNote?: string;         // resurface tag for Done items
+}
+
+export function buildCardExclusions(prior: PriorCardDecision[]): Map<string, CardExclusion> {
+  const map = new Map<string, CardExclusion>();
+  for (const d of prior) {
+    if (d.status !== 'approved' && d.status !== 'edited') continue;
+    if (!d.workOrderId) continue;
+    const key = `${d.workOrderId}:${d.tripwire}`;
+
+    let until: string;
+    let doneNote: string | undefined;
+    if (d.snoozedTo && isValidYmd(d.snoozedTo)) {
+      until = d.snoozedTo;
+    } else {
+      let dt = new Date(d.decidedAt);
+      for (let i = 0; i < DONE_COOLOFF_BUSINESS_DAYS; i++) dt = nextBusinessDay(dt);
+      until = toDateString(dt);
+      if (d.resolution?.startsWith('Done')) {
+        doneNote = `marked done ${todayPacific(new Date(d.decidedAt))} — still unresolved`;
+      }
+    }
+
+    const existing = map.get(key);
+    if (!existing || until > existing.until) map.set(key, { until, doneNote });
+  }
+  return map;
+}
+
+/**
+ * Drop exceptions inside their cool-off window; tag survivors whose window
+ * expired after a Done tap. `today` is a Pacific YYYY-MM-DD (string compare
+ * is safe on YMD).
+ */
+export function applyCardExclusions(
+  exceptions: TripwireException[],
+  exclusions: Map<string, CardExclusion>,
+  today: string
+): TripwireException[] {
+  const out: TripwireException[] = [];
+  for (const ex of exceptions) {
+    const exc = ex.workOrderId ? exclusions.get(`${ex.workOrderId}:${ex.tripwire}`) : undefined;
+    if (!exc) {
+      out.push(ex);
+    } else if (today < exc.until) {
+      continue; // suppressed
+    } else if (exc.doneNote) {
+      out.push({ ...ex, item: `${ex.item} (${exc.doneNote})` });
+    } else {
+      out.push(ex);
+    }
+  }
+  return out;
+}
+
+// ============================================
 // Dates
 // ============================================
 
