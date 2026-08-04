@@ -55,7 +55,8 @@ async function test() {
     // Step 3: Test Anthropic
     console.log('\n3. Testing Anthropic Claude...');
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-5',
+      thinking: { type: 'disabled' },
       max_tokens: 100,
       messages: [{ role: 'user', content: 'Say "RAG test successful" in exactly 3 words.' }],
     });

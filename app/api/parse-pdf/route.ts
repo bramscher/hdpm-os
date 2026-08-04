@@ -30,7 +30,8 @@ async function extractWithVision(arrayBuffer: ArrayBuffer, fileName: string): Pr
   console.log(`[OCR] Base64 length: ${base64.length} chars (${Math.round(base64.length / 1024)} KB)`);
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
+    thinking: { type: 'disabled' },
     max_tokens: 4096,
     messages: [
       {

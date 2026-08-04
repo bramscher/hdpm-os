@@ -489,7 +489,8 @@ The sources are numbered [1] through [${sources.length}] in the context below.`;
 
   // Step 4: Call Claude API
   const message = await getAnthropic().messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
+    thinking: { type: 'disabled' },
     max_tokens: 1024,
     system: systemPrompt,
     messages: [
@@ -654,7 +655,8 @@ export async function askRAGStream(
 
   // Step 5: Create streaming response from Claude
   const streamResponse = await getAnthropic().messages.stream({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
+    thinking: { type: 'disabled' },
     max_tokens: 2048, // Increased for document analysis
     system: systemPrompt,
     messages: [
