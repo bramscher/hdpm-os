@@ -31,6 +31,7 @@ const PUBLIC_PREFIXES = [
   "/api/haven/sync",
   "/api/haven/cron",
   "/api/brain", // self-guarded: cron via CRON_SECRET; search/think via service token or staff session
+  "/api/eos/cron", // Friday scorecard — CRON_SECRET-guarded in the route
   "/api/reception/sync",
   "/api/inspections/candidates/sync",
 ];

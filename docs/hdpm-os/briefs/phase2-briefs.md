@@ -39,7 +39,19 @@ known facts (Craig/Cheryl/Brody/Bryce/Ashley; occupancy + goals flagged
 PROVISIONAL for Craig's edit) and scorecard metrics wired to live
 `metrics_snapshot` keys. Operator step: SQL run, then the seed script.
 
-## Brief 2B — Scorecard: auto-fill, Friday cards, screen
+## Brief 2B — Scorecard: auto-fill, Friday cards, screen  ⟵ SHIPPED 2026-08-04
+
+> Shipped: lib/eos/scorecard.ts (pure week math/goal eval, tested) +
+> scorecard-run.ts (auto-fill from metrics_snapshot — manual entries never
+> clobbered; Slack nudge to owners of manual metrics missing this week's
+> number; off-track-2-weeks → issue via the source_ref dedupe index; every
+> write audits). Cron /api/eos/cron/scorecard (Fri 22:00 UTC ≈ 3 PM PT,
+> after the 13:30 metrics snapshot) + PUBLIC_PREFIXES + vercel.json —
+> activates on merge to main. Screen /company/scorecard (Company nav item):
+> 8-week grid, red/green, sparkline, manual-entry cell, [→ Issue] via
+> POST /api/eos/issues (also 2C's create surface). First live week filled
+> (2026-08-03: 7/7 metrics, 3 green / 4 red — several reds are provisional-
+> goal artifacts; goal review with Craig is the open step-3 item).
 
 Weekly auto-entry cron (Friday): `source_ref`-mapped metrics pull the week's
 value from `metrics_snapshot`/`kpi_snapshots` into `scorecard_entry`

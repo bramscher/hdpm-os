@@ -95,6 +95,10 @@
     {
       "path": "/api/brain/cron/evolve",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/eos/cron/scorecard",
+      "schedule": "0 22 * * 5"
     }
   ]
 }
