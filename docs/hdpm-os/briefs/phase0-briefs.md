@@ -132,12 +132,24 @@ regression surface in Phase 0 — isolated on purpose.
 >   `invoice-dashboard.tsx:247,285`) over `lib/work-orders.ts`. Kept;
 >   doc 01's "retire" note amended. Nothing deleted.
 
-## Brief D — Repo rename + audit_event design note
+## Brief D — Repo rename + audit_event design note  ⟵ SHIPPED 2026-08-03
 
 Rename GitHub repo → `hdpm-os` (redirects stand; update local remotes,
 Vercel git link, any webhook URLs pointing at the repo); write the
 `audit_event` generalization design (1-pager, lands with the first EOS
 migration in Phase 2 rather than as its own table now).
+
+> **Execution notes (2026-08-03):** renamed via `gh repo rename` →
+> `bramscher/hdpm-os` (gh updated the local remote; GitHub redirects the old
+> name). Vercel tracks the repo by ID, so the git link follows automatically
+> — verified by this branch's push triggering a build. No webhooks point at
+> the repo (AppFolio/Slack/Zoom hit the app domain). Local folder name left
+> as `hdpm-chatbot` on purpose (session/memory paths key off it); CLAUDE.md
+> updated. Design note: `briefs/audit-event-design.md`.
+>
+> **Phase 0 complete.** Outstanding operator items: 3 SQL-editor runs
+> (access_role, service_tokens, RAG-function paste), prod sign-in check on
+> first deploy of the Auth.js v5 change, and minting per-service tokens.
 
 ---
 
