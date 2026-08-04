@@ -244,6 +244,11 @@ function DelinquencyChart({ data }: { data: TrendPoint[] }) {
           <Line yAxisId="rate" type="monotone" dataKey="rate" stroke="#dc2626" strokeWidth={2} dot={{ r: 3, fill: "#dc2626" }} />
         </ComposedChart>
       </ResponsiveContainer>
+      <p className="mt-2 text-2xs text-charcoal-400">
+        Definition changed Aug 4, 2026: rate is now current tenancies with balance &gt;$50 ÷ current
+        tenancies (earlier points divided by every lease since 2020 and counted any open charge —
+        the pre-Aug-4 sawtooth and level are not comparable).
+      </p>
     </div>
   );
 }
@@ -1070,13 +1075,6 @@ function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Leasing Funnel" />;
 
   const multi = isMultiYear(data);
-  const chartData = data.map((d) => ({
-    date: d.date,
-    overallConversion: (d.value.conversionRates as unknown as Record<string, number>)?.overallConversion ?? 0,
-  }));
-
-  const rates = chartData.map((d) => d.overallConversion);
-  const stats = computeStats(rates);
 
   // Current funnel from latest snapshot
   const latest = data[data.length - 1];
@@ -1086,13 +1084,41 @@ function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
   const dataQuality = latest.value.dataQuality as unknown as
     | { tenantMoveIns: number; leadLinkageSparse: boolean }
     | undefined;
+  // AppFolio's May-2026 lead-lifecycle rewrite broke lead→application
+  // linkage: stage counts/conversions are fiction when sparse, so the chart
+  // and stats switch to actual tenant move-ins (ground truth).
+  const sparse = dataQuality?.leadLinkageSparse === true;
 
-  const funnelStages: FunnelStage[] = funnel ? [
-    { name: 'Guest Cards', count: funnel.guestCards ?? 0, rate: '—', color: '#0284c7' },
-    { name: 'Applications', count: funnel.applications ?? 0, rate: `${convRates?.guestCardToApplication?.toFixed(0) ?? 0}% of leads`, color: '#6366f1' },
-    { name: 'Approvals', count: funnel.approvals ?? 0, rate: `${convRates?.applicationToApproval?.toFixed(0) ?? 0}% of apps`, color: '#8b5cf6' },
-    { name: 'Move-Ins', count: funnel.moveIns ?? 0, rate: `${convRates?.approvalToMoveIn?.toFixed(0) ?? 0}% of approved`, color: '#059669' },
-  ] : [];
+  const chartData = data.map((d) => ({
+    date: d.date,
+    overallConversion: (d.value.conversionRates as unknown as Record<string, number>)?.overallConversion ?? 0,
+    tenantMoveIns:
+      (d.value.dataQuality as unknown as { tenantMoveIns?: number } | undefined)?.tenantMoveIns ?? 0,
+  }));
+
+  const series = chartData.map((d) => (sparse ? d.tenantMoveIns : d.overallConversion));
+  const stats = computeStats(series);
+
+  const gcCount = funnel?.guestCards ?? 0;
+  const miActual = dataQuality?.tenantMoveIns ?? 0;
+  const funnelStages: FunnelStage[] = !funnel
+    ? []
+    : sparse
+      ? [
+          { name: 'Guest Cards', count: gcCount, rate: '—', color: '#0284c7' },
+          {
+            name: 'Move-Ins (tenant records)',
+            count: miActual,
+            rate: gcCount > 0 ? `${((miActual / gcCount) * 100).toFixed(1)}% of leads` : '—',
+            color: '#059669',
+          },
+        ]
+      : [
+          { name: 'Guest Cards', count: gcCount, rate: '—', color: '#0284c7' },
+          { name: 'Applications', count: funnel.applications ?? 0, rate: `${convRates?.guestCardToApplication?.toFixed(0) ?? 0}% of leads`, color: '#6366f1' },
+          { name: 'Approvals', count: funnel.approvals ?? 0, rate: `${convRates?.applicationToApproval?.toFixed(0) ?? 0}% of apps`, color: '#8b5cf6' },
+          { name: 'Move-Ins', count: funnel.moveIns ?? 0, rate: `${convRates?.approvalToMoveIn?.toFixed(0) ?? 0}% of approved`, color: '#059669' },
+        ];
 
   const avgDays = (latest.value.avgDaysLeadToLease as number) ?? 0;
   const avgResponseHours = contact?.avgHoursToFirstContact as number | null;
@@ -1109,29 +1135,36 @@ function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
       <StatPills
         stats={[
           { label: "Avg Lead-to-Lease", value: `${avgDays.toFixed(0)} days` },
-          { label: "Best Conversion", value: `${stats.high.toFixed(1)}%` },
-          { label: "Current", value: `${stats.current.toFixed(1)}%` },
+          sparse
+            ? { label: "Peak Move-Ins (90d)", value: `${stats.high.toFixed(0)}` }
+            : { label: "Best Conversion", value: `${stats.high.toFixed(1)}%` },
+          sparse
+            ? { label: "Current Move-Ins (90d)", value: `${stats.current.toFixed(0)}` }
+            : { label: "Current", value: `${stats.current.toFixed(1)}%` },
           { label: "Avg Response", value: avgResponseHours != null ? `${avgResponseHours.toFixed(0)}h` : 'N/A' },
         ]}
       />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Conversion rate line chart */}
+        {/* Conversion rate (or move-ins when linkage is sparse) line chart */}
         <div>
-          <p className="text-xs font-medium text-charcoal-500 mb-2">Overall Conversion Rate</p>
+          <p className="text-xs font-medium text-charcoal-500 mb-2">
+            {sparse ? "Tenant Move-Ins (rolling 90 days)" : "Overall Conversion Rate"}
+          </p>
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
               <CartesianGrid {...GRID_PROPS} />
               <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
-              <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v}%`} />
+              <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => (sparse ? `${v}` : `${v}%`)} />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
                 labelStyle={LABEL_STYLE}
-                formatter={((value: number) => [`${value.toFixed(1)}%`, "Conversion"]) as AnyFormatter}
+                formatter={((value: number) =>
+                  sparse ? [`${value.toFixed(0)}`, "Move-ins (90d)"] : [`${value.toFixed(1)}%`, "Conversion"]) as AnyFormatter}
               />
               {yearBoundaries(data).map((b) => (
                 <ReferenceLine key={b.rawDate} x={b.rawDate} {...YEAR_LINE_STYLE} label={{ value: String(b.year), position: "insideTopLeft", ...YEAR_LABEL_STYLE }} />
               ))}
-              <Area type="monotone" dataKey="overallConversion" stroke="#e11d48" strokeWidth={2} fill="#fecdd3" fillOpacity={0.3} dot={{ r: 3, fill: "#e11d48" }} />
+              <Area type="monotone" dataKey={sparse ? "tenantMoveIns" : "overallConversion"} stroke="#e11d48" strokeWidth={2} fill="#fecdd3" fillOpacity={0.3} dot={{ r: 3, fill: "#e11d48" }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1187,17 +1220,37 @@ function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
 }
 
 function ManagementFeesChart({ data }: { data: TrendPoint[] }) {
-  if (data.length === 0) return <EmptyChart name="Annual Management Fees" />;
+  // Pre-2026-08-04 snapshots carried a broken feeCount (always 0) — chart
+  // only the rewritten metric (estimated annual fee revenue from
+  // CurrentManagementFeePolicy × occupied market rents).
+  const usable = data.filter((d) => d.value.estAnnualFeeRevenue != null);
+  if (usable.length === 0) {
+    return (
+      <div className="glass glass-shine rounded-2xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
+            <Receipt className="w-4 h-4 text-violet-600" />
+          </div>
+          <h4 className="text-sm font-semibold text-charcoal-700">Management Fee Revenue (est.)</h4>
+        </div>
+        <p className="text-xs text-charcoal-400 py-8 text-center">
+          Collecting since Aug 4, 2026 — the prior &ldquo;annual management fee&rdquo; metric read a
+          custom field the API doesn&rsquo;t return and was always zero. Trend fills in daily.
+        </p>
+      </div>
+    );
+  }
 
-  const multi = isMultiYear(data);
-  const chartData = data.map((d) => ({
+  const multi = isMultiYear(usable);
+  const chartData = usable.map((d) => ({
     date: d.date,
-    feeCount: d.value.feeCount ?? 0,
+    estAnnualK: Math.round(((d.value.estAnnualFeeRevenue as number) ?? 0) / 1000),
+    avgFeePct: d.value.avgFeePct ?? 0,
     totalProperties: d.value.totalProperties ?? 0,
   }));
 
-  const counts = chartData.map((d) => d.feeCount);
-  const stats = computeStats(counts);
+  const values = chartData.map((d) => d.estAnnualK);
+  const stats = computeStats(values);
   const latest = chartData[chartData.length - 1];
 
   return (
@@ -1206,36 +1259,39 @@ function ManagementFeesChart({ data }: { data: TrendPoint[] }) {
         <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
           <Receipt className="w-4 h-4 text-violet-600" />
         </div>
-        <h4 className="text-sm font-semibold text-charcoal-700">Annual Management Fees</h4>
+        <h4 className="text-sm font-semibold text-charcoal-700">Management Fee Revenue (est. annual)</h4>
       </div>
       <StatPills
         stats={[
-          { label: "Current", value: `${stats.current}` },
-          { label: "Total Props", value: `${latest.totalProperties}` },
-          { label: "High", value: `${stats.high}` },
-          { label: "Low", value: `${stats.low}` },
+          { label: "Current", value: `$${stats.current.toFixed(0)}k` },
+          { label: "Avg Fee", value: `${latest.avgFeePct}%` },
+          { label: "Properties", value: `${latest.totalProperties}` },
+          { label: "High", value: `$${stats.high.toFixed(0)}k` },
         ]}
       />
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
           <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
-          <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={50} />
+          <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={55} tickFormatter={(v) => `$${v}k`} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
             labelStyle={LABEL_STYLE}
             labelFormatter={tooltipLabel}
             formatter={((value: number, name: string) => {
-              if (name === "feeCount") return [`${value}`, "With Mgmt Fee"];
-              return [`${value}`, "Total Properties"];
+              if (name === "estAnnualK") return [`$${value}k`, "Est. Annual Fees"];
+              return [`${value}`, name];
             }) as AnyFormatter}
           />
-          {yearBoundaries(data).map((b) => (
+          {yearBoundaries(usable).map((b) => (
             <ReferenceLine key={b.rawDate} x={b.rawDate} {...YEAR_LINE_STYLE} label={{ value: String(b.year), position: "insideTopLeft", ...YEAR_LABEL_STYLE }} />
           ))}
-          <Area type="monotone" dataKey="feeCount" stroke="#7c3aed" strokeWidth={2} fill="#ddd6fe" fillOpacity={0.3} dot={{ r: 3, fill: "#7c3aed" }} />
+          <Area type="monotone" dataKey="estAnnualK" stroke="#7c3aed" strokeWidth={2} fill="#ddd6fe" fillOpacity={0.3} dot={{ r: 3, fill: "#7c3aed" }} />
         </AreaChart>
       </ResponsiveContainer>
+      <p className="mt-2 text-2xs text-charcoal-400">
+        Estimate: occupied-unit market rents × each property&rsquo;s AppFolio fee policy. Not QuickBooks actuals.
+      </p>
     </div>
   );
 }

@@ -44,6 +44,9 @@ interface DelinquencyData {
   rate: number;
   totalDollars: number;
   count: number;
+  totalActive?: number;
+  dollarRatePct?: number | null;
+  formerTenantDollars?: number;
 }
 
 interface VacancyData {
@@ -112,8 +115,13 @@ interface GuestCardData {
 }
 
 interface ManagementFeesData {
-  feeCount: number;
   totalProperties: number;
+  avgFeePct?: number | null;
+  tiers?: { pct: number; count: number }[];
+  flatCount?: number;
+  estAnnualFeeRevenue?: number | null;
+  /** legacy shape (pre-2026-08-04 snapshots) */
+  feeCount?: number;
 }
 
 interface OccupancyData {
@@ -182,6 +190,10 @@ interface LeasingFunnelData {
     pctNeverContacted: number | null;
     dataSource: string;
   };
+  dataQuality?: {
+    tenantMoveIns?: number;
+    leadLinkageSparse?: boolean;
+  };
 }
 
 type KpiData = DelinquencyData | VacancyData | WorkOrderData | NoticeData | InsuranceData
@@ -246,7 +258,8 @@ const KPI_CARDS: KpiCardConfig[] = [
     formatPrimary: (d) => `${(d as DelinquencyData).rate}%`,
     formatSecondary: (d) => {
       const data = d as DelinquencyData;
-      return `${data.count} occupancies | $${data.totalDollars.toLocaleString()} outstanding`;
+      const base = `${data.count}${data.totalActive ? ` of ${data.totalActive}` : ""} current tenancies >$50 | $${data.totalDollars.toLocaleString()} owed`;
+      return data.dollarRatePct != null ? `${base} (${data.dollarRatePct}% of rent roll)` : base;
     },
     getSparklineValue: (s) => (s.rate as number) ?? 0,
     getDelta: (current, prior) => {
@@ -575,7 +588,16 @@ const KPI_CARDS: KpiCardConfig[] = [
     sparkColor: "#e11d48",
     sparkFill: "#fecdd3",
     dataTag: "live",
-    formatPrimary: (d) => `${(d as LeasingFunnelData).conversionRates.overallConversion}%`,
+    formatPrimary: (d) => {
+      const data = d as LeasingFunnelData;
+      // AppFolio's May-2026 lead-lifecycle rewrite broke guest-card→app
+      // linkage; when sparse, the stage counts/conversions are fiction —
+      // show real tenant move-ins instead.
+      if (data.dataQuality?.leadLinkageSparse && data.dataQuality.tenantMoveIns != null) {
+        return `${data.dataQuality.tenantMoveIns}`;
+      }
+      return `${data.conversionRates.overallConversion}%`;
+    },
     formatSecondary: (d) => {
       const data = d as LeasingFunnelData;
       const f = data.funnel;
@@ -583,16 +605,34 @@ const KPI_CARDS: KpiCardConfig[] = [
       const responseLine = contact.dataSource !== "unavailable" && contact.avgHoursToFirstContact != null
         ? `Avg response: ${contact.avgHoursToFirstContact.toFixed(0)}h  |  ${contact.pctContactedUnder1Hour?.toFixed(0)}% <1hr`
         : "Response time: data pending";
+      if (data.dataQuality?.leadLinkageSparse) {
+        return `move-ins (90d) | ${f.guestCards} leads — stage linkage broken in AppFolio since May\n${responseLine}`;
+      }
       return `${f.guestCards} leads → ${f.applications} apps → ${f.approvals} approved → ${f.moveIns} move-ins\n${responseLine}`;
     },
     getSparklineValue: (s) => {
+      const dq = s.dataQuality as { leadLinkageSparse?: boolean; tenantMoveIns?: number } | undefined;
+      if (dq?.leadLinkageSparse && dq.tenantMoveIns != null) return dq.tenantMoveIns;
       const rates = s.conversionRates as Record<string, number> | undefined;
       return rates?.overallConversion ?? 0;
     },
     getDelta: (current, prior) => {
-      const curr = (current as LeasingFunnelData).conversionRates.overallConversion;
-      const priorRates = (prior as { conversionRates?: { overallConversion?: number } }).conversionRates;
-      const prev = priorRates?.overallConversion;
+      const cur = current as LeasingFunnelData;
+      const pri = prior as unknown as LeasingFunnelData;
+      if (cur.dataQuality?.leadLinkageSparse) {
+        const c = cur.dataQuality.tenantMoveIns;
+        const p = pri.dataQuality?.tenantMoveIns;
+        if (c == null || p == null) return null;
+        const diff = c - p;
+        if (diff === 0) return { direction: "flat", sentiment: "neutral", label: "No change" };
+        return {
+          direction: diff > 0 ? "up" : "down",
+          sentiment: diff > 0 ? "good" : "bad",
+          label: `${Math.abs(diff)} move-ins`,
+        };
+      }
+      const curr = cur.conversionRates.overallConversion;
+      const prev = pri.conversionRates?.overallConversion;
       if (prev == null) return null;
       const diff = curr - prev;
       if (Math.abs(diff) < 0.1) return { direction: "flat", sentiment: "neutral", label: "No change" };
@@ -614,22 +654,34 @@ const KPI_CARDS: KpiCardConfig[] = [
     sparkColor: "#7c3aed",
     sparkFill: "#ddd6fe",
     dataTag: "live",
-    formatPrimary: (d) => `${(d as ManagementFeesData).feeCount}`,
+    formatPrimary: (d) => {
+      const data = d as ManagementFeesData;
+      if (data.estAnnualFeeRevenue != null) {
+        return `$${Math.round(data.estAnnualFeeRevenue / 1000)}k`;
+      }
+      return data.avgFeePct != null ? `${data.avgFeePct}%` : "—";
+    },
     formatSecondary: (d) => {
       const data = d as ManagementFeesData;
-      return `${data.feeCount} of ${data.totalProperties} properties with mgmt fee`;
+      if (data.avgFeePct == null) return "Fee policy data unavailable";
+      const topTiers = (data.tiers ?? [])
+        .slice(0, 3)
+        .map((t) => `${t.pct}%×${t.count}`)
+        .join(" · ");
+      return `est. annual fees | avg ${data.avgFeePct}% across ${data.totalProperties} properties${topTiers ? ` (${topTiers})` : ""}`;
     },
-    getSparklineValue: (s) => (s.feeCount as number) ?? 0,
+    getSparklineValue: (s) =>
+      ((s.estAnnualFeeRevenue as number | null) ?? 0) / 1000,
     getDelta: (current, prior) => {
-      const curr = (current as ManagementFeesData).feeCount;
-      const prev = (prior as { feeCount?: number }).feeCount;
-      if (prev == null) return null;
+      const curr = (current as ManagementFeesData).estAnnualFeeRevenue;
+      const prev = (prior as unknown as ManagementFeesData).estAnnualFeeRevenue;
+      if (curr == null || prev == null) return null;
       const diff = curr - prev;
-      if (diff === 0) return { direction: "flat", sentiment: "neutral", label: "No change" };
+      if (Math.abs(diff) < 1000) return { direction: "flat", sentiment: "neutral", label: "No change" };
       return {
         direction: diff > 0 ? "up" : "down",
         sentiment: diff > 0 ? "good" : "bad",
-        label: `${Math.abs(diff)} properties`,
+        label: `$${Math.round(Math.abs(diff) / 1000)}k/yr`,
       };
     },
   },

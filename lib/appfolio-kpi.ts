@@ -244,48 +244,98 @@ interface V0Tenant {
 // ============================================
 
 export interface DelinquencyKpi {
+  /** % of CURRENT tenancies with balance > threshold */
   rate: number;
+  /** open balances owed by current tenancies over the threshold */
   totalDollars: number;
+  /** current tenancies over the threshold */
   count: number;
+  /** current tenancies (denominator) */
+  totalActive: number;
+  /** delinquent $ as % of monthly market rent roll — stable across the month */
+  dollarRatePct: number | null;
+  rentRollMonthly: number | null;
+  /** open balances on non-current (former/other) occupancies — collections, not delinquency */
+  formerTenantDollars: number;
+  thresholdDollars: number;
 }
 
+const DELINQUENCY_THRESHOLD = 50;
+
+/**
+ * Rewritten 2026-08-04. The old version divided current delinquents by every
+ * 'Fully Executed' lease since 2020 (ended leases included — denominator
+ * ~3.5x reality, rate meaningless) and counted any open charge with no
+ * threshold (day-1-of-month sawtooth). Now: denominator = current tenancies
+ * only; numerator = current tenancies with balance > $50; plus a
+ * dollars-to-rent-roll ratio that stays comparable across the month.
+ */
 export async function fetchDelinquencyKpi(): Promise<DelinquencyKpi> {
   const config = getKpiConfig();
   if (!config) {
-    return { rate: 0, totalDollars: 0, count: 0 };
+    return {
+      rate: 0, totalDollars: 0, count: 0, totalActive: 0,
+      dollarRatePct: null, rentRollMonthly: null, formerTenantDollars: 0,
+      thresholdDollars: DELINQUENCY_THRESHOLD,
+    };
   }
 
-  // Fetch all open delinquent charges (no date filter needed — endpoint returns current open charges)
-  const charges = await v0FetchAll<V0DelinquentCharge>(
-    '/delinquent_charges',
-    {},
-    config
+  const [charges, units] = await Promise.all([
+    v0FetchAll<V0DelinquentCharge>('/delinquent_charges', {}, config),
+    v0FetchAll<V0Unit>(
+      '/units',
+      { 'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z' },
+      config
+    ),
+  ]);
+
+  // Current tenancies = units' CurrentOccupancyId (AppFolio's own "who lives
+  // here now"). Lease-status filtering was tried first and over-counts —
+  // historical MTM leases stay 'Fully Executed' with no EndOn forever.
+  const currentOccupancies = new Set(
+    units
+      .filter((u) => !u.HiddenAt && !u.NonRevenue && u.CurrentOccupancyId)
+      .map((u) => u.CurrentOccupancyId as string)
   );
 
-  // Fetch active leases to get total occupancy count (denominator)
-  const leases = await v0FetchAll<V0Lease>(
-    '/leases',
-    { 'filters[LastUpdatedAtFrom]': '2020-01-01T00:00:00Z' },
-    config
-  );
+  // Balance per occupancy (a tenant can have several open charges).
+  const balanceByOccupancy = new Map<string, number>();
+  for (const c of charges) {
+    const amt = parseFloat(c.AmountDue || '0') || 0;
+    balanceByOccupancy.set(c.OccupancyId, (balanceByOccupancy.get(c.OccupancyId) ?? 0) + amt);
+  }
 
-  const activeOccupancies = new Set(
-    leases.filter((l) => l.Status === 'Fully Executed').map((l) => l.OccupancyId)
-  );
+  let totalDollars = 0;
+  let formerTenantDollars = 0;
+  let count = 0;
+  for (const [occ, balance] of balanceByOccupancy) {
+    if (!currentOccupancies.has(occ)) {
+      formerTenantDollars += balance;
+    } else if (balance > DELINQUENCY_THRESHOLD) {
+      totalDollars += balance;
+      count++;
+    }
+  }
 
-  const delinquentOccupancies = new Set(charges.map((c) => c.OccupancyId));
-  const totalDollars = charges.reduce((sum, c) => sum + parseFloat(c.AmountDue || '0'), 0);
-  const count = delinquentOccupancies.size;
-  const totalActive = activeOccupancies.size;
+  const totalActive = currentOccupancies.size;
+  const rate = totalActive > 0 ? Math.round((count / totalActive) * 1000) / 10 : 0;
 
-  const rate = totalActive > 0
-    ? Math.round((count / totalActive) * 1000) / 10
-    : 0;
+  const rentRollMonthly = units.reduce((sum, u) => {
+    if (u.HiddenAt || u.NonRevenue || !u.CurrentOccupancyId) return sum;
+    const rent = u.MarketRent != null ? parseFloat(u.MarketRent) : NaN;
+    return Number.isFinite(rent) ? sum + rent : sum;
+  }, 0);
 
   return {
     rate,
     totalDollars: Math.round(totalDollars * 100) / 100,
     count,
+    totalActive,
+    dollarRatePct:
+      rentRollMonthly > 0 ? Math.round((totalDollars / rentRollMonthly) * 1000) / 10 : null,
+    rentRollMonthly: Math.round(rentRollMonthly),
+    formerTenantDollars: Math.round(formerTenantDollars * 100) / 100,
+    thresholdDollars: DELINQUENCY_THRESHOLD,
   };
 }
 
@@ -1201,38 +1251,104 @@ export async function fetchLeasingFunnelKpi(): Promise<LeasingFunnelKpi> {
 // ============================================
 
 interface ManagementFeesKpi {
-  feeCount: number;
-  totalProperties: number;
+  totalProperties: number;               // active under management
+  avgFeePct: number | null;              // mean % across percent-fee properties
+  tiers: { pct: number; count: number }[];
+  flatCount: number;                     // flat-fee properties
+  noPolicy: number;                      // properties without a fee policy
+  /** Σ occupied-unit market rent × property fee % × 12 (+ flat fees × 12).
+      An ESTIMATE — actual lease rents are not on the v0 API. */
+  estAnnualFeeRevenue: number | null;
 }
 
-interface V0PropertyWithCustom {
+interface V0PropertyWithFees {
   Id: string;
   HiddenAt?: string | null;
-  CustomValues?: Array<{ Name: string; Value: string }>;
+  ManagementEndDate?: string | null;
+  CurrentManagementFeePolicy?: {
+    FeeType?: string | null;             // 'Percent' | 'Flat'
+    Percentage?: string | null;
+    FlatAmount?: string | null;
+  } | null;
 }
 
+/**
+ * Rewritten 2026-08-04. The old version counted a custom field
+ * ("Accounting Management Fee" via a CustomValues array) that the API does
+ * not return — the field is CustomFields (an object) and the flag is named
+ * "Annual Accounting Fee" — so feeCount was 0 forever. The API now exposes
+ * CurrentManagementFeePolicy directly, which is the real data.
+ */
 export async function fetchManagementFeesKpi(): Promise<ManagementFeesKpi> {
   const config = getKpiConfig();
   if (!config) {
-    return { feeCount: 0, totalProperties: 0 };
+    return { totalProperties: 0, avgFeePct: null, tiers: [], flatCount: 0, noPolicy: 0, estAnnualFeeRevenue: null };
   }
 
-  const properties = await v0FetchAll<V0PropertyWithCustom>(
-    '/properties',
-    { 'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z' },
-    config,
-    1000,
-    10
-  );
+  const [properties, units] = await Promise.all([
+    v0FetchAll<V0PropertyWithFees>(
+      '/properties',
+      { 'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z' },
+      config,
+      1000,
+      10
+    ),
+    v0FetchAll<V0Unit>(
+      '/units',
+      { 'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z' },
+      config
+    ),
+  ]);
 
-  const active = properties.filter((p) => !p.HiddenAt);
-  const feeCount = active.filter((p) =>
-    (p.CustomValues || []).some(
-      (cv) => cv.Name === 'Accounting Management Fee' && cv.Value === 'Yes'
-    )
-  ).length;
+  const active = properties.filter((p) => !p.HiddenAt && !p.ManagementEndDate);
+  const pctByProperty = new Map<string, number>();
+  const tierCounts = new Map<number, number>();
+  let flatCount = 0;
+  let noPolicy = 0;
+  let flatAnnual = 0;
 
-  return { feeCount, totalProperties: active.length };
+  for (const p of active) {
+    const policy = p.CurrentManagementFeePolicy;
+    const pct = policy?.Percentage != null ? parseFloat(policy.Percentage) : NaN;
+    if (policy?.FeeType === 'Percent' && Number.isFinite(pct) && pct > 0) {
+      pctByProperty.set(p.Id, pct);
+      tierCounts.set(pct, (tierCounts.get(pct) ?? 0) + 1);
+    } else if (policy?.FeeType === 'Flat' && policy.FlatAmount != null) {
+      flatCount++;
+      flatAnnual += (parseFloat(policy.FlatAmount) || 0) * 12;
+    } else {
+      noPolicy++;
+    }
+  }
+
+  const pcts = [...pctByProperty.values()];
+  const avgFeePct = pcts.length
+    ? Math.round((pcts.reduce((a, b) => a + b, 0) / pcts.length) * 10) / 10
+    : null;
+
+  // Estimated annual revenue: occupied, revenue units × market rent × fee %.
+  let pctAnnual = 0;
+  let ratedUnits = 0;
+  for (const u of units) {
+    if (u.HiddenAt || u.NonRevenue || !u.CurrentOccupancyId || !u.PropertyId) continue;
+    const pct = pctByProperty.get(u.PropertyId);
+    const rent = u.MarketRent != null ? parseFloat(u.MarketRent) : NaN;
+    if (pct == null || !Number.isFinite(rent)) continue;
+    pctAnnual += rent * (pct / 100) * 12;
+    ratedUnits++;
+  }
+  const estAnnualFeeRevenue = ratedUnits > 0 ? Math.round(pctAnnual + flatAnnual) : null;
+
+  return {
+    totalProperties: active.length,
+    avgFeePct,
+    tiers: [...tierCounts.entries()]
+      .map(([pct, count]) => ({ pct, count }))
+      .sort((a, b) => b.count - a.count),
+    flatCount,
+    noPolicy,
+    estAnnualFeeRevenue,
+  };
 }
 
 // ============================================
