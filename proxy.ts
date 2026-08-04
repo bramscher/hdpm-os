@@ -25,6 +25,13 @@ const PUBLIC_PREFIXES = [
   "/api/maintenance/cron", // Vercel cron — protected by CRON_SECRET, not session auth
   "/api/agents", // Agent layer — self-guarded via HDPM_SERVICE_TOKEN or staff session (requireStaffOrService)
   "/api/intake", // hdpm-web rental-analysis handoff — self-guarded via HDPM_SERVICE_TOKEN
+  // Cron-driven syncs outside /api/sync — each self-guards (CRON_SECRET
+  // bearer OR staff session). Mirrors the 2026-08-04 main fix: these were
+  // missing, so their Vercel crons were redirected to /login and never ran.
+  "/api/haven/sync",
+  "/api/haven/cron",
+  "/api/reception/sync",
+  "/api/inspections/candidates/sync",
 ];
 
 // Admin-only: the entire KPI/financial dashboard and its data APIs.
