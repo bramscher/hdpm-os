@@ -47,6 +47,44 @@ const METRIC_NAMES = [
 
 const INTERNAL_VENDOR_NAME_RE = /high desert maintenance/i;
 
+/**
+ * Brief 1D: company-memory context for the deep brief's escalation items —
+ * one bounded think() call about the escalation patterns present. Best-effort:
+ * any failure (or no escalations, or dry run) yields null and the brief
+ * renders without the section.
+ */
+async function escalationMemoryContext(
+  items: EscalationBriefItem[],
+  dryRun: boolean
+): Promise<{ answer: string; links: { title: string; url: string }[] } | null> {
+  if (dryRun || items.length === 0) return null;
+  const reasons = [...new Set(items.map((i) => i.reason))];
+  const described = reasons
+    .map((r) =>
+      r === 'chased_3x'
+        ? 'vendors chased 3+ times with no movement'
+        : r === 'aged_45d'
+          ? 'work orders stuck 45+ days'
+          : r
+    )
+    .join(' and ');
+  try {
+    const { think } = await import('@/lib/brain/think');
+    const result = await think(
+      `What has HDPM decided about handling maintenance escalations like ${described} — who is responsible, what are the autonomy limits, and what should happen next?`,
+      { limit: 6, maxTokens: 500 }
+    );
+    if (!result.answer || result.matches.length === 0) return null;
+    return {
+      answer: result.answer,
+      links: result.sources.map((s) => ({ title: s.title, url: s.url })),
+    };
+  } catch (err) {
+    console.error('[Agents] ops-brief memory context failed (continuing without):', err);
+    return null;
+  }
+}
+
 export interface OpsBriefRunResult {
   halted?: string;
   dryRun: boolean;
@@ -280,6 +318,7 @@ export async function runOpsBrief(opts: {
         last7Days: num(current, 'appfolio_retype_touches', 'last7Days'),
         weeklyTarget: num(current, 'appfolio_retype_touches', 'weeklyTarget') ?? 40,
       },
+      memory: await escalationMemoryContext(needsCraig, dryRun),
       baseline: baseline
         ? [
             {

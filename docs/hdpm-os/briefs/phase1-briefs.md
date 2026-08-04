@@ -85,7 +85,19 @@ clarification-question generation → `brain_clarification`; metrics summary.
 Cron route `/api/brain/cron/evolve` + vercel.json entry (3am). Clarification
 queue surfaces as a simple list in the Agents console.
 
-## Brief 1D — Agent access + Ops Brief citations + eval
+## Brief 1D — Agent access + Ops Brief citations + eval  ⟵ SHIPPED 2026-08-04
+
+> Shipped: POST /api/brain/search + /api/brain/think (requireStaffOrService —
+> service token scope 'agents' + X-Agent-Actor, or staff session; sensitivity
+> clamped to 'internal'; /api/brain self-guarded prefix in proxy). Deep-Monday
+> Ops Brief now includes a "🧠 From company memory" section — one bounded
+> think() call about the escalation patterns present, with citation links
+> (best-effort: any failure renders the brief without it; first live render
+> next Monday). Golden eval scripts/brain/golden-questions.ts →
+> docs/eval/brain-golden.md: **10/10 citation checks, 3/3 gap probes** on the
+> live corpus — the Phase 1 acceptance gate PASSES. Route smoke: 401 without
+> token/actor, 200 with scoped token (verified with a minted-then-deactivated
+> smoke token).
 
 1. `/api/brain/search` + `/api/brain/think` (service-token scope `agents` —
    add scope value `brain` only if separation proves needed). **MCP-proper

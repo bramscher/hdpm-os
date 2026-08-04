@@ -30,7 +30,7 @@ const PUBLIC_PREFIXES = [
   // missing, so their Vercel crons were redirected to /login and never ran.
   "/api/haven/sync",
   "/api/haven/cron",
-  "/api/brain/cron", // nightly evolve — CRON_SECRET-guarded in the route
+  "/api/brain", // self-guarded: cron via CRON_SECRET; search/think via service token or staff session
   "/api/reception/sync",
   "/api/inspections/candidates/sync",
 ];
