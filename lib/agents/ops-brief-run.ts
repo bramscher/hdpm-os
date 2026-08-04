@@ -55,7 +55,7 @@ export interface OpsBriefRunResult {
   needsCraig: number;
   unacked: number;
   agentsReported: number;
-  slack: { brody?: SendOutcome; matt?: SendOutcome };
+  slack: { brody?: SendOutcome; matt?: SendOutcome; craig?: SendOutcome };
 }
 
 function num(map: MetricMap, metric: string, field: string): number | null {
@@ -306,7 +306,8 @@ export async function runOpsBrief(opts: {
     return result;
   }
 
-  // ── Send: proposal first (audit), then Craig (interactive) + Matt (read-only) ──
+  // ── Send: proposal first (audit), then Brody (interactive) + Matt and
+  // Craig (read-only copies; Craig re-added 2026-08-04 by request) ──
   const interactive = buildOpsBriefBlocks(data, { readOnly: false });
   const readOnly = buildOpsBriefBlocks(data, { readOnly: true });
 
@@ -329,9 +330,10 @@ export async function runOpsBrief(opts: {
     rationale: `${deep ? 'Monday deep' : 'Daily'} ops brief — ${needsCraig.length} needs-decision item(s)`,
   });
 
-  const [brody, matt] = await Promise.all([
+  const [brody, matt, craig] = await Promise.all([
     resolveStaffByPersonOrEmail('Brody'),
     resolveStaffByPersonOrEmail('Matt'),
+    resolveStaffByPersonOrEmail('Craig'),
   ]);
 
   let brodyOutboxId: string | null = null;
@@ -362,6 +364,19 @@ export async function runOpsBrief(opts: {
   } else {
     result.slack.matt = { status: 'skipped', error: 'Matt has no slack_user_id in staff' };
   }
+  if (craig?.slack_user_id) {
+    await enqueueOutbox({
+      proposal_id: proposal.id,
+      channel: 'slack',
+      recipient_person: 'Craig',
+      recipient_address: craig.slack_user_id,
+      subject: 'Ops Brief (copy)',
+      body: readOnly.text,
+      payload: { blocks: readOnly.blocks, brief_date: briefDate },
+    });
+  } else {
+    result.slack.craig = { status: 'skipped', error: 'Craig has no slack_user_id in staff' };
+  }
 
   await dispatchOutbox({ channel: 'slack', now });
 
@@ -385,6 +400,9 @@ export async function runOpsBrief(opts: {
   }
   if (matt?.slack_user_id && result.slack.matt === undefined) {
     result.slack.matt = { status: 'sent' };
+  }
+  if (craig?.slack_user_id && result.slack.craig === undefined) {
+    result.slack.craig = { status: 'sent' };
   }
 
   return result;
