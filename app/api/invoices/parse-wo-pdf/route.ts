@@ -18,7 +18,8 @@ async function extractWithVision(arrayBuffer: ArrayBuffer): Promise<string> {
   const base64 = Buffer.from(arrayBuffer).toString('base64');
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
+    thinking: { type: 'disabled' },
     max_tokens: 4096,
     messages: [
       {
@@ -83,7 +84,8 @@ async function extractWorkOrderFields(text: string): Promise<ParsedWorkOrder> {
   const anthropic = getAnthropic();
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
+    thinking: { type: 'disabled' },
     max_tokens: 4096,
     messages: [
       {

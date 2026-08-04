@@ -8,6 +8,13 @@ import {
   KnowledgeChunk,
   FulltextChunk,
 } from './supabase';
+import { searchBrain } from './brain/retrieve';
+import {
+  brainSourcesForChat,
+  buildBrainContext,
+  BRAIN_PROMPT_ADDENDUM,
+} from './brain/think';
+import type { BrainMatch } from './brain/types';
 
 // Lazy initialization to avoid build-time issues
 let _openai: OpenAI | null = null;
@@ -40,7 +47,18 @@ export const SOURCE_ICONS: Record<string, string> = {
   notion_sop: '📘',
   loom_video: '🎬',
   policy_doc: '📄',
+  brain: '🧠',
 };
+
+/** Brain retrieval for the chat — failure degrades to no brain sources. */
+async function searchBrainForChat(question: string): Promise<BrainMatch[]> {
+  try {
+    return await searchBrain(question, { limit: 6, maxSensitivity: 'internal' });
+  } catch (err) {
+    console.error('[RAG] brain search failed (continuing without):', err);
+    return [];
+  }
+}
 
 // Types for RAG response
 export interface Source {
@@ -438,59 +456,29 @@ function extractSources(chunks: KnowledgeChunk[]): Source[] {
  * Main RAG function: search knowledge base and generate response with Claude
  */
 export async function askRAG(question: string): Promise<RAGResponse> {
-  // Step 1: Hybrid search — vector + fulltext, auto-detects query intent
-  const chunks = await searchKnowledgeHybrid(question, {
-    enableQueryExpansion: false,
-    minSimilarity: 0.50,
-    maxResults: 15
-  });
+  // Step 1: Hybrid search (ORS/SOP corpus) + company-memory search in parallel
+  const [chunks, brainMatches] = await Promise.all([
+    searchKnowledgeHybrid(question, {
+      enableQueryExpansion: false,
+      minSimilarity: 0.50,
+      maxResults: 15,
+    }),
+    searchBrainForChat(question),
+  ]);
 
-  // Step 2: Build context from retrieved chunks
-  const context = buildContext(chunks);
-  const sources = extractSources(chunks);
+  // Step 2: Build context — brain sources continue the numbering
+  const brainContext = buildBrainContext(brainMatches, chunks.length + 1);
+  const context = brainContext ? `${buildContext(chunks)}\n\n${brainContext}` : buildContext(chunks);
+  const sources = [...extractSources(chunks), ...brainSourcesForChat(brainMatches)];
 
   // Step 3: Build the system prompt
-  const systemPrompt = `You are the internal knowledge assistant for High Desert Property Management. Your role is to help property managers, leasing agents, and staff quickly find accurate information about landlord-tenant law, company policies, and procedures.
-
-CONTEXT:
-- This is an INTERNAL tool for High Desert Property Management staff only
-- Users are professionals who need practical, actionable guidance
-- Focus on Oregon landlord-tenant law (ORS Chapter 90) and HDPM's own procedures
-- Always consider the landlord/property manager perspective when answering
-- The knowledge base contains TWO corpora:
-  1. The COMPLETE Oregon ORS Chapter 90 (163 sections covering residential landlord-tenant law, manufactured dwelling parks, and marinas)
-  2. Every HDPM Standard Operating Procedure from the Notion SOP library (move-in/move-out, inspections, maintenance, key management, screening, front desk, HDPM-OS app procedures, and more)
-- When a question touches company process ("how do we...", "what's our procedure for..."), answer from the SOPs; when it touches the law, answer from ORS 90; blend both when relevant (e.g., what the law requires AND how HDPM executes it)
-- SOP sources link to the live Notion page — point the user there for the full procedure when your answer summarizes one
-
-RESPONSE FORMAT:
-1. Start with a brief, direct answer to the question
-2. Use clear headers (## Header) to organize longer responses
-3. Use bullet points for lists and requirements
-4. Include specific ORS section numbers, timeframes, and limits when available
-5. Add practical tips or warnings where relevant (e.g., "Important:", "Note:")
-
-CITATIONS:
-- Use inline citations [1], [2], etc. for ALL factual claims from the knowledge base
-- Place citations immediately after the relevant statement
-- Multiple citations can be grouped: [1][2]
-- Always cite the specific ORS section number when referencing the law
-- When referencing an SOP, name it (e.g., "per SOP: Routine Inspection") and cite it — the citation links to the actual Notion page
-
-TONE:
-- Professional but approachable
-- Confident when information is clear
-- Honest about limitations or ambiguities in the law
-- Suggest consulting legal counsel for complex situations
-
-If the knowledge base doesn't contain relevant information, say so clearly and suggest appropriate next steps (e.g., consult the company handbook, speak with a supervisor, or seek legal advice).
-
-The sources are numbered [1] through [${sources.length}] in the context below.`;
+  const systemPrompt = buildSystemPrompt(sources.length);
 
   // Step 4: Call Claude API
   const message = await getAnthropic().messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1024,
+    model: 'claude-sonnet-5',
+    thinking: { type: 'disabled' },
+    max_tokens: 2048,
     system: systemPrompt,
     messages: [
       {
@@ -522,10 +510,11 @@ CONTEXT:
 - Users are professionals who need practical, actionable guidance
 - Focus on Oregon landlord-tenant law (ORS Chapter 90) and HDPM's own procedures
 - Always consider the landlord/property manager perspective when answering
-- The knowledge base contains TWO corpora:
+- The knowledge base contains THREE corpora:
   1. The COMPLETE Oregon ORS Chapter 90 (163 sections covering residential landlord-tenant law, manufactured dwelling parks, and marinas)
   2. Every HDPM Standard Operating Procedure from the Notion SOP library (move-in/move-out, inspections, maintenance, key management, screening, front desk, HDPM-OS app procedures, and more)
-- When a question touches company process ("how do we...", "what's our procedure for..."), answer from the SOPs; when it touches the law, answer from ORS 90; blend both when relevant (e.g., what the law requires AND how HDPM executes it)
+  3. HDPM company memory — recorded decisions, plans, and architecture/process docs (sources labeled "company memory")
+- When a question touches company process ("how do we...", "what's our procedure for..."), answer from the SOPs; when it touches the law, answer from ORS 90; when it touches company decisions/history/plans ("why did we...", "what did we decide..."), answer from company memory; blend when relevant
 - SOP sources link to the live Notion page — point the user there for the full procedure when your answer summarizes one
 
 RESPONSE FORMAT:
@@ -549,6 +538,7 @@ TONE:
 - Suggest consulting legal counsel for complex situations
 
 If the knowledge base doesn't contain relevant information, say so clearly and suggest appropriate next steps (e.g., consult the company handbook, speak with a supervisor, or seek legal advice).
+${BRAIN_PROMPT_ADDENDUM}
 
 The sources are numbered [1] through [${sourcesCount}] in the context below.`;
 }
@@ -618,17 +608,22 @@ export async function askRAGStream(
     console.log(`[RAG] Document analysis mode: "${documentName || 'unnamed'}" (${documentContent.length} chars)`);
   }
 
-  // Step 1: Hybrid search — vector + fulltext, auto-detects query intent
-  // Don't pollute the search with document content - we want relevant ORS sections for the question
-  const chunks = await searchKnowledgeHybrid(question, {
-    enableQueryExpansion: false,
-    minSimilarity: 0.50,
-    maxResults: 15
-  });
+  // Step 1: Hybrid search (ORS/SOP) + company memory in parallel. Document
+  // analysis mode skips the brain — that mode is about the uploaded document
+  // plus the law, not company history.
+  const [chunks, brainMatches] = await Promise.all([
+    searchKnowledgeHybrid(question, {
+      enableQueryExpansion: false,
+      minSimilarity: 0.50,
+      maxResults: 15,
+    }),
+    documentContent ? Promise.resolve([] as BrainMatch[]) : searchBrainForChat(question),
+  ]);
 
-  // Step 2: Build context from retrieved chunks
-  const context = buildContext(chunks);
-  const sources = extractSources(chunks);
+  // Step 2: Build context — brain sources continue the numbering
+  const brainContext = buildBrainContext(brainMatches, chunks.length + 1);
+  const context = brainContext ? `${buildContext(chunks)}\n\n${brainContext}` : buildContext(chunks);
+  const sources = [...extractSources(chunks), ...brainSourcesForChat(brainMatches)];
 
   // Step 3: Build the appropriate system prompt
   const systemPrompt = documentContent
@@ -654,7 +649,8 @@ export async function askRAGStream(
 
   // Step 5: Create streaming response from Claude
   const streamResponse = await getAnthropic().messages.stream({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-5',
+    thinking: { type: 'disabled' },
     max_tokens: 2048, // Increased for document analysis
     system: systemPrompt,
     messages: [

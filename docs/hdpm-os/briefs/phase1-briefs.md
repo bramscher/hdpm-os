@@ -41,7 +41,19 @@
 
 Operator step: run the migration, then `npx tsx scripts/brain/seed-docs.ts`.
 
-## Brief 1B — `think()` synthesis + knowledge-chat integration
+## Brief 1B — `think()` synthesis + knowledge-chat integration  ⟵ SHIPPED 2026-08-04
+
+> Shipped: `lib/brain/think.ts` (brainSourcesForChat / buildBrainContext /
+> BRAIN_PROMPT_ADDENDUM / standalone `think()`); `lib/rag.ts` runs brain search
+> in parallel with knowledge search in both askRAG and askRAGStream (document-
+> analysis mode skips brain), merges 🧠 sources with continued numbering, and
+> the system prompt covers three corpora + the required gaps section. Live
+> smoke verified: GBrain question answered from memory alone (6 brain sources,
+> knowledge base empty on the topic); think() gap probe returned citations +
+> "What I don't know". Incidental fix shipped with this brief: the chat's
+> Claude model `claude-sonnet-4-20250514` hit API end-of-life (404) — migrated
+> all call sites to `claude-sonnet-5` with `thinking: disabled` (preserves
+> pre-migration latency/behavior; Sonnet 5 defaults to adaptive thinking).
 
 `lib/brain/think.ts`: retrieve → Claude synthesis with **per-claim citations
 and an explicit gap section** ("what the brain does not know"), honoring
