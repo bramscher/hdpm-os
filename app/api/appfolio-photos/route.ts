@@ -60,10 +60,21 @@ async function v0PhotoFetch(path: string, params: Record<string, string>): Promi
   return response.json() as Promise<V0PhotoResponse>;
 }
 
+// Craigslist's image uploader accepts at most 24 photos per post.
+const MAX_PHOTOS = 24;
+
 function v0PhotosToUnitPhotos(v0Photos: V0Photo[]): UnitPhoto[] {
+  const seen = new Set<string>();
   return v0Photos
-    .filter((p) => p.Url)
-    .slice(0, 16)
+    .filter((p) => {
+      if (!p.Url || seen.has(p.Id)) return false;
+      seen.add(p.Id);
+      return true;
+    })
+    // AppFolio gallery order first (Position, unpositioned last) so the cap
+    // keeps the photos the office arranged, not arbitrary API order.
+    .sort((a, b) => (a.Position ?? Number.MAX_SAFE_INTEGER) - (b.Position ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, MAX_PHOTOS)
     .map((p, i) => ({
       id: p.Id,
       url: p.Url,
