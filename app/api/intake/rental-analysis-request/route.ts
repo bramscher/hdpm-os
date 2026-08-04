@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-
-const SERVICE_TOKEN = process.env.HDPM_SERVICE_TOKEN || '';
+import { verifyServiceToken, bearerFromHeader } from '@/lib/service-tokens';
 
 interface SubjectIn {
   address: string;
@@ -37,11 +36,15 @@ interface Body {
  * rent_analyses with status='requested' so it shows up in the comps
  * dashboard for an operator to run the analysis, review, and deliver.
  *
- * Auth: Bearer HDPM_SERVICE_TOKEN.
+ * Auth: Bearer token with 'intake' scope (service_token table; legacy
+ * HDPM_SERVICE_TOKEN accepted as fallback — lib/service-tokens.ts).
  */
 export async function POST(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  if (!SERVICE_TOKEN || auth !== `Bearer ${SERVICE_TOKEN}`) {
+  const identity = await verifyServiceToken(
+    bearerFromHeader(req.headers.get('authorization')),
+    'intake'
+  );
+  if (!identity) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

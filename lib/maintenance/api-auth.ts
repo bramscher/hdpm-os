@@ -10,6 +10,7 @@ import { isCompanyEmail } from '@/lib/require-role';
 import type { NextRequest } from 'next/server';
 import { isAgentActor, parseAgentActor } from '@/lib/agents/actor';
 import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
+import { verifyServiceToken, bearerFromHeader } from '@/lib/service-tokens';
 
 export interface StaffSession {
   email: string;
@@ -45,11 +46,13 @@ export type AgentCaller =
  * 2. Browser staff: falls back to requireStaffSession().
  */
 export async function requireStaffOrService(request: NextRequest): Promise<AgentCaller | null> {
-  const serviceToken = process.env.HDPM_SERVICE_TOKEN;
   const authHeader = request.headers.get('authorization');
 
   if (authHeader?.startsWith('Bearer ')) {
-    if (!serviceToken || authHeader !== `Bearer ${serviceToken}`) return null;
+    // Per-service scoped tokens (service_token table), legacy env token
+    // accepted as fallback — see lib/service-tokens.ts (Brief C).
+    const identity = await verifyServiceToken(bearerFromHeader(authHeader), 'agents');
+    if (!identity) return null;
     const actorHeader = request.headers.get('x-agent-actor')?.trim();
     if (!actorHeader) return null;
     if (isAgentActor(actorHeader)) {

@@ -94,7 +94,7 @@ regression surface in Phase 0 — isolated on purpose.
 >   (prod-only redirect URI) — verify sign-in + calendar publish right after
 >   the eventual deploy; client signIn/signOut now use `redirectTo`.
 
-## Brief C — Schema capture, secrets hygiene, service tokens
+## Brief C — Schema capture, secrets hygiene, service tokens  ⟵ SHIPPED 2026-08-03
 
 1. Dump live Supabase definitions for the missing RAG core
    (`knowledge_chunks`, `conversations`, `conversation_messages`, RPCs,
@@ -106,6 +106,31 @@ regression surface in Phase 0 — isolated on purpose.
    `svc:agent-service`, `svc:cron`) — table-backed with hashed tokens, the
    existing `requireStaffOrService()` extended to resolve scope.
 4. Dead code: retire legacy `/api/work-orders` (confirm zero callers first).
+
+> **Execution notes (2026-08-03):**
+> - **Schema capture:** table columns/types/defaults captured from the LIVE
+>   DB via the PostgREST OpenAPI schema →
+>   `20260803_rag_core_baseline.sql` (idempotent; no-op on prod). Function
+>   bodies cannot be introspected remotely — **Craig runs
+>   `scripts/sql/dump-rag-core-functions.sql` once** in the SQL editor and
+>   pastes the output into the migration's placeholder section (also
+>   returns real index DDL to verify the reconstructed indexes).
+> - **Secrets:** history scan clean — no env file ever committed; the only
+>   pattern hits were env-var *name* tables in an old README. Gitleaks CI
+>   added (`.github/workflows/secret-scan.yml`, first workflow in the repo).
+>   No rotation required.
+> - **Service tokens:** `service_token` table (sha256 hashes, scopes
+>   `agents`/`intake`, revocable) + `lib/service-tokens.ts` (60s cache,
+>   last_used_at touch); `requireStaffOrService()` and the intake route now
+>   verify scoped tokens with the **legacy env token still accepted (logged)**
+>   — mint via `scripts/mint-service-token.mjs` (prints token once + INSERT),
+>   then retire the env var. Migration `20260803_service_tokens.sql` pending
+>   SQL-editor run. `cron` scope deferred: crons use CRON_SECRET, a separate
+>   Vercel-managed mechanism — no change needed.
+> - **Item 4 correction:** `/api/work-orders` is **not dead code** — it is
+>   the invoice dashboard's WO search/detail API (2 live call sites,
+>   `invoice-dashboard.tsx:247,285`) over `lib/work-orders.ts`. Kept;
+>   doc 01's "retire" note amended. Nothing deleted.
 
 ## Brief D — Repo rename + audit_event design note
 

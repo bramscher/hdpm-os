@@ -190,9 +190,10 @@ Resend (email); Zillow/Rentcast/Rentometer/HUD/Google (comps); Rentzap
 - **Refactor in place**: auth stack (Auth.js v5 + DB roles), RLS adoption for
   new+sensitive tables, split monster components as they're next touched
   (not a big-bang rewrite), centralize session/domain guards.
-- **Replace/retire**: legacy `/api/work-orders`, manual QuickBooks seeding
-  (live QBO or drop the gauges), any Craigslist/marketing code that goes
-  unused after CRM ships.
+- **Replace/retire**: manual QuickBooks seeding (live QBO or drop the
+  gauges), any Craigslist/marketing code that goes unused after CRM ships.
+  (Correction 2026-08-03: `/api/work-orders` initially looked legacy but is
+  the invoice dashboard's WO search API — kept.)
 - **Rename**: repo → `hdpm-os` (cosmetic; GitHub redirects; re-point Vercel).
   Folder structure already fits the direction (`app/` surfaces + `lib/`
   domains + `docs/<initiative>/`); no restructure needed.
