@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { weekStartPacific, weeksBefore } from '@/lib/eos/scorecard';
 import ScorecardGrid from '@/components/eos/ScorecardGrid';
 import type { ScorecardMetric, ScorecardEntry } from '@/lib/eos/types';
@@ -41,17 +42,16 @@ export default async function ScorecardPage() {
   const entries = (entriesRes.data ?? []) as ScorecardEntry[];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-1 text-display text-charcoal-900">Scorecard</h1>
-      <p className="mb-6 text-sm text-charcoal-500">
-        Weekly numbers vs goal. Auto rows fill Friday afternoon from the agent metrics; manual
-        metrics are entered here. Two weeks off-track files an issue automatically.
-      </p>
+    <PageContainer>
+      <PageHeader
+        title="Scorecard"
+        description="Weekly numbers vs goal. Auto rows fill Friday afternoon from the agent metrics; manual metrics are entered here. Two weeks off-track files an issue automatically."
+      />
       <ScorecardGrid metrics={metrics} entries={entries} weeks={weeks} currentWeek={currentWeek} />
       <p className="mt-6 text-xs text-charcoal-400">
         Goals are provisional until reviewed · Data: scorecard_metric, scorecard_entry ·
         Auto-fill: Friday 3 PM PT
       </p>
-    </div>
+    </PageContainer>
   );
 }

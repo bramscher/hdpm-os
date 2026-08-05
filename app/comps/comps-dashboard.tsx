@@ -9,6 +9,8 @@ import {
   FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CompsFilters } from "@/components/comps/CompsFilters";
 import { CompsStatsCards } from "@/components/comps/CompsStatsCards";
 import { CompsTable } from "@/components/comps/CompsTable";
@@ -208,32 +210,32 @@ export function CompsDashboard({ userEmail, userName }: CompsDashboardProps) {
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-slide-up">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-charcoal-900 tracking-tight">
-          Rent Comparison Toolkit
-        </h2>
-
-        <div className="flex items-center gap-2">
-          <Link href="/comps/analysis">
+      <PageHeader
+        title="Rent Comparison Toolkit"
+        className="mb-0"
+        actions={
+          <>
+            <Link href="/comps/analysis">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-sand-200 text-charcoal-700 hover:bg-sand-50"
+              >
+                <FileText className="h-4 w-4 mr-1.5" />
+                Rent Analysis
+              </Button>
+            </Link>
             <Button
+              onClick={() => setView("add")}
               size="sm"
-              variant="outline"
-              className="border-sand-200 text-charcoal-700 hover:bg-sand-50"
+              className="bg-terra-500 hover:bg-terra-600 text-white shadow-sm transition-all duration-200"
             >
-              <FileText className="h-4 w-4 mr-1.5" />
-              Rent Analysis
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Comp
             </Button>
-          </Link>
-          <Button
-            onClick={() => setView("add")}
-            size="sm"
-            className="bg-terra-500 hover:bg-terra-600 text-white shadow-sm transition-all duration-200"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add Comp
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Filters */}
       <CompsFilters filter={filter} onChange={setFilter} />
@@ -241,45 +243,30 @@ export function CompsDashboard({ userEmail, userName }: CompsDashboardProps) {
       {/* Stats Cards */}
       <CompsStatsCards stats={stats} baselines={baselines} loading={loading} />
 
-      {/* View Toggle */}
-      <div className="flex items-center gap-1 bg-sand-100 rounded-xl p-1 w-fit">
-        <button
-          type="button"
-          onClick={() => setDataView("table")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${
-            dataView === "table"
-              ? "bg-white text-charcoal-900 shadow-sm"
-              : "text-charcoal-400 hover:text-charcoal-600"
-          }`}
-        >
-          <Table2 className="h-3.5 w-3.5" />
-          Table
-        </button>
-        <button
-          type="button"
-          onClick={() => setDataView("chart")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${
-            dataView === "chart"
-              ? "bg-white text-charcoal-900 shadow-sm"
-              : "text-charcoal-400 hover:text-charcoal-600"
-          }`}
-        >
-          <BarChartHorizontal className="h-3.5 w-3.5" />
-          Chart
-        </button>
-      </div>
-
       {/* Data View */}
-      {dataView === "table" ? (
-        <CompsTable comps={displayComps} loading={loading} onDelete={handleDelete} />
-      ) : (
-        <CompsChart
-          townStats={townStats}
-          baselines={baselines}
-          loading={loading}
-          bedrooms={filter.bedrooms?.[0]}
-        />
-      )}
+      <Tabs value={dataView} onValueChange={(v) => setDataView(v as DataView)}>
+        <TabsList>
+          <TabsTrigger value="table">
+            <Table2 className="h-3.5 w-3.5" />
+            Table
+          </TabsTrigger>
+          <TabsTrigger value="chart">
+            <BarChartHorizontal className="h-3.5 w-3.5" />
+            Chart
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="table">
+          <CompsTable comps={displayComps} loading={loading} onDelete={handleDelete} />
+        </TabsContent>
+        <TabsContent value="chart">
+          <CompsChart
+            townStats={townStats}
+            baselines={baselines}
+            loading={loading}
+            bedrooms={filter.bedrooms?.[0]}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Rentometer Widget */}
       <RentometerWidget onCompCreated={fetchData} />
