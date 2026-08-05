@@ -204,7 +204,22 @@ export default function BoardClient({
 
       {error && <p className="note flag">{error}</p>}
 
-      {!board && loading && <p className="note">Loading the board…</p>}
+      {!board && loading && (
+        <div className="colwrap" aria-label="Loading the board">
+          <div className="cols">
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} className="col">
+                <div className="animate-pulse">
+                  <div className="h-6 rounded-t-md bg-sand-100" />
+                  <div className="mt-1.5 h-20 rounded-md bg-sand-100" />
+                  <div className="mt-1.5 h-20 rounded-md bg-sand-50" />
+                  <div className="mt-1.5 h-20 rounded-md bg-sand-50" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {board && activeBoard && (
         <>

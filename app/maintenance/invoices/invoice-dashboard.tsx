@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { useSession } from "next-auth/react";
 import { WorkOrderRow, HdmsInvoice, displayAssignee, TECHNICIANS } from "@/lib/invoices";
 import { Button } from "@/components/ui/button";
@@ -222,6 +224,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
       }
     } catch (err) {
       console.error("Failed to fetch invoices:", err);
+      toast.error("Could not load invoices — check your connection and retry.");
     } finally {
       setIsLoadingInvoices(false);
     }
@@ -252,6 +255,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
       }
     } catch (err) {
       console.error("Failed to fetch work orders:", err);
+      toast.error("Could not load work orders — check your connection and retry.");
     } finally {
       setWoLoading(false);
     }
@@ -308,6 +312,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
         setView("form");
       } catch (err) {
         console.error("Failed to load work order:", err);
+        toast.error("Could not open that work order.");
       }
     }
 
@@ -898,8 +903,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                     <tbody>
                       {woLoading ? (
                         <tr>
-                          <td colSpan={9} className="px-4 py-10 text-center">
-                            <Loader2 className="h-5 w-5 animate-spin text-terra-500 mx-auto" />
+                          <td colSpan={9} className="px-4 py-4">
+                            <SkeletonRows rows={6} />
                           </td>
                         </tr>
                       ) : paginatedWo.length === 0 ? (

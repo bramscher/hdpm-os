@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, KeyRound, AlertTriangle, Link2Off } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { StatusBadge, SYNC_FLAG_LABELS, fmtDate } from "@/components/keys/shared";
 import { AssignKeyModal } from "@/components/keys/AssignKeyModal";
 import { MarkVacantModal } from "@/components/keys/MarkVacantModal";
@@ -70,9 +71,10 @@ export function KeyDetailClient({ slotId }: { slotId: string }) {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || "Action failed");
+      toast.error(data.error || "Action failed");
       return;
     }
+    toast.success("Key updated");
     await load();
   }
 
@@ -116,9 +118,10 @@ export function KeyDetailClient({ slotId }: { slotId: string }) {
       if (!res.ok) throw new Error(data.error || "Failed to link");
       setModal(null);
       setLinkUnit(null);
+      toast.success("Unit linked");
       await load();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to link");
+      toast.error(err instanceof Error ? err.message : "Failed to link");
     } finally {
       setLinking(false);
     }
