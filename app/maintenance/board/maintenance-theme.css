@@ -5,17 +5,22 @@
  */
 
 .maint-os {
-  /* Brand */
-  --dk: #1f5c22;
-  --gr: #2f7d32;
-  --tint: #eef5ee;
-  --lt: #f7faf7;
-  --ink: #1a1a1a;
-  --muted: #5b625b;
-  --hair: #c7cec7;
+  /* Brand — Desert (terra/sand/charcoal), bridged 2026-08-05. The green
+     brand lives on only in the semantic --ok family below. */
+  --dk: #6d3b2e;      /* terra-900 */
+  --gr: #c4704b;      /* terra-600 */
+  --tint: #fdf3ee;    /* terra-50 */
+  --lt: #faf8f5;      /* sand-50 */
+  --ink: #2d2a33;     /* charcoal-900 */
+  --muted: #6e6154;   /* sand-700 — sand-600 is ~4.4:1 on white, below AA */
+  --hair: #e8e3d9;    /* sand-200 */
   --red: #b3261e;
   --amber: #9a6a00;
-  /* Waiting-On type system */
+  /* Semantic green: ok/pass/healthy states — NOT brand. */
+  --ok: #2f7d32;
+  --ok-dk: #1f5c22;
+  --ok-tint: #eef5ee;
+  /* Waiting-On type system (field color contract — do not change hues) */
   --w-tenant: #2c5f8a;
   --w-vendor: #9a6a00;
   --w-parts: #0e6e6e;
@@ -23,7 +28,6 @@
   --w-weather: #5b625b;
   --w-internal: #2f7d32;
 
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   color: var(--ink);
 }
 
@@ -66,8 +70,9 @@
 }
 .maint-os .col .cnt { float: right; color: var(--muted); }
 .maint-os .card {
-  border: 1px solid var(--hair); border-radius: 6px; padding: 8px 9px; margin-top: 6px;
+  border: 1px solid var(--hair); border-radius: var(--radius); padding: 8px 9px; margin-top: 6px;
   font-size: 12px; background: #fff; display: block; color: inherit; text-decoration: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.03);
 }
 .maint-os .card:hover { border-color: var(--gr); }
 .maint-os .card b { display: block; font-size: 12.5px; color: var(--ink); margin-bottom: 2px; }
@@ -77,7 +82,7 @@
 .maint-os .card .due.needsdate { color: var(--amber); font-weight: 700; }
 .maint-os .p1 { border-left: 4px solid var(--red); }
 .maint-os .p2 { border-left: 4px solid var(--amber); }
-.maint-os .p3 { border-left: 4px solid var(--gr); }
+.maint-os .p3 { border-left: 4px solid var(--ok); }
 .maint-os .p4 { border-left: 4px solid var(--hair); }
 
 /* ── Tables ── */
@@ -89,7 +94,7 @@
 .maint-os table.mo-table td { padding: 7px 10px; border: 1px solid var(--hair); }
 .maint-os table.mo-table tr:nth-child(even) td { background: var(--lt); }
 .maint-os .flag { color: var(--red); font-weight: 700; }
-.maint-os .ok { color: var(--gr); font-weight: 700; }
+.maint-os .ok { color: var(--ok); font-weight: 700; }
 .maint-os .warn { color: var(--amber); font-weight: 700; }
 .maint-os .grp {
   margin: 14px 0 6px; font-size: 13px; font-weight: 700; color: var(--dk);
@@ -176,7 +181,7 @@
   gap: 10px; margin-bottom: 14px;
 }
 .maint-os .kpi {
-  border: 1px solid var(--hair); border-radius: 8px; padding: 10px;
+  border: 1px solid var(--hair); border-radius: var(--radius); padding: 10px;
   text-align: center; background: var(--lt);
 }
 .maint-os .kpi .v { font-size: 24px; font-weight: 800; color: var(--dk); }
@@ -228,7 +233,7 @@
   display: inline-block; padding: 1px 8px; border-radius: 10px;
   font-size: 11px; font-weight: 700;
 }
-.maint-os .b0 { background: var(--tint); color: var(--dk); }
+.maint-os .b0 { background: var(--ok-tint); color: var(--ok-dk); }
 .maint-os .b1 { background: #fff3d6; color: var(--amber); }
 .maint-os .b2 { background: #ffe0dd; color: var(--red); }
 .maint-os .b3 { background: var(--red); color: #fff; }
@@ -262,13 +267,14 @@
   display: inline-block; min-width: 30px; text-align: center; padding: 1px 7px;
   border-radius: 10px; font-weight: 800; font-size: 11.5px;
 }
-.maint-os .d-ok { background: var(--tint); color: var(--dk); }
+.maint-os .d-ok { background: var(--ok-tint); color: var(--ok-dk); }
 .maint-os .d-warn { background: #fff3d6; color: var(--amber); }
 .maint-os .d-late { background: #ffe0dd; color: var(--red); }
 
 /* ── Detail page ── */
 .maint-os .mo-panel {
-  border: 1px solid var(--hair); border-radius: 8px; padding: 14px; background: #fff;
+  border: 1px solid var(--hair); border-radius: var(--radius); padding: 14px; background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.03);
 }
 .maint-os .mo-panel h2 {
   font-size: 14px; color: var(--dk); font-weight: 700; margin-bottom: 10px;
@@ -309,7 +315,7 @@
 /* Closure gate checklist */
 .maint-os .gate-item { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 4px 0; }
 .maint-os .gate-item .mark { font-weight: 800; }
-.maint-os .gate-item.pass .mark { color: var(--gr); }
+.maint-os .gate-item.pass .mark { color: var(--ok); }
 .maint-os .gate-item.fail .mark { color: var(--red); }
 
 /* Event timeline */
