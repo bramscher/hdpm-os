@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { weekStartPacific, weeksBefore } from '@/lib/eos/scorecard';
 import { isConcluded } from '@/lib/eos/meeting';
@@ -43,12 +44,11 @@ export default async function MeetingsPage() {
   const archive = meetings.filter((m) => m.id !== thisWeek?.id);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold tracking-tight text-charcoal-900">Meetings</h1>
-      <p className="mb-6 text-sm text-charcoal-500">
-        The weekly cadence: same agenda, same order, run from one screen. The prep packet lands
-        Monday morning; solving an issue requires an outcome.
-      </p>
+    <PageContainer>
+      <PageHeader
+        title="Meetings"
+        description="The weekly cadence: same agenda, same order, run from one screen. The prep packet lands Monday morning; solving an issue requires an outcome."
+      />
 
       <div className="mb-8 rounded-xl border border-sand-200 bg-white shadow-card p-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-500">
@@ -110,6 +110,6 @@ export default async function MeetingsPage() {
         Data: meeting, meeting_item, decision · Prep: Monday 7:30 AM PT · Minutes & decisions feed
         the company brain
       </p>
-    </div>
+    </PageContainer>
   );
 }

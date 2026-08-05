@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { weekStartPacific, weeksBefore } from '@/lib/eos/scorecard';
 import { todayPacific, parseSourceRef, rolledDueOn } from '@/lib/eos/escalation';
 import IssuesBoard, { type EvidenceMap } from '@/components/eos/IssuesBoard';
@@ -110,13 +111,11 @@ export default async function IssuesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold tracking-tight text-charcoal-900">Issues & To-Dos</h1>
-      <p className="mb-6 text-sm text-charcoal-500">
-        The IDS queue, priority-ordered. Aged tripwires, agent escalations, off-track metrics and
-        twice-missed to-dos file themselves; anything else goes in with + Issue. Solving happens
-        with the humans in the room.
-      </p>
+    <PageContainer>
+      <PageHeader
+        title="Issues & To-Dos"
+        description="The IDS queue, priority-ordered. Aged tripwires, agent escalations, off-track metrics and twice-missed to-dos file themselves; anything else goes in with + Issue. Solving happens with the humans in the room."
+      />
       <IssuesBoard
         issues={issues}
         todos={todos}
@@ -129,6 +128,6 @@ export default async function IssuesPage() {
         Data: issue, todo · Escalation cron: weekdays ~7:15 AM PT · Missed to-dos roll once, then
         land here as issues
       </p>
-    </div>
+    </PageContainer>
   );
 }

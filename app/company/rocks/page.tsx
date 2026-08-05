@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { currentQuarter } from '@/lib/eos/rock';
 import RocksBoard from '@/components/eos/RocksBoard';
 import type { Rock, Seat } from '@/lib/eos/types';
@@ -30,12 +31,11 @@ export default async function RocksPage() {
   ]);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold tracking-tight text-charcoal-900">Rocks</h1>
-      <p className="mb-6 text-sm text-charcoal-500">
-        The quarter&rsquo;s 3–7 most important things, each with one owner. Owners get a one-tap
-        on/off check every Friday on Slack; off-track Rocks get discussed in the weekly meeting.
-      </p>
+    <PageContainer>
+      <PageHeader
+        title="Rocks"
+        description="The quarter's 3–7 most important things, each with one owner. Owners get a one-tap on/off check every Friday on Slack; off-track Rocks get discussed in the weekly meeting."
+      />
       <RocksBoard
         rocks={(rocksRes.data ?? []) as Rock[]}
         seats={(seatsRes.data ?? []) as Seat[]}
@@ -46,6 +46,6 @@ export default async function RocksPage() {
         Data: rock · Friday check rides the 3 PM scorecard cron · Set properly in the quarterly
         meeting (Phase 2.5)
       </p>
-    </div>
+    </PageContainer>
   );
 }
