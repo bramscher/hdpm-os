@@ -25,7 +25,8 @@ const SEATS: Record<
   },
   Integrator: {
     roles: ['Runs the weekly cadence', 'Removes obstacles', 'Owns the scorecard'],
-    reportsTo: 'Visionary', // open seat — confirm with Craig
+    person: 'Craig', // dual-hat with Visionary until someone earns the seat (2026-08-05)
+    reportsTo: 'Visionary',
     sort: 1,
   },
   'Finance & Operations': {
@@ -98,11 +99,12 @@ const METRICS: Array<{
 }> = [
   { name: 'Open exceptions', owner: 'Cheryl', unit: 'count', goal_op: 'lte', goal_value: 150, source: 'metrics_snapshot', source_ref: 'open_exceptions.total', sort: 0 },
   { name: 'Staff actions via agent surfaces (7d)', owner: 'Craig', unit: 'count', goal_op: 'gte', goal_value: 25, source: 'metrics_snapshot', source_ref: 'staff_actions.last7Days', sort: 1 },
-  { name: 'Stuck estimates (open)', owner: 'Cheryl', unit: 'count', goal_op: 'lte', goal_value: 20, source: 'metrics_snapshot', source_ref: 'estimate_approval_latency.openCount', sort: 2 },
+  // Q3 step-down goals set with Craig 2026-08-05 (from 44 actual); tighten quarterly.
+  { name: 'Stuck estimates (open)', owner: 'Cheryl', unit: 'count', goal_op: 'lte', goal_value: 35, source: 'metrics_snapshot', source_ref: 'estimate_approval_latency.openCount', sort: 2 },
   { name: 'Estimate decision latency (median)', owner: 'Cheryl', unit: 'days', goal_op: 'lte', goal_value: 7, source: 'metrics_snapshot', source_ref: 'estimate_approval_latency.medianDaysToDecision', sort: 3 },
   { name: 'Vendor accepted-unworked WOs', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'vendor_stuck_pools.acceptedUnworkedCount', sort: 4 },
-  { name: 'Open unit turns', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 10, source: 'metrics_snapshot', source_ref: 'turns.openTurns', sort: 5 },
-  { name: 'Median days vacant (turns)', owner: 'Brody', unit: 'days', goal_op: 'lte', goal_value: 21, source: 'metrics_snapshot', source_ref: 'turns.medianDaysVacant', sort: 6 },
+  { name: 'Open unit turns', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 45, source: 'metrics_snapshot', source_ref: 'turns.openTurns', sort: 5 },
+  { name: 'Median days vacant (turns)', owner: 'Brody', unit: 'days', goal_op: 'lte', goal_value: 25, source: 'metrics_snapshot', source_ref: 'turns.medianDaysVacant', sort: 6 },
 ];
 
 async function main() {
