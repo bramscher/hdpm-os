@@ -14,11 +14,11 @@ export default async function HavenPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen">
       <div className="container mx-auto px-4 py-6 max-w-6xl">
         <div className="mb-5">
-          <h1 className="text-xl font-semibold text-slate-800">Haven — Leasing &amp; Reception</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h1 className="text-xl font-semibold text-charcoal-800">Haven — Leasing &amp; Reception</h1>
+          <p className="text-sm text-charcoal-500 mt-0.5">
             The AI leasing pipeline, flags that need a human, and receptionist performance.
           </p>
         </div>
