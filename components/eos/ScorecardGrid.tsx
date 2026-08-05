@@ -34,7 +34,7 @@ function Sparkline({ values }: { values: (number | null)[] }) {
     .filter(Boolean)
     .join(' ');
   return (
-    <svg width="64" height="20" className="inline-block text-gray-400" aria-hidden>
+    <svg width="64" height="20" className="inline-block text-charcoal-400" aria-hidden>
       <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   );
@@ -100,23 +100,23 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
           {note}
         </div>
       ) : null}
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
               <th className="px-3 py-2">Metric</th>
               <th className="px-3 py-2">Owner</th>
               <th className="px-3 py-2">Goal</th>
               <th className="px-3 py-2">Trend</th>
               {weeks.map((w) => (
-                <th key={w} className={`px-2 py-2 text-center ${w === currentWeek ? 'text-gray-900' : ''}`}>
+                <th key={w} className={`px-2 py-2 text-center ${w === currentWeek ? 'text-charcoal-900' : ''}`}>
                   {fmtWeek(w)}
                 </th>
               ))}
               <th className="px-2 py-2" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-sand-100">
             {metrics.map((m) => {
               const values = weeks.map((w) => {
                 const e = byCell.get(`${m.id}:${w}`);
@@ -124,9 +124,9 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
               });
               return (
                 <tr key={m.id}>
-                  <td className="px-3 py-2 font-medium text-gray-900">{m.name}</td>
-                  <td className="px-3 py-2 text-gray-500">{m.owner_person ?? '—'}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-gray-500">
+                  <td className="px-3 py-2 font-medium text-charcoal-900">{m.name}</td>
+                  <td className="px-3 py-2 text-charcoal-500">{m.owner_person ?? '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-charcoal-500">
                     {m.goal_op === 'gte' ? '≥' : '≤'} {m.goal_value} {m.unit ?? ''}
                   </td>
                   <td className="px-3 py-2">
@@ -139,7 +139,7 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
                       return (
                         <td key={w} className="px-1 py-1 text-center">
                           <input
-                            className="w-16 rounded border border-gray-300 px-1 py-0.5 text-center text-sm"
+                            className="w-16 rounded border border-sand-300 px-1 py-0.5 text-center text-sm"
                             defaultValue={e?.value ?? ''}
                             inputMode="decimal"
                             onChange={(ev) => setDrafts((d) => ({ ...d, [m.id]: ev.target.value }))}
@@ -158,7 +158,7 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
                         ? 'bg-green-50 text-green-800'
                         : e?.on_track === false
                           ? 'bg-red-50 text-red-700 font-semibold'
-                          : 'text-gray-400';
+                          : 'text-charcoal-400';
                     return (
                       <td key={w} className={`px-2 py-2 text-center ${tone}`}>
                         {fmtValue(e?.value ?? null)}
@@ -167,7 +167,7 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
                   })}
                   <td className="px-2 py-2">
                     <button
-                      className="whitespace-nowrap rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 transition-colors hover:border-amber-400 hover:text-amber-700 disabled:opacity-50"
+                      className="whitespace-nowrap rounded border border-sand-300 px-2 py-1 text-xs text-charcoal-600 transition-colors hover:border-amber-400 hover:text-amber-700 disabled:opacity-50"
                       onClick={() => void dropToIssues(m)}
                       disabled={busy === m.id}
                       title="File this metric as an issue for the weekly meeting"
@@ -180,7 +180,7 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
             })}
             {metrics.length === 0 ? (
               <tr>
-                <td colSpan={weeks.length + 5} className="px-3 py-8 text-center text-gray-400">
+                <td colSpan={weeks.length + 5} className="px-3 py-8 text-center text-charcoal-400">
                   No active metrics — run scripts/eos/seed-eos.ts.
                 </td>
               </tr>

@@ -10,11 +10,11 @@ function toHtml(md: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
   html = html
-    .replace(/^### (.+)$/gm, '<h4 class="mt-3 mb-1 text-sm font-semibold text-gray-900">$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3 class="mt-3 mb-1 text-base font-semibold text-gray-900">$1</h3>')
+    .replace(/^### (.+)$/gm, '<h4 class="mt-3 mb-1 text-sm font-semibold text-charcoal-900">$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 class="mt-3 mb-1 text-base font-semibold text-charcoal-900">$1</h3>')
     .replace(/\[([^\]]+)\]\((\/[^)\s]+|https?:[^)\s]+)\)/g, '<a class="text-blue-600 hover:underline" href="$2">$1</a>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
-    .replace(/_(.+?)_/g, '<em class="text-gray-500 italic">$1</em>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-charcoal-900">$1</strong>')
+    .replace(/_(.+?)_/g, '<em class="text-charcoal-500 italic">$1</em>')
     .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc leading-snug">$1</li>')
     .replace(/\n\n/g, '</p><p class="mt-1.5">')
     .replace(/\n/g, '<br/>')
@@ -26,7 +26,7 @@ function toHtml(md: string): string {
 export default function MarkdownLite({ md, className }: { md: string; className?: string }) {
   return (
     <div
-      className={className ?? 'text-sm text-gray-600'}
+      className={className ?? 'text-sm text-charcoal-600'}
       dangerouslySetInnerHTML={{ __html: toHtml(md) }}
     />
   );

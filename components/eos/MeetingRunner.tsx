@@ -48,7 +48,7 @@ function entryTone(onTrack: boolean | null): string {
     ? 'bg-green-50 text-green-800'
     : onTrack === false
       ? 'bg-red-50 text-red-700 font-semibold'
-      : 'text-gray-400';
+      : 'text-charcoal-400';
 }
 
 export default function MeetingRunner(props: Props) {
@@ -143,36 +143,36 @@ export default function MeetingRunner(props: Props) {
       <div>
         <Header meeting={meeting} />
         {meeting.prep_packet_md ? (
-          <details className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-gray-700">
+          <details className="mb-4 rounded-xl border border-sand-200 bg-white shadow-card p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-charcoal-700">
               Prep packet
             </summary>
-            <MarkdownLite md={meeting.prep_packet_md} className="mt-2 text-sm text-gray-600" />
+            <MarkdownLite md={meeting.prep_packet_md} className="mt-2 text-sm text-charcoal-600" />
           </details>
         ) : null}
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <div className="rounded-xl border border-sand-200 bg-white shadow-card p-4">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-500">
               Minutes {meeting.rating ? `· rated ${meeting.rating}/10` : ''}
             </h2>
             {meeting.minutes_md ? (
               <MarkdownLite md={meeting.minutes_md} />
             ) : (
-              <p className="text-sm text-gray-400">No minutes recorded.</p>
+              <p className="text-sm text-charcoal-400">No minutes recorded.</p>
             )}
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <div className="rounded-xl border border-sand-200 bg-white shadow-card p-4">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-500">
               Outcomes
             </h2>
-            <p className="mb-2 text-xs text-gray-500">
+            <p className="mb-2 text-xs text-charcoal-500">
               {props.idsItemCount} issue{props.idsItemCount === 1 ? '' : 's'} solved in IDS ·{' '}
               {props.decisions.length} decision{props.decisions.length === 1 ? '' : 's'}
             </p>
             {props.decisions.map((d) => (
               <div key={d.id} className="mb-2 border-l-2 border-green-200 pl-2">
-                <p className="text-sm font-medium text-gray-900">{d.title}</p>
-                <p className="text-xs text-gray-600">{d.statement_md}</p>
+                <p className="text-sm font-medium text-charcoal-900">{d.title}</p>
+                <p className="text-xs text-charcoal-600">{d.statement_md}</p>
               </div>
             ))}
           </div>
@@ -191,35 +191,35 @@ export default function MeetingRunner(props: Props) {
         </div>
       ) : null}
       {meeting.prep_packet_md ? (
-        <details className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-gray-700">
+        <details className="mb-4 rounded-xl border border-sand-200 bg-white shadow-card p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-charcoal-700">
             Prep packet
           </summary>
-          <MarkdownLite md={meeting.prep_packet_md} className="mt-2 text-sm text-gray-600" />
+          <MarkdownLite md={meeting.prep_packet_md} className="mt-2 text-sm text-charcoal-600" />
         </details>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-4">
         {/* Step rail */}
         <div>
-          <ol className="rounded-lg border border-gray-200 bg-white">
+          <ol className="rounded-xl border border-sand-200 bg-white shadow-card">
             {agenda.map((s, i) => (
               <li key={s.kind}>
                 <button
                   type="button"
                   onClick={() => goTo(i)}
                   className={cn(
-                    'flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-sm last:border-b-0',
-                    i === stepIndex ? 'bg-blue-50/60 font-medium text-gray-900' : 'text-gray-600 hover:bg-gray-50'
+                    'flex w-full items-center gap-2 border-b border-sand-100 px-3 py-2 text-left text-sm last:border-b-0',
+                    i === stepIndex ? 'bg-blue-50/60 font-medium text-charcoal-900' : 'text-charcoal-600 hover:bg-sand-50'
                   )}
                 >
                   {i < stepIndex ? (
                     <CheckCircle2 size={14} className="text-green-600" aria-hidden />
                   ) : (
-                    <Circle size={14} className="text-gray-300" aria-hidden />
+                    <Circle size={14} className="text-charcoal-300" aria-hidden />
                   )}
                   <span className="flex-1">{s.title}</span>
-                  <span className="text-xs text-gray-400">{s.minutes}m</span>
+                  <span className="text-xs text-charcoal-400">{s.minutes}m</span>
                 </button>
               </li>
             ))}
@@ -229,7 +229,7 @@ export default function MeetingRunner(props: Props) {
               'mt-3 flex items-center justify-center gap-2 rounded-lg border p-3 text-2xl font-semibold tabular-nums',
               secondsLeft < 0
                 ? 'border-red-200 bg-red-50 text-red-700'
-                : 'border-gray-200 bg-white text-gray-900'
+                : 'border-sand-200 bg-white text-charcoal-900'
             )}
           >
             <Clock size={20} aria-hidden />
@@ -240,7 +240,7 @@ export default function MeetingRunner(props: Props) {
               type="button"
               onClick={() => goTo(stepIndex - 1)}
               disabled={stepIndex === 0}
-              className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-600 disabled:opacity-40"
+              className="flex-1 rounded border border-sand-300 px-2 py-1.5 text-sm text-charcoal-600 disabled:opacity-40"
             >
               ← Back
             </button>
@@ -248,7 +248,7 @@ export default function MeetingRunner(props: Props) {
               type="button"
               onClick={() => goTo(stepIndex + 1)}
               disabled={stepIndex === agenda.length - 1}
-              className="flex-1 rounded bg-gray-900 px-2 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+              className="flex-1 rounded-lg bg-terra-500 hover:bg-terra-600 transition-colors px-2 py-1.5 text-sm font-medium text-white disabled:opacity-40"
             >
               Next →
             </button>
@@ -257,14 +257,14 @@ export default function MeetingRunner(props: Props) {
 
         {/* Step content */}
         <div className="lg:col-span-3">
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <h2 className="mb-1 text-lg font-semibold text-gray-900">{step.title}</h2>
-            <p className="mb-4 text-sm text-gray-500">{step.hint}</p>
+          <div className="rounded-xl border border-sand-200 bg-white shadow-card p-4">
+            <h2 className="mb-1 text-lg font-semibold text-charcoal-900">{step.title}</h2>
+            <p className="mb-4 text-sm text-charcoal-500">{step.hint}</p>
 
             {step.kind === 'scorecard' ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wide text-gray-500">
+                  <thead className="text-left text-xs uppercase tracking-wide text-charcoal-500">
                     <tr>
                       <th className="py-1.5 pr-3">Metric</th>
                       <th className="py-1.5 pr-3">Goal</th>
@@ -272,7 +272,7 @@ export default function MeetingRunner(props: Props) {
                       <th className="py-1.5 text-center">This wk</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-sand-100">
                     {props.metrics.map((m) => {
                       const cur = props.entries.find(
                         (e) => e.metric_id === m.id && e.week_start === props.currentWeek
@@ -282,8 +282,8 @@ export default function MeetingRunner(props: Props) {
                       );
                       return (
                         <tr key={m.id}>
-                          <td className="py-1.5 pr-3 font-medium text-gray-900">{m.name}</td>
-                          <td className="whitespace-nowrap py-1.5 pr-3 text-gray-500">
+                          <td className="py-1.5 pr-3 font-medium text-charcoal-900">{m.name}</td>
+                          <td className="whitespace-nowrap py-1.5 pr-3 text-charcoal-500">
                             {m.goal_op === 'gte' ? '≥' : '≤'} {m.goal_value} {m.unit ?? ''}
                           </td>
                           <td className={cn('py-1.5 pr-3 text-center', entryTone(prev?.on_track ?? null))}>
@@ -297,7 +297,7 @@ export default function MeetingRunner(props: Props) {
                     })}
                   </tbody>
                 </table>
-                <p className="mt-3 text-xs text-gray-400">
+                <p className="mt-3 text-xs text-charcoal-400">
                   Off-track and worth discussing? Drop it to Issues from the{' '}
                   <Link href="/company/scorecard" className="text-blue-600 hover:underline">
                     Scorecard
@@ -310,7 +310,7 @@ export default function MeetingRunner(props: Props) {
             {step.kind === 'rock_review' ? (
               <div>
                 {props.rocks.length === 0 ? (
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-charcoal-400">
                     No active Rocks this quarter —{' '}
                     <Link href="/company/rocks" className="text-blue-600 hover:underline">
                       set some
@@ -321,7 +321,7 @@ export default function MeetingRunner(props: Props) {
                   props.rocks.map((r) => (
                     <div
                       key={r.id}
-                      className="flex items-center gap-3 border-b border-gray-100 py-2 last:border-b-0"
+                      className="flex items-center gap-3 border-b border-sand-100 py-2 last:border-b-0"
                     >
                       <span
                         className={cn(
@@ -331,13 +331,13 @@ export default function MeetingRunner(props: Props) {
                       >
                         {r.status === 'on' ? 'on track' : 'off track'}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{r.title}</span>
-                      <span className="text-xs text-gray-500">{r.owner_person ?? '—'}</span>
-                      {r.due_on ? <span className="text-xs text-gray-400">{r.due_on}</span> : null}
+                      <span className="min-w-0 flex-1 truncate text-sm text-charcoal-900">{r.title}</span>
+                      <span className="text-xs text-charcoal-500">{r.owner_person ?? '—'}</span>
+                      {r.due_on ? <span className="text-xs text-charcoal-400">{r.due_on}</span> : null}
                     </div>
                   ))
                 )}
-                <p className="mt-3 text-xs text-gray-400">
+                <p className="mt-3 text-xs text-charcoal-400">
                   On/off only — off-track Rocks worth an hour go to IDS via{' '}
                   <Link href="/company/issues" className="text-blue-600 hover:underline">
                     + Issue
@@ -353,7 +353,7 @@ export default function MeetingRunner(props: Props) {
 
             {step.kind === 'headline' ? (
               <textarea
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="w-full rounded border border-sand-300 px-2 py-1.5 text-sm"
                 placeholder={'One line each, e.g.\n- Firkus cleared 12 WOs this week\n- New owner signed: 4-plex on Purcell'}
                 rows={6}
                 value={headlines}
@@ -364,12 +364,12 @@ export default function MeetingRunner(props: Props) {
             {step.kind === 'todo_review' ? (
               <div>
                 {props.lastWeekTodos.length === 0 ? (
-                  <p className="text-sm text-gray-400">No to-dos were due last week.</p>
+                  <p className="text-sm text-charcoal-400">No to-dos were due last week.</p>
                 ) : (
                   props.lastWeekTodos.map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-center gap-3 border-b border-gray-100 py-2 last:border-b-0"
+                      className="flex items-center gap-3 border-b border-sand-100 py-2 last:border-b-0"
                     >
                       <span
                         className={cn(
@@ -381,14 +381,14 @@ export default function MeetingRunner(props: Props) {
                       >
                         {t.status}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{t.title}</span>
-                      <span className="text-xs text-gray-500">{t.owner_person ?? '—'}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-charcoal-900">{t.title}</span>
+                      <span className="text-xs text-charcoal-500">{t.owner_person ?? '—'}</span>
                       {t.status === 'open' ? (
                         <button
                           type="button"
                           onClick={() => void api(`/api/eos/todos/${t.id}`, 'PATCH', { status: 'done' }, t.id)}
                           disabled={busy === t.id}
-                          className="rounded border border-gray-300 px-2 py-0.5 text-xs text-gray-600 hover:border-green-500 hover:text-green-700"
+                          className="rounded border border-sand-300 px-2 py-0.5 text-xs text-charcoal-600 hover:border-green-500 hover:text-green-700"
                         >
                           Done
                         </button>
@@ -396,7 +396,7 @@ export default function MeetingRunner(props: Props) {
                     </div>
                   ))
                 )}
-                <p className="mt-3 text-xs text-gray-400">
+                <p className="mt-3 text-xs text-charcoal-400">
                   Done rate:{' '}
                   {props.lastWeekTodos.length === 0
                     ? '—'
@@ -409,10 +409,10 @@ export default function MeetingRunner(props: Props) {
             {step.kind === 'ids' ? (
               <div>
                 {props.issues.length === 0 ? (
-                  <p className="text-sm text-gray-400">The list is clear. Enjoy the extra hour.</p>
+                  <p className="text-sm text-charcoal-400">The list is clear. Enjoy the extra hour.</p>
                 ) : (
                   props.issues.map((issue) => (
-                    <div key={issue.id} className="border-b border-gray-100 py-2 last:border-b-0">
+                    <div key={issue.id} className="border-b border-sand-100 py-2 last:border-b-0">
                       <div className="flex items-center gap-3">
                         <span
                           className={cn(
@@ -421,19 +421,19 @@ export default function MeetingRunner(props: Props) {
                               ? 'border-red-200 bg-red-50 text-red-700'
                               : issue.priority === 3
                                 ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                : 'border-gray-200 bg-gray-50 text-gray-500'
+                                : 'border-sand-200 bg-sand-50 text-charcoal-500'
                           )}
                         >
                           {issue.priority}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-charcoal-900">
                           {issue.title}
                         </span>
                         <button
                           type="button"
                           onClick={() => void api(`/api/eos/issues/${issue.id}`, 'PATCH', { status: 'parked' }, issue.id)}
                           disabled={busy === issue.id}
-                          className="rounded border border-gray-300 px-2 py-0.5 text-xs text-gray-600 hover:border-gray-400"
+                          className="rounded border border-sand-300 px-2 py-0.5 text-xs text-charcoal-600 hover:border-sand-400"
                         >
                           Park
                         </button>
@@ -446,7 +446,7 @@ export default function MeetingRunner(props: Props) {
                         </button>
                       </div>
                       {issue.detail && solvingId === issue.id ? (
-                        <p className="mt-1 whitespace-pre-line pl-9 text-xs text-gray-500">{issue.detail}</p>
+                        <p className="mt-1 whitespace-pre-line pl-9 text-xs text-charcoal-500">{issue.detail}</p>
                       ) : null}
                       {solvingId === issue.id ? (
                         <div className="mt-2 pl-9">
@@ -466,7 +466,7 @@ export default function MeetingRunner(props: Props) {
                     </div>
                   ))
                 )}
-                <p className="mt-3 text-xs text-gray-400">
+                <p className="mt-3 text-xs text-charcoal-400">
                   Full queue with evidence lives in{' '}
                   <Link href="/company/issues" className="text-blue-600 hover:underline">
                     Issues & To-Dos
@@ -479,14 +479,14 @@ export default function MeetingRunner(props: Props) {
             {step.kind === 'conclude' ? (
               <div className="space-y-4">
                 <div>
-                  <p className="mb-1 text-xs font-medium text-gray-700">
+                  <p className="mb-1 text-xs font-medium text-charcoal-700">
                     To-dos to send as Slack cards ({props.meetingTodos.length - unconfirmed.size} confirmed)
                   </p>
                   {props.meetingTodos.length === 0 ? (
-                    <p className="text-sm text-gray-400">No to-dos were handed out this meeting.</p>
+                    <p className="text-sm text-charcoal-400">No to-dos were handed out this meeting.</p>
                   ) : (
                     props.meetingTodos.map((t) => (
-                      <label key={t.id} className="flex items-center gap-2 py-1 text-sm text-gray-900">
+                      <label key={t.id} className="flex items-center gap-2 py-1 text-sm text-charcoal-900">
                         <input
                           type="checkbox"
                           checked={!unconfirmed.has(t.id)}
@@ -500,7 +500,7 @@ export default function MeetingRunner(props: Props) {
                           }
                         />
                         <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-charcoal-500">
                           {t.owner_person ?? '—'} · {t.due_on}
                         </span>
                       </label>
@@ -508,19 +508,19 @@ export default function MeetingRunner(props: Props) {
                   )}
                 </div>
                 <div>
-                  <p className="mb-1 text-xs font-medium text-gray-700">Minutes</p>
+                  <p className="mb-1 text-xs font-medium text-charcoal-700">Minutes</p>
                   <textarea
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 font-mono text-xs"
+                    className="w-full rounded border border-sand-300 px-2 py-1.5 font-mono text-xs"
                     rows={10}
                     value={minutesDraft}
                     onChange={(e) => setMinutesDraft(e.target.value)}
                   />
                 </div>
                 <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-700">
+                  <label className="text-sm text-charcoal-700">
                     Rate the meeting{' '}
                     <select
-                      className="rounded border border-gray-300 px-1 py-0.5 text-sm"
+                      className="rounded border border-sand-300 px-1 py-0.5 text-sm"
                       value={rating}
                       onChange={(e) => setRating(Number(e.target.value))}
                     >
@@ -535,12 +535,12 @@ export default function MeetingRunner(props: Props) {
                     type="button"
                     onClick={() => void conclude()}
                     disabled={busy === 'conclude'}
-                    className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    className="rounded-lg bg-terra-500 hover:bg-terra-600 transition-colors px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                   >
                     Conclude meeting
                   </button>
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-charcoal-400">
                   Concluding sends the checked to-dos to their owners on Slack and files the minutes
                   and decisions into the company brain.
                 </p>
@@ -557,10 +557,10 @@ function Header({ meeting }: { meeting: Meeting }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
       <div className="min-w-0 flex-1">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-charcoal-900">
           {meeting.kind} — {fmtDate(meeting.starts_at)}
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-charcoal-500">
           {meeting.facilitator_person ? `Facilitator: ${meeting.facilitator_person} · ` : ''}
           Same agenda every week — that&rsquo;s the point.
         </p>

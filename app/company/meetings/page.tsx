@@ -44,55 +44,55 @@ export default async function MeetingsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold text-gray-900">Meetings</h1>
-      <p className="mb-6 text-sm text-gray-500">
+      <h1 className="mb-1 text-2xl font-bold tracking-tight text-charcoal-900">Meetings</h1>
+      <p className="mb-6 text-sm text-charcoal-500">
         The weekly cadence: same agenda, same order, run from one screen. The prep packet lands
         Monday morning; solving an issue requires an outcome.
       </p>
 
-      <div className="mb-8 rounded-lg border border-gray-200 bg-white p-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <div className="mb-8 rounded-xl border border-sand-200 bg-white shadow-card p-4">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-500">
           Week of {weekStart}
         </h2>
         {thisWeek ? (
           <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-sm font-medium text-charcoal-900">
                 {thisWeek.kind} · {fmtDate(thisWeek.starts_at)}
                 {thisWeek.facilitator_person ? ` · ${thisWeek.facilitator_person}` : ''}
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-charcoal-500">
                 {thisWeek.prep_packet_md ? 'Prep packet ready' : 'Prep packet lands Monday 7:30 AM'}
                 {isConcluded(thisWeek) ? ` · concluded${thisWeek.rating ? ` (${thisWeek.rating}/10)` : ''}` : ''}
               </p>
             </div>
             <Link
               href={`/company/meetings/${thisWeek.id}`}
-              className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white"
+              className="rounded-lg bg-terra-500 hover:bg-terra-600 transition-colors px-3 py-1.5 text-sm font-medium text-white"
             >
               {isConcluded(thisWeek) ? 'View' : 'Open runner'}
             </Link>
           </div>
         ) : (
           <div className="flex items-center gap-3">
-            <p className="text-sm text-gray-500">No meeting scheduled this week.</p>
+            <p className="text-sm text-charcoal-500">No meeting scheduled this week.</p>
             <StartMeetingButton />
           </div>
         )}
       </div>
 
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Archive</h2>
-      <div className="rounded-lg border border-gray-200 bg-white">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-500">Archive</h2>
+      <div className="rounded-xl border border-sand-200 bg-white shadow-card">
         {archive.map((m) => (
           <Link
             key={m.id}
             href={`/company/meetings/${m.id}`}
-            className="flex items-center gap-3 border-b border-gray-100 px-3 py-2.5 text-sm last:border-b-0 hover:bg-gray-50"
+            className="flex items-center gap-3 border-b border-sand-100 px-3 py-2.5 text-sm last:border-b-0 hover:bg-sand-50"
           >
-            <span className="font-medium text-gray-900">{fmtDate(m.starts_at)}</span>
-            <span className="text-gray-500">{m.kind}</span>
+            <span className="font-medium text-charcoal-900">{fmtDate(m.starts_at)}</span>
+            <span className="text-charcoal-500">{m.kind}</span>
             <span className="flex-1" />
-            {m.rating ? <span className="text-xs text-gray-500">rated {m.rating}/10</span> : null}
+            {m.rating ? <span className="text-xs text-charcoal-500">rated {m.rating}/10</span> : null}
             {!isConcluded(m) ? (
               <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
                 not concluded
@@ -101,12 +101,12 @@ export default async function MeetingsPage() {
           </Link>
         ))}
         {archive.length === 0 ? (
-          <p className="px-3 py-8 text-center text-sm text-gray-400">
+          <p className="px-3 py-8 text-center text-sm text-charcoal-400">
             No meetings yet — the archive builds itself as you run them.
           </p>
         ) : null}
       </div>
-      <p className="mt-6 text-xs text-gray-400">
+      <p className="mt-6 text-xs text-charcoal-400">
         Data: meeting, meeting_item, decision · Prep: Monday 7:30 AM PT · Minutes & decisions feed
         the company brain
       </p>
