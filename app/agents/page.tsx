@@ -120,17 +120,17 @@ const statusStyles: Record<string, string> = {
   edited: 'bg-green-100 text-green-800',
   auto_applied: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
-  expired: 'bg-gray-200 text-gray-600',
+  expired: 'bg-sand-200 text-charcoal-600',
   queued: 'bg-amber-100 text-amber-800',
   sent: 'bg-green-100 text-green-800',
   failed: 'bg-red-100 text-red-800',
-  skipped: 'bg-gray-200 text-gray-600',
+  skipped: 'bg-sand-200 text-charcoal-600',
 };
 
 function Pill({ status }: { status: string }) {
   return (
     <span
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[status] ?? 'bg-gray-200 text-gray-600'}`}
+      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[status] ?? 'bg-sand-200 text-charcoal-600'}`}
     >
       {status}
     </span>
@@ -139,10 +139,10 @@ function Pill({ status }: { status: string }) {
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-gray-900">{value}</div>
-      {sub ? <div className="mt-0.5 text-xs text-gray-500">{sub}</div> : null}
+    <div className="rounded-xl border border-sand-200 bg-white shadow-card p-4">
+      <div className="text-xs uppercase tracking-wide text-charcoal-500">{label}</div>
+      <div className="mt-1 text-2xl font-semibold text-charcoal-900">{value}</div>
+      {sub ? <div className="mt-0.5 text-xs text-charcoal-500">{sub}</div> : null}
     </div>
   );
 }
@@ -167,7 +167,7 @@ export default async function AgentsPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-1 flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">Agent Team</h1>
+        <h1 className="text-display text-charcoal-900">Agent Team</h1>
         {killed ? (
           <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">
             KILL SWITCH ON — all agents halted
@@ -178,13 +178,13 @@ export default async function AgentsPage() {
           </span>
         )}
       </div>
-      <p className="mb-6 text-sm text-gray-500">
+      <p className="mb-6 text-sm text-charcoal-500">
         Supervision surface — the action surface is Slack. Autonomy changes are row updates in{' '}
-        <code className="rounded bg-gray-100 px-1">agent_config</code>.
+        <code className="rounded bg-sand-100 px-1">agent_config</code>.
       </p>
 
       {/* Sep 4 tracker */}
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         Sep 4 write-path tracker
       </h2>
       <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -215,12 +215,12 @@ export default async function AgentsPage() {
       </div>
 
       {/* Autonomy matrix */}
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         Autonomy matrix
       </h2>
-      <div className="mb-8 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <div className="mb-8 overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
               <th className="px-3 py-2">Agent</th>
               <th className="px-3 py-2">Action</th>
@@ -231,13 +231,13 @@ export default async function AgentsPage() {
               <th className="px-3 py-2">Enabled</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-sand-100">
             {config.map((row: AgentConfigRow) => (
               <tr key={`${row.agent}:${row.action_type}`} className={row.agent === '*' ? 'bg-amber-50' : ''}>
                 <td className="px-3 py-2 font-medium">{row.agent === '*' ? '* (kill switch)' : row.agent}</td>
                 <td className="px-3 py-2">{row.action_type}</td>
                 <td className="px-3 py-2">{LEVEL_LABELS[row.autonomy_level] ?? row.autonomy_level}</td>
-                <td className="px-3 py-2 text-gray-500">{LEVEL_LABELS[row.ceiling_level] ?? row.ceiling_level}</td>
+                <td className="px-3 py-2 text-charcoal-500">{LEVEL_LABELS[row.ceiling_level] ?? row.ceiling_level}</td>
                 <td className="px-3 py-2">{row.max_per_day ?? '—'}</td>
                 <td className="px-3 py-2">{row.owner_role ?? '—'}</td>
                 <td className="px-3 py-2">{row.enabled ? '✓' : <span className="font-bold text-red-600">off</span>}</td>
@@ -248,9 +248,9 @@ export default async function AgentsPage() {
       </div>
 
       {/* Proposals */}
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         Recent proposals{' '}
-        <span className="font-normal normal-case text-gray-400">
+        <span className="font-normal normal-case text-charcoal-400">
           (last {proposals.length} —{' '}
           {Object.entries(stats.counts)
             .map(([s, n]) => `${n} ${s}`)
@@ -258,9 +258,9 @@ export default async function AgentsPage() {
           )
         </span>
       </h2>
-      <div className="mb-8 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <div className="mb-8 overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
               <th className="px-3 py-2">When</th>
               <th className="px-3 py-2">Agent</th>
@@ -270,13 +270,13 @@ export default async function AgentsPage() {
               <th className="px-3 py-2">Decided by</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-sand-100">
             {proposals.slice(0, 25).map((p) => (
               <tr key={p.id}>
-                <td className="whitespace-nowrap px-3 py-2 text-gray-500">{fmtDate(p.created_at)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-charcoal-500">{fmtDate(p.created_at)}</td>
                 <td className="px-3 py-2">{p.agent}</td>
                 <td className="px-3 py-2">{p.action_type}</td>
-                <td className="max-w-[16rem] truncate px-3 py-2 text-gray-600">
+                <td className="max-w-[16rem] truncate px-3 py-2 text-charcoal-600">
                   {typeof (p.payload as MetricValue).item === 'string'
                     ? ((p.payload as MetricValue).item as string)
                     : `${p.subject_type} ${p.subject_id ?? ''}`}
@@ -284,12 +284,12 @@ export default async function AgentsPage() {
                 <td className="px-3 py-2">
                   <Pill status={p.status} />
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-gray-500">{p.decided_by ?? '—'}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-charcoal-500">{p.decided_by ?? '—'}</td>
               </tr>
             ))}
             {proposals.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-3 py-6 text-center text-charcoal-400">
                   No proposals yet — the first Morning Action Card creates them.
                 </td>
               </tr>
@@ -299,24 +299,24 @@ export default async function AgentsPage() {
       </div>
 
       {/* Brain clarification queue (Brief 1C) */}
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         🧠 Brain clarification queue{' '}
-        <span className="font-normal normal-case text-gray-400">
+        <span className="font-normal normal-case text-charcoal-400">
           (open questions from the nightly consolidation — answer in chat or a doc; corrections
           supersede)
         </span>
       </h2>
-      <div className="mb-8 rounded-lg border border-gray-200 bg-white">
+      <div className="mb-8 rounded-xl border border-sand-200 bg-white shadow-card">
         {clarifications.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm text-gray-400">
+          <p className="px-3 py-6 text-center text-sm text-charcoal-400">
             No open questions — the brain has nothing it is unsure about.
           </p>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-sand-100">
             {clarifications.map((c) => (
               <li key={c.id} className="px-3 py-3">
-                <div className="text-sm text-gray-900">{c.question}</div>
-                <div className="mt-0.5 text-xs text-gray-400">
+                <div className="text-sm text-charcoal-900">{c.question}</div>
+                <div className="mt-0.5 text-xs text-charcoal-400">
                   {fmtDate(c.created_at)}
                   {c.context_ref ? ` · ${c.context_ref}` : ''}
                 </div>
@@ -327,12 +327,12 @@ export default async function AgentsPage() {
       </div>
 
       {/* Outbox */}
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-600">
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         Outbox — last 20 messages
       </h2>
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
               <th className="px-3 py-2">When</th>
               <th className="px-3 py-2">Channel</th>
@@ -342,13 +342,13 @@ export default async function AgentsPage() {
               <th className="px-3 py-2">Error</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-sand-100">
             {outbox.map((m) => (
               <tr key={m.id}>
-                <td className="whitespace-nowrap px-3 py-2 text-gray-500">{fmtDate(m.created_at)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-charcoal-500">{fmtDate(m.created_at)}</td>
                 <td className="px-3 py-2">{m.channel}</td>
                 <td className="px-3 py-2">{m.recipient_person ?? m.recipient_address ?? '—'}</td>
-                <td className="max-w-[16rem] truncate px-3 py-2 text-gray-600">{m.subject ?? '—'}</td>
+                <td className="max-w-[16rem] truncate px-3 py-2 text-charcoal-600">{m.subject ?? '—'}</td>
                 <td className="px-3 py-2">
                   <Pill status={m.status} />
                 </td>
@@ -357,7 +357,7 @@ export default async function AgentsPage() {
             ))}
             {outbox.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-3 py-6 text-center text-charcoal-400">
                   Nothing sent yet.
                 </td>
               </tr>
@@ -366,7 +366,7 @@ export default async function AgentsPage() {
         </table>
       </div>
 
-      <p className="mt-6 text-xs text-gray-400">
+      <p className="mt-6 text-xs text-charcoal-400">
         Baseline frozen: {baseline ? fmtDate(baseline.captured_at) : 'not yet — run the freeze curl before agents act'} ·
         Metrics refresh daily at 6:30 AM PT · Data: agent_config, agent_proposal, agent_outbox, metrics_snapshot
       </p>
