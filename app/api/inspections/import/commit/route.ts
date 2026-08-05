@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import {
   validateInspectionRows,
   commitInspectionImport,
@@ -13,7 +13,7 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

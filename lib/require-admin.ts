@@ -8,16 +8,15 @@
  *   if (!guard.ok) return guard.response;
  */
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { requireRole } from "@/lib/require-role";
 
 type AdminGuard =
   | { ok: true; email: string }
   | { ok: false; response: NextResponse };
 
 export async function requireAdmin(): Promise<AdminGuard> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.isAdmin) {
+  const guard = await requireRole("admin");
+  if (!guard.ok) {
     return {
       ok: false,
       response: NextResponse.json(
@@ -26,5 +25,5 @@ export async function requireAdmin(): Promise<AdminGuard> {
       ),
     };
   }
-  return { ok: true, email: session.user.email ?? "" };
+  return { ok: true, email: guard.email };
 }

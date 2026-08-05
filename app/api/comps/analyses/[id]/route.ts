@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { getRentAnalysis, updateRentAnalysis, deleteRentAnalysis } from '@/lib/rent-analyses';
 import { generateRentReportPdf } from '@/lib/rent-report-pdf';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -14,7 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -42,7 +42,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -120,7 +120,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

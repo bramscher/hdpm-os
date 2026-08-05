@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { buildHavenDigest } from '@/lib/haven-digest';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
 
     if (!isCron) {
-      const session = await getServerSession();
+      const session = await auth();
       if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }

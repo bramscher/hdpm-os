@@ -1,4 +1,4 @@
-import { getServerSession } from "next-auth";
+import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { KeyDetailClient } from "./detail-client";
 
@@ -11,7 +11,7 @@ export default async function KeyDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await getServerSession();
+  const session = await auth();
 
   if (!session?.user?.email?.endsWith("@highdesertpm.com")) {
     redirect("/login");

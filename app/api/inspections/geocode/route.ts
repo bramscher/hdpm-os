@@ -1,4 +1,4 @@
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { batchGeocodeProperties } from '@/lib/inspection-geocode';
 
 /**
@@ -11,7 +11,7 @@ import { batchGeocodeProperties } from '@/lib/inspection-geocode';
  */
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,

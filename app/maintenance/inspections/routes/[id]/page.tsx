@@ -1,4 +1,4 @@
-import { getServerSession } from "next-auth";
+import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { RouteDetail } from "./route-detail";
 
@@ -7,7 +7,7 @@ interface RouteDetailPageProps {
 }
 
 export default async function RouteDetailPage({ params }: RouteDetailPageProps) {
-  const session = await getServerSession();
+  const session = await auth();
 
   if (!session?.user?.email?.endsWith("@highdesertpm.com")) {
     redirect("/login");

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import {
   getConversationWithMessages,
   updateConversationTitle,
@@ -12,7 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     const userEmail = session?.user?.email;
 
     if (!userEmail?.endsWith('@highdesertpm.com')) {
@@ -49,7 +49,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     const userEmail = session?.user?.email;
 
     if (!userEmail?.endsWith('@highdesertpm.com')) {
@@ -89,7 +89,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     const userEmail = session?.user?.email;
 
     if (!userEmail?.endsWith('@highdesertpm.com')) {

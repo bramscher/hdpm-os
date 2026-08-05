@@ -240,7 +240,7 @@ export function Sidebar({ collapsed = false, onToggleChat, isChatOpen = false }:
                   </p>
                 </div>
                 <button
-                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  onClick={() => signOut({ redirectTo: "/login" })}
                   className="text-charcoal-500 hover:text-charcoal-300 transition-colors p-1"
                   title="Sign out"
                 >

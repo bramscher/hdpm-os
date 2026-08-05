@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { buildRoutePlans } from '@/lib/route-engine';
 import type { GeoInspection, RouteGenerationRequest } from '@/types/routes';
@@ -11,7 +11,7 @@ import type { GeoInspection, RouteGenerationRequest } from '@/types/routes';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

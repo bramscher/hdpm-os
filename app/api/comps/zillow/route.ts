@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { scrapeZillowListings, getZillowSearchUrl } from '@/lib/zillow';
 import type { Town } from '@/types/comps';
 
@@ -13,7 +13,7 @@ const VALID_TOWNS: Town[] = ['Bend', 'Redmond', 'Sisters', 'Prineville', 'Culver
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

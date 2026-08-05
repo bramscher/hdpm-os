@@ -1,6 +1,5 @@
-import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@/lib/auth';
 import { ZoomSyncDashboard } from './zoom-sync-dashboard';
 
 export const metadata = {
@@ -8,7 +7,7 @@ export const metadata = {
 };
 
 export default async function ZoomSyncPage() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user?.isAdmin) {
     redirect('/');
   }

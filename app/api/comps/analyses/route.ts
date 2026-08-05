@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { listRentAnalyses } from '@/lib/rent-analyses';
 
 /**
@@ -8,7 +8,7 @@ import { listRentAnalyses } from '@/lib/rent-analyses';
  */
 export async function GET() {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

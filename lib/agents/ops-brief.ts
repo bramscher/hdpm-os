@@ -144,7 +144,22 @@ export interface OpsBriefData {
     turns: { openTurns: number | null; medianDaysVacant: number | null };
     retype: { last7Days: number | null; weeklyTarget: number };
     baseline: { label: string; before: string; now: string }[];
+    /** Brief 1D: company-memory context for the escalation items (deep only). */
+    memory?: { answer: string; links: { title: string; url: string }[] } | null;
   };
+}
+
+/**
+ * Light markdown → Slack mrkdwn: **bold** → *bold*, "## Heading" → *Heading*,
+ * strip [n] citation markers (the links render separately). Pure, exported
+ * for tests.
+ */
+export function mdToMrkdwn(md: string): string {
+  return md
+    .replace(/^#{1,4}\s+(.+)$/gm, '*$1*')
+    .replace(/\*\*(.+?)\*\*/g, '*$1*')
+    .replace(/\s?\[\d+(?:,\s*\d+)*\]/g, '')
+    .trim();
 }
 
 // ============================================
@@ -327,6 +342,18 @@ export function buildOpsBriefBlocks(
     if (d.baseline.length > 0) {
       const lines = d.baseline.map((b) => `• ${b.label}: ${b.before} → ${b.now}`).join('\n');
       blocks.push(mrkdwn(`*Since the baseline freeze:*\n${lines}`));
+    }
+    if (d.memory?.answer) {
+      const body = mdToMrkdwn(d.memory.answer);
+      const truncated = body.length > 1200 ? `${body.slice(0, 1200)}…` : body;
+      blocks.push(mrkdwn(`🧠 *From company memory (on today's escalations):*\n${truncated}`));
+      if (d.memory.links.length > 0) {
+        const links = d.memory.links
+          .slice(0, 4)
+          .map((l) => `<${l.url}|${l.title.replace(/[<>|]/g, '')}>`)
+          .join(' · ');
+        blocks.push(context(links));
+      }
     }
   }
 

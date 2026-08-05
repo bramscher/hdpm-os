@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import {
   getDueNotices,
@@ -28,7 +28,7 @@ async function authorize(request: NextRequest): Promise<boolean> {
   if (process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`) {
     return true;
   }
-  const session = await getServerSession();
+  const session = await auth();
   return Boolean(session?.user?.email?.endsWith('@highdesertpm.com'));
 }
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { syncAfBills } from '@/lib/af-bills';
 
 // Full-backfill sync pages through ~9 requests of 1000 bills; allow time.
@@ -7,7 +7,7 @@ export const maxDuration = 300;
 
 export async function POST() {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
         { error: 'Unauthorized. Please sign in with your company Microsoft account.' },

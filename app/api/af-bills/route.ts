@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { auth } from '@/lib/auth';
 import { getAfBills } from '@/lib/af-bills';
 
 export async function GET() {
   try {
-    const session = await getServerSession();
+    const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
         { error: 'Unauthorized. Please sign in with your company Microsoft account.' },

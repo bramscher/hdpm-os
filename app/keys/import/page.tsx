@@ -1,4 +1,4 @@
-import { getServerSession } from "next-auth";
+import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { ImportKeysClient } from "@/components/keys/ImportKeysClient";
 
@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default async function KeysImportPage() {
-  const session = await getServerSession();
+  const session = await auth();
 
   if (!session?.user?.email?.endsWith("@highdesertpm.com")) {
     redirect("/login");

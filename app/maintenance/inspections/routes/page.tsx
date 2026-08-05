@@ -1,9 +1,9 @@
-import { getServerSession } from "next-auth";
+import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { RouteBuilder } from "./route-builder";
 
 export default async function RoutesPage() {
-  const session = await getServerSession();
+  const session = await auth();
 
   if (!session?.user?.email?.endsWith("@highdesertpm.com")) {
     redirect("/login");

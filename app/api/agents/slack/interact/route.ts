@@ -8,6 +8,8 @@ import { parseBlockAction, snoozeDate, isValidYmd } from '@/lib/agents/morning-c
 import { parseEcActionId, ESTIMATE_CHASER_AGENT, VENDOR_CHASE_SMS_ACTION, ESCALATE_ACTION } from '@/lib/agents/estimate-chaser';
 import { rebuildSmsQueueCard } from '@/lib/agents/estimate-chaser-run';
 import { parseObActionId, applyAckToBlocks, OPS_BRIEF_AGENT, SEND_BRIEF_ACTION } from '@/lib/agents/ops-brief';
+import { parseRockActionId, buildRockCardBlocks, currentQuarter, type RockAction } from '@/lib/eos/rock';
+import { logAudit } from '@/lib/audit';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
 import { updateSlackMessage, splitSlackMessageId } from '@/lib/agents/channels/slack';
 import { updateWorkOrderWorkflow, WorkflowValidationError } from '@/lib/maintenance/workflow-db';
@@ -74,6 +76,13 @@ export async function POST(request: NextRequest) {
     typeof rawAction?.action_id === 'string' ? parseObActionId(rawAction.action_id) : null;
   if (obAction) {
     return handleObAction(obAction, actor, payload.response_url);
+  }
+
+  // Rocks namespace (rock:*) — Friday one-tap on/off self-report (EOS 2E).
+  const rockAction =
+    typeof rawAction?.action_id === 'string' ? parseRockActionId(rawAction.action_id) : null;
+  if (rockAction) {
+    return handleRockAction(rockAction, actor, payload.response_url);
   }
 
   const action = parseBlockAction(payload.actions[0]);
@@ -434,6 +443,68 @@ async function handleObAction(
     }
   } catch (err) {
     console.error('[Agents] ob action failed:', err instanceof Error ? err.message : String(err));
+  }
+
+  return new NextResponse(null, { status: 200 });
+}
+
+/**
+ * rock:* — one-tap Rock self-report (EOS Brief 2E). Updates rock.status,
+ * audits as the tapping human, and rebuilds the owner's card from fresh
+ * rows (morning-card strategy). No proposal row involved.
+ */
+async function handleRockAction(
+  action: RockAction,
+  actor: string,
+  responseUrl: string | undefined
+): Promise<NextResponse> {
+  const supabase = getSupabaseAdmin();
+  try {
+    const { data: rock } = await supabase
+      .from('rock')
+      .select('id, title, status, owner_person, quarter')
+      .eq('id', action.rockId)
+      .maybeSingle();
+    if (!rock) {
+      await respond(responseUrl, {
+        response_type: 'ephemeral',
+        replace_original: false,
+        text: 'That Rock no longer exists.',
+      });
+      return new NextResponse(null, { status: 200 });
+    }
+    if (rock.status !== action.kind) {
+      const { error } = await supabase
+        .from('rock')
+        .update({ status: action.kind })
+        .eq('id', rock.id);
+      if (error) throw new Error(error.message);
+      await logAudit('rock', rock.id, 'self_report', actor, {
+        from: rock.status,
+        to: action.kind,
+        via: 'slack',
+      });
+    }
+
+    // Rebuild the whole card for this owner so every row shows current state.
+    if (rock.owner_person) {
+      const quarter = currentQuarter(new Date());
+      const { data: ownerRocks } = await supabase
+        .from('rock')
+        .select('id, title, status, due_on')
+        .eq('org_id', 'hdpm')
+        .eq('quarter', quarter)
+        .eq('owner_person', rock.owner_person)
+        .in('status', ['on', 'off'])
+        .order('due_on', { ascending: true, nullsFirst: false });
+      const { text, blocks } = buildRockCardBlocks(ownerRocks ?? [], quarter);
+      const replaced = await respond(responseUrl, { replace_original: true, text, blocks });
+      if (!replaced) {
+        console.warn('[Agents] rock card replace failed (response_url)');
+      }
+    }
+  } catch (err) {
+    console.error('[Agents] rock action failed:', err instanceof Error ? err.message : String(err));
   }
 
   return new NextResponse(null, { status: 200 });

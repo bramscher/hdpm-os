@@ -6,6 +6,7 @@ import {
   parseObActionId,
   buildOpsBriefBlocks,
   applyAckToBlocks,
+  mdToMrkdwn,
   NEEDS_CRAIG_CAP,
   type OpsBriefData,
   type EscalationBriefItem,
@@ -186,5 +187,55 @@ describe('applyAckToBlocks', () => {
   it('returns null when the block is absent', () => {
     const { blocks } = buildOpsBriefBlocks(briefData(), { readOnly: false });
     expect(applyAckToBlocks(blocks, 'nope', 'Craig', '5:12 PM')).toBeNull();
+  });
+});
+
+describe('mdToMrkdwn (Brief 1D)', () => {
+  it('converts markdown bold/headings to Slack mrkdwn and strips citations', () => {
+    const md = '## Policy\n\n**Escalations** go to Brody [1][2]. See ceilings [3, 4].';
+    const out = mdToMrkdwn(md);
+    expect(out).toContain('*Policy*');
+    expect(out).toContain('*Escalations* go to Brody.');
+    expect(out).not.toMatch(/\[\d/);
+  });
+});
+
+describe('memory section (Brief 1D)', () => {
+  const deepWithMemory = (memory: OpsBriefData['deepSections'] extends infer D
+    ? D extends { memory?: infer M }
+      ? M
+      : never
+    : never) =>
+    briefData({
+      deep: true,
+      deepSections: {
+        vendorTop: [],
+        offenders: [],
+        vendorStuck: { acceptedUnworkedCount: 1, scheduledDatePassedCount: 1, vsLastWeek: null },
+        unbilled: { count: 0, oldestDays: null },
+        turns: { openTurns: 0, medianDaysVacant: null },
+        retype: { last7Days: 0, weeklyTarget: 40 },
+        baseline: [],
+        memory,
+      },
+    });
+
+  it('renders the company-memory block with sanitized links', () => {
+    const { blocks } = buildOpsBriefBlocks(
+      deepWithMemory({
+        answer: '**Escalations** route to Brody [1].',
+        links: [{ title: 'Agent-OS Q&A <1>', url: 'https://github.com/x/y' }],
+      }),
+      { readOnly: true }
+    );
+    const json = JSON.stringify(blocks);
+    expect(json).toContain('From company memory');
+    expect(json).toContain('*Escalations* route to Brody.');
+    expect(json).toContain('<https://github.com/x/y|Agent-OS Q&A 1>');
+  });
+
+  it('omits the section when memory is null/absent', () => {
+    const { blocks } = buildOpsBriefBlocks(deepWithMemory(null), { readOnly: true });
+    expect(JSON.stringify(blocks)).not.toContain('From company memory');
   });
 });
