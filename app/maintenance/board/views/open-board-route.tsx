@@ -240,7 +240,7 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
       )}
 
       {published.length > 0 && (
-        <div className="card" style={{ margin: '10px 0', borderColor: '#2f7d32' }}>
+        <div className="card" style={{ margin: '10px 0', borderColor: 'var(--ok)' }}>
           {published.map((r) => (
             <div key={r.id} style={{ fontSize: 13 }}>
               <b>
@@ -341,7 +341,7 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
             </p>
           )}
           {outcome && (
-            <p className="note" style={{ marginTop: 6, borderColor: '#2f7d32' }}>
+            <p className="note" style={{ marginTop: 6, borderColor: 'var(--ok)' }}>
               Route published · {outcome.scheduled.length} WO
               {outcome.scheduled.length === 1 ? '' : 's'} moved to SCHEDULED
               {outcome.dated.length > 0 &&
