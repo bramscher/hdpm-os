@@ -431,7 +431,7 @@ export default function InspectionImportPage() {
 
           {/* ── Step 1: Upload ── */}
           {step === 1 && (
-            <div className="bg-white rounded-lg border border-charcoal-200 p-8">
+            <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-8">
               <div
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
@@ -492,7 +492,7 @@ export default function InspectionImportPage() {
           {/* ── Step 2: Column Mapping ── */}
           {step === 2 && (
             <div className="space-y-6">
-              <div className="bg-white rounded-lg border border-charcoal-200 p-6">
+              <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-lg font-semibold text-charcoal-900">Column Mapping</h2>
@@ -549,7 +549,7 @@ export default function InspectionImportPage() {
 
               {/* Preview */}
               {previewRows.length > 0 && (
-                <div className="bg-white rounded-lg border border-charcoal-200 p-6">
+                <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-6">
                   <h3 className="text-sm font-semibold text-charcoal-700 mb-3">
                     Preview (first {previewRows.length} rows)
                   </h3>
@@ -622,28 +622,28 @@ export default function InspectionImportPage() {
             <div className="space-y-6">
               {/* Summary cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+                <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <CheckCircle2 className="w-4 h-4 text-green-500" />
                     <span className="text-xs font-medium text-charcoal-500">Valid</span>
                   </div>
                   <p className="text-2xl font-bold text-green-600">{validationResult.valid}</p>
                 </div>
-                <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+                <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <AlertTriangle className="w-4 h-4 text-amber-500" />
                     <span className="text-xs font-medium text-charcoal-500">Warnings</span>
                   </div>
                   <p className="text-2xl font-bold text-amber-600">{validationResult.warnings}</p>
                 </div>
-                <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+                <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <XCircle className="w-4 h-4 text-red-500" />
                     <span className="text-xs font-medium text-charcoal-500">Errors</span>
                   </div>
                   <p className="text-2xl font-bold text-red-600">{validationResult.errors}</p>
                 </div>
-                <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+                <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Copy className="w-4 h-4 text-orange-500" />
                     <span className="text-xs font-medium text-charcoal-500">Duplicates</span>
@@ -653,7 +653,7 @@ export default function InspectionImportPage() {
               </div>
 
               {/* Validation table */}
-              <div className="bg-white rounded-lg border border-charcoal-200 overflow-hidden">
+              <div className="bg-white rounded-xl shadow-card border border-charcoal-200 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>

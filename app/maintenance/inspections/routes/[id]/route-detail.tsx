@@ -538,14 +538,14 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
 
       {/* ── Stats Bar ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <MapPin className="w-4 h-4 text-terra-500" />
             <span className="text-xs font-medium text-charcoal-500">Stops</span>
           </div>
           <p className="text-2xl font-bold text-charcoal-900">{stops.length}</p>
         </div>
-        <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <Car className="w-4 h-4 text-blue-500" />
             <span className="text-xs font-medium text-charcoal-500">Drive Time</span>
@@ -554,7 +554,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
             {totalDrive > 0 ? `${totalDrive} min` : "\u2014"}
           </p>
         </div>
-        <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <Clock className="w-4 h-4 text-amber-500" />
             <span className="text-xs font-medium text-charcoal-500">Service Time</span>
@@ -563,7 +563,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
             {totalService > 0 ? `${totalService} min` : "\u2014"}
           </p>
         </div>
-        <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <CheckCircle2 className="w-4 h-4 text-green-500" />
             <span className="text-xs font-medium text-charcoal-500">Est. Finish</span>
@@ -576,7 +576,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
 
       {/* ── Map ── */}
       {stops.length > 0 && (
-        <div className="bg-white rounded-lg border border-charcoal-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-charcoal-200">
             <h2 className="text-sm font-semibold text-charcoal-900 flex items-center gap-2">
               <Map className="w-4 h-4 text-charcoal-400" />
@@ -614,7 +614,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
       )}
 
       {/* ── Stop Timeline ── */}
-      <div className="bg-white rounded-lg border border-charcoal-200 p-6">
+      <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-6">
         <h2 className="text-lg font-semibold text-charcoal-900 mb-6">Route Timeline</h2>
 
         <div className="relative">

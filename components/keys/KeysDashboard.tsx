@@ -172,7 +172,7 @@ export function KeysDashboard() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search key #, address, tenant, owner…"
-            className="pl-9 pr-3 py-2 w-72 rounded-lg border border-sand-200 bg-white text-sm text-charcoal-900 placeholder:text-charcoal-300 focus:outline-none focus:ring-2 focus:ring-terra-400"
+            className="pl-9 pr-3 py-2 w-72 rounded-xl border border-sand-200 bg-white shadow-card text-sm text-charcoal-900 placeholder:text-charcoal-300 focus:outline-none focus:ring-2 focus:ring-terra-400"
           />
         </div>
       </div>

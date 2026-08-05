@@ -843,7 +843,7 @@ function BillingView({
                                 placeholder="Search invoices by code, WO#, property, or amount…"
                                 className="w-full text-xs px-3 py-2 rounded-lg border border-sand-300 focus:outline-none focus:ring-1 focus:ring-terra-400"
                               />
-                              <div className="divide-y divide-charcoal-100/60 rounded-lg border border-sand-200 bg-white">
+                              <div className="divide-y divide-charcoal-100/60 rounded-xl border border-sand-200 bg-white shadow-card">
                                 {candidates(b).map((inv) => {
                                   const exact =
                                     Math.abs(Number(inv.total_amount) - Number(b.total_amount)) < 0.005;

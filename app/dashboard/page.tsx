@@ -1024,7 +1024,7 @@ function NumberField({
   return (
     <label className="block">
       <span className="text-xs font-medium text-charcoal-500">{label}</span>
-      <div className="mt-1 flex items-center gap-1.5 rounded-lg border border-sand-200 bg-white px-2.5 focus-within:border-terra-300">
+      <div className="mt-1 flex items-center gap-1.5 rounded-xl border border-sand-200 bg-white shadow-card px-2.5 focus-within:border-terra-300">
         {prefix && <span className="text-xs text-charcoal-400">{prefix}</span>}
         <input
           type="number"
@@ -1132,7 +1132,7 @@ function ConfigDrawer({
                   })
                 }
                 rows={3}
-                className="w-full rounded-lg border border-sand-200 bg-white p-2.5 font-mono text-xs text-charcoal-900 outline-none focus:border-terra-300"
+                className="w-full rounded-xl border border-sand-200 bg-white shadow-card p-2.5 font-mono text-xs text-charcoal-900 outline-none focus:border-terra-300"
               />
             </section>
 

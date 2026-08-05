@@ -518,7 +518,7 @@ export function ChatWindow({
 
       {/* Panel mode: history as a popover over the chat */}
       {isPanel && showHistory && (
-        <div className="absolute left-3 top-16 bottom-24 z-30 flex overflow-hidden rounded-xl border border-sand-200 bg-white shadow-xl">
+        <div className="absolute left-3 top-16 bottom-24 z-30 flex overflow-hidden rounded-xl border border-sand-200 bg-white shadow-card-hover">
           <ConversationHistory
             conversations={conversations}
             activeConversationId={activeConversationId}

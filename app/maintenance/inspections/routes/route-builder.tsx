@@ -410,7 +410,7 @@ export function RouteBuilder() {
                   key={route.id}
                   onClick={() => router.push(`/maintenance/inspections/routes/${route.id}`)}
                   className={cn(
-                    "bg-white rounded-lg border border-charcoal-200 p-5 text-left",
+                    "bg-white rounded-xl shadow-card border border-charcoal-200 p-5 text-left",
                     "hover:border-terra-300 hover:shadow-md transition-all duration-150",
                     "focus:outline-none focus:ring-2 focus:ring-terra-400 focus:border-transparent"
                   )}
@@ -475,7 +475,7 @@ export function RouteBuilder() {
 
           {/* Modal */}
           <div className={cn(
-            "relative bg-white rounded-xl shadow-xl mx-4 p-6",
+            "relative bg-white rounded-xl shadow-card-hover mx-4 p-6",
             pickMode === "pick" ? "w-full max-w-2xl" : "w-full max-w-md"
           )}>
             <div className="flex items-center justify-between mb-5">

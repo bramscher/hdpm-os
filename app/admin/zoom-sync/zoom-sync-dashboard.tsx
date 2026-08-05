@@ -362,7 +362,7 @@ export function ZoomSyncDashboard() {
                 setOffset(0);
               }}
               placeholder="Search name, phone, email"
-              className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-sand-200 bg-white outline-none focus:border-terra-300 w-56"
+              className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-sand-200 bg-white shadow-card outline-none focus:border-terra-300 w-56"
             />
           </div>
         </div>
