@@ -21,6 +21,7 @@ import type { TripwireRunResult } from './tripwire-engine';
 import { fetchAllRows, loadTripwireSnapshot, runTripwires } from './tripwire-engine';
 import { medianOf } from './vendors';
 import { proposalCounts } from './triage-batch';
+import { weeklyBillableHours, WEEKLY_HOURS_TARGET } from '@/lib/invoices';
 
 export interface MetricRow {
   metric: string;
@@ -398,6 +399,26 @@ export async function computeAllMetrics(
     });
   } catch (err) {
     errors.triage = err instanceof Error ? err.message : String(err);
+  }
+
+  // In-house billable hours from invoice labor lines (target 30–36/wk).
+  // 30d created_at over-fetch; the pure function windows on completed_date.
+  try {
+    const since30 = new Date(now.getTime() - 30 * DAY_MS).toISOString();
+    const invoices = (await fetchAllRows(
+      () =>
+        supabase
+          .from('hdms_invoices')
+          .select('status, line_items, completed_date, created_at')
+          .gte('created_at', since30),
+      'hdms_invoices'
+    )) as Parameters<typeof weeklyBillableHours>[0];
+    rows.push({
+      metric: 'billable_hours',
+      value: { ...weeklyBillableHours(invoices, now), target: WEEKLY_HOURS_TARGET },
+    });
+  } catch (err) {
+    errors.billableHours = err instanceof Error ? err.message : String(err);
   }
 
   // Days-to-lease: frozen from the existing kpi_snapshots history (captured
