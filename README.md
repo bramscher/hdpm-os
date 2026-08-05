@@ -1,6 +1,17 @@
 # HDPM-OS
 
-The operating system for **High Desert Property Management** (~835 doors across 467 properties, Central Oregon). Runs the **Maintenance OS** (live work-order board, 12 crack-proofing tripwires, AI triage, vendor scoreboard), and automates inspections, invoice generation, rent comp analysis, Craigslist ad creation, plus a live KPI dashboard covering portfolio health.
+The operating system for **High Desert Property Management** (~835 doors across 467 properties, Central Oregon).
+
+> **Mission: run HDPM like a system — every door, every dollar, and every decision visible, owned, and remembered.** Humans decide; agents watch, chase, brief, and file; the brain remembers. Full mission, system schematic, and agent org chart: [`docs/hdpm-os/13-mission-agents-and-schematic.md`](docs/hdpm-os/13-mission-agents-and-schematic.md).
+
+Four layers on one Supabase spine, over the systems of record (AppFolio, M365, Slack, Zoom — never replaced):
+
+1. **Maintenance OS** — live work-order board with an 8-stage lifecycle, one accountable owner + next-action date per WO, 12 crack-proofing tripwires, AI triage, vendor scoreboard, turnover board.
+2. **EOS operating layer** (Company screens) — weekly scorecard, the Issues & To-Dos IDS queue fed by an escalation ladder, the meeting runner (solve requires an outcome), Rocks, and the accountability chart.
+3. **Agent layer** — Morning Card, Estimate Chaser, Ops Brief, Escalation Ladder, Scorecard, Meeting Prep: proposal-first, audited, autonomy earned per action.
+4. **Company brain** — pgvector memory over SOPs, decisions, and minutes; every answer cited.
+
+Plus the tools: inspections + route builder, invoice generation + trust-payment reconciliation, rent comps, Craigslist ads, key manager, owner reports, and the KPI dashboard.
 
 **Stack:** Next.js 16 / React 18 / TypeScript 5.7 / Supabase (PostgreSQL + pgvector) / Tailwind CSS 3.4 / Recharts 3 / Anthropic SDK / Vercel
 **Auth:** Microsoft Azure AD (@highdesertpm.com only)
@@ -24,6 +35,8 @@ The operating system for **High Desert Property Management** (~835 doors across 
   - [Work Order Detail](#work-order-detail)
   - [Tripwires & Email Digests](#tripwires--email-digests)
 - [Agent-OS (the Agent Team)](#agent-os-the-agent-team)
+- [Company — the EOS Layer](#company--the-eos-layer)
+- [Company Brain](#company-brain)
 - [KPI Dashboard](#kpi-dashboard)
   - [KPI Cards](#kpi-cards)
   - [KPI Trends](#kpi-trends)
@@ -182,20 +195,49 @@ Twelve if-then rules run every weekday at 6 AM PT; each person gets **one email 
 
 The agent layer converts the Maintenance OS's *detection* (tripwires, exceptions) into *staff motion* in the channels people already use — Slack, Outlook, and Zoom SMS. Every agent output is an `agent_proposal` row first (audit trail + approval queue), every outbound message goes through `agent_outbox` (channel adapters: `slack`, `email`, `outlook_draft`, `sms_zoom`, `in_app` — all five live), and autonomy is data, not code: `agent_config` holds one row per (agent, action) on the **L0 observe → L1 draft → L2 act-on-tap → L3 act-then-notify → L4 silent** ladder, with per-action ceilings (owner/tenant-facing hard-walled at L2 forever) and a global kill switch (`agent='*', action_type='*', enabled=false`).
 
-**Status (2026-07-20):**
+**Status (2026-08-04):** full roster, schedules, and the agent org chart live in [`docs/hdpm-os/13-mission-agents-and-schematic.md`](docs/hdpm-os/13-mission-agents-and-schematic.md).
 
 | Agent | What it does | Autonomy | Status |
 |-------|--------------|----------|--------|
-| **Morning Action Card** (Brief C) | Weekday 6:30 AM PT: Cheryl's 7 most important exceptions as a Slack card with Done / Snooze / Set-date / Reassign buttons; Craig gets a read-only copy + email mirror | L2 | ✅ Live |
-| **Estimate Chaser — email** (Brief D) | Weekday 6:45 AM PT: TW11 stuck estimates become ready-to-send Outlook drafts in Cheryl's Drafts folder via app-only Graph (vendor bid chases + owner approval asks; never a dollar amount; 3-business-day no-double-chase cooldown) | L1 | ✅ Live |
-| **Estimate Chaser — SMS** (Brief D.5/D.5b) | Vendor chases go SMS-first when a phone is known: a Slack "Text chase queue" card with per-item [Send text] buttons; taps send from Cheryl's Zoom line via her own OAuth token (Zoom S2S tokens can't send SMS) | L2 | 🟡 Built & deployed; disabled in `agent_config` pending Cheryl's one-time Zoom authorize (`/api/agents/zoom-oauth/start`) |
-| **Escalations → Craig** | Items chased 3× or stuck >45 days roll up as a Slack DM digest to Craig (interim until the Ops Brief) | L3 | ✅ Live |
-| **Ops Brief** (Brief E) | Daily 5 PM + Monday deep brief for Craig/Matt, absorbing all agent escalations | — | 🔜 Next brief |
-| Email Triage, Intake, Day-Close SMS, Reconciliation, Vendor Chaser, Inspections | See the master plan roster (#2, #4–#6, #8–#10) | — | Phase 2 |
+| **Morning Action Card** | Weekday 6:30 AM PT: Cheryl's 7 most important exceptions as a Slack card with Done / Snooze / Set-date / Reassign buttons; Brody + Matt read-only copies + email mirror; one 1 PM nudge | L2 | ✅ Live |
+| **Estimate Chaser — email** | Weekday 6:45 AM PT: TW11 stuck estimates become ready-to-send Outlook drafts in Cheryl's Drafts folder (vendor bid chases + owner approval asks; never a dollar amount; 3-business-day cooldown) | L1 | ✅ Live |
+| **Estimate Chaser — SMS** | Vendor chases go SMS-first when a phone is known: Slack "Text chase queue" card, taps send from Cheryl's Zoom line via her own OAuth token | L2 | 🟡 Built; disabled pending Cheryl's one-time Zoom authorize |
+| **Estimate Chaser — escalations** | Chased 3× or stuck >45 days → Slack DM to Brody + Matt, and (via the ladder below) an EOS issue | L3 | ✅ Live |
+| **Ops Brief** | Daily ~5 PM PT + Monday deep brief: metrics + deltas, agent activity, open escalations with [Acknowledge] taps, brain context — Brody interactive, Matt + Craig read-only | L3 | ✅ Live |
+| **Escalation Ladder** | Weekday 7:15 AM PT: aged/recurring tripwires, chaser escalations, and twice-missed to-dos auto-file EOS issues (deduped, capped 10/rung/run) so nothing evaporates from a DM | files only | ✅ Live |
+| **Scorecard** | Friday 3 PM PT: auto-fills the weekly scorecard, nudges manual-metric owners, files issues at 2 weeks off-track, sends the one-tap Friday Rock check | L2 | ✅ Live |
+| **Meeting Prep** | Monday 7:30 AM PT: builds the L10 prep packet (scorecard deltas, aged issues, cited brain context) and DMs the facilitator | L1 | ✅ Live |
+| Email Triage, Intake, Day-Close SMS, Reconciliation, Vendor Chaser, Inspections | See the master plan roster | — | Backlog |
 
 **Key routes:** `/agents` (dashboard: config matrix, proposals, outbox) · `/api/agents/cron/morning-card` + `/api/agents/cron/estimate-chaser` (crons) · `/api/agents/slack/interact` (button taps; Slack-signature auth) · `/api/agents/dispatch` (manual outbox drain) · `/api/agents/sms-test` (Zoom SMS probe) · `/api/agents/vendor-contact-audit` (AppFolio contact-field diagnostics) · `/api/agents/zoom-oauth/start` (one-time SMS sender authorization)
 
 **Adoption gate (Phase 1):** ≥25 human actions/week through cards/drafts for 2 consecutive weeks (baseline ~0), then Phase 2 agents unlock. Metrics captured daily in `metrics_snapshot`; baseline frozen pre-agents.
+
+---
+
+## Company — the EOS Layer
+
+**Path:** `/company/*` (Company in the top nav, five tabs) · **Docs:** `docs/hdpm-os/06-eos-operating-layer.md` + `docs/hdpm-os/briefs/phase2-briefs.md`
+
+The management loop: scorecard → issues → weekly meeting → decisions → to-dos → memory. Slack is the notification surface (cards, one-tap actions); these screens are where the deep work happens. Shipped as Phase 2 briefs 2A–2E (2026-08-04); no data here is ever agent-"solved" — agents file and draft, humans decide.
+
+| Tab | Path | What it does |
+|-----|------|--------------|
+| **Scorecard** | `/company/scorecard` | 8-week grid of the 7 weekly metrics vs goal, red/green with sparklines. Auto-fills Friday 3 PM from `metrics_snapshot`; manual metrics entered inline (owners get a Friday Slack nudge). Two weeks off-track auto-files an issue. [→ Issue] on any metric. |
+| **Issues & To-Dos** | `/company/issues` | The priority-ordered IDS queue with an evidence side-panel driven by `source_ref` (metric history, work-order + AppFolio links, or the to-do chain). Issues arrive from the escalation ladder, the scorecard, or + Issue. Solving requires an outcome (decision and/or to-dos). Below it: the 7-day to-do list — missed to-dos roll once (owner gets one nudge), then file as issues. |
+| **Meetings** | `/company/meetings` | This week's L10 + archive. The runner is a standing-agenda stepper with per-step timer (Segue → Scorecard → Rock review → Headlines → To-do review → IDS → Conclude). The Monday prep packet renders up top. Conclude fans confirmed to-dos out as Slack cards and files minutes + decisions into the brain. |
+| **Rocks** | `/company/rocks` | Quarter board by owner with on/off/done/dropped badges + past-quarter archive. Owners get a one-tap On/Off Slack check every Friday. |
+| **Org** | `/company/org` | Read-only accountability chart: the 11 seats with roles, owned metrics, active Rocks, and the agents attached to each seat (agents under seats, never as seats). |
+
+**Escalation ladder** (weekdays 7:15 AM PT): tripwire exceptions aged 21+ days or genuinely recurring, estimate-chaser escalations, and twice-missed to-dos each auto-file an issue — deduplicated against open issues by `source_ref`, capped at 10 per rung per run (worst-first, deferred counts reported). The system escalates visibility, never applies pressure.
+
+---
+
+## Company Brain
+
+**Docs:** `docs/hdpm-os/04-gbrain-company-brain.md` · **Tables:** `brain_chunk`, `brain_node`, `brain_ingest_log` (pgvector)
+
+Institutional memory with citations. Content flows in from the Notion SOP corpus (weekly sync), EOS decisions (`decision:<id>`, ingested at solve time), and meeting minutes (`meeting:<id>#n`, ingested at conclude) — all idempotent on `source_key`. A nightly consolidation cron ("dream cycle") summarizes, reconciles contradictions, and decays stale salience. Retrieval is hybrid (vector + full-text); `think()` produces cited syntheses and powers the Knowledge Chat, the Ops Brief's memory context, and the Monday meeting-prep packet. Humans correct the record via `human_correction` chunks that supersede the old fact.
 
 ---
 
@@ -502,22 +544,34 @@ An AI assistant trained on Oregon Revised Statutes Chapter 90 (landlord-tenant l
 
 Configured in `vercel.json`. All times are UTC.
 
-| Schedule | Endpoint | Purpose |
+| Schedule (UTC) | Endpoint | Purpose |
 |----------|----------|---------|
 | **Every 15 min** | `/api/sync/work-orders?days=1` | AppFolio work-order mirror delta (+ vendor roster) |
 | **Every 30 min** | `/api/maintenance/cron/appfolio-webhook-resolve` | Resolve webhook-logged WO events against the mirror |
 | **Hourly** | `/api/sync/work-orders?days=7` | Work-order deep pass (webhook safety net) |
 | **Hourly at :45** | `/api/sync/keys` | Key Manager ↔ AppFolio sync: tenants, owners, occupancy, flags |
-| **9 AM daily** | `/api/sync/appfolio` | Full AppFolio sync: properties, vacancies, comps |
-| **9:30 AM daily** | `/api/inspections/candidates/sync` | Refresh inspection candidates (move-in-anchored cadence) |
-| **11 AM daily** | `/api/sync/zoom-contacts` | AppFolio → Zoom Phone contact sync |
-| **1 PM Mon–Fri** | `/api/maintenance/cron/tripwires` | Run the 12 tripwires; email per-owner exception digests (6 AM PT) |
-| **1:30 PM Mon–Fri** | `/api/agents/cron/morning-card` | Cheryl's Morning Action Card → Slack + email mirror (6:30 AM PT) |
-| **1:30 PM daily** | `/api/maintenance/cron/metrics` | Daily `metrics_snapshot` capture (agent-layer KPIs) |
-| **1:45 PM Mon–Fri** | `/api/agents/cron/estimate-chaser` | Estimate Chaser: Outlook drafts + SMS queue card + Craig escalations (6:45 AM PT) |
-| **2 PM daily** | `/api/kpi/cron` | Capture daily KPI snapshots for the trends page |
-| **2 PM Monday** | `/api/maintenance/cron/unbilled-report` | Verified-but-unbilled weekly report → Penny |
-| **8 PM Mon–Fri** | `/api/agents/cron/morning-card?nudge=1` | One (and only one) 1 PM PT nudge if the card is untouched |
+| **9:00 daily** | `/api/sync/appfolio` | Full AppFolio sync: properties, vacancies, comps |
+| **9:15 daily** | `/api/sync/af-reports` | AppFolio Reports API pulls (mgmt end dates, …) |
+| **9:30 daily** | `/api/inspections/candidates/sync` | Refresh inspection candidates (move-in-anchored cadence) |
+| **10:00 daily** | `/api/brain/cron/evolve` | Company-brain nightly consolidation (dream cycle) |
+| **10:00 Sunday** | `/api/sync/knowledge` | Notion SOP corpus → knowledge base refresh |
+| **11:00 daily** | `/api/sync/zoom-contacts` | AppFolio → Zoom Phone contact sync |
+| **13:00 Mon–Fri** | `/api/maintenance/cron/tripwires` | Run the 12 tripwires; per-owner exception digests (6 AM PT) |
+| **13:30 Mon–Fri** | `/api/agents/cron/morning-card` | Cheryl's Morning Action Card → Slack + email mirror (6:30 AM PT) |
+| **13:30 daily** | `/api/maintenance/cron/metrics` | Daily `metrics_snapshot` capture (agent-layer KPIs) |
+| **13:45 Mon–Fri** | `/api/agents/cron/estimate-chaser` | Estimate Chaser: Outlook drafts + SMS queue + escalations (6:45 AM PT) |
+| **13:45 daily** | `/api/haven/sync` | Haven.AI conversation sync |
+| **14:00 daily** | `/api/kpi/cron` | Capture daily KPI snapshots for the trends page |
+| **14:00 Monday** | `/api/maintenance/cron/unbilled-report` | Verified-but-unbilled weekly report → Penny |
+| **14:15 Mon–Fri** | `/api/eos/cron/escalation` | Escalation ladder → EOS issues; to-do roll/nudge (7:15 AM PT) |
+| **14:15 Mon–Fri** | `/api/haven/cron/digest` | Haven response-time digest |
+| **14:20 daily** | `/api/reception/sync` | Zoom main-line reception call report sync |
+| **14:30 Monday** | `/api/eos/cron/meeting-prep` | L10 prep packet + facilitator DM (7:30 AM PT) |
+| **15:00 daily** | `/api/sync/vacancies` | AppFolio vacancy cache refresh |
+| **15:00 Monday** | `/api/agents/cron/ops-brief?deep=1` | Monday deep Ops Brief (8 AM PT) |
+| **20:00 Mon–Fri** | `/api/agents/cron/morning-card?nudge=1` | One (and only one) 1 PM PT nudge if the card is untouched |
+| **22:00 Friday** | `/api/eos/cron/scorecard` | Scorecard auto-fill + owner nudges + Rock check cards (3 PM PT) |
+| **00:00 Tue–Sat** | `/api/agents/cron/ops-brief` | Daily Ops Brief (~5 PM PT) |
 | **Jan 1 annually** | `/api/sync/hud` | HUD Fair Market Rent data refresh |
 
 Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted from Azure AD middleware (Vercel cron sends GET; every cron route's GET delegates to its authenticated POST). AppFolio also pushes updates in real time through `/api/webhooks/appfolio` and `/api/webhooks/appfolio-leads`.
@@ -614,6 +668,13 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `rental_comps` / `market_baselines` | Rental comps, baselines, and saved comp-analysis reports |
 | `conversations` / `conversation_messages` | AI chat history and individual messages (with sources and attachments) |
 | `knowledge_chunks` | pgvector knowledge base chunks for ORS 90 semantic search |
+| `brain_chunk` / `brain_node` / `brain_ingest_log` | Company brain: cited memory chunks (pgvector), entity graph, ingest audit |
+| `seat` / `rock` | EOS accountability chart seats + quarterly Rocks |
+| `scorecard_metric` / `scorecard_entry` | The weekly scorecard: metric definitions + red/green entries |
+| `issue` / `todo` | The IDS queue (open-`source_ref` dedupe) + 7-day to-do list (roll-once chain) |
+| `meeting` / `meeting_item` / `decision` | L10 meetings (agenda, prep packet, minutes, rating), per-step outcomes, the decision log |
+| `audit_event` | Append-only EOS audit trail — every scorecard/issue/todo/meeting/rock write |
+| `service_token` | Per-service scoped API tokens for the agent layer |
 
 **Migrations:** Located in `supabase/migrations/`. Run new migrations via the [Supabase SQL Editor](https://supabase.com/dashboard).
 
