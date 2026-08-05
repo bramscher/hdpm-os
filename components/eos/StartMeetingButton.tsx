@@ -35,7 +35,7 @@ export default function StartMeetingButton({ kind = 'L10' }: { kind?: 'L10' | 'h
         type="button"
         onClick={() => void start()}
         disabled={busy}
-        className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-lg bg-terra-500 hover:bg-terra-600 transition-colors px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
       >
         Start this week&rsquo;s {kind}
       </button>

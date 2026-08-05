@@ -31,19 +31,19 @@ function SeatCard({
   const agents = SEAT_AGENTS[seat.name] ?? [];
 
   return (
-    <div className={cn(depth > 0 && 'border-l-2 border-gray-200 pl-4', 'mt-3')}>
-      <div className="rounded-lg border border-gray-200 bg-white p-3">
+    <div className={cn(depth > 0 && 'border-l-2 border-sand-200 pl-4', 'mt-3')}>
+      <div className="rounded-xl border border-sand-200 bg-white shadow-card p-3">
         <div className="flex items-center gap-2">
-          <User size={14} className="text-gray-400" aria-hidden />
-          <span className="text-sm font-semibold text-gray-900">{seat.name}</span>
+          <User size={14} className="text-charcoal-400" aria-hidden />
+          <span className="text-sm font-semibold text-charcoal-900">{seat.name}</span>
           {seat.person ? (
-            <span className="text-sm text-gray-600">— {seat.person}</span>
+            <span className="text-sm text-charcoal-600">— {seat.person}</span>
           ) : (
             <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">OPEN</span>
           )}
         </div>
         {seat.roles.length > 0 ? (
-          <ul className="mt-1.5 text-xs text-gray-500">
+          <ul className="mt-1.5 text-xs text-charcoal-500">
             {seat.roles.map((role) => (
               <li key={role} className="ml-4 list-disc">
                 {role}
@@ -52,10 +52,10 @@ function SeatCard({
           </ul>
         ) : null}
         {metrics.length > 0 ? (
-          <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-gray-500">
-            <Target size={12} className="text-gray-400" aria-hidden />
+          <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-charcoal-500">
+            <Target size={12} className="text-charcoal-400" aria-hidden />
             {metrics.map((m) => (
-              <span key={m.id} className="rounded bg-gray-100 px-1.5 py-0.5">
+              <span key={m.id} className="rounded bg-sand-100 px-1.5 py-0.5">
                 {m.name}
               </span>
             ))}
@@ -64,7 +64,7 @@ function SeatCard({
         {rocks.length > 0 ? (
           <div className="mt-1.5 space-y-0.5">
             {rocks.map((r) => (
-              <p key={r.id} className="text-xs text-gray-600">
+              <p key={r.id} className="text-xs text-charcoal-600">
                 🪨 {r.title}{' '}
                 <span
                   className={cn(
@@ -73,7 +73,7 @@ function SeatCard({
                       ? 'bg-green-50 text-green-800'
                       : r.status === 'off'
                         ? 'bg-red-50 text-red-700'
-                        : 'bg-gray-100 text-gray-500'
+                        : 'bg-sand-100 text-charcoal-500'
                   )}
                 >
                   {r.status}
@@ -84,7 +84,7 @@ function SeatCard({
         ) : null}
         {agents.length > 0 ? (
           <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs">
-            <Bot size={12} className="text-gray-400" aria-hidden />
+            <Bot size={12} className="text-charcoal-400" aria-hidden />
             {agents.map((a) => (
               <span key={a} className="rounded-full bg-blue-50 px-1.5 py-0.5 text-blue-700">
                 {a}

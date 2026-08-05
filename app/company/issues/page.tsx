@@ -111,8 +111,8 @@ export default async function IssuesPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold text-gray-900">Issues & To-Dos</h1>
-      <p className="mb-6 text-sm text-gray-500">
+      <h1 className="mb-1 text-2xl font-bold tracking-tight text-charcoal-900">Issues & To-Dos</h1>
+      <p className="mb-6 text-sm text-charcoal-500">
         The IDS queue, priority-ordered. Aged tripwires, agent escalations, off-track metrics and
         twice-missed to-dos file themselves; anything else goes in with + Issue. Solving happens
         with the humans in the room.
@@ -125,7 +125,7 @@ export default async function IssuesPage() {
         evidence={evidence}
         today={today}
       />
-      <p className="mt-6 text-xs text-gray-400">
+      <p className="mt-6 text-xs text-charcoal-400">
         Data: issue, todo · Escalation cron: weekdays ~7:15 AM PT · Missed to-dos roll once, then
         land here as issues
       </p>

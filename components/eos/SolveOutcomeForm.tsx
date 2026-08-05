@@ -69,7 +69,7 @@ export default function SolveOutcomeForm({
       <p className="text-xs font-semibold uppercase tracking-wide text-green-800">
         Solve: {issueTitle}
       </p>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-charcoal-500">
         No outcome, no &ldquo;solved&rdquo; — record a decision, hand out to-dos, or both.
       </p>
       {error ? (
@@ -79,15 +79,15 @@ export default function SolveOutcomeForm({
       ) : null}
 
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-gray-700">Decision (optional)</p>
+        <p className="text-xs font-medium text-charcoal-700">Decision (optional)</p>
         <input
-          className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+          className="w-full rounded border border-sand-300 px-2 py-1.5 text-sm"
           placeholder="Decision title"
           value={decisionTitle}
           onChange={(e) => setDecisionTitle(e.target.value)}
         />
         <textarea
-          className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+          className="w-full rounded border border-sand-300 px-2 py-1.5 text-sm"
           placeholder="What was decided, in a sentence or two"
           rows={2}
           value={decisionStatement}
@@ -96,11 +96,11 @@ export default function SolveOutcomeForm({
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-gray-700">To-dos (optional)</p>
+        <p className="text-xs font-medium text-charcoal-700">To-dos (optional)</p>
         {todos.map((t, i) => (
           <div key={i} className="flex items-center gap-1.5">
             <input
-              className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+              className="min-w-0 flex-1 rounded border border-sand-300 px-2 py-1 text-sm"
               placeholder="To-do"
               value={t.title}
               onChange={(e) =>
@@ -108,7 +108,7 @@ export default function SolveOutcomeForm({
               }
             />
             <select
-              className="rounded border border-gray-300 px-1 py-1 text-xs text-gray-600"
+              className="rounded border border-sand-300 px-1 py-1 text-xs text-charcoal-600"
               value={t.owner}
               onChange={(e) =>
                 setTodos((list) => list.map((x, j) => (j === i ? { ...x, owner: e.target.value } : x)))
@@ -123,7 +123,7 @@ export default function SolveOutcomeForm({
             </select>
             <input
               type="date"
-              className="rounded border border-gray-300 px-1 py-1 text-xs text-gray-600"
+              className="rounded border border-sand-300 px-1 py-1 text-xs text-charcoal-600"
               value={t.dueOn}
               onChange={(e) =>
                 setTodos((list) => list.map((x, j) => (j === i ? { ...x, dueOn: e.target.value } : x)))
@@ -133,7 +133,7 @@ export default function SolveOutcomeForm({
         ))}
         <button
           type="button"
-          className="text-xs text-gray-500 hover:text-gray-700"
+          className="text-xs text-charcoal-500 hover:text-charcoal-700"
           onClick={() => setTodos((list) => [...list, { title: '', owner: '', dueOn: '' }])}
         >
           + another to-do
@@ -153,7 +153,7 @@ export default function SolveOutcomeForm({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600"
+          className="rounded border border-sand-300 px-3 py-1 text-xs text-charcoal-600"
         >
           Cancel
         </button>

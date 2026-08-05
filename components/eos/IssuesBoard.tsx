@@ -55,7 +55,7 @@ function PriorityBadge({ priority }: { priority: number }) {
       ? 'bg-red-50 text-red-700 border-red-200'
       : priority === 3
         ? 'bg-amber-50 text-amber-700 border-amber-200'
-        : 'bg-gray-50 text-gray-500 border-gray-200';
+        : 'bg-sand-50 text-charcoal-500 border-sand-200';
   return (
     <span className={cn('inline-block w-6 rounded border text-center text-xs font-semibold', tone)}>
       {priority}
@@ -68,7 +68,7 @@ function RaisedByChip({ raisedBy }: { raisedBy: string }) {
   const label = raisedBy.replace(/^(agent|system):/, '').replace(/^tripwire:/, 'tripwire #');
   const Icon = isSystem ? Bot : User;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+    <span className="inline-flex items-center gap-1 rounded-full bg-sand-100 px-2 py-0.5 text-xs text-charcoal-600">
       <Icon size={12} aria-hidden />
       {label}
     </span>
@@ -79,11 +79,11 @@ function Evidence({ issue, evidence }: { issue: Issue; evidence: EvidenceMap }) 
   const ref = parseSourceRef(issue.source_ref);
   if (ref.kind === 'scorecard_metric') {
     const ev = evidence.metrics[ref.id];
-    if (!ev) return <p className="text-sm text-gray-400">Metric no longer active.</p>;
+    if (!ev) return <p className="text-sm text-charcoal-400">Metric no longer active.</p>;
     return (
       <div className="space-y-2 text-sm">
-        <p className="font-medium text-gray-900">{ev.metric.name}</p>
-        <p className="text-gray-500">
+        <p className="font-medium text-charcoal-900">{ev.metric.name}</p>
+        <p className="text-charcoal-500">
           Goal {ev.metric.goal_op === 'gte' ? '≥' : '≤'} {ev.metric.goal_value}{' '}
           {ev.metric.unit ?? ''} · Owner: {ev.metric.owner_person ?? '—'}
         </p>
@@ -97,7 +97,7 @@ function Evidence({ issue, evidence }: { issue: Issue; evidence: EvidenceMap }) 
                   ? 'bg-green-50 text-green-800'
                   : e.on_track === false
                     ? 'bg-red-50 text-red-700'
-                    : 'bg-gray-50 text-gray-500'
+                    : 'bg-sand-50 text-charcoal-500'
               )}
             >
               {fmtDate(e.week_start)}: {e.value ?? '—'}
@@ -112,14 +112,14 @@ function Evidence({ issue, evidence }: { issue: Issue; evidence: EvidenceMap }) 
   }
   if (ref.kind === 'wo_tripwire' || ref.kind === 'wo_escalation') {
     const wo = evidence.workOrders[ref.id];
-    if (!wo) return <p className="text-sm text-gray-400">Work order not found.</p>;
+    if (!wo) return <p className="text-sm text-charcoal-400">Work order not found.</p>;
     return (
       <div className="space-y-2 text-sm">
-        <p className="font-medium text-gray-900">
+        <p className="font-medium text-charcoal-900">
           WO {wo.wo_number ?? '—'} · {wo.property_name}
           {wo.unit_name ? ` ${wo.unit_name}` : ''}
         </p>
-        <p className="text-gray-500">
+        <p className="text-charcoal-500">
           Stage: {wo.stage}
           {wo.vendor_name ? ` · Vendor: ${wo.vendor_name}` : ''}
           {ref.kind === 'wo_tripwire' ? ` · Tripwire #${ref.tripwire}` : ' · Estimate escalation'}
@@ -144,12 +144,12 @@ function Evidence({ issue, evidence }: { issue: Issue; evidence: EvidenceMap }) 
   }
   if (ref.kind === 'todo') {
     const chain = evidence.todoChains[ref.id];
-    if (!chain?.length) return <p className="text-sm text-gray-400">To-do not found.</p>;
+    if (!chain?.length) return <p className="text-sm text-charcoal-400">To-do not found.</p>;
     return (
       <div className="space-y-1 text-sm">
         {chain.map((t) => (
-          <p key={t.id} className="text-gray-600">
-            <span className="font-medium text-gray-900">{t.title}</span> — {t.owner_person ?? '—'},
+          <p key={t.id} className="text-charcoal-600">
+            <span className="font-medium text-charcoal-900">{t.title}</span> — {t.owner_person ?? '—'},
             due {fmtDate(t.due_on)},{' '}
             <span className={t.status === 'done' ? 'text-green-700' : 'text-red-600'}>{t.status}</span>
           </p>
@@ -158,7 +158,7 @@ function Evidence({ issue, evidence }: { issue: Issue; evidence: EvidenceMap }) 
     );
   }
   return (
-    <p className="text-sm text-gray-400">
+    <p className="text-sm text-charcoal-400">
       {issue.source_ref ? `Ref: ${issue.source_ref}` : 'Filed manually — no linked evidence.'}
     </p>
   );
@@ -243,20 +243,20 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
           setConfirmSolve(null);
         }}
         className={cn(
-          'flex w-full items-center gap-3 border-b border-gray-100 px-3 py-2.5 text-left transition-colors last:border-b-0',
-          isSelected ? 'bg-blue-50/60' : 'hover:bg-gray-50'
+          'flex w-full items-center gap-3 border-b border-sand-100 px-3 py-2.5 text-left transition-colors last:border-b-0',
+          isSelected ? 'bg-blue-50/60' : 'hover:bg-sand-50'
         )}
       >
         <PriorityBadge priority={issue.priority} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-charcoal-900">
           {issue.title}
         </span>
         <RaisedByChip raisedBy={issue.raised_by} />
-        <span className="whitespace-nowrap text-xs text-gray-400">
+        <span className="whitespace-nowrap text-xs text-charcoal-400">
           {ageDays(issue.created_at, today)}d
         </span>
         {issue.status !== 'open' ? (
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+          <span className="rounded-full bg-sand-100 px-2 py-0.5 text-xs text-charcoal-500">
             {issue.status}
           </span>
         ) : null}
@@ -276,38 +276,38 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
         {/* ── IDS queue ─────────────────────────────────────────────── */}
         <div className="lg:col-span-2">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-charcoal-500">
               Issues ({queue.length})
             </h2>
             <button
               type="button"
               onClick={() => setShowNewIssue((v) => !v)}
-              className="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 transition-colors hover:border-amber-400 hover:text-amber-700"
+              className="inline-flex items-center gap-1 rounded border border-sand-300 px-2 py-1 text-xs text-charcoal-600 transition-colors hover:border-amber-400 hover:text-amber-700"
             >
               <Plus size={14} aria-hidden /> Issue
             </button>
           </div>
 
           {showNewIssue ? (
-            <div className="mb-3 space-y-2 rounded-lg border border-gray-200 bg-white p-3">
+            <div className="mb-3 space-y-2 rounded-xl border border-sand-200 bg-white shadow-card p-3">
               <input
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="w-full rounded border border-sand-300 px-2 py-1.5 text-sm"
                 placeholder="What's the issue?"
                 value={issueDraft.title}
                 onChange={(e) => setIssueDraft((d) => ({ ...d, title: e.target.value }))}
               />
               <textarea
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                className="w-full rounded border border-sand-300 px-2 py-1.5 text-sm"
                 placeholder="Detail / evidence (optional)"
                 rows={2}
                 value={issueDraft.detail}
                 onChange={(e) => setIssueDraft((d) => ({ ...d, detail: e.target.value }))}
               />
               <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-500">
+                <label className="text-xs text-charcoal-500">
                   Priority{' '}
                   <select
-                    className="rounded border border-gray-300 px-1 py-0.5 text-sm"
+                    className="rounded border border-sand-300 px-1 py-0.5 text-sm"
                     value={issueDraft.priority}
                     onChange={(e) =>
                       setIssueDraft((d) => ({ ...d, priority: Number(e.target.value) }))
@@ -324,7 +324,7 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
                   type="button"
                   onClick={() => void createIssue()}
                   disabled={busy === 'new-issue' || !issueDraft.title.trim()}
-                  className="rounded bg-gray-900 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                  className="rounded-lg bg-terra-500 hover:bg-terra-600 transition-colors px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
                 >
                   File issue
                 </button>
@@ -332,12 +332,12 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
             </div>
           ) : null}
 
-          <div className="rounded-lg border border-gray-200 bg-white">
+          <div className="rounded-xl border border-sand-200 bg-white shadow-card">
             {queue.map((issue) => (
               <IssueRow key={issue.id} issue={issue} />
             ))}
             {queue.length === 0 ? (
-              <p className="px-3 py-8 text-center text-sm text-gray-400">
+              <p className="px-3 py-8 text-center text-sm text-charcoal-400">
                 Nothing on the list. Issues file themselves from tripwires, escalations and the
                 scorecard — or use + Issue.
               </p>
@@ -349,12 +349,12 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
               <button
                 type="button"
                 onClick={() => setShowParked((v) => !v)}
-                className="text-xs text-gray-500 hover:text-gray-700"
+                className="text-xs text-charcoal-500 hover:text-charcoal-700"
               >
                 {showParked ? '▾' : '▸'} Parked ({parked.length})
               </button>
               {showParked ? (
-                <div className="mt-2 rounded-lg border border-gray-200 bg-white opacity-70">
+                <div className="mt-2 rounded-xl border border-sand-200 bg-white shadow-card opacity-70">
                   {parked.map((issue) => (
                     <IssueRow key={issue.id} issue={issue} />
                   ))}
@@ -364,43 +364,43 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
           ) : null}
 
           {/* ── To-dos ──────────────────────────────────────────────── */}
-          <h2 className="mb-2 mt-8 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-2 mt-8 text-sm font-semibold uppercase tracking-wide text-charcoal-500">
             To-dos — next 7 days ({todos.length})
           </h2>
-          <div className="rounded-lg border border-gray-200 bg-white">
+          <div className="rounded-xl border border-sand-200 bg-white shadow-card">
             {todos.map((t) => {
               const overdue = t.due_on < today;
               return (
                 <div
                   key={t.id}
-                  className="flex items-center gap-3 border-b border-gray-100 px-3 py-2 last:border-b-0"
+                  className="flex items-center gap-3 border-b border-sand-100 px-3 py-2 last:border-b-0"
                 >
                   <button
                     type="button"
                     onClick={() => void api(`/api/eos/todos/${t.id}`, 'PATCH', { status: 'done' }, t.id)}
                     disabled={busy === t.id}
                     title="Mark done"
-                    className="text-gray-300 transition-colors hover:text-green-600 disabled:opacity-50"
+                    className="text-charcoal-300 transition-colors hover:text-green-600 disabled:opacity-50"
                   >
                     <CheckCircle2 size={18} aria-hidden />
                   </button>
-                  <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{t.title}</span>
-                  <span className="text-xs text-gray-500">{t.owner_person ?? '—'}</span>
-                  <span className={cn('text-xs', overdue ? 'font-semibold text-red-600' : 'text-gray-400')}>
+                  <span className="min-w-0 flex-1 truncate text-sm text-charcoal-900">{t.title}</span>
+                  <span className="text-xs text-charcoal-500">{t.owner_person ?? '—'}</span>
+                  <span className={cn('text-xs', overdue ? 'font-semibold text-red-600' : 'text-charcoal-400')}>
                     {fmtDate(t.due_on)}
                   </span>
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                  <span className="rounded-full bg-sand-100 px-2 py-0.5 text-xs text-charcoal-500">
                     {t.source}
                   </span>
                 </div>
               );
             })}
             {todos.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-gray-400">No open to-dos this week.</p>
+              <p className="px-3 py-6 text-center text-sm text-charcoal-400">No open to-dos this week.</p>
             ) : null}
-            <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-2">
+            <div className="flex items-center gap-2 border-t border-sand-100 px-3 py-2">
               <input
-                className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                className="min-w-0 flex-1 rounded border border-sand-300 px-2 py-1 text-sm"
                 placeholder="Add a to-do…"
                 value={todoDraft.title}
                 onChange={(e) => setTodoDraft((d) => ({ ...d, title: e.target.value }))}
@@ -409,7 +409,7 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
                 }}
               />
               <select
-                className="rounded border border-gray-300 px-1 py-1 text-xs text-gray-600"
+                className="rounded border border-sand-300 px-1 py-1 text-xs text-charcoal-600"
                 value={todoDraft.owner}
                 onChange={(e) => setTodoDraft((d) => ({ ...d, owner: e.target.value }))}
               >
@@ -422,7 +422,7 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
               </select>
               <input
                 type="date"
-                className="rounded border border-gray-300 px-1 py-1 text-xs text-gray-600"
+                className="rounded border border-sand-300 px-1 py-1 text-xs text-charcoal-600"
                 value={todoDraft.dueOn}
                 onChange={(e) => setTodoDraft((d) => ({ ...d, dueOn: e.target.value }))}
               />
@@ -430,7 +430,7 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
                 type="button"
                 onClick={() => void createTodo()}
                 disabled={busy === 'new-todo' || !todoDraft.title.trim()}
-                className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+                className="rounded-lg bg-terra-500 hover:bg-terra-600 transition-colors px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
               >
                 Add
               </button>
@@ -439,37 +439,37 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
           {missedTodos.length > 0 ? (
             <div className="mt-2 space-y-1">
               {missedTodos.map((t) => (
-                <p key={t.id} className="text-xs text-gray-400 line-through">
+                <p key={t.id} className="text-xs text-charcoal-400 line-through">
                   {t.title} — {t.owner_person ?? '—'}, missed {fmtDate(t.due_on)}
                 </p>
               ))}
             </div>
           ) : null}
-          <p className="mt-2 text-xs text-gray-400">
+          <p className="mt-2 text-xs text-charcoal-400">
             Missed to-dos roll forward once (owner gets one nudge), then file as issues.
           </p>
         </div>
 
         {/* ── Evidence / actions side panel ─────────────────────────── */}
         <div>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-500">
             {selected ? 'Issue' : 'Evidence'}
           </h2>
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="rounded-xl border border-sand-200 bg-white shadow-card p-4">
             {!selected ? (
-              <p className="text-sm text-gray-400">Select an issue to see its evidence and actions.</p>
+              <p className="text-sm text-charcoal-400">Select an issue to see its evidence and actions.</p>
             ) : (
               <div className="space-y-4">
                 <div>
                   <div className="mb-1 flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-gray-900">{selected.title}</p>
+                    <p className="text-sm font-semibold text-charcoal-900">{selected.title}</p>
                     <div className="flex flex-col">
                       <button
                         type="button"
                         title="Raise priority"
                         disabled={busy === selected.id || selected.priority <= 1}
                         onClick={() => void patchIssue(selected.id, { priority: selected.priority - 1 })}
-                        className="text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                        className="text-charcoal-400 hover:text-charcoal-700 disabled:opacity-30"
                       >
                         <ChevronUp size={16} aria-hidden />
                       </button>
@@ -478,34 +478,34 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
                         title="Lower priority"
                         disabled={busy === selected.id || selected.priority >= 5}
                         onClick={() => void patchIssue(selected.id, { priority: selected.priority + 1 })}
-                        className="text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                        className="text-charcoal-400 hover:text-charcoal-700 disabled:opacity-30"
                       >
                         <ChevronDown size={16} aria-hidden />
                       </button>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-charcoal-500">
                     <RaisedByChip raisedBy={selected.raised_by} /> · filed{' '}
                     {fmtDate(selected.created_at.slice(0, 10))} · priority {selected.priority} ·{' '}
                     {selected.status}
                   </p>
                 </div>
                 {selected.detail ? (
-                  <p className="whitespace-pre-line text-sm text-gray-600">{selected.detail}</p>
+                  <p className="whitespace-pre-line text-sm text-charcoal-600">{selected.detail}</p>
                 ) : null}
-                <div className="border-t border-gray-100 pt-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                <div className="border-t border-sand-100 pt-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-charcoal-400">
                     Evidence
                   </p>
                   <Evidence issue={selected} evidence={evidence} />
                 </div>
-                <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+                <div className="flex flex-wrap gap-2 border-t border-sand-100 pt-3">
                   {selected.status === 'open' ? (
                     <button
                       type="button"
                       onClick={() => void patchIssue(selected.id, { status: 'discussed' })}
                       disabled={busy === selected.id}
-                      className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:border-gray-400"
+                      className="rounded border border-sand-300 px-2 py-1 text-xs text-charcoal-600 hover:border-sand-400"
                     >
                       Mark discussed
                     </button>
@@ -515,7 +515,7 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
                       type="button"
                       onClick={() => void patchIssue(selected.id, { status: 'parked' })}
                       disabled={busy === selected.id}
-                      className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:border-gray-400"
+                      className="rounded border border-sand-300 px-2 py-1 text-xs text-charcoal-600 hover:border-sand-400"
                     >
                       Park
                     </button>
@@ -524,7 +524,7 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
                       type="button"
                       onClick={() => void patchIssue(selected.id, { status: 'open' })}
                       disabled={busy === selected.id}
-                      className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:border-gray-400"
+                      className="rounded border border-sand-300 px-2 py-1 text-xs text-charcoal-600 hover:border-sand-400"
                     >
                       Reopen
                     </button>

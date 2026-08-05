@@ -31,8 +31,8 @@ export default async function RocksPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold text-gray-900">Rocks</h1>
-      <p className="mb-6 text-sm text-gray-500">
+      <h1 className="mb-1 text-2xl font-bold tracking-tight text-charcoal-900">Rocks</h1>
+      <p className="mb-6 text-sm text-charcoal-500">
         The quarter&rsquo;s 3–7 most important things, each with one owner. Owners get a one-tap
         on/off check every Friday on Slack; off-track Rocks get discussed in the weekly meeting.
       </p>
@@ -42,7 +42,7 @@ export default async function RocksPage() {
         staff={(staffRes.data ?? []).map((s) => s.person as string)}
         quarter={quarter}
       />
-      <p className="mt-6 text-xs text-gray-400">
+      <p className="mt-6 text-xs text-charcoal-400">
         Data: rock · Friday check rides the 3 PM scorecard cron · Set properly in the quarterly
         meeting (Phase 2.5)
       </p>

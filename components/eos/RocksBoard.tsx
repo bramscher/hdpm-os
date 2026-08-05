@@ -16,8 +16,8 @@ interface Props {
 const STATUS_TONE: Record<Rock['status'], string> = {
   on: 'bg-green-50 text-green-800 border-green-200',
   off: 'bg-red-50 text-red-700 border-red-200',
-  done: 'bg-gray-100 text-gray-600 border-gray-200',
-  dropped: 'bg-gray-50 text-gray-400 border-gray-200',
+  done: 'bg-sand-100 text-charcoal-600 border-sand-200',
+  dropped: 'bg-sand-50 text-charcoal-400 border-sand-200',
 };
 
 const STATUS_LABEL: Record<Rock['status'], string> = {
@@ -97,7 +97,7 @@ export default function RocksBoard({ rocks, seats, staff, quarter }: Props) {
             type="button"
             onClick={() => void api(`/api/eos/rocks/${rock.id}`, 'PATCH', { status: n.status }, rock.id)}
             disabled={busy === rock.id}
-            className="rounded border border-gray-300 px-2 py-0.5 text-xs text-gray-600 hover:border-gray-400 disabled:opacity-50"
+            className="rounded border border-sand-300 px-2 py-0.5 text-xs text-charcoal-600 hover:border-sand-400 disabled:opacity-50"
           >
             {n.label}
           </button>
@@ -115,28 +115,28 @@ export default function RocksBoard({ rocks, seats, staff, quarter }: Props) {
       ) : null}
 
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-charcoal-500">
           {quarter} ({current.length} rocks)
         </h2>
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
-          className="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 transition-colors hover:border-amber-400 hover:text-amber-700"
+          className="inline-flex items-center gap-1 rounded border border-sand-300 px-2 py-1 text-xs text-charcoal-600 transition-colors hover:border-amber-400 hover:text-amber-700"
         >
           <Plus size={14} aria-hidden /> Rock
         </button>
       </div>
 
       {showForm ? (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-sand-200 bg-white shadow-card p-3">
           <input
-            className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="min-w-0 flex-1 rounded border border-sand-300 px-2 py-1.5 text-sm"
             placeholder="The rock — one important, finishable thing"
             value={draft.title}
             onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
           />
           <select
-            className="rounded border border-gray-300 px-1 py-1.5 text-xs text-gray-600"
+            className="rounded border border-sand-300 px-1 py-1.5 text-xs text-charcoal-600"
             value={draft.owner}
             onChange={(e) => setDraft((d) => ({ ...d, owner: e.target.value }))}
           >
@@ -149,7 +149,7 @@ export default function RocksBoard({ rocks, seats, staff, quarter }: Props) {
           </select>
           <input
             type="date"
-            className="rounded border border-gray-300 px-1 py-1.5 text-xs text-gray-600"
+            className="rounded border border-sand-300 px-1 py-1.5 text-xs text-charcoal-600"
             value={draft.dueOn}
             onChange={(e) => setDraft((d) => ({ ...d, dueOn: e.target.value }))}
           />
@@ -157,7 +157,7 @@ export default function RocksBoard({ rocks, seats, staff, quarter }: Props) {
             type="button"
             onClick={() => void createRock()}
             disabled={busy === 'new-rock' || !draft.title.trim()}
-            className="rounded bg-gray-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+            className="rounded-lg bg-terra-500 hover:bg-terra-600 transition-colors px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
           >
             Add
           </button>
@@ -165,23 +165,23 @@ export default function RocksBoard({ rocks, seats, staff, quarter }: Props) {
       ) : null}
 
       {current.length === 0 ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-400">
+        <div className="rounded-xl border border-sand-200 bg-white shadow-card p-8 text-center text-sm text-charcoal-400">
           No rocks this quarter yet — 3–7 for the company, 1–3 per seat.
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {[...byOwner.entries()].map(([owner, ownerRocks]) => (
-            <div key={owner} className="rounded-lg border border-gray-200 bg-white p-4">
-              <p className="mb-2 text-sm font-semibold text-gray-900">
+            <div key={owner} className="rounded-xl border border-sand-200 bg-white shadow-card p-4">
+              <p className="mb-2 text-sm font-semibold text-charcoal-900">
                 {owner}
                 {seatByPerson.has(owner) ? (
-                  <span className="ml-2 text-xs font-normal text-gray-400">
+                  <span className="ml-2 text-xs font-normal text-charcoal-400">
                     {seatByPerson.get(owner)}
                   </span>
                 ) : null}
               </p>
               {ownerRocks.map((r) => (
-                <div key={r.id} className="border-t border-gray-100 py-2 first:border-t-0">
+                <div key={r.id} className="border-t border-sand-100 py-2 first:border-t-0">
                   <div className="flex items-center gap-2">
                     <span
                       className={cn(
@@ -191,12 +191,12 @@ export default function RocksBoard({ rocks, seats, staff, quarter }: Props) {
                     >
                       {STATUS_LABEL[r.status]}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{r.title}</span>
-                    {r.due_on ? <span className="text-xs text-gray-400">{r.due_on}</span> : null}
+                    <span className="min-w-0 flex-1 truncate text-sm text-charcoal-900">{r.title}</span>
+                    {r.due_on ? <span className="text-xs text-charcoal-400">{r.due_on}</span> : null}
                   </div>
                   <div className="mt-1 flex items-center justify-between">
                     {r.notes ? (
-                      <span className="truncate text-xs text-gray-400">{r.notes}</span>
+                      <span className="truncate text-xs text-charcoal-400">{r.notes}</span>
                     ) : (
                       <span />
                     )}
@@ -211,21 +211,21 @@ export default function RocksBoard({ rocks, seats, staff, quarter }: Props) {
 
       {past.length > 0 ? (
         <details className="mt-6">
-          <summary className="cursor-pointer text-xs text-gray-500">
+          <summary className="cursor-pointer text-xs text-charcoal-500">
             Past quarters ({past.length})
           </summary>
-          <div className="mt-2 rounded-lg border border-gray-200 bg-white">
+          <div className="mt-2 rounded-xl border border-sand-200 bg-white shadow-card">
             {past.map((r) => (
               <div
                 key={r.id}
-                className="flex items-center gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0"
+                className="flex items-center gap-3 border-b border-sand-100 px-3 py-2 text-sm last:border-b-0"
               >
-                <span className="text-xs text-gray-400">{r.quarter}</span>
+                <span className="text-xs text-charcoal-400">{r.quarter}</span>
                 <span className={cn('rounded-full border px-2 py-0.5 text-xs', STATUS_TONE[r.status])}>
                   {STATUS_LABEL[r.status]}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-gray-700">{r.title}</span>
-                <span className="text-xs text-gray-500">{r.owner_person ?? '—'}</span>
+                <span className="min-w-0 flex-1 truncate text-charcoal-700">{r.title}</span>
+                <span className="text-xs text-charcoal-500">{r.owner_person ?? '—'}</span>
               </div>
             ))}
           </div>

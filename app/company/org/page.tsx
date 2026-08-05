@@ -49,13 +49,13 @@ export default async function OrgPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold text-gray-900">Accountability chart</h1>
-      <p className="mb-6 text-sm text-gray-500">
+      <h1 className="mb-1 text-2xl font-bold tracking-tight text-charcoal-900">Accountability chart</h1>
+      <p className="mb-6 text-sm text-charcoal-500">
         Who owns what: each seat&rsquo;s roles, metrics, {quarter} Rocks, and the agents working
         for it. Read-only — seats change in quarterly conversations, not here.
       </p>
       <OrgChart tree={tree} metricsByPerson={metricsByPerson} rocksByPerson={rocksByPerson} />
-      <p className="mt-6 text-xs text-gray-400">
+      <p className="mt-6 text-xs text-charcoal-400">
         Data: seat, scorecard_metric, rock · Seat occupancy and the agent attachments are
         provisional pending review · Agents appear under seats, never as seats
       </p>
