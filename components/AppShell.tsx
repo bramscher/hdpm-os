@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar, MobileNav } from "@/components/Sidebar";
 import { HelpButton } from "@/components/HelpButton";
 
 /**
@@ -29,13 +29,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen page-texture">
       <Sidebar
-        collapsed={false}
+        onToggleChat={() => router.push("/")}
+        isChatOpen={pathname === "/"}
+      />
+      <MobileNav
         onToggleChat={() => router.push("/")}
         isChatOpen={pathname === "/"}
       />
 
       {/* Page content */}
-      <main className="min-h-screen ml-[220px]">{children}</main>
+      <main className="min-h-screen md:ml-[220px]">{children}</main>
 
       {/* Per-page help → Notion SOP */}
       <HelpButton />
