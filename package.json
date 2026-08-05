@@ -21,6 +21,7 @@
     "jspdf": "^4.2.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.469.0",
+    "motion": "^13.0.0",
     "next": "^16.1.4",
     "next-auth": "^5.0.0-beta.32",
     "openai": "^4.77.0",

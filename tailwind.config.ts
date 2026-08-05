@@ -109,6 +109,14 @@ const config: Config = {
       },
       fontSize: {
         "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
+        // Semantic type scale (Wave 1): size-specific tracking (tighter as
+        // text grows), leading inversely tracks size, hierarchy = size +
+        // weight + leading as a set.
+        display: ["1.75rem", { lineHeight: "2.125rem", letterSpacing: "-0.02em", fontWeight: "700" }],
+        title: ["1.25rem", { lineHeight: "1.625rem", letterSpacing: "-0.015em", fontWeight: "600" }],
+        heading: ["1rem", { lineHeight: "1.5rem", letterSpacing: "-0.01em", fontWeight: "600" }],
+        body: ["0.875rem", { lineHeight: "1.375rem", letterSpacing: "0em", fontWeight: "400" }],
+        caption: ["0.75rem", { lineHeight: "1.125rem", letterSpacing: "0.01em", fontWeight: "500" }],
       },
     },
   },

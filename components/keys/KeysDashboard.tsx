@@ -102,7 +102,7 @@ export function KeysDashboard() {
             <KeyRound className="w-5 h-5 text-terra-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-charcoal-900 tracking-tight">Key Manager</h1>
+            <h1 className="text-display text-charcoal-900">Key Manager</h1>
             <p className="text-xs text-charcoal-400">
               Physical key registry — assignments, copies, and history
             </p>
