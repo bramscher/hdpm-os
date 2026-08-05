@@ -22,7 +22,7 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { useSession } from "next-auth/react";
-import { WorkOrderRow, HdmsInvoice, displayAssignee, TECHNICIANS } from "@/lib/invoices";
+import { WorkOrderRow, HdmsInvoice, displayAssignee, TECHNICIANS, weeklyBillableHours, WEEKLY_HOURS_TARGET } from "@/lib/invoices";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CsvUploader } from "./csv-uploader";
@@ -351,6 +351,9 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
     return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
   }
 
+  // This week's billed labor hours vs the 30–36 target band.
+  const weeklyHours = useMemo(() => weeklyBillableHours(invoices), [invoices]);
+
   // Staff names present in the loaded work orders, known technicians first.
   const woTechOptions = useMemo(() => {
     const names = new Set<string>();
@@ -618,7 +621,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
       {view === "main" && (
         <div className="space-y-6">
           {/* Stats Cards */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               {
                 label: "Open",
@@ -657,6 +660,38 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 )}
               </div>
             ))}
+
+            {/* Billable hours this week vs the 30–36 target band */}
+            <div className="bg-white rounded-xl border border-sand-200 shadow-card p-5">
+              {isLoadingInvoices ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-3 w-16 bg-charcoal-200 rounded" />
+                  <div className="h-8 w-12 bg-charcoal-200 rounded" />
+                </div>
+              ) : (
+                <>
+                  <p className="text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider mb-1">
+                    Billed Hrs (wk)
+                  </p>
+                  <p
+                    className={`text-3xl font-bold ${
+                      weeklyHours.weekHours >= WEEKLY_HOURS_TARGET.min &&
+                      weeklyHours.weekHours <= WEEKLY_HOURS_TARGET.max
+                        ? "text-green-700"
+                        : weeklyHours.weekHours > WEEKLY_HOURS_TARGET.max
+                          ? "text-amber-600"
+                          : "text-charcoal-600"
+                    }`}
+                  >
+                    {weeklyHours.weekHours}
+                  </p>
+                  <p className="text-[10px] text-charcoal-300 mt-1">
+                    target {WEEKLY_HOURS_TARGET.min}–{WEEKLY_HOURS_TARGET.max} · last wk{" "}
+                    {weeklyHours.lastWeekHours}
+                  </p>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Tab Bar */}

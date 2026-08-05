@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from './supabase';
+import { weekStartPacific, weeksBefore } from './eos/scorecard';
 
 // ============================================
 // Types
@@ -64,6 +65,76 @@ export const TECHNICIAN_INITIALS: Record<Technician, string> = {
   Brody: 'BB',
   Alberto: 'AF',
 };
+
+// ============================================
+// Weekly billable hours
+// ============================================
+
+/** Target band for in-house billable hours per week (Craig, 2026-08-05 — starting point). */
+export const WEEKLY_HOURS_TARGET = { min: 30, max: 36 } as const;
+
+/** Total labor hours on an invoice = sum of labor-line qty. */
+export function invoiceLaborHours(inv: Pick<HdmsInvoice, 'line_items'>): number {
+  return (inv.line_items ?? []).reduce(
+    (sum, li) => ((li.type || 'labor') === 'labor' && li.qty && li.qty > 0 ? sum + li.qty : sum),
+    0
+  );
+}
+
+export interface WeeklyBillableHours {
+  /** Current Pacific week's Monday (YYYY-MM-DD). */
+  weekStart: string;
+  /** Hours billed so far this week. */
+  weekHours: number;
+  /** Hours billed in the full prior week. */
+  lastWeekHours: number;
+  /** This week's hours by technician (labor lines with a technician set). */
+  byTech: Record<string, number>;
+}
+
+/**
+ * Weekly billable hours from invoice labor lines. An invoice's hours are
+ * attributed wholly to the week of its completed_date (created_at fallback) —
+ * per Craig, billables almost never span weeks, so no per-day allocation.
+ * Void invoices are excluded; drafts count (the work happened — they just
+ * haven't been generated yet).
+ */
+export function weeklyBillableHours(
+  invoices: Pick<HdmsInvoice, 'status' | 'line_items' | 'completed_date' | 'created_at'>[],
+  now: Date = new Date()
+): WeeklyBillableHours {
+  const weekStart = weekStartPacific(now);
+  const lastWeekStart = weeksBefore(weekStart, 1);
+  const nextWeekStart = weeksBefore(weekStart, -1);
+
+  let weekHours = 0;
+  let lastWeekHours = 0;
+  const byTech: Record<string, number> = {};
+
+  for (const inv of invoices) {
+    if (inv.status === 'void') continue;
+    const day = (inv.completed_date ?? inv.created_at ?? '').slice(0, 10);
+    if (!day) continue;
+    if (day >= weekStart && day < nextWeekStart) {
+      for (const li of inv.line_items ?? []) {
+        if ((li.type || 'labor') !== 'labor' || !li.qty || li.qty <= 0) continue;
+        weekHours += li.qty;
+        const tech = li.technician?.trim();
+        if (tech) byTech[tech] = (byTech[tech] ?? 0) + li.qty;
+      }
+    } else if (day >= lastWeekStart && day < weekStart) {
+      lastWeekHours += invoiceLaborHours(inv);
+    }
+  }
+
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  return {
+    weekStart,
+    weekHours: round1(weekHours),
+    lastWeekHours: round1(lastWeekHours),
+    byTech: Object.fromEntries(Object.entries(byTech).map(([k, v]) => [k, round1(v)])),
+  };
+}
 
 /** Normalize an arbitrary assigned-tech string (name, email, casing) to a known technician, or "" if unknown. */
 export function normalizeTechnician(raw: string | null | undefined): Technician | '' {
