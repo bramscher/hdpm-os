@@ -571,7 +571,7 @@ export function InspectionDashboard() {
       {/* ── Bulk Update Modal ── */}
       {showBulkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-card-hover w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-charcoal-900">Bulk Status Update</h3>
               <button onClick={() => setShowBulkModal(false)} className="text-charcoal-400 hover:text-charcoal-600 text-xl">&times;</button>
@@ -657,35 +657,35 @@ export function InspectionDashboard() {
       {/* ── Stats Bar ── */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+          <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">
               <ClipboardCheck className="w-4 h-4 text-blue-500" />
               <span className="text-xs font-medium text-charcoal-500">Total in Queue</span>
             </div>
             <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
           </div>
-          <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+          <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">
               <AlertTriangle className="w-4 h-4 text-red-500" />
               <span className="text-xs font-medium text-charcoal-500">Overdue</span>
             </div>
             <p className="text-2xl font-bold text-red-600">{stats.overdue}</p>
           </div>
-          <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+          <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">
               <Calendar className="w-4 h-4 text-amber-500" />
               <span className="text-xs font-medium text-charcoal-500">This Week</span>
             </div>
             <p className="text-2xl font-bold text-amber-600">{stats.this_week}</p>
           </div>
-          <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+          <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
               <span className="text-xs font-medium text-charcoal-500">Completed</span>
             </div>
             <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
           </div>
-          <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+          <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">
               <Users className="w-4 h-4 text-charcoal-500" />
               <span className="text-xs font-medium text-charcoal-500">Unassigned</span>
@@ -873,7 +873,7 @@ export function InspectionDashboard() {
           </Link>
         </div>
       ) : activeTab === "queue" ? (
-        <div className="bg-white rounded-lg border border-charcoal-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1108,7 +1108,7 @@ function NoticeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-card-hover w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between p-6 pb-4 border-b border-charcoal-200">
           <div>
             <h3 className="text-base font-bold text-charcoal-900">Send Tenant Inspection Notices</h3>
@@ -1352,28 +1352,28 @@ function MonthlySummary({ inspections }: { inspections: Inspection[] }) {
     <div className="space-y-6">
       {/* ── Overview Cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
           <span className="text-xs font-medium text-charcoal-500">Total Inspections</span>
           <p className="text-2xl font-bold text-charcoal-900 mt-1">{inspections.length}</p>
         </div>
-        <div className="bg-white rounded-lg border border-red-200 p-4">
+        <div className="bg-white rounded-xl shadow-card border border-red-200 p-4">
           <span className="text-xs font-medium text-red-500">Overdue</span>
           <p className="text-2xl font-bold text-red-600 mt-1">{overdue.length}</p>
         </div>
-        <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
           <span className="text-xs font-medium text-charcoal-500">Avg / Month</span>
           <p className="text-2xl font-bold text-charcoal-900 mt-1">
             {Math.round(inspections.length / 12)}
           </p>
         </div>
-        <div className="bg-white rounded-lg border border-charcoal-200 p-4">
+        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
           <span className="text-xs font-medium text-charcoal-500">Cities</span>
           <p className="text-2xl font-bold text-charcoal-900 mt-1">{allCities.length}</p>
         </div>
       </div>
 
       {/* ── Bar Chart ── */}
-      <div className="bg-white rounded-lg border border-charcoal-200 p-6">
+      <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-charcoal-700">Inspections Due by Month</h3>
           <div className="flex items-center gap-4 text-xs">
@@ -1450,7 +1450,7 @@ function MonthlySummary({ inspections }: { inspections: Inspection[] }) {
       </div>
 
       {/* ── Monthly Breakdown Table ── */}
-      <div className="bg-white rounded-lg border border-charcoal-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-card border border-charcoal-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

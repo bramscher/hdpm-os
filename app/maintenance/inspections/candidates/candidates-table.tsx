@@ -478,7 +478,7 @@ function ScheduleModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4"
+        className="bg-white rounded-xl shadow-card-hover w-full max-w-md p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div>

@@ -1028,7 +1028,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
                   {showTechNotes ? "Hide" : "Show"} Technician&apos;s Notes
                 </button>
                 {showTechNotes && (
-                  <div className="mt-1.5 p-3 bg-white rounded-lg border border-blue-100/60 text-[11px] text-charcoal-600 leading-relaxed whitespace-pre-wrap">
+                  <div className="mt-1.5 p-3 bg-white rounded-xl shadow-card border border-blue-100/60 text-[11px] text-charcoal-600 leading-relaxed whitespace-pre-wrap">
                     {scannedMeta.technicianNotes}
                   </div>
                 )}

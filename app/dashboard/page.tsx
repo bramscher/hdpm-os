@@ -1024,7 +1024,7 @@ function NumberField({
   return (
     <label className="block">
       <span className="text-xs font-medium text-charcoal-500">{label}</span>
-      <div className="mt-1 flex items-center gap-1.5 rounded-lg border border-sand-200 bg-white px-2.5 focus-within:border-terra-300">
+      <div className="mt-1 flex items-center gap-1.5 rounded-xl border border-sand-200 bg-white shadow-card px-2.5 focus-within:border-terra-300">
         {prefix && <span className="text-xs text-charcoal-400">{prefix}</span>}
         <input
           type="number"
@@ -1091,7 +1091,7 @@ function ConfigDrawer({
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-charcoal-900/30" onClick={onClose} />
       <div className="relative h-full w-full max-w-md overflow-y-auto bg-sand-50 shadow-xl animate-slide-up">
-        <div className="sticky top-0 flex items-center justify-between border-b border-sand-200 bg-sand-50 px-6 py-4">
+        <div className="sticky top-0 z-10 flex items-center justify-between glass-chrome scroll-edge-fade px-6 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-terra-500">
               Dashboard Config
@@ -1132,7 +1132,7 @@ function ConfigDrawer({
                   })
                 }
                 rows={3}
-                className="w-full rounded-lg border border-sand-200 bg-white p-2.5 font-mono text-xs text-charcoal-900 outline-none focus:border-terra-300"
+                className="w-full rounded-xl border border-sand-200 bg-white shadow-card p-2.5 font-mono text-xs text-charcoal-900 outline-none focus:border-terra-300"
               />
             </section>
 
