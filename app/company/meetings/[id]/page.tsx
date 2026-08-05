@@ -2,8 +2,9 @@ import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { weekStartPacific, weeksBefore } from '@/lib/eos/scorecard';
 import { buildAgenda, type AgendaStep } from '@/lib/eos/meeting';
+import { currentQuarter } from '@/lib/eos/rock';
 import MeetingRunner from '@/components/eos/MeetingRunner';
-import type { Meeting, ScorecardMetric, ScorecardEntry, Issue, Todo, Decision } from '@/lib/eos/types';
+import type { Meeting, ScorecardMetric, ScorecardEntry, Issue, Todo, Decision, Rock } from '@/lib/eos/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const currentWeek = weekStartPacific(new Date());
   const prevWeek = weeksBefore(currentWeek, 1);
 
-  const [metricsRes, entriesRes, issuesRes, lastWeekTodosRes, meetingTodosRes, decisionsRes, itemsRes, staffRes] =
+  const [metricsRes, entriesRes, issuesRes, lastWeekTodosRes, meetingTodosRes, decisionsRes, itemsRes, staffRes, rocksRes] =
     await Promise.all([
       supabase
         .from('scorecard_metric')
@@ -67,6 +68,13 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
         .order('created_at'),
       supabase.from('meeting_item').select('*').eq('meeting_id', id).order('sort'),
       supabase.from('staff').select('person').eq('active', true).order('person'),
+      supabase
+        .from('rock')
+        .select('*')
+        .eq('org_id', 'hdpm')
+        .eq('quarter', currentQuarter(new Date()))
+        .in('status', ['on', 'off'])
+        .order('owner_person'),
     ]);
 
   const agenda =
@@ -87,6 +95,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
         lastWeekTodos={(lastWeekTodosRes.data ?? []) as Todo[]}
         meetingTodos={(meetingTodosRes.data ?? []) as Todo[]}
         decisions={(decisionsRes.data ?? []) as Decision[]}
+        rocks={(rocksRes.data ?? []) as Rock[]}
         idsItemCount={(itemsRes.data ?? []).filter((i) => i.kind === 'ids').length}
         staff={(staffRes.data ?? []).map((s) => s.person as string)}
       />

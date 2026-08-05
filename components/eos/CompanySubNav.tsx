@@ -8,6 +8,8 @@ const TABS = [
   { label: 'Scorecard', href: '/company/scorecard' },
   { label: 'Issues & To-Dos', href: '/company/issues' },
   { label: 'Meetings', href: '/company/meetings' },
+  { label: 'Rocks', href: '/company/rocks' },
+  { label: 'Org', href: '/company/org' },
 ];
 
 /** Company section tabs (doc 06 §8 — Scorecard, Issues & To-Dos; Meetings and Org follow). */

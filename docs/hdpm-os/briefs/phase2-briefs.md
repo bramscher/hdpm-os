@@ -120,7 +120,28 @@ to-dos out as Slack cards. Decision rows + minutes ingest to the brain
 agent** (reuses Ops Brief pattern): Monday packet — scorecard deltas, aged
 issues, related history via `think()` with citations — linked in Slack.
 
-## Brief 2E — Accountability chart + Rocks (fast-follow)
+## Brief 2E — Accountability chart + Rocks (fast-follow)  ⟵ SHIPPED 2026-08-04
+
+> **Execution notes:** lib/eos/rock.ts (pure: currentQuarter '2026-Q3',
+> rock:* action ids, Friday card blocks — tested) + org.ts (seat tree +
+> SEAT_AGENTS static map: Maintenance Coordinator → Morning Card/Estimate
+> Chaser, Inspections & Maintenance → Ops Brief, Integrator → Scorecard/
+> Escalation Ladder/Meeting Prep — PROVISIONAL, no DB column until it
+> earns one) + rock-run.ts. Friday self-report rides the existing
+> scorecard cron (runRockWeek after runScorecardWeek — no new cron): one
+> consolidated card per owner, On/Off buttons per rock; taps land in the
+> slack interact route's new rock:* namespace (status update + audit +
+> full-card rebuild, no proposal row). POST /api/eos/rocks + PATCH
+> /api/eos/rocks/[id] (+ Rock form on the board — quarterly-meeting flow
+> is Phase 2.5). Screens: /company/rocks (quarter board by owner with
+> seat labels, past-quarters collapse) and /company/org (read-only seat
+> tree: roles, owned metrics, active rocks, agent chips; OPEN badge on
+> vacant seats). Runner rock_review step now renders real rocks. No
+> migration. Live-verified: cron dry-run merges rocks counts; real
+> runRockWeek exercised via a no-slack owner (card skipped cleanly);
+> test rock removed. **Operator steps: visual pass on /company/rocks +
+> /company/org after merge; review SEAT_AGENTS + seed the real Q3 rocks
+> with Craig; first Friday cards land Aug 7 3 PM PT.**
 
 Company → Org: read-only seat chart (roles, metrics, Rocks, and the agents
 attached to each seat — agents under seats, never as seats). Rocks quarter

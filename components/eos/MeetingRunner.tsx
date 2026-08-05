@@ -7,7 +7,7 @@ import { CheckCircle2, Circle, Clock } from 'lucide-react';
 import { isConcluded, type AgendaStep } from '@/lib/eos/meeting';
 import MarkdownLite from './MarkdownLite';
 import SolveOutcomeForm from './SolveOutcomeForm';
-import type { Meeting, ScorecardMetric, ScorecardEntry, Issue, Todo, Decision } from '@/lib/eos/types';
+import type { Meeting, ScorecardMetric, ScorecardEntry, Issue, Todo, Decision, Rock } from '@/lib/eos/types';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -21,6 +21,7 @@ interface Props {
   lastWeekTodos: Todo[];
   meetingTodos: Todo[];
   decisions: Decision[];
+  rocks: Rock[];
   idsItemCount: number;
   staff: string[];
 }
@@ -307,10 +308,47 @@ export default function MeetingRunner(props: Props) {
             ) : null}
 
             {step.kind === 'rock_review' ? (
-              <p className="text-sm text-gray-400">
-                Rocks arrive with the next build (accountability chart + Rocks). Until then, park
-                Rock-sized topics as issues.
-              </p>
+              <div>
+                {props.rocks.length === 0 ? (
+                  <p className="text-sm text-gray-400">
+                    No active Rocks this quarter —{' '}
+                    <Link href="/company/rocks" className="text-blue-600 hover:underline">
+                      set some
+                    </Link>{' '}
+                    (3–7 for the company, 1–3 per seat).
+                  </p>
+                ) : (
+                  props.rocks.map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-3 border-b border-gray-100 py-2 last:border-b-0"
+                    >
+                      <span
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-xs',
+                          r.status === 'on' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'
+                        )}
+                      >
+                        {r.status === 'on' ? 'on track' : 'off track'}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{r.title}</span>
+                      <span className="text-xs text-gray-500">{r.owner_person ?? '—'}</span>
+                      {r.due_on ? <span className="text-xs text-gray-400">{r.due_on}</span> : null}
+                    </div>
+                  ))
+                )}
+                <p className="mt-3 text-xs text-gray-400">
+                  On/off only — off-track Rocks worth an hour go to IDS via{' '}
+                  <Link href="/company/issues" className="text-blue-600 hover:underline">
+                    + Issue
+                  </Link>
+                  . Statuses update on the{' '}
+                  <Link href="/company/rocks" className="text-blue-600 hover:underline">
+                    Rocks board
+                  </Link>{' '}
+                  or the Friday Slack tap.
+                </p>
+              </div>
             ) : null}
 
             {step.kind === 'headline' ? (
