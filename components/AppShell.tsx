@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Toaster } from "sonner";
 import { Sidebar, MobileNav } from "@/components/Sidebar";
 import { HelpButton } from "@/components/HelpButton";
 
@@ -42,6 +43,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Per-page help → Notion SOP */}
       <HelpButton />
+
+      {/* App-wide toasts (success/error feedback on mutating actions) */}
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: "#fff",
+            border: "1px solid #e8e3d9",
+            color: "#2d2a33",
+            borderRadius: "0.75rem",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03)",
+          },
+        }}
+      />
     </div>
   );
 }

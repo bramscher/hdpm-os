@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import Link from 'next/link';
 import type {
   ClosureGateResult,
@@ -71,6 +72,7 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
         return;
       }
       await load();
+      toast.success("Work order updated");
     } finally {
       setSaving(false);
     }
@@ -91,6 +93,7 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
         return;
       }
       await load();
+      toast.success("Update logged");
     } finally {
       setSaving(false);
     }

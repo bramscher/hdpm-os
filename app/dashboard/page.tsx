@@ -1104,7 +1104,11 @@ function ConfigDrawer({
         </div>
 
         {!draft ? (
-          <div className="p-6 text-sm text-charcoal-400">Loading config…</div>
+          <div className="p-6 space-y-3 animate-pulse">
+            <div className="h-4 w-40 rounded bg-sand-100" />
+            <div className="h-9 w-full rounded bg-sand-100" />
+            <div className="h-9 w-full rounded bg-sand-50" />
+          </div>
         ) : (
           <div className="space-y-6 p-6">
             {/* Internal vendors */}

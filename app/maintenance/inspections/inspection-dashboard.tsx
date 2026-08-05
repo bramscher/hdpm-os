@@ -22,6 +22,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SkeletonCard, SkeletonRows } from "@/components/ui/skeleton";
 
 // AppFolio "Letters" deep link. Opens the saved "Inspection Letter — TENANT
 // NOTIFICATION" template (id 197) in edit mode: Communication → Letters. AppFolio
@@ -484,9 +485,15 @@ export function InspectionDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <RefreshCw className="w-6 h-6 animate-spin text-charcoal-400" />
-        <span className="ml-3 text-charcoal-500">Loading inspections...</span>
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }, (_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <div className="rounded-xl border border-sand-200 bg-white shadow-card p-4">
+          <SkeletonRows rows={8} />
+        </div>
       </div>
     );
   }
