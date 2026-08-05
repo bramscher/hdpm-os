@@ -61,7 +61,25 @@ Scorecard screen: weekly grid, red/green, owner, sparkline, [Drop to
 Issues]. Off-track 2 consecutive weeks auto-files an `issue` (dedup by
 source_ref). Every write audits.
 
-## Brief 2C — Issues & To-Dos: IDS queue + escalation ladder
+## Brief 2C — Issues & To-Dos: IDS queue + escalation ladder  ⟵ SHIPPED 2026-08-04
+
+> **Execution notes:** lib/eos/escalation.ts (pure, tested) + escalation-run.ts;
+> cron /api/eos/cron/escalation (weekdays 14:15 UTC — after tripwires 13:00
+> and chaser 13:45; /api/eos/cron prefix already public). Thresholds were
+> **measured, not guessed** — the spec as written would have filed 140 issues
+> day one: "recurring 3×" became *episodes* (flag→clear→flag; the daily
+> tripwire cron makes distinct-days ≡ persistence), aged threshold 21d,
+> tripwire #11 excluded from the tripwire rung (the estimate chaser owns
+> that pool; its escalations arrive via rung 2), and each rung caps at 10
+> files/run worst-first with deferred counts reported (no silent caps).
+> To-do chain: roll copy's source_id = original id; issue ref todo:<rootId>;
+> the single nudge fires at roll time (none on the second miss — the issue
+> is the visibility). PATCH /api/eos/issues/[id] (solve human-only +
+> confirm), POST/PATCH /api/eos/todos. Screen /company/issues (+ Company
+> sub-nav via app/company/layout.tsx). Live-verified: roll→missed→issue
+> with audits, drip past dedupe, re-run no-ops; test rows cleaned up.
+> No migration — the 2A schema covers everything. **Operator step: visual
+> pass on /company/issues after merge (localhost SSO is prod-only).**
 
 Company → Issues & To-Dos screen (priority-ordered IDS queue, evidence
 side-panel from source_ref; 7-day to-do list). Escalation rungs (doc 06 §5):
