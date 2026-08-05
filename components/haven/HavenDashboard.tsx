@@ -154,19 +154,19 @@ function StatTile({
   accent?: string;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
+    <div className="bg-white rounded-xl border border-sand-200 p-4">
+      <p className="text-xs font-medium text-charcoal-500">{label}</p>
       <p className="text-2xl font-semibold mt-1" style={{ color: accent || "#1e293b" }}>
         {value}
       </p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-charcoal-400 mt-0.5">{sub}</p>}
     </div>
   );
 }
 
 function ContactLinks({ flag }: { flag: Flag }) {
   const linkClass =
-    "p-1 rounded text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors";
+    "p-1 rounded text-charcoal-400 hover:text-terra-600 hover:bg-terra-50 transition-colors";
   return (
     <span className="flex items-center whitespace-nowrap">
       {flag.phone && (
@@ -257,7 +257,7 @@ export function HavenDashboard() {
     );
   }
   if (!data) {
-    return <div className="py-16 text-center text-sm text-slate-400">Loading Haven data…</div>;
+    return <div className="py-16 text-center text-sm text-charcoal-400">Loading Haven data…</div>;
   }
   if (!data.synced) {
     return (
@@ -311,9 +311,9 @@ export function HavenDashboard() {
 
       <div className="grid lg:grid-cols-5 gap-6">
         {/* Funnel */}
-        <section className="lg:col-span-3 bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-800">Leasing Pipeline</h2>
-          <p className="text-xs text-slate-400 mt-0.5 mb-4">
+        <section className="lg:col-span-3 bg-white rounded-xl border border-sand-200 p-5">
+          <h2 className="text-sm font-semibold text-charcoal-800">Leasing Pipeline</h2>
+          <p className="text-xs text-charcoal-400 mt-0.5 mb-4">
             Where every active prospect stands right now · {data.totals.inactive} inactive not shown
           </p>
           <div className="space-y-2">
@@ -332,7 +332,7 @@ export function HavenDashboard() {
                   onMouseEnter={() => setHoverPhase(stage.phase)}
                   onMouseLeave={() => setHoverPhase(null)}
                 >
-                  <span className="text-xs text-slate-600 text-right">{meta.label}</span>
+                  <span className="text-xs text-charcoal-600 text-right">{meta.label}</span>
                   <div className="h-6 relative" title={`${meta.label}: ${stage.count} prospects (${pctOfActive}% of active)`}>
                     <div
                       className="h-6 rounded-r transition-all"
@@ -343,9 +343,9 @@ export function HavenDashboard() {
                       }}
                     />
                   </div>
-                  <span className="text-xs text-slate-700 tabular-nums">
+                  <span className="text-xs text-charcoal-700 tabular-nums">
                     <span className="font-semibold">{stage.count}</span>
-                    <span className="text-slate-400"> · {pctOfActive}%</span>
+                    <span className="text-charcoal-400"> · {pctOfActive}%</span>
                   </span>
                 </div>
               );
@@ -354,8 +354,8 @@ export function HavenDashboard() {
 
           {/* Hot leads inside the pipeline card */}
           {data.hotLeads.length > 0 && (
-            <div className="mt-5 pt-4 border-t border-slate-100">
-              <h3 className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+            <div className="mt-5 pt-4 border-t border-sand-100">
+              <h3 className="text-xs font-semibold text-charcoal-700 flex items-center gap-1.5">
                 <Flame className="w-3.5 h-3.5" style={{ color: STATUS.serious }} />
                 Hot leads — ready to move ({data.hotLeads.length})
               </h3>
@@ -363,9 +363,9 @@ export function HavenDashboard() {
                 {data.hotLeads.slice(0, 6).map((l) => (
                   <li key={l.conversation_id} className="flex items-baseline justify-between gap-2 text-xs">
                     <span className="truncate">
-                      <span className="font-medium text-slate-700">{l.name}</span>
-                      <span className="text-slate-400"> · {l.classification}</span>
-                      {l.property && <span className="text-slate-400"> · {l.property}</span>}
+                      <span className="font-medium text-charcoal-700">{l.name}</span>
+                      <span className="text-charcoal-400"> · {l.classification}</span>
+                      {l.property && <span className="text-charcoal-400"> · {l.property}</span>}
                     </span>
                     <ContactLinks flag={l} />
                   </li>
@@ -377,16 +377,16 @@ export function HavenDashboard() {
 
         {/* Needs action */}
         <section className="lg:col-span-2 space-y-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+          <div className="bg-white rounded-xl border border-sand-200 p-5">
+            <h2 className="text-sm font-semibold text-charcoal-800 flex items-center gap-1.5">
               <AlertTriangle className="w-4 h-4" style={{ color: STATUS.critical }} />
               Escalations ({data.escalations.length})
             </h2>
             {data.escalations.length === 0 ? (
-              <p className="text-xs text-slate-400 mt-2">Nothing flagged — all clear.</p>
+              <p className="text-xs text-charcoal-400 mt-2">Nothing flagged — all clear.</p>
             ) : (
               <>
-                <ul className="mt-2.5 divide-y divide-slate-50">
+                <ul className="mt-2.5 divide-y divide-sand-50">
                   {escalationsShown.map((f) => (
                     <li
                       key={f.conversation_id}
@@ -395,10 +395,10 @@ export function HavenDashboard() {
                       title={`${f.flag_type || "Escalated"}${f.property ? ` · ${f.property}` : ""}`}
                     >
                       <span className="min-w-0 flex-1 truncate">
-                        <span className="font-medium text-slate-700">{f.name}</span>
-                        <span className="text-slate-400"> · {f.flag_type || "Escalated"}</span>
+                        <span className="font-medium text-charcoal-700">{f.name}</span>
+                        <span className="text-charcoal-400"> · {f.flag_type || "Escalated"}</span>
                       </span>
-                      <span className="text-slate-300 whitespace-nowrap">{timeAgo(f.flag_date)}</span>
+                      <span className="text-charcoal-300 whitespace-nowrap">{timeAgo(f.flag_date)}</span>
                       <ContactLinks flag={f} />
                     </li>
                   ))}
@@ -406,7 +406,7 @@ export function HavenDashboard() {
                 {data.escalations.length > 8 && (
                   <button
                     onClick={() => setShowAllEscalations((v) => !v)}
-                    className="mt-2 text-xs font-medium text-emerald-700 hover:underline"
+                    className="mt-2 text-xs font-medium text-terra-600 hover:underline"
                   >
                     {showAllEscalations ? "Show fewer" : `Show all ${data.escalations.length}`}
                   </button>
@@ -416,12 +416,12 @@ export function HavenDashboard() {
           </div>
 
           {data.followUps.length > 0 && (
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+            <div className="bg-white rounded-xl border border-sand-200 p-5">
+              <h2 className="text-sm font-semibold text-charcoal-800 flex items-center gap-1.5">
                 <MessageCircleWarning className="w-4 h-4" style={{ color: STATUS.warning }} />
                 Pending follow-ups ({data.followUps.length})
               </h2>
-              <ul className="mt-2.5 divide-y divide-slate-50">
+              <ul className="mt-2.5 divide-y divide-sand-50">
                 {data.followUps.slice(0, 6).map((f) => (
                   <li
                     key={f.conversation_id}
@@ -430,10 +430,10 @@ export function HavenDashboard() {
                     title={f.property || undefined}
                   >
                     <span className="min-w-0 flex-1 truncate">
-                      <span className="font-medium text-slate-700">{f.name}</span>
-                      {f.property && <span className="text-slate-400"> · {f.property}</span>}
+                      <span className="font-medium text-charcoal-700">{f.name}</span>
+                      {f.property && <span className="text-charcoal-400"> · {f.property}</span>}
                     </span>
-                    <span className="text-slate-300 whitespace-nowrap">{timeAgo(f.last_activity_at)}</span>
+                    <span className="text-charcoal-300 whitespace-nowrap">{timeAgo(f.last_activity_at)}</span>
                     <ContactLinks flag={f} />
                   </li>
                 ))}
@@ -445,17 +445,17 @@ export function HavenDashboard() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Upcoming tours */}
-        <section className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-            <CalendarCheck className="w-4 h-4 text-emerald-600" />
+        <section className="bg-white rounded-xl border border-sand-200 p-5">
+          <h2 className="text-sm font-semibold text-charcoal-800 flex items-center gap-1.5">
+            <CalendarCheck className="w-4 h-4 text-terra-500" />
             Upcoming tours ({data.tours.length})
           </h2>
           {data.tours.length === 0 ? (
-            <p className="text-xs text-slate-400 mt-2">No tours scheduled.</p>
+            <p className="text-xs text-charcoal-400 mt-2">No tours scheduled.</p>
           ) : (
             <table className="w-full mt-3 text-xs">
               <thead>
-                <tr className="text-slate-400 text-left">
+                <tr className="text-charcoal-400 text-left">
                   <th className="font-medium pb-1.5">When</th>
                   <th className="font-medium pb-1.5">Prospect</th>
                   <th className="font-medium pb-1.5">Property</th>
@@ -464,16 +464,16 @@ export function HavenDashboard() {
               </thead>
               <tbody>
                 {data.tours.slice(0, 8).map((t) => (
-                  <tr key={t.conversation_id} className="border-t border-slate-100">
-                    <td className="py-1.5 whitespace-nowrap text-slate-700 tabular-nums">{fmtTourTime(t.start)}</td>
-                    <td className="py-1.5 text-slate-700">{t.name}</td>
-                    <td className="py-1.5 text-slate-500 truncate max-w-[12rem]">{t.property || "—"}</td>
+                  <tr key={t.conversation_id} className="border-t border-sand-100">
+                    <td className="py-1.5 whitespace-nowrap text-charcoal-700 tabular-nums">{fmtTourTime(t.start)}</td>
+                    <td className="py-1.5 text-charcoal-700">{t.name}</td>
+                    <td className="py-1.5 text-charcoal-500 truncate max-w-[12rem]">{t.property || "—"}</td>
                     <td className="py-1.5">
                       <span
                         className={
                           t.status === "confirmed"
-                            ? "text-emerald-700 font-medium"
-                            : "text-slate-500"
+                            ? "text-green-700 font-medium"
+                            : "text-charcoal-500"
                         }
                       >
                         {t.status || "scheduled"}
@@ -487,31 +487,31 @@ export function HavenDashboard() {
         </section>
 
         {/* Conversions */}
-        <section className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-            <Home className="w-4 h-4 text-emerald-600" />
+        <section className="bg-white rounded-xl border border-sand-200 p-5">
+          <h2 className="text-sm font-semibold text-charcoal-800 flex items-center gap-1.5">
+            <Home className="w-4 h-4 text-terra-500" />
             Became tenants
           </h2>
           {!data.conversions || data.conversions.convertedAllTime === 0 ? (
-            <p className="text-xs text-slate-400 mt-2">
+            <p className="text-xs text-charcoal-400 mt-2">
               No conversions attributed yet — populated by the AppFolio lead match
               (migration 20260727_haven_af_lead_link + next sync).
             </p>
           ) : (
             <>
-              <p className="text-2xl font-semibold text-slate-800 mt-2">
+              <p className="text-2xl font-semibold text-charcoal-800 mt-2">
                 {data.conversions.converted90d}
-                <span className="text-sm font-normal text-slate-400"> in 90 days</span>
+                <span className="text-sm font-normal text-charcoal-400"> in 90 days</span>
               </p>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-charcoal-400 mt-0.5">
                 {data.conversions.convertedAllTime} all-time from Haven conversations
               </p>
               {data.conversions.bySource.length > 0 && (
                 <ul className="mt-3 space-y-1">
                   {data.conversions.bySource.map((s) => (
                     <li key={s.source} className="flex justify-between text-xs">
-                      <span className="text-slate-600 truncate">{s.source}</span>
-                      <span className="text-slate-700 tabular-nums font-medium">{s.count}</span>
+                      <span className="text-charcoal-600 truncate">{s.source}</span>
+                      <span className="text-charcoal-700 tabular-nums font-medium">{s.count}</span>
                     </li>
                   ))}
                 </ul>
@@ -521,13 +521,13 @@ export function HavenDashboard() {
         </section>
 
         {/* Reception strip */}
-        <section className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-            <PhoneCall className="w-4 h-4 text-emerald-600" />
+        <section className="bg-white rounded-xl border border-sand-200 p-5">
+          <h2 className="text-sm font-semibold text-charcoal-800 flex items-center gap-1.5">
+            <PhoneCall className="w-4 h-4 text-terra-500" />
             Reception — last 30 days
           </h2>
           {!rc ? (
-            <p className="text-xs text-slate-400 mt-2">Reception metrics unavailable.</p>
+            <p className="text-xs text-charcoal-400 mt-2">Reception metrics unavailable.</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
               <StatTile label="Total calls" value={rc.totalCalls} />
@@ -557,28 +557,28 @@ export function HavenDashboard() {
 
       {/* Daily reception call report */}
       {receptionDaily && receptionDaily.length > 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-            <PhoneCall className="w-4 h-4 text-emerald-600" />
+        <section className="bg-white rounded-xl border border-sand-200 p-5">
+          <h2 className="text-sm font-semibold text-charcoal-800 flex items-center gap-1.5">
+            <PhoneCall className="w-4 h-4 text-terra-500" />
             Reception — daily call report
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5 mb-3">
+          <p className="text-xs text-charcoal-400 mt-0.5 mb-3">
             Main-line calls by who answered (from Zoom Phone), and where Haven sent callers
             who needed a human.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-slate-500 border-b border-slate-200">
+                <tr className="text-charcoal-500 border-b border-sand-200">
                   <th className="text-left py-1.5 pr-3 font-medium">Date</th>
                   <th className="text-right py-1.5 px-2 font-medium">Calls</th>
                   <th className="text-right py-1.5 px-2 font-medium">Ashley</th>
                   <th className="text-right py-1.5 px-2 font-medium">Haven AI</th>
-                  <th className="text-right py-1.5 px-2 font-medium text-slate-400">
+                  <th className="text-right py-1.5 px-2 font-medium text-charcoal-400">
                     after-hours / overflow
                   </th>
                   <th className="text-right py-1.5 px-2 font-medium">Missed</th>
-                  <th className="text-right py-1.5 px-2 font-medium border-l border-slate-200">
+                  <th className="text-right py-1.5 px-2 font-medium border-l border-sand-200">
                     → Leasing
                   </th>
                   <th className="text-right py-1.5 px-2 font-medium">→ Maintenance</th>
@@ -587,7 +587,7 @@ export function HavenDashboard() {
               </thead>
               <tbody>
                 {receptionDaily.map((d) => (
-                  <tr key={d.date} className="border-b border-slate-100 text-slate-700">
+                  <tr key={d.date} className="border-b border-sand-100 text-charcoal-700">
                     <td className="py-1.5 pr-3 whitespace-nowrap">
                       {new Date(`${d.date}T12:00:00`).toLocaleDateString("en-US", {
                         weekday: "short",
@@ -596,14 +596,14 @@ export function HavenDashboard() {
                       })}
                     </td>
                     <td className="text-right py-1.5 px-2 font-medium">{d.total}</td>
-                    <td className="text-right py-1.5 px-2 text-emerald-700 font-medium">
+                    <td className="text-right py-1.5 px-2 text-terra-600 font-medium">
                       {d.ashley}
                       {d.staff > 0 && (
-                        <span className="text-slate-400 font-normal"> +{d.staff} staff</span>
+                        <span className="text-charcoal-400 font-normal"> +{d.staff} staff</span>
                       )}
                     </td>
                     <td className="text-right py-1.5 px-2 text-sky-700 font-medium">{d.haven}</td>
-                    <td className="text-right py-1.5 px-2 text-slate-400">
+                    <td className="text-right py-1.5 px-2 text-charcoal-400">
                       {d.havenDirect} / {d.havenOverflow}
                     </td>
                     <td
@@ -612,7 +612,7 @@ export function HavenDashboard() {
                     >
                       {d.missed}
                     </td>
-                    <td className="text-right py-1.5 px-2 border-l border-slate-200">
+                    <td className="text-right py-1.5 px-2 border-l border-sand-200">
                       {d.transferLeasing}
                     </td>
                     <td className="text-right py-1.5 px-2">{d.transferMaintenance}</td>
@@ -622,7 +622,7 @@ export function HavenDashboard() {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-slate-400 mt-2">
+          <p className="text-xs text-charcoal-400 mt-2">
             “→” columns are live transfers Haven placed back to the team (leasing = Approved
             Application queue, maintenance = Existing Tenant queue). Haven calls it resolved
             without a transfer aren’t split by topic — its API only exposes leasing
@@ -631,7 +631,7 @@ export function HavenDashboard() {
         </section>
       )}
 
-      <p className="text-xs text-slate-400 flex items-center gap-1">
+      <p className="text-xs text-charcoal-400 flex items-center gap-1">
         <Clock className="w-3 h-3" />
         Leasing data syncs daily at 6:45am PT from Haven; reception metrics are live.
       </p>

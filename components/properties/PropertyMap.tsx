@@ -15,19 +15,19 @@ const STATUS_CONFIG: Record<
     label: "Actively managed",
     color: "#16A34A",
     chipOn: "bg-emerald-100 text-emerald-800 border-emerald-300",
-    chipOff: "bg-white text-slate-400 border-slate-200",
+    chipOff: "bg-white text-charcoal-400 border-sand-200",
   },
   offboarding: {
     label: "Leaving management",
     color: "#EAB308",
     chipOn: "bg-yellow-100 text-yellow-800 border-yellow-300",
-    chipOff: "bg-white text-slate-400 border-slate-200",
+    chipOff: "bg-white text-charcoal-400 border-sand-200",
   },
   lost: {
     label: "Listing lost",
     color: "#DC2626",
     chipOn: "bg-red-100 text-red-800 border-red-300",
-    chipOff: "bg-white text-slate-400 border-slate-200",
+    chipOff: "bg-white text-charcoal-400 border-sand-200",
   },
 };
 
@@ -272,7 +272,7 @@ export function PropertyMap() {
 
   if (error) {
     return (
-      <div className="h-[70vh] rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 text-sm">
+      <div className="h-[70vh] rounded-xl bg-sand-100 flex items-center justify-center text-charcoal-500 text-sm">
         {error}
       </div>
     );
@@ -307,7 +307,7 @@ export function PropertyMap() {
             </button>
           );
         })}
-        {loading && <span className="text-sm text-slate-400">Loading properties…</span>}
+        {loading && <span className="text-sm text-charcoal-400">Loading properties…</span>}
         {!loading && !statusTableReady && (
           <span className="text-xs text-amber-600">
             Status table missing — apply migration 20260727 to enable yellow/red tagging
@@ -319,8 +319,8 @@ export function PropertyMap() {
           title="Summary by city"
           className={`ml-auto w-7 h-7 rounded-full border flex items-center justify-center text-sm font-serif italic font-semibold transition-colors ${
             showCitySummary
-              ? "bg-slate-700 border-slate-700 text-white"
-              : "bg-white border-slate-300 text-slate-500 hover:bg-slate-100"
+              ? "bg-charcoal-800 border-charcoal-800 text-white"
+              : "bg-white border-sand-300 text-charcoal-500 hover:bg-sand-100"
           }`}
         >
           i
@@ -329,12 +329,12 @@ export function PropertyMap() {
 
       {/* City summary panel */}
       {showCitySummary && (
-        <div className="absolute top-12 right-0 z-10 w-72 max-w-[calc(100%-1rem)] bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+        <div className="absolute top-12 right-0 z-10 w-72 max-w-[calc(100%-1rem)] bg-white rounded-xl shadow-lg border border-sand-200 p-4">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-semibold text-slate-800">By city</div>
+            <div className="text-sm font-semibold text-charcoal-800">By city</div>
             <button
               onClick={() => setShowCitySummary(false)}
-              className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              className="text-charcoal-400 hover:text-charcoal-600 text-lg leading-none"
               aria-label="Close"
             >
               ×
@@ -342,7 +342,7 @@ export function PropertyMap() {
           </div>
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-slate-400">
+              <tr className="text-charcoal-400">
                 <th className="text-left font-medium pb-1">City</th>
                 <th className="text-right font-medium pb-1">Props</th>
                 <th className="text-right font-medium pb-1">Units</th>
@@ -351,18 +351,18 @@ export function PropertyMap() {
             </thead>
             <tbody>
               {citySummary.map((row) => (
-                <tr key={row.city} className="border-t border-slate-100">
-                  <td className="py-1 text-slate-700">{row.city}</td>
-                  <td className="py-1 text-right tabular-nums text-slate-700">
+                <tr key={row.city} className="border-t border-sand-100">
+                  <td className="py-1 text-charcoal-700">{row.city}</td>
+                  <td className="py-1 text-right tabular-nums text-charcoal-700">
                     {row.properties}
                   </td>
-                  <td className="py-1 text-right tabular-nums text-slate-700">{row.units}</td>
+                  <td className="py-1 text-right tabular-nums text-charcoal-700">{row.units}</td>
                   <td className="py-1 text-right tabular-nums text-yellow-700">
                     {row.leaving || ""}
                   </td>
                 </tr>
               ))}
-              <tr className="border-t border-slate-200 font-semibold text-slate-800">
+              <tr className="border-t border-sand-200 font-semibold text-charcoal-800">
                 <td className="py-1">Total</td>
                 <td className="py-1 text-right tabular-nums">
                   {citySummary.reduce((n, r) => n + r.properties, 0)}
@@ -380,17 +380,17 @@ export function PropertyMap() {
       )}
 
       {/* Map */}
-      <div ref={mapRef} className="h-[72vh] w-full rounded-xl overflow-hidden bg-slate-100" />
+      <div ref={mapRef} className="h-[72vh] w-full rounded-xl overflow-hidden bg-sand-100" />
 
       {/* Selected property card */}
       {selected && (
-        <div className="absolute bottom-4 left-4 w-80 max-w-[calc(100%-2rem)] bg-white rounded-xl shadow-lg border border-slate-200 p-4">
+        <div className="absolute bottom-4 left-4 w-80 max-w-[calc(100%-2rem)] bg-white rounded-xl shadow-lg border border-sand-200 p-4">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="font-semibold text-slate-800 text-sm">
+              <div className="font-semibold text-charcoal-800 text-sm">
                 {selected.name || selected.address}
               </div>
-              <div className="text-xs text-slate-500 mt-0.5">
+              <div className="text-xs text-charcoal-500 mt-0.5">
                 {selected.address}, {selected.city}
                 {selected.unit_count > 1 ? ` · ${selected.unit_count} units` : ""}
               </div>
@@ -403,7 +403,7 @@ export function PropertyMap() {
                 </div>
               )}
               {selected.prospects > 0 && (
-                <div className="text-xs text-slate-600 mt-1">
+                <div className="text-xs text-charcoal-600 mt-1">
                   {selected.prospects} leasing prospect{selected.prospects === 1 ? "" : "s"}
                   {selected.hot_prospects > 0 && (
                     <span className="text-orange-600 font-medium">
@@ -428,7 +428,7 @@ export function PropertyMap() {
             </div>
             <button
               onClick={() => setSelectedKey(null)}
-              className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              className="text-charcoal-400 hover:text-charcoal-600 text-lg leading-none"
               aria-label="Close"
             >
               ×
@@ -448,8 +448,8 @@ export function PropertyMap() {
                   onClick={() => setStatus(selected, status)}
                   className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm text-left transition-colors ${
                     isCurrent
-                      ? "border-slate-400 bg-slate-50 font-medium text-slate-800"
-                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      ? "border-sand-400 bg-sand-50 font-medium text-charcoal-800"
+                      : "border-sand-200 text-charcoal-600 hover:bg-sand-50"
                   } ${disabled && !isCurrent ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   <span
@@ -457,7 +457,7 @@ export function PropertyMap() {
                     style={{ background: config.color }}
                   />
                   {config.label}
-                  {isCurrent && <span className="ml-auto text-xs text-slate-400">current</span>}
+                  {isCurrent && <span className="ml-auto text-xs text-charcoal-400">current</span>}
                 </button>
               );
             })}

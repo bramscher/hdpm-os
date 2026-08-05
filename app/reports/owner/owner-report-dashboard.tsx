@@ -210,13 +210,13 @@ export function OwnerReportDashboard() {
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="text-gray-400 hover:text-gray-200 transition-colors"
+            className="text-charcoal-500 hover:text-charcoal-700 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white">Owner Reports</h1>
-            <p className="text-sm text-gray-400 mt-1">
+            <h1 className="text-display text-charcoal-900">Owner Reports</h1>
+            <p className="text-sm text-charcoal-500 mt-1">
               Tenant history, rent timelines, and portfolio summaries by owner
             </p>
           </div>
@@ -226,7 +226,7 @@ export function OwnerReportDashboard() {
             <button
               onClick={() => exportReport("excel")}
               disabled={!!exportLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               {exportLoading === "excel" ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -252,21 +252,21 @@ export function OwnerReportDashboard() {
       </div>
 
       {/* Owner Search */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+      <div className="bg-white rounded-xl border border-sand-200 shadow-card p-6">
+        <label className="block text-sm font-medium text-charcoal-600 mb-2">
           Search Owner
         </label>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-charcoal-500" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Type an owner name..."
-            className="w-full pl-10 pr-4 py-2.5 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-sand-300 rounded-lg text-charcoal-900 placeholder-charcoal-400 focus:outline-none focus:ring-2 focus:ring-terra-500 focus:border-transparent"
           />
           {searchLoading && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-charcoal-500" />
           )}
         </div>
 
@@ -279,8 +279,8 @@ export function OwnerReportDashboard() {
                 onClick={() => generateReport(name)}
                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                   selectedOwner === name
-                    ? "bg-emerald-600/20 text-emerald-400 border border-emerald-600/30"
-                    : "text-gray-300 hover:bg-gray-700"
+                    ? "bg-terra-50 text-terra-700 border border-terra-200"
+                    : "text-charcoal-600 hover:bg-sand-100"
                 }`}
               >
                 <Building2 className="w-3.5 h-3.5 inline mr-2 opacity-50" />
@@ -291,7 +291,7 @@ export function OwnerReportDashboard() {
         )}
 
         {!searchLoading && ownerNames.length === 0 && searchQuery.length >= 2 && (
-          <p className="mt-3 text-sm text-gray-500">
+          <p className="mt-3 text-sm text-charcoal-400">
             No owners found matching &ldquo;{searchQuery}&rdquo;
           </p>
         )}
@@ -299,7 +299,7 @@ export function OwnerReportDashboard() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 text-red-400 text-sm">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
           {error}
         </div>
       )}
@@ -308,11 +308,11 @@ export function OwnerReportDashboard() {
       {reportLoading && (
         <div className="flex items-center justify-center py-16">
           <div className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">
+            <Loader2 className="w-8 h-8 animate-spin text-terra-500 mx-auto mb-3" />
+            <p className="text-charcoal-500 text-sm">
               Building report for {selectedOwner}...
             </p>
-            <p className="text-gray-500 text-xs mt-1">
+            <p className="text-charcoal-400 text-xs mt-1">
               Fetching properties, tenants, and rent history from AppFolio
             </p>
           </div>
@@ -349,7 +349,7 @@ export function OwnerReportDashboard() {
           </div>
 
           {report.summary.longestTenancy && (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-charcoal-400">
               Longest tenancy: {report.summary.longestTenancy.tenantName} ({report.summary.longestTenancy.years} years)
             </p>
           )}
@@ -392,22 +392,22 @@ function SummaryCard({
     <div
       className={`rounded-xl border p-4 ${
         accent
-          ? "bg-emerald-900/20 border-emerald-700/50"
-          : "bg-gray-800 border-gray-700"
+          ? "bg-terra-50 border-terra-200"
+          : "bg-white border-sand-200 shadow-card"
       }`}
     >
-      <div className="flex items-center gap-2 text-gray-400 mb-2">
+      <div className="flex items-center gap-2 text-charcoal-500 mb-2">
         {icon}
         <span className="text-xs font-medium uppercase tracking-wide">{label}</span>
       </div>
       <p
         className={`text-xl font-bold ${
-          accent ? "text-emerald-400" : "text-white"
+          accent ? "text-terra-700" : "text-charcoal-900"
         }`}
       >
         {value}
       </p>
-      {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-charcoal-400 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -427,23 +427,23 @@ function PropertyCard({
   ).length;
 
   return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+    <div className="bg-white rounded-xl border border-sand-200 shadow-card overflow-hidden">
       {/* Property header */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-750 transition-colors text-left"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-sand-50 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
           {expanded ? (
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+            <ChevronDown className="w-4 h-4 text-charcoal-500" />
           ) : (
-            <ChevronRight className="w-4 h-4 text-gray-400" />
+            <ChevronRight className="w-4 h-4 text-charcoal-500" />
           )}
           <div>
-            <h3 className="font-semibold text-white">
+            <h3 className="font-semibold text-charcoal-900">
               {property.address || property.name}
             </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-charcoal-500 mt-0.5">
               {property.city}, {property.state} {property.zip}
               {property.propertyType && ` · ${property.propertyType}`}
               {` · ${property.units.length} unit(s)`}
@@ -451,10 +451,10 @@ function PropertyCard({
           </div>
         </div>
         <div className="text-right">
-          <p className="text-sm font-semibold text-emerald-400">
+          <p className="text-sm font-semibold text-green-700">
             {fmt(totalRent)}/mo
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-charcoal-400">
             {occupiedCount}/{property.units.length} occupied
           </p>
         </div>
@@ -462,16 +462,16 @@ function PropertyCard({
 
       {/* Expanded: unit + tenant details */}
       {expanded && (
-        <div className="border-t border-gray-700">
+        <div className="border-t border-sand-200">
           {property.units.map((unit) => (
-            <div key={unit.unitId} className="px-5 py-3 border-b border-gray-700/50 last:border-b-0">
+            <div key={unit.unitId} className="px-5 py-3 border-b border-sand-100 last:border-b-0">
               {/* Unit header (if multi-unit) */}
               {property.units.length > 1 && unit.unitName && (
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-emerald-400">
+                  <span className="text-sm font-medium text-green-700">
                     Unit: {unit.unitName}
                   </span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-charcoal-400">
                     {[
                       unit.bedrooms && `${unit.bedrooms}BR`,
                       unit.bathrooms && `${unit.bathrooms}BA`,
@@ -488,7 +488,7 @@ function PropertyCard({
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-xs text-gray-500 uppercase tracking-wider">
+                      <tr className="text-xs text-charcoal-400 uppercase tracking-wider">
                         <th className="text-left py-1 pr-3">Tenant</th>
                         <th className="text-left py-1 pr-3">Move-In</th>
                         <th className="text-left py-1 pr-3">Move-Out</th>
@@ -501,8 +501,8 @@ function PropertyCard({
                       {unit.tenantHistory.map((t) => (
                         <tr
                           key={t.tenantId}
-                          className={`border-t border-gray-700/30 ${
-                            t.isCurrent ? "text-white" : "text-gray-400"
+                          className={`border-t border-sand-100 ${
+                            t.isCurrent ? "text-charcoal-900" : "text-charcoal-500"
                           }`}
                         >
                           <td className="py-1.5 pr-3 font-medium">
@@ -520,8 +520,8 @@ function PropertyCard({
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                                 t.isCurrent
-                                  ? "bg-emerald-900/30 text-emerald-400"
-                                  : "bg-gray-700 text-gray-400"
+                                  ? "bg-green-50 text-green-800"
+                                  : "bg-sand-100 text-charcoal-500"
                               }`}
                             >
                               {t.status}
@@ -533,7 +533,7 @@ function PropertyCard({
                   </table>
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 italic">
+                <p className="text-sm text-charcoal-400 italic">
                   No tenant records found
                 </p>
               )}
