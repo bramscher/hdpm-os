@@ -88,7 +88,29 @@ missed to-do rolls once then files an issue; in-app "+ Issue" button.
 To-do Slack nudge (one nudge, per adoption rules). Dedupe by open
 source_ref. Agents file/draft only — no auto-solve (doc 06 §9).
 
-## Brief 2D — Meetings: runner screen + prep agent + decision→brain
+## Brief 2D — Meetings: runner screen + prep agent + decision→brain  ⟵ SHIPPED 2026-08-04
+
+> **Execution notes:** lib/eos/meeting.ts (pure: L10/huddle agendas,
+> prep-packet markdown, solve-outcome validation, brain source keys —
+> tested) + meeting-prep-run.ts. Cron /api/eos/cron/meeting-prep (Monday
+> 14:30 UTC ≈ 7:30 AM PT): ensures this week's L10 row, writes
+> meeting.prep_packet_md (scorecard deltas from the last *completed* week,
+> aged issues, to-do done rate, bounded think() context — best-effort),
+> proposal + audit, DMs the facilitator (default Craig) a link. IDS solve
+> is now gated: PATCH status=solved rejected; POST /api/eos/issues/[id]/solve
+> requires a decision and/or to-dos (SolveOutcomeForm shared by Issues
+> board + runner), sets solved_decision_id, writes a meeting_item when
+> solved in-meeting, ingests the decision (kind fact, source_key
+> decision:<id> — idempotent). Conclude (POST /meetings/[id]/conclude)
+> fans checked to-dos out as Slack cards and ingests minutes via
+> chunkMarkdown (source_key meeting:<id>#i, kind summary). Screens:
+> /company/meetings (this-week card + archive) and /company/meetings/[id]
+> (stepper + per-step timer, scorecard/todo-review/IDS/conclude steps;
+> rock_review is a 2E placeholder; archive view once concluded).
+> Live-verified: prep dry-run + real run (packet/proposal/audit; DM path
+> skipped via no-slack facilitator, test rows cleaned). No migration.
+> **Operator steps: visual pass on /company/meetings after merge; first
+> real packet lands next Monday.**
 
 Company → Meetings: run-the-meeting mode (standing agenda stepper + timer,
 doc 06 §4) + archive. IDS solve forces a structured outcome (decision row

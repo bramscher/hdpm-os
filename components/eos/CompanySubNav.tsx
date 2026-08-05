@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 const TABS = [
   { label: 'Scorecard', href: '/company/scorecard' },
   { label: 'Issues & To-Dos', href: '/company/issues' },
+  { label: 'Meetings', href: '/company/meetings' },
 ];
 
 /** Company section tabs (doc 06 §8 — Scorecard, Issues & To-Dos; Meetings and Org follow). */

@@ -9,10 +9,10 @@ const STATUSES: IssueStatus[] = ['open', 'discussed', 'solved', 'parked'];
 /**
  * PATCH /api/eos/issues/:id — edit an issue from the 2C screen. Staff
  * session required; humans only — agents and crons never touch existing
- * issues, and only humans mark solved (doc 06 §9; `confirm: true`
- * required so a stray click can't solve).
+ * issues. Solving is NOT allowed here: IDS solve forces a structured
+ * outcome via POST /api/eos/issues/:id/solve (Brief 2D, doc 06 §4).
  *
- * Body: { status?, priority?, title?, detail?, confirm?: boolean }
+ * Body: { status?, priority?, title?, detail? }
  */
 export async function PATCH(
   request: NextRequest,
@@ -42,8 +42,11 @@ export async function PATCH(
     if (typeof body.status !== 'string' || !STATUSES.includes(body.status as IssueStatus)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
-    if (body.status === 'solved' && body.confirm !== true) {
-      return NextResponse.json({ error: 'Solving requires confirmation' }, { status: 400 });
+    if (body.status === 'solved') {
+      return NextResponse.json(
+        { error: 'Solving requires an outcome — use the Solve dialog.' },
+        { status: 400 }
+      );
     }
     patch.status = body.status;
   }

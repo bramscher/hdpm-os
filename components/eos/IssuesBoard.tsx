@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronUp, ChevronDown, Bot, User, Plus, CheckCircle2 } from 'lucide-react';
 import { parseSourceRef } from '@/lib/eos/escalation';
+import SolveOutcomeForm from './SolveOutcomeForm';
 import type { Issue, Todo, ScorecardMetric, ScorecardEntry } from '@/lib/eos/types';
 import { cn } from '@/lib/utils';
 
@@ -528,23 +529,7 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
                       Reopen
                     </button>
                   )}
-                  {confirmSolve === selected.id ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void patchIssue(selected.id, { status: 'solved', confirm: true }).then((ok) => {
-                          if (ok) {
-                            setSelectedId(null);
-                            setConfirmSolve(null);
-                          }
-                        });
-                      }}
-                      disabled={busy === selected.id}
-                      className="rounded bg-green-700 px-2 py-1 text-xs font-medium text-white"
-                    >
-                      Confirm solved
-                    </button>
-                  ) : (
+                  {confirmSolve !== selected.id ? (
                     <button
                       type="button"
                       onClick={() => setConfirmSolve(selected.id)}
@@ -553,8 +538,21 @@ export default function IssuesBoard({ issues, todos, missedTodos, staff, evidenc
                     >
                       Solve…
                     </button>
-                  )}
+                  ) : null}
                 </div>
+                {confirmSolve === selected.id ? (
+                  <SolveOutcomeForm
+                    issueId={selected.id}
+                    issueTitle={selected.title}
+                    staff={staff}
+                    onSolved={() => {
+                      setSelectedId(null);
+                      setConfirmSolve(null);
+                      router.refresh();
+                    }}
+                    onCancel={() => setConfirmSolve(null)}
+                  />
+                ) : null}
               </div>
             )}
           </div>
