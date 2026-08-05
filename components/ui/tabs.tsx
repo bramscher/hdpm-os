@@ -4,8 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
+import { motion, useReducedMotion } from "motion/react";
 
 import { cn } from "@/lib/utils";
+import { springSnappy } from "@/lib/motion";
 
 /**
  * The two tab patterns (UI Wave 4).
@@ -49,7 +51,32 @@ export function TabNav({ tabs, className }: { tabs: TabNavItem[]; className?: st
   );
 }
 
-const Tabs = TabsPrimitive.Root;
+/** Current tab value + a unique layout id, so triggers can render the
+ *  sliding indicator (motion layoutId) without fighting Radix internals. */
+const TabsContext = React.createContext<{ value?: string; groupId: string }>({ groupId: "tabs" });
+
+const Tabs = ({
+  value,
+  defaultValue,
+  onValueChange,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>) => {
+  const [internal, setInternal] = React.useState(defaultValue);
+  const current = value ?? internal;
+  const groupId = React.useId();
+  return (
+    <TabsContext.Provider value={{ value: current, groupId }}>
+      <TabsPrimitive.Root
+        value={current}
+        onValueChange={(v) => {
+          setInternal(v);
+          onValueChange?.(v);
+        }}
+        {...props}
+      />
+    </TabsContext.Provider>
+  );
+};
 
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
@@ -69,24 +96,44 @@ TabsList.displayName = TabsPrimitive.List.displayName;
 const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-charcoal-500 transition-colors",
-      "hover:text-charcoal-700 data-[state=active]:bg-white data-[state=active]:text-charcoal-900 data-[state=active]:shadow-card",
-      className
-    )}
-    {...props}
-  />
-));
+>(({ className, children, value, ...props }, ref) => {
+  const ctx = React.useContext(TabsContext);
+  const reduced = useReducedMotion();
+  const active = ctx.value === value;
+  return (
+    <TabsPrimitive.Trigger
+      ref={ref}
+      value={value}
+      className={cn(
+        "relative inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-charcoal-500 transition-colors",
+        "hover:text-charcoal-700 data-[state=active]:text-charcoal-900",
+        className
+      )}
+      {...props}
+    >
+      {active && (
+        <motion.span
+          layoutId={`${ctx.groupId}-indicator`}
+          className="absolute inset-0 rounded-lg bg-white shadow-card"
+          transition={reduced ? { duration: 0 } : springSnappy}
+          aria-hidden
+        />
+      )}
+      <span className="relative z-10 inline-flex items-center gap-1.5">{children}</span>
+    </TabsPrimitive.Trigger>
+  );
+});
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
 const TabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
 >(({ className, ...props }, ref) => (
-  <TabsPrimitive.Content ref={ref} className={cn("mt-4 outline-none", className)} {...props} />
+  <TabsPrimitive.Content
+    ref={ref}
+    className={cn("mt-4 outline-none animate-fade-in", className)}
+    {...props}
+  />
 ));
 TabsContent.displayName = TabsPrimitive.Content.displayName;
 

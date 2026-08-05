@@ -1091,7 +1091,7 @@ function ConfigDrawer({
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-charcoal-900/30" onClick={onClose} />
       <div className="relative h-full w-full max-w-md overflow-y-auto bg-sand-50 shadow-xl animate-slide-up">
-        <div className="sticky top-0 flex items-center justify-between border-b border-sand-200 bg-sand-50 px-6 py-4">
+        <div className="sticky top-0 z-10 flex items-center justify-between glass-chrome scroll-edge-fade px-6 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-terra-500">
               Dashboard Config
