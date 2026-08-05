@@ -42,7 +42,7 @@ export default async function ScorecardPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold tracking-tight text-charcoal-900">Scorecard</h1>
+      <h1 className="mb-1 text-display text-charcoal-900">Scorecard</h1>
       <p className="mb-6 text-sm text-charcoal-500">
         Weekly numbers vs goal. Auto rows fill Friday afternoon from the agent metrics; manual
         metrics are entered here. Two weeks off-track files an issue automatically.
