@@ -621,7 +621,7 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `HDPM_SERVICE_TOKEN` | Agent-OS | Service-caller auth for `/api/agents/*` (with `X-Agent-Actor` header) |
 | `AGENT_EMAIL_FROM` | Resend | From address for agent emails (falls back to `MAINT_DIGEST_FROM`) |
 | `AZURE_TENANT_ID` | Microsoft Graph | App-only mail tenant (distinct from `AZURE_AD_TENANT_ID`) |
-| `AGENT_GRAPH_CLIENT_ID` / `AGENT_GRAPH_CLIENT_SECRET` | Microsoft Graph | "HDPM-OS Agent Mail" app — application `Mail.ReadWrite`, ApplicationAccessPolicy-scoped to cheryl@ + info@ |
+| `AGENT_GRAPH_CLIENT_ID` / `AGENT_GRAPH_CLIENT_SECRET` | Microsoft Graph | "HDPM-OS Agent Mail" app — application `Mail.ReadWrite` (ApplicationAccessPolicy-scoped to cheryl@ + info@) plus `Files.Read.All` for the knowledge-base OneDrive sync (`lib/onedrive-sync.ts`; without consent that sync fails with 403) |
 | `AGENT_GRAPH_DRYRUN` | Microsoft Graph | `=1` skips draft creation (staged rollout) |
 | `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET` | Zoom | Server-to-Server app ("HDPM Appfolio Sync") — contact sync; cannot send SMS |
 | `ZOOM_USER_CLIENT_ID` / `ZOOM_USER_CLIENT_SECRET` | Zoom | User-managed app ("HDPM-OS SMS Sender") — per-user OAuth for SMS sending |

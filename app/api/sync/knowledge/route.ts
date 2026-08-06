@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncOrs90, syncNotionSops } from '@/lib/knowledge-sync';
+import { syncOneDriveDocs } from '@/lib/onedrive-sync';
 
 // Weekly refresh does ~160 statute fetches + embeddings — needs the long budget.
 export const maxDuration = 300;
@@ -16,8 +17,10 @@ export async function GET(request: NextRequest) {
  *   - ORS Chapter 90 from oregon.public.law (statute text changes rarely, but
  *     this keeps it current without anyone re-running the ingest script)
  *   - Notion SOPs from the Process Documentation Hub (needs NOTION_API_KEY)
+ *   - OneDrive/SharePoint docs from the team library (needs the app-only
+ *     Graph creds with Files.Read.All; capped per run, eTag-incremental)
  *
- * Query params: ?target=ors | notion | all (default all)
+ * Query params: ?target=ors | notion | onedrive | all (default all)
  * Protected by CRON_SECRET.
  */
 export async function POST(request: NextRequest) {
@@ -35,6 +38,9 @@ export async function POST(request: NextRequest) {
     }
     if (target === 'notion' || target === 'all') {
       out.notion_sops = await syncNotionSops();
+    }
+    if (target === 'onedrive' || target === 'all') {
+      out.onedrive_docs = await syncOneDriveDocs();
     }
 
     console.log('[Sync] Knowledge refresh:', JSON.stringify(out));

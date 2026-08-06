@@ -45,6 +45,7 @@ function getAnthropic(): Anthropic {
 export const SOURCE_ICONS: Record<string, string> = {
   ors_90: '⚖️',
   notion_sop: '📘',
+  onedrive_doc: '🗂️',
   loom_video: '🎬',
   policy_doc: '📄',
   brain: '🧠',
