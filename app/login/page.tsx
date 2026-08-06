@@ -35,13 +35,13 @@ function LoginContent() {
       <div className="hidden lg:flex lg:w-[45%] login-panel relative overflow-hidden items-end p-12">
         <div className="relative z-10 animate-slide-up">
           <Image
-            src="/HDPM-PrimaryLogo-White.png"
+            src="/HDPM-PrimaryLogo-Black.png"
             alt="High Desert Property Management"
             width={280}
             height={90}
             className="mb-6 opacity-95"
           />
-          <p className="text-charcoal-400 text-base max-w-xs leading-relaxed">
+          <p className="text-charcoal-500 text-base max-w-xs leading-relaxed">
             Internal automation tools for invoice generation, rent analysis, and knowledge management.
           </p>
 
@@ -62,8 +62,8 @@ function LoginContent() {
         </div>
 
         {/* Background decorative circle */}
-        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full border border-white/[0.04]" />
-        <div className="absolute -top-12 -right-12 w-72 h-72 rounded-full border border-white/[0.03]" />
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full border border-charcoal-900/[0.04]" />
+        <div className="absolute -top-12 -right-12 w-72 h-72 rounded-full border border-charcoal-900/[0.03]" />
       </div>
 
       {/* Right Panel — Sign In */}
