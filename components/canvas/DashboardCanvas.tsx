@@ -64,6 +64,15 @@ interface BoardKpis {
   p1ThisWeek: number;
 }
 
+interface CrackItem {
+  kind: string;
+  label: string;
+  detail: string;
+  owner: string | null;
+  ageDays: number;
+  href: string | null;
+}
+
 interface TodayRouteStop {
   work_order_id: string;
   stop_order: number;
@@ -197,6 +206,8 @@ export function DashboardCanvas() {
   const [vacancyCount, setVacancyCount] = useState<number | null>(null);
   const [boardKpis, setBoardKpis] = useState<BoardKpis | null>(null);
   const [todayRoutes, setTodayRoutes] = useState<TodayRoute[]>([]);
+  const [cracks, setCracks] = useState<CrackItem[]>([]);
+  const [crackTotal, setCrackTotal] = useState(0);
 
   const firstName = (() => {
     const n = session?.user?.name;
@@ -240,6 +251,16 @@ export function DashboardCanvas() {
       .then((data) => setTodayRoutes(data.routes ?? []))
       .catch(() => {});
 
+    // Fetch the Cracks Radar (work nobody is touching)
+    fetch("/api/maintenance/cracks")
+      .then((r) => r.json())
+      .then((data) => {
+        const list = Array.isArray(data.cracks) ? (data.cracks as CrackItem[]) : [];
+        setCracks(list.slice(0, 8));
+        setCrackTotal(list.length);
+      })
+      .catch(() => {});
+
     // Fetch cached vacancy count
     fetch("/api/cached-vacancies")
       .then((r) => r.json())
@@ -262,6 +283,46 @@ export function DashboardCanvas() {
           Your automation tools are ready.
         </p>
       </div>
+
+      {/* Cracks Radar — work nobody is touching, ranked oldest/most severe first */}
+      {cracks.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl border border-sand-200 shadow-card animate-slide-up">
+          <div className="flex items-center gap-2 px-5 pt-4 pb-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <h2 className="text-heading text-charcoal-900 flex-1">Falling through the cracks</h2>
+            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+              {crackTotal}
+            </span>
+          </div>
+          <ul className="px-2 pb-2">
+            {cracks.map((c, i) => (
+              <li key={i}>
+                <Link
+                  href={c.href ?? "/maintenance/board"}
+                  className="flex items-baseline gap-2 rounded-lg px-3 py-1.5 text-sm hover:bg-sand-50 transition-colors"
+                >
+                  <span className="shrink-0 rounded-full bg-sand-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-charcoal-500">
+                    {c.label}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-charcoal-700">{c.detail}</span>
+                  {c.owner && (
+                    <span className="shrink-0 text-xs font-medium text-charcoal-500">{c.owner}</span>
+                  )}
+                  <span className="shrink-0 text-xs tabular-nums text-charcoal-400">
+                    {c.ageDays}d
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {crackTotal > cracks.length && (
+            <p className="px-5 pb-3 text-xs text-charcoal-400">
+              +{crackTotal - cracks.length} more — see the board&apos;s Exceptions view and the
+              Issues queue.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Today's field route (published from the maintenance board) */}
       {todayRoutes.map((route) => {
