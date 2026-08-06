@@ -147,18 +147,14 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
                     href={item.href}
                     onClick={onNavigate}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 group relative",
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors duration-150 group",
                       isActive
-                        ? "bg-charcoal-900/[0.06] text-charcoal-900"
+                        ? "text-terra-600"
                         : "text-charcoal-500 hover:text-charcoal-900 hover:bg-charcoal-900/[0.04]"
                     )}
                   >
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-terra-500 rounded-r-full" />
-                    )}
-                    <Icon className={cn("w-[18px] h-[18px] flex-shrink-0", isActive ? "text-terra-600" : "")} />
+                    <Icon className="w-[18px] h-[18px] flex-shrink-0" />
                     <span className="flex-1">{item.label}</span>
-                    {isActive && <ChevronRight className="w-3.5 h-3.5 text-charcoal-500" />}
                   </Link>
                 );
               })}
@@ -173,9 +169,9 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
           </p>
           <button
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 w-full group text-left relative",
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors duration-150 w-full group text-left",
               isChatOpen
-                ? "bg-charcoal-900/[0.06] text-charcoal-900"
+                ? "text-terra-600"
                 : "text-charcoal-500 hover:text-charcoal-900 hover:bg-charcoal-900/[0.04]"
             )}
             onClick={() => {
@@ -183,10 +179,7 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
               onNavigate?.();
             }}
           >
-            {isChatOpen && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-terra-500 rounded-r-full" />
-            )}
-            <MessageCircle className={cn("w-[18px] h-[18px] flex-shrink-0", isChatOpen ? "text-terra-600" : "")} />
+            <MessageCircle className="w-[18px] h-[18px] flex-shrink-0" />
             <span className="flex-1">Knowledge Chat</span>
             <span className="w-2 h-2 rounded-full bg-green-400 opacity-75" />
           </button>
