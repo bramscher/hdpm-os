@@ -162,7 +162,12 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
                         aria-hidden
                       />
                     )}
-                    <Icon className="relative z-10 w-[18px] h-[18px] flex-shrink-0" />
+                    <Icon
+                      className={cn(
+                        "relative z-10 w-[18px] h-[18px] flex-shrink-0",
+                        !isActive && "text-charcoal-900"
+                      )}
+                    />
                     <span className="relative z-10 flex-1">{item.label}</span>
                   </Link>
                 );
@@ -191,7 +196,12 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
             {isChatOpen && (
               <span className="absolute inset-0 rounded-lg nav-glass-active" aria-hidden />
             )}
-            <MessageCircle className="relative z-10 w-[18px] h-[18px] flex-shrink-0" />
+            <MessageCircle
+              className={cn(
+                "relative z-10 w-[18px] h-[18px] flex-shrink-0",
+                !isChatOpen && "text-charcoal-900"
+              )}
+            />
             <span className="relative z-10 flex-1">Knowledge Chat</span>
             <span className="relative z-10 w-2 h-2 rounded-full bg-green-400 opacity-75" />
           </button>
