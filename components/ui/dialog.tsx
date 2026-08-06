@@ -30,7 +30,7 @@ export function Modal({ title, onClose, busy, children, footer, wide }: ModalPro
     <DialogPrimitive.Root open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
-          className="fixed inset-0 z-[100] bg-charcoal-900/40 data-[state=open]:animate-fade-in"
+          className="fixed inset-0 z-[100] bg-charcoal-900/25 backdrop-blur-sm data-[state=open]:animate-fade-in"
           onClick={() => !busy && onClose()}
         />
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none">
@@ -46,7 +46,7 @@ export function Modal({ title, onClose, busy, children, footer, wide }: ModalPro
             }}
             className={cn(
               "pointer-events-auto relative w-full max-h-[85vh] flex flex-col",
-              "rounded-xl border border-sand-200 bg-white shadow-card-hover",
+              "rounded-2xl border border-sand-200 bg-white/90 backdrop-blur-2xl shadow-card-hover",
               "data-[state=open]:animate-slide-up",
               wide ? "max-w-2xl" : "max-w-lg"
             )}

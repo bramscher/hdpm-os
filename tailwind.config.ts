@@ -50,18 +50,19 @@ const config: Config = {
           muted: "hsl(var(--sidebar-muted))",
           border: "hsl(var(--sidebar-border))",
         },
-        // Desert palette direct access
+        // Accent ramp — Apple blue (2026-08-05 re-skin; token name kept so
+        // no component changes; was Desert terra).
         terra: {
-          50: "#fdf3ee",
-          100: "#fbe4d6",
-          200: "#f5c7ab",
-          300: "#efa77a",
-          400: "#e88547",
-          500: "#d4845a",
-          600: "#c4704b",
-          700: "#a25439",
-          800: "#854634",
-          900: "#6d3b2e",
+          50: "#f2f7fd",
+          100: "#e3eefb",
+          200: "#c2ddf7",
+          300: "#93c3f0",
+          400: "#4d9ae8",
+          500: "#0071e3",
+          600: "#0066cc",
+          700: "#0055ab",
+          800: "#004488",
+          900: "#0d3a66",
         },
         // Apple-neutral ramp (2026-08-05 re-skin): sand = surfaces/borders,
         // charcoal = ink. Token names kept so no component changes needed.
@@ -99,8 +100,8 @@ const config: Config = {
         "3xl": "1.5rem",
       },
       boxShadow: {
-        card: "0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03)",
-        "card-hover": "0 4px 12px rgba(0,0,0,0.06), 0 12px 32px rgba(0,0,0,0.06)",
+        card: "0 1px 2px rgba(0,0,0,0.03), 0 8px 24px rgba(0,0,0,0.05)",
+        "card-hover": "0 4px 12px rgba(0,0,0,0.05), 0 16px 40px rgba(0,0,0,0.08)",
         "card-active": "0 0 0 2px hsl(20 55% 55% / 0.2)",
         sidebar: "4px 0 24px rgba(0,0,0,0.12)",
         inner: "inset 0 1px 2px rgba(0,0,0,0.06)",
