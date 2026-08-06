@@ -23,6 +23,11 @@ export const AUTH_SECRET = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRE
 export const authConfig = {
   secret: AUTH_SECRET,
   trustHost: true,
+  // Preview deployments proxy their OAuth callback through prod (the one
+  // redirect URI Azure knows), which bounces the login back to the preview
+  // host — so any vercel.app preview can sign in with no Azure changes.
+  // Prod sets the same var and behaves normally (origin == proxy).
+  redirectProxyUrl: process.env.AUTH_REDIRECT_PROXY_URL,
   providers: [
     MicrosoftEntraID({
       // Keep the v4 provider id so the OAuth callback URL stays
