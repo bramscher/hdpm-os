@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FileText, BarChart3, Home, MessageCircle, LogOut, ChevronRight, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X } from "lucide-react";
+import { FileText, BarChart3, Home, MessageCircle, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { springDefault } from "@/lib/motion";
 
