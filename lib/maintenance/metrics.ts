@@ -21,7 +21,7 @@ import type { TripwireRunResult } from './tripwire-engine';
 import { fetchAllRows, loadTripwireSnapshot, runTripwires } from './tripwire-engine';
 import { medianOf } from './vendors';
 import { proposalCounts } from './triage-batch';
-import { weeklyBillableHours, WEEKLY_HOURS_TARGET } from '@/lib/invoices';
+import { weeklyBillableHours, WEEKLY_HOURS_TARGET, TECHNICIANS } from '@/lib/invoices';
 
 export interface MetricRow {
   metric: string;
@@ -413,9 +413,17 @@ export async function computeAllMetrics(
           .gte('created_at', since30),
       'hdms_invoices'
     )) as Parameters<typeof weeklyBillableHours>[0];
+    const weekly = weeklyBillableHours(invoices, now);
     rows.push({
       metric: 'billable_hours',
-      value: { ...weeklyBillableHours(invoices, now), target: WEEKLY_HOURS_TARGET },
+      value: {
+        ...weekly,
+        target: WEEKLY_HOURS_TARGET,
+        // Flat per-tech fields — scorecard source_ref only reads one level deep.
+        ...Object.fromEntries(
+          TECHNICIANS.map((t) => [`${t.toLowerCase()}Hours`, weekly.byTech[t] ?? 0])
+        ),
+      },
     });
   } catch (err) {
     errors.billableHours = err instanceof Error ? err.message : String(err);

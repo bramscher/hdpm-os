@@ -105,8 +105,9 @@ const METRICS: Array<{
   { name: 'Vendor accepted-unworked WOs', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'vendor_stuck_pools.acceptedUnworkedCount', sort: 4 },
   { name: 'Open unit turns', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 45, source: 'metrics_snapshot', source_ref: 'turns.openTurns', sort: 5 },
   { name: 'Median days vacant (turns)', owner: 'Brody', unit: 'days', goal_op: 'lte', goal_value: 25, source: 'metrics_snapshot', source_ref: 'turns.medianDaysVacant', sort: 6 },
-  // Target band is 30–36 (Craig 2026-08-05); scorecard tracks the floor.
-  { name: 'Billable hours (week)', owner: 'Brody', unit: 'hours', goal_op: 'gte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'billable_hours.weekHours', sort: 7 },
+  // Target band is 30–36 PER TECH (Craig 2026-08-05); scorecard tracks the floor.
+  { name: 'Billable hours — Brody', owner: 'Brody', unit: 'hours', goal_op: 'gte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'billable_hours.brodyHours', sort: 7 },
+  { name: 'Billable hours — Alberto', owner: 'Alberto', unit: 'hours', goal_op: 'gte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'billable_hours.albertoHours', sort: 8 },
 ];
 
 async function main() {

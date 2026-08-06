@@ -70,7 +70,7 @@ export const TECHNICIAN_INITIALS: Record<Technician, string> = {
 // Weekly billable hours
 // ============================================
 
-/** Target band for in-house billable hours per week (Craig, 2026-08-05 — starting point). */
+/** Target band for billable hours per week, PER TECHNICIAN (Craig, 2026-08-05 — starting point). */
 export const WEEKLY_HOURS_TARGET = { min: 30, max: 36 } as const;
 
 /** Total labor hours on an invoice = sum of labor-line qty. */
@@ -90,6 +90,8 @@ export interface WeeklyBillableHours {
   lastWeekHours: number;
   /** This week's hours by technician (labor lines with a technician set). */
   byTech: Record<string, number>;
+  /** Prior week's hours by technician. */
+  lastWeekByTech: Record<string, number>;
 }
 
 /**
@@ -107,32 +109,37 @@ export function weeklyBillableHours(
   const lastWeekStart = weeksBefore(weekStart, 1);
   const nextWeekStart = weeksBefore(weekStart, -1);
 
-  let weekHours = 0;
-  let lastWeekHours = 0;
-  const byTech: Record<string, number> = {};
+  const week = { total: 0, byTech: {} as Record<string, number> };
+  const lastWeek = { total: 0, byTech: {} as Record<string, number> };
 
   for (const inv of invoices) {
     if (inv.status === 'void') continue;
     const day = (inv.completed_date ?? inv.created_at ?? '').slice(0, 10);
     if (!day) continue;
-    if (day >= weekStart && day < nextWeekStart) {
-      for (const li of inv.line_items ?? []) {
-        if ((li.type || 'labor') !== 'labor' || !li.qty || li.qty <= 0) continue;
-        weekHours += li.qty;
-        const tech = li.technician?.trim();
-        if (tech) byTech[tech] = (byTech[tech] ?? 0) + li.qty;
-      }
-    } else if (day >= lastWeekStart && day < weekStart) {
-      lastWeekHours += invoiceLaborHours(inv);
+    const bucket =
+      day >= weekStart && day < nextWeekStart
+        ? week
+        : day >= lastWeekStart && day < weekStart
+          ? lastWeek
+          : null;
+    if (!bucket) continue;
+    for (const li of inv.line_items ?? []) {
+      if ((li.type || 'labor') !== 'labor' || !li.qty || li.qty <= 0) continue;
+      bucket.total += li.qty;
+      const tech = li.technician?.trim();
+      if (tech) bucket.byTech[tech] = (bucket.byTech[tech] ?? 0) + li.qty;
     }
   }
 
   const round1 = (n: number) => Math.round(n * 10) / 10;
+  const roundMap = (m: Record<string, number>) =>
+    Object.fromEntries(Object.entries(m).map(([k, v]) => [k, round1(v)]));
   return {
     weekStart,
-    weekHours: round1(weekHours),
-    lastWeekHours: round1(lastWeekHours),
-    byTech: Object.fromEntries(Object.entries(byTech).map(([k, v]) => [k, round1(v)])),
+    weekHours: round1(week.total),
+    lastWeekHours: round1(lastWeek.total),
+    byTech: roundMap(week.byTech),
+    lastWeekByTech: roundMap(lastWeek.byTech),
   };
 }
 

@@ -673,21 +673,28 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                   <p className="text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider mb-1">
                     Billed Hrs (wk)
                   </p>
-                  <p
-                    className={`text-3xl font-bold ${
-                      weeklyHours.weekHours >= WEEKLY_HOURS_TARGET.min &&
-                      weeklyHours.weekHours <= WEEKLY_HOURS_TARGET.max
-                        ? "text-green-700"
-                        : weeklyHours.weekHours > WEEKLY_HOURS_TARGET.max
-                          ? "text-amber-600"
-                          : "text-charcoal-600"
-                    }`}
-                  >
-                    {weeklyHours.weekHours}
-                  </p>
+                  <div className="flex items-baseline gap-4">
+                    {TECHNICIANS.map((tech) => {
+                      const hrs = weeklyHours.byTech[tech] ?? 0;
+                      const color =
+                        hrs >= WEEKLY_HOURS_TARGET.min && hrs <= WEEKLY_HOURS_TARGET.max
+                          ? "text-green-700"
+                          : hrs > WEEKLY_HOURS_TARGET.max
+                            ? "text-amber-600"
+                            : "text-charcoal-600";
+                      return (
+                        <div key={tech}>
+                          <span className={`text-3xl font-bold ${color}`}>{hrs}</span>
+                          <span className="ml-1 text-[10px] font-semibold text-charcoal-400 uppercase">
+                            {tech}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                   <p className="text-[10px] text-charcoal-300 mt-1">
-                    target {WEEKLY_HOURS_TARGET.min}–{WEEKLY_HOURS_TARGET.max} · last wk{" "}
-                    {weeklyHours.lastWeekHours}
+                    target {WEEKLY_HOURS_TARGET.min}–{WEEKLY_HOURS_TARGET.max} each · last wk{" "}
+                    {TECHNICIANS.map((t) => weeklyHours.lastWeekByTech[t] ?? 0).join(" / ")}
                   </p>
                 </>
               )}
