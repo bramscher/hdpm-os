@@ -52,6 +52,7 @@ describe('weeklyBillableHours', () => {
     expect(r.weekHours).toBe(7.5);
     expect(r.lastWeekHours).toBe(6);
     expect(r.byTech).toEqual({ Brody: 4, Alberto: 3.5 });
+    expect(r.lastWeekByTech).toEqual({ Brody: 6 });
   });
 
   it('excludes void invoices, counts drafts, falls back to created_at', () => {
