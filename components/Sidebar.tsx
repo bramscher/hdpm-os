@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FileText, BarChart3, Home, MessageCircle, LogOut, ChevronRight, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X } from "lucide-react";
+import { FileText, BarChart3, Home, MessageCircle, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { springDefault } from "@/lib/motion";
 
@@ -99,6 +99,7 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin === true;
+  const reducedMotion = useReducedMotion();
 
   const sections = NAV_SECTIONS.filter((s) => !s.adminOnly || isAdmin);
 
@@ -119,7 +120,7 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
       <div className="pt-6 pb-4 px-4">
         <Link href="/" className="block group" title="Dashboard" onClick={onNavigate}>
           <Image
-            src="/HDPM-SecondaryLogo-White.png"
+            src="/HDPM-SecondaryLogo-Black.png"
             alt="HDPM"
             width={200}
             height={60}
@@ -147,18 +148,27 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
                     href={item.href}
                     onClick={onNavigate}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 group relative",
+                      "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors duration-150 group",
                       isActive
-                        ? "bg-white/10 text-white"
-                        : "text-charcoal-400 hover:text-white hover:bg-white/[0.05]"
+                        ? "text-terra-600"
+                        : "text-charcoal-500 hover:text-charcoal-900 hover:bg-charcoal-900/[0.04]"
                     )}
                   >
                     {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-terra-500 rounded-r-full" />
+                      <motion.span
+                        layoutId="nav-active-pill"
+                        className="absolute inset-0 rounded-lg nav-glass-active"
+                        transition={reducedMotion ? { duration: 0 } : springDefault}
+                        aria-hidden
+                      />
                     )}
-                    <Icon className={cn("w-[18px] h-[18px] flex-shrink-0", isActive ? "text-terra-400" : "")} />
-                    <span className="flex-1">{item.label}</span>
-                    {isActive && <ChevronRight className="w-3.5 h-3.5 text-charcoal-500" />}
+                    <Icon
+                      className={cn(
+                        "relative z-10 w-[18px] h-[18px] flex-shrink-0",
+                        !isActive && "text-charcoal-900"
+                      )}
+                    />
+                    <span className="relative z-10 flex-1">{item.label}</span>
                   </Link>
                 );
               })}
@@ -167,16 +177,16 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
         ))}
 
         {/* AI Chat section */}
-        <div className="mt-6 pt-4 border-t border-white/[0.06]">
+        <div className="mt-6 pt-4 border-t border-sand-200">
           <p className="px-3 mb-2 text-2xs font-semibold text-charcoal-500 uppercase tracking-widest">
             AI Assistant
           </p>
           <button
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 w-full group text-left relative",
+              "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors duration-150 w-full group text-left",
               isChatOpen
-                ? "bg-white/10 text-white"
-                : "text-charcoal-400 hover:text-white hover:bg-white/[0.05]"
+                ? "text-terra-600"
+                : "text-charcoal-500 hover:text-charcoal-900 hover:bg-charcoal-900/[0.04]"
             )}
             onClick={() => {
               onToggleChat?.();
@@ -184,29 +194,34 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
             }}
           >
             {isChatOpen && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-terra-500 rounded-r-full" />
+              <span className="absolute inset-0 rounded-lg nav-glass-active" aria-hidden />
             )}
-            <MessageCircle className={cn("w-[18px] h-[18px] flex-shrink-0", isChatOpen ? "text-terra-400" : "")} />
-            <span className="flex-1">Knowledge Chat</span>
-            <span className="w-2 h-2 rounded-full bg-green-400 opacity-75" />
+            <MessageCircle
+              className={cn(
+                "relative z-10 w-[18px] h-[18px] flex-shrink-0",
+                !isChatOpen && "text-charcoal-900"
+              )}
+            />
+            <span className="relative z-10 flex-1">Knowledge Chat</span>
+            <span className="relative z-10 w-2 h-2 rounded-full bg-green-400 opacity-75" />
           </button>
         </div>
       </nav>
 
       {/* User section at bottom */}
       <div className="px-2 pb-4 mt-auto">
-        <div className="border-t border-white/[0.06] pt-3">
+        <div className="border-t border-sand-200 pt-3">
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-8 h-8 rounded-full bg-terra-500/20 border border-terra-500/30 flex items-center justify-center flex-shrink-0">
-              <span className="text-2xs font-bold text-terra-400">{initials}</span>
+              <span className="text-2xs font-bold text-terra-600">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-white truncate">{firstName}</p>
+              <p className="text-xs font-medium text-charcoal-900 truncate">{firstName}</p>
               <p className="text-2xs text-charcoal-500 truncate">{session?.user?.email ?? ""}</p>
             </div>
             <button
               onClick={() => signOut({ redirectTo: "/login" })}
-              className="text-charcoal-500 hover:text-charcoal-300 transition-colors p-1"
+              className="text-charcoal-500 hover:text-charcoal-700 transition-colors p-1"
               title="Sign out"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -229,7 +244,7 @@ export function Sidebar({ onToggleChat, isChatOpen = false }: SidebarProps) {
   if (pathname === "/login") return null;
 
   return (
-    <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[220px] sidebar-gradient shadow-sidebar z-50 flex-col">
+    <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[220px] sidebar-gradient z-50 flex-col">
       <SidebarContent onToggleChat={onToggleChat} isChatOpen={isChatOpen} />
     </aside>
   );
@@ -300,7 +315,7 @@ export function MobileNav({ onToggleChat, isChatOpen = false }: SidebarProps) {
             >
               <button
                 onClick={() => setOpen(false)}
-                className="absolute top-4 right-3 p-1.5 rounded-lg text-charcoal-400 hover:text-white hover:bg-white/[0.05] transition-colors"
+                className="absolute top-4 right-3 p-1.5 rounded-lg text-charcoal-500 hover:text-charcoal-900 hover:bg-charcoal-900/[0.04] transition-colors"
                 aria-label="Close navigation"
               >
                 <X className="w-4 h-4" />

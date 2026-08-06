@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         toastOptions={{
           style: {
             background: "#fff",
-            border: "1px solid #e8e3d9",
+            border: "1px solid #e8e8ed",
             color: "#2d2a33",
             borderRadius: "0.75rem",
             boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03)",

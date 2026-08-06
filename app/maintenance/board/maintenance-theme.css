@@ -7,13 +7,13 @@
 .maint-os {
   /* Brand — Desert (terra/sand/charcoal), bridged 2026-08-05. The green
      brand lives on only in the semantic --ok family below. */
-  --dk: #6d3b2e;      /* terra-900 */
-  --gr: #c4704b;      /* terra-600 */
-  --tint: #fdf3ee;    /* terra-50 */
-  --lt: #faf8f5;      /* sand-50 */
-  --ink: #2d2a33;     /* charcoal-900 */
-  --muted: #6e6154;   /* sand-700 — sand-600 is ~4.4:1 on white, below AA */
-  --hair: #e8e3d9;    /* sand-200 */
+  --dk: #1d1d1f;      /* ink */
+  --gr: #0071e3;      /* apple blue */
+  --tint: #eaf3fd;    /* blue tint */
+  --lt: #f5f5f7;      /* neutral gray */
+  --ink: #1d1d1f;     /* apple ink */
+  --muted: #6e6e73;   /* neutral gray, ~5.3:1 on white */
+  --hair: #e8e8ed;    /* neutral hairline */
   --red: #b3261e;
   --amber: #9a6a00;
   /* Semantic green: ok/pass/healthy states — NOT brand. */
