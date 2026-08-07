@@ -7,9 +7,9 @@
 set -euo pipefail
 
 BASE="${BASE:-https://hdpmchat.highdesertpm.com}"
-SECRET="${CRON_SECRET:-$(vercel env pull /dev/stdout --environment=production 2>/dev/null \
-  | grep '^CRON_SECRET=' | cut -d= -f2- | tr -d '"')}"
-[ -n "$SECRET" ] || { echo "CRON_SECRET not found (set CRON_SECRET or run: vercel link)"; exit 1; }
+ENVFILE="${ENVFILE:-.env.local}"
+SECRET="${CRON_SECRET:-$( [ -f "$ENVFILE" ] && grep '^CRON_SECRET=' "$ENVFILE" | head -1 | cut -d= -f2- | tr -d '"' )}"
+[ -n "$SECRET" ] || { echo "CRON_SECRET not found (set CRON_SECRET=... or add it to $ENVFILE)"; exit 1; }
 
 while :; do
   resp=$(curl -s -X POST "$BASE/api/sync/knowledge?target=onedrive" \
