@@ -16,8 +16,10 @@ export interface Crack {
   kind: CrackKind;
   /** Short chip label, e.g. "Exception", "Overdue to-do". */
   label: string;
-  /** One human line: what it is + what closing it takes. */
+  /** The situation: what/where it is (no fix appended). */
   detail: string;
+  /** The recommended next step, kept separate so UIs can lay it out as its own line. */
+  action: string | null;
   /** Accountable person, when the source knows one. */
   owner: string | null;
   ageDays: number;
@@ -58,7 +60,8 @@ export function exceptionCracks(
   return exceptions.map((ex) => ({
     kind,
     label: kind === 'exception' ? ex.label : KIND_LABELS.needs_date,
-    detail: ex.fixRequired ? `${ex.item} — ${ex.fixRequired}` : ex.item,
+    detail: ex.item,
+    action: ex.fixRequired || null,
     owner: ex.owner || null,
     ageDays: ex.ageDays ?? 0,
     href: ex.workOrderId ? `/maintenance/board/wo/${ex.workOrderId}` : '/maintenance/board',
@@ -85,6 +88,7 @@ export function proposalCracks(
         kind: 'stale_nudge' as const,
         label: KIND_LABELS.stale_nudge,
         detail: `${p.agent}: ${p.action_type.replace(/_/g, ' ')} awaiting a decision`,
+        action: null,
         owner: recipientByProposal.get(p.id) ?? null,
         ageDays,
         href:
@@ -107,6 +111,7 @@ export function todoCracks(
           kind: 'overdue_todo' as const,
           label: KIND_LABELS.overdue_todo,
           detail: t.title,
+          action: null,
           owner: t.owner_person,
           ageDays: days(t.due_on),
           href: '/company/issues',
@@ -119,6 +124,7 @@ export function todoCracks(
           kind: 'missed_todo' as const,
           label: KIND_LABELS.missed_todo,
           detail: t.title,
+          action: null,
           owner: t.owner_person,
           ageDays: days(t.due_on),
           href: '/company/issues',

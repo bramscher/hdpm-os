@@ -116,7 +116,7 @@ export interface PrepPacketInput {
   recentDecisions: { title: string; effectiveOn: string }[];
   memory: { answer: string; links: { title: string; url: string }[] } | null;
   /** Top cracks (work nobody is touching); crackTotal is the full count. */
-  cracks?: { label: string; detail: string; owner: string | null; ageDays: number }[];
+  cracks?: { label: string; detail: string; action?: string | null; owner: string | null; ageDays: number }[];
   crackTotal?: number;
 }
 
@@ -166,7 +166,8 @@ export function buildPrepPacket(input: PrepPacketInput): string {
     lines.push(`### Cracks (${input.crackTotal} open)`);
     if (input.cracks.length === 0) lines.push('_Nothing is falling through — clear board._');
     for (const c of input.cracks) {
-      lines.push(`- [${c.label}] ${c.detail} — ${c.owner ?? 'unowned'}, ${c.ageDays}d`);
+      const fix = c.action ? ` — ${c.action}` : '';
+      lines.push(`- [${c.label}] ${c.detail}${fix} — ${c.owner ?? 'unowned'}, ${c.ageDays}d`);
     }
     lines.push('');
   }

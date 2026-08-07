@@ -6,10 +6,10 @@ const NOW = new Date('2026-08-05T19:00:00Z');
 describe('rankCracks', () => {
   it('orders by kind severity, then oldest first', () => {
     const ranked = rankCracks([
-      { kind: 'needs_date', label: '', detail: 'c', owner: null, ageDays: 30, href: null },
-      { kind: 'exception', label: '', detail: 'a', owner: null, ageDays: 2, href: null },
-      { kind: 'exception', label: '', detail: 'b', owner: null, ageDays: 9, href: null },
-      { kind: 'overdue_todo', label: '', detail: 'd', owner: null, ageDays: 1, href: null },
+      { kind: 'needs_date', label: '', detail: 'c', action: null, owner: null, ageDays: 30, href: null },
+      { kind: 'exception', label: '', detail: 'a', action: null, owner: null, ageDays: 2, href: null },
+      { kind: 'exception', label: '', detail: 'b', action: null, owner: null, ageDays: 9, href: null },
+      { kind: 'overdue_todo', label: '', detail: 'd', action: null, owner: null, ageDays: 1, href: null },
     ]);
     expect(ranked.map((c) => c.detail)).toEqual(['b', 'a', 'd', 'c']);
   });
@@ -50,7 +50,7 @@ describe('todoCracks', () => {
 });
 
 describe('exceptionCracks', () => {
-  it('maps tripwire exceptions with deep links and fix text', () => {
+  it('maps tripwire exceptions with deep links, keeping the fix as a separate action', () => {
     const cracks = exceptionCracks(
       [
         {
@@ -68,7 +68,8 @@ describe('exceptionCracks', () => {
     expect(cracks[0]).toMatchObject({
       kind: 'exception',
       label: '#3 Past-due next action',
-      detail: '[WAIT-OWNER] Window replacement — Set a new next action',
+      detail: '[WAIT-OWNER] Window replacement',
+      action: 'Set a new next action',
       owner: 'Cheryl',
       ageDays: 5,
       href: '/maintenance/board/wo/abc',

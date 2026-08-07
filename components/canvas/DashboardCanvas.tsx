@@ -68,9 +68,19 @@ interface CrackItem {
   kind: string;
   label: string;
   detail: string;
+  action: string | null;
   owner: string | null;
   ageDays: number;
   href: string | null;
+}
+
+// The situation string is "<where> — <problem>"; split so the where reads as a
+// bold lead and the problem as lighter follow-on. Falls back to the whole
+// string as the lead when there's no separator (to-dos, nudges).
+function splitCrackDetail(detail: string): { lead: string; rest: string } {
+  const i = detail.indexOf(" — ");
+  if (i === -1) return { lead: detail, rest: "" };
+  return { lead: detail.slice(0, i), rest: detail.slice(i + 3) };
 }
 
 // Cracks bucket order (most severe first) + compact tab labels. Mirrors the
@@ -348,24 +358,37 @@ export function DashboardCanvas() {
             })}
           </div>
 
-          {/* Items for the selected bucket */}
+          {/* Items for the selected bucket — subject/problem on top, fix beneath */}
           <ul className="px-2 pb-2">
-            {shown.map((c, i) => (
-              <li key={i}>
-                <Link
-                  href={c.href ?? "/maintenance/board"}
-                  className="flex items-baseline gap-2 rounded-lg px-3 py-1.5 text-sm hover:bg-sand-50 transition-colors"
-                >
-                  <span className="min-w-0 flex-1 truncate text-charcoal-700">{c.detail}</span>
-                  {c.owner && (
-                    <span className="shrink-0 text-xs font-medium text-charcoal-500">{c.owner}</span>
-                  )}
-                  <span className="shrink-0 text-xs tabular-nums text-charcoal-400">
-                    {c.ageDays}d
-                  </span>
-                </Link>
-              </li>
-            ))}
+            {shown.map((c, i) => {
+              const { lead, rest } = splitCrackDetail(c.detail);
+              return (
+                <li key={i}>
+                  <Link
+                    href={c.href ?? "/maintenance/board"}
+                    className="block rounded-lg px-3 py-2 hover:bg-sand-50 transition-colors"
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <p className="min-w-0 flex-1 truncate text-sm">
+                        <span className="font-semibold text-charcoal-900">{lead}</span>
+                        {rest && <span className="text-charcoal-500"> · {rest}</span>}
+                      </p>
+                      {c.owner && (
+                        <span className="shrink-0 text-xs font-medium text-charcoal-500">
+                          {c.owner}
+                        </span>
+                      )}
+                      <span className="shrink-0 text-xs tabular-nums text-charcoal-400">
+                        {c.ageDays}d
+                      </span>
+                    </div>
+                    {c.action && (
+                      <p className="mt-0.5 truncate text-xs text-charcoal-400">→ {c.action}</p>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
           {activeCount > shown.length && activeMeta && (
             <p className="px-5 pb-3 text-xs text-charcoal-400">

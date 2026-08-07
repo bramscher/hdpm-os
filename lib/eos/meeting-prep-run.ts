@@ -197,14 +197,20 @@ export async function runMeetingPrep(opts: { dryRun?: boolean; now?: Date } = {}
   result.memoryUsed = memory !== null;
 
   // Cracks Radar — best-effort; a collector failure never blocks the packet.
-  let cracksTop: { label: string; detail: string; owner: string | null; ageDays: number }[] = [];
+  let cracksTop: {
+    label: string;
+    detail: string;
+    action: string | null;
+    owner: string | null;
+    ageDays: number;
+  }[] = [];
   let crackTotal = 0;
   try {
     const report = await collectCracks(today);
     crackTotal = report.cracks.length;
     cracksTop = report.cracks
       .slice(0, 10)
-      .map(({ label, detail, owner, ageDays }) => ({ label, detail, owner, ageDays }));
+      .map(({ label, detail, action, owner, ageDays }) => ({ label, detail, action, owner, ageDays }));
   } catch (err) {
     console.error('[meeting-prep] cracks collect failed:', err);
   }
