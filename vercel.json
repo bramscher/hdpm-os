@@ -21,6 +21,10 @@
       "schedule": "0 10 * * 0"
     },
     {
+      "path": "/api/sync/knowledge?target=onedrive",
+      "schedule": "0 11 * * 0"
+    },
+    {
       "path": "/api/sync/hud",
       "schedule": "0 10 1 1 *"
     },
