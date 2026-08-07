@@ -328,30 +328,39 @@ export function DashboardCanvas() {
             </span>
           </div>
 
-          {/* Bucket tabs — only kinds that have items */}
+          {/* Bucket tabs — all five kinds; empty ones are dimmed and disabled */}
           <div className="flex flex-wrap gap-1.5 px-5 pb-3">
-            {CRACK_KINDS.filter((k) => (crackCounts[k.kind] ?? 0) > 0).map((k) => {
+            {CRACK_KINDS.map((k) => {
+              const count = crackCounts[k.kind] ?? 0;
               const active = k.kind === activeCrackKind;
+              const empty = count === 0;
               return (
                 <button
                   key={k.kind}
                   type="button"
+                  disabled={empty}
                   onClick={() => setActiveCrackKind(k.kind)}
                   className={cn(
                     "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
                     active
                       ? "bg-charcoal-900 text-white"
-                      : "bg-sand-50 text-charcoal-600 hover:bg-sand-100"
+                      : empty
+                        ? "bg-transparent text-charcoal-300 cursor-default"
+                        : "bg-sand-50 text-charcoal-600 hover:bg-sand-100"
                   )}
                 >
                   <span>{k.tab}</span>
                   <span
                     className={cn(
                       "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
-                      active ? "bg-white/20 text-white" : "bg-white text-charcoal-500"
+                      active
+                        ? "bg-white/20 text-white"
+                        : empty
+                          ? "bg-transparent text-charcoal-300"
+                          : "bg-white text-charcoal-500"
                     )}
                   >
-                    {crackCounts[k.kind] ?? 0}
+                    {count}
                   </span>
                 </button>
               );
