@@ -7,9 +7,11 @@
  * alongside the ORS and Notion corpora.
  *
  * Auth reuses the app-only Graph client credentials from lib/agents/graph.ts
- * (AZURE_TENANT_ID + AGENT_GRAPH_CLIENT_ID/SECRET). That registration needs
- * application Files.Read.All (or Sites.Read.All) admin-consented — without
- * it every Graph call 403s and the sync reports failed.
+ * (AZURE_TENANT_ID + AGENT_GRAPH_CLIENT_ID/SECRET). The "HDPM-OS Agent Mail"
+ * registration already holds application Sites.Read.All (admin-consented),
+ * which covers reading this SharePoint library's drive items — no extra
+ * permission needed. (Files.Read.All would also work.) Without a suitable
+ * grant every Graph call 403s and the sync reports failed.
  *
  * Incremental: knowledge_sync_state stores each file's Graph eTag; only
  * files whose eTag changed are re-downloaded and re-embedded, capped at

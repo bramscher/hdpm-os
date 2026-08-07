@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
  *   - ORS Chapter 90 from oregon.public.law (statute text changes rarely, but
  *     this keeps it current without anyone re-running the ingest script)
  *   - Notion SOPs from the Process Documentation Hub (needs NOTION_API_KEY)
- *   - OneDrive/SharePoint docs from the team library (needs the app-only
- *     Graph creds with Files.Read.All; capped per run, eTag-incremental)
+ *   - OneDrive/SharePoint docs from the team library (app-only Graph creds
+ *     with Sites.Read.All; capped per run, eTag-incremental)
  *
  * Query params: ?target=ors | notion | onedrive | all (default all)
  * Protected by CRON_SECRET.
