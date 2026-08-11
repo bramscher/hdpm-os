@@ -43,9 +43,11 @@ export { getSupabaseAdmin } from './db';
 export * from './eos/types';
 export * from './eos/seat';
 
-// Jackets — primitive 2 (the work object + its workflow engine)
+// Jackets — primitive 2 (the work object + its workflow engine + card + loop)
 export * from './jacket/types';
 export * from './jacket/engine';
+export * from './jacket/card';
+export * from './jacket/interact';
 
 // Business-day date math (jacket due_rule, watcher aging)
 export * from './business-days';
