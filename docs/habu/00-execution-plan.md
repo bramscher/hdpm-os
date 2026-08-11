@@ -71,11 +71,17 @@ This tracks how the spec is being built and where we are.
       `briefHeadline`. Dropped `owner==='Cheryl'`, the 12-tripwire SEVERITY_TIERS
       const, and AppFolio deep links (tenant concerns). Clock-free (`today`
       passed in). **Status: 86 tests pass, typecheck clean.**
-- [ ] **PR-A7 — Watchers + escalation ladder.** Extract the engine from
-      `tripwire-engine.ts`; rules become org config. Also here: split the
-      generic escalation ladder (Todo roll/miss→issue, aging/recurrence
-      counting, IssueDraft) out of `escalation.ts` from the tenant-specific
-      tripwire parts (deferred from A3).
+- [x] **PR-A7 — Watchers + escalation ladder.** `watcher/engine.ts`:
+      `evaluateWatchers`/`evaluateRule` over the 4 kinds (aged/recurring/
+      no_owner/waiting_external) with thresholds as rule params (not consts);
+      `countEpisodes` ported; `watcherSignal` feeds the jacket's deriveAttention.
+      `escalation/ladder.ts`: `escalateWatcherHits` (files Issues routed up the
+      holder's human escalation path via resolveEscalationSeat — agents file,
+      never solve), plus the generic to-do lifecycle (`decideTodoAction`,
+      `rolledDueOn`, `buildTodoRoll`, `buildTodoMissedIssue`). Migration 0007
+      adds `issue` + `todo`. Left tenant-side: `decideTripwireIssues`,
+      estimate-chaser `buildEscalationIssue`, tripwire #11, TripwireException.
+      **Status: 103 tests pass, typecheck clean.**
 - [ ] **PR-A8 — Card renderer + generalized interact endpoint** (from the
       544-line `app/api/agents/slack/interact/route.ts`).
       **Acceptance gate (§8.3):** in a sandbox Slack, post card → tap →

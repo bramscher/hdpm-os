@@ -52,3 +52,9 @@ export * from './business-days';
 
 // Brief — primitive 4 (per-human-seat daily brief: cap-at-7, cool-off, honest totals)
 export * from './brief/engine';
+
+// Watchers — primitive 3 (generalized tripwire engine over jackets)
+export * from './watcher/engine';
+
+// Escalation ladder — the safety path for agent seats (agents file, never solve)
+export * from './escalation/ladder';
