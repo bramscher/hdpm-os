@@ -2,13 +2,18 @@
   "name": "hdpm-os",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:habu": "npm test -w @habu/core",
+    "typecheck:habu": "npm run typecheck -w @habu/core"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
