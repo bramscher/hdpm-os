@@ -41,9 +41,17 @@ This tracks how the spec is being built and where we are.
       `TripwireException`, hardcode tripwire #11, wire tripwire-engine +
       estimate-chaser). Separating the generic ladder from the tenant tripwire
       cluster is the same surgery as Watchers → folded into **A7**.
-- [ ] **PR-A4 — Migrations.** Port the 6 §1.4 migrations minus
-      `20260719_staff_seed_contacts.sql`; add `jacket`, `jacket_step`,
-      `jacket_template`, `watcher_rule`; extend `seat`.
+- [x] **PR-A4 — Migrations.** Core initial schema under
+      `packages/habu-core/migrations/` (0001–0006): ported agent_config /
+      agent_proposal / agent_outbox / staff as **DDL only** (HDPM seed rows,
+      roster, and `'hdpm'` org_id default stripped); new `seat` (§3, with
+      agent-needs-escalation + holder-field CHECK constraints), `jacket_template`
+      / `jacket` / `jacket_step` (§4 + App A — color=process-identity,
+      derived `attention` dot per A.0), `watcher_rule` / `watcher_hit` (§5).
+      Left behind: staff_seed_contacts + the EOS operating layer
+      (scorecard/issues/meetings/rocks) — not the four v1 primitives; A7 adds
+      the issue/todo tables the ladder needs. **Status: pending application
+      (manual, same as all hdpm-os migrations). No TS/test change.**
 - [ ] **PR-A5 — Jacket engine (new).** Types (§4), derived-color rule,
       one-seat-at-a-time routing = the workflow engine. Move
       `business-days.ts` into core for `due_rule` (it currently lives in the
