@@ -125,3 +125,24 @@ Teams adapter.
 2. Confirm agent-as-seat-holder (§3) — spec assumes YES + mandatory escalation.
 3. Clear "HABU" trademark/domain before build-in-public.
 4. First external tenant agent to port: Estimate Chaser (recommended) or Ops Brief.
+
+## PR-A9 — Agent identity & voice (the "agents are colleagues" layer)
+
+- [x] **Agents as named seat-holders (§3 identity layer).** Migration 0008
+      `agent` (display_name, title, avatar, persona, expertise[], model).
+      `agent/identity.ts`: `AgentIdentity`, `agentActorFor` (ties to the
+      `agent:<id>` actor convention), `signature`, `slackIdentity`
+      (emoji/url → Slack `icon_emoji`/`icon_url`), `personaPreamble` (voice +
+      expertise + the guardrail "propose & file, never claim work, escalate at
+      the ceiling"). Slack adapter passes a per-agent sender identity
+      (`payload.as` → username/icon; needs `chat:write.customize`), so each
+      agent's cards post under its own name+face. `@habu/core/agent` subpath.
+      The `/habu` demo now has **Casey · Turnover Coordinator** holding step 2 —
+      acts as `agent:estimate_chaser`, signs its work, escalates to the human.
+      **Status: 118 tests pass, typecheck + build clean; verified live.**
+
+### Still to build for full Slack conversation (Phase B)
+- Inbound: Slack Events subscription → route @mention/thread-reply to the agent
+  holding that seat/subject → LLM(`personaPreamble` + jacket/brain context +
+  its allowed actions) → threaded reply, optionally a proposal. Reuses the
+  interact endpoint + outbox spine; nothing structural is missing.

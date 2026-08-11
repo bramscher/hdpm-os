@@ -50,15 +50,26 @@ export async function slackApi(
   }
 }
 
+/** Per-agent sender identity (chat.postMessage with chat:write.customize). */
+export interface SlackSenderIdentity {
+  username?: string;
+  icon_emoji?: string;
+  icon_url?: string;
+}
+
 export async function sendSlackMessage(input: {
   channel: string; // Slack user id (U…) → DM, or a channel/D… id
   text: string; // notification fallback
   blocks?: unknown[];
+  as?: SlackSenderIdentity; // agent identity; omitted → the bot's default name/avatar
 }): Promise<SendOutcome> {
   return slackApi('chat.postMessage', {
     channel: input.channel,
     text: input.text,
     ...(input.blocks ? { blocks: input.blocks } : {}),
+    ...(input.as?.username ? { username: input.as.username } : {}),
+    ...(input.as?.icon_emoji ? { icon_emoji: input.as.icon_emoji } : {}),
+    ...(input.as?.icon_url ? { icon_url: input.as.icon_url } : {}),
   });
 }
 
@@ -93,6 +104,7 @@ export const slackAdapter: ChannelAdapter = {
       channel: msg.recipient_address,
       text: msg.body ?? msg.subject ?? '',
       blocks: Array.isArray(msg.payload.blocks) ? (msg.payload.blocks as unknown[]) : undefined,
+      as: (msg.payload.as as SlackSenderIdentity | undefined) ?? undefined,
     });
   },
 };

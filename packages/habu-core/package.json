@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./jacket": "./src/jacket/index.ts",
-    "./brief": "./src/brief/engine.ts"
+    "./brief": "./src/brief/engine.ts",
+    "./agent": "./src/agent/index.ts"
   },
   "scripts": {
     "test": "vitest run",

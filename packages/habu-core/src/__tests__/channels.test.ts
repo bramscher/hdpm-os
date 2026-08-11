@@ -274,6 +274,21 @@ describe('slack adapter', () => {
     vi.unstubAllGlobals();
   });
 
+  it('posts with the agent sender identity when payload.as is set', async () => {
+    vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-test');
+    const calls: { body: Record<string, unknown> }[] = [];
+    vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
+      calls.push({ body: JSON.parse(init.body) });
+      return { json: async () => ({ ok: true, channel: 'D0ABC', ts: '1.2' }) };
+    });
+    await getAdapter('slack').send(
+      msg({ channel: 'slack', recipient_address: 'U123', payload: { as: { username: 'Casey', icon_emoji: ':robot_face:' } } })
+    );
+    expect(calls[0].body.username).toBe('Casey');
+    expect(calls[0].body.icon_emoji).toBe(':robot_face:');
+    vi.unstubAllGlobals();
+  });
+
   it('surfaces slack API errors as failed', async () => {
     vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-test');
     vi.stubGlobal('fetch', async () => ({

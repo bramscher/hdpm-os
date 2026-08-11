@@ -10,6 +10,23 @@ import {
   type JacketStep,
   type JacketTemplate,
 } from '@habu/core/jacket';
+import { agentActorFor, signature, type AgentIdentity } from '@habu/core/agent';
+
+// A named agent that HOLDS a seat (§3): a face, a voice, declared expertise.
+const CASEY: AgentIdentity = {
+  id: 'estimate_chaser',
+  org_id: 'demo',
+  display_name: 'Casey',
+  title: 'Turnover Coordinator',
+  avatar: '🤖',
+  persona: 'friendly, terse, a little dogged',
+  expertise: ['vendor scheduling', 'turnover cleans', 'follow-ups'],
+  model: 'claude-sonnet-5',
+  active: true,
+};
+
+// Which demo steps are held by an agent seat (rest are human seats).
+const AGENT_STEPS: Record<string, AgentIdentity> = { 'step-1': CASEY };
 
 // A move-out jacket template (Appendix A.1, trimmed for the demo). Step 3 closes
 // ITSELF when AppFolio reports the clean is scheduled — no human comes back.
@@ -62,7 +79,7 @@ function freshSteps(): JacketStep[] {
   });
 }
 
-type LogEntry = { text: string; kind: 'human' | 'system' };
+type LogEntry = { text: string; kind: 'human' | 'system' | 'agent' };
 
 export default function HabuDemo() {
   const [jacket, setJacket] = useState<Jacket>(freshJacket);
@@ -75,6 +92,7 @@ export default function HabuDemo() {
   );
   const active = useMemo(() => leadStep(steps), [steps]);
   const waitingExternal = active?.requires === 'external_event';
+  const activeAgent = active ? AGENT_STEPS[active.id] : undefined;
 
   function tap() {
     if (!active) return;
@@ -86,6 +104,22 @@ export default function HabuDemo() {
     setSteps(r.steps);
     setLog((l) => [
       { text: `You tapped “${active.label}” → ${r.transition.type === 'completed' ? 'jacket done' : 'routed on'}`, kind: 'human' },
+      ...l,
+    ]);
+  }
+
+  function agentAct() {
+    if (!active || !activeAgent) return;
+    const r = applyJacketAction(
+      jacket,
+      steps,
+      { kind: 'tap', step_id: active.id, actor: agentActorFor(activeAgent) },
+      { at: new Date().toISOString(), today: TODAY }
+    );
+    setJacket(r.jacket);
+    setSteps(r.steps);
+    setLog((l) => [
+      { text: `${activeAgent.display_name} handled “${active.label}” and moved it on. ${signature(activeAgent)}`, kind: 'agent' },
       ...l,
     ]);
   }
@@ -152,6 +186,25 @@ export default function HabuDemo() {
                   ⏳ Waiting on AppFolio to confirm the clean is scheduled. This step
                   closes itself — see the panel below.
                 </div>
+              ) : activeAgent ? (
+                <div style={S.agentBox}>
+                  <div style={S.agentRow}>
+                    <span style={{ fontSize: 20 }}>{activeAgent.avatar}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={S.agentName}>
+                        {activeAgent.display_name} <span style={S.agentTitle}>· {activeAgent.title}</span>
+                      </div>
+                      <div style={S.agentExp}>holds this seat · {activeAgent.expertise.join(' · ')}</div>
+                    </div>
+                    <span style={S.agentTag}>agent seat</span>
+                  </div>
+                  <button style={{ ...S.primaryBtn, marginTop: 12 }} onClick={agentAct}>
+                    ▶ Let {activeAgent.display_name} handle it
+                  </button>
+                  <div style={S.agentEscalate}>
+                    ↑ escalates to <b>you</b> (Coordinator) if it stalls or hits its ceiling
+                  </div>
+                </div>
               ) : (
                 <button style={S.primaryBtn} onClick={tap}>
                   {card.action.label}
@@ -204,8 +257,11 @@ export default function HabuDemo() {
         {log.length > 0 && (
           <div style={S.logBox}>
             {log.map((e, i) => (
-              <div key={i} style={{ color: e.kind === 'system' ? '#2563eb' : '#111', fontSize: 13, padding: '2px 0' }}>
-                {e.kind === 'system' ? '↩︎ ' : '→ '}
+              <div
+                key={i}
+                style={{ color: e.kind === 'system' ? '#2563eb' : e.kind === 'agent' ? '#7c3aed' : '#111', fontSize: 13, padding: '2px 0' }}
+              >
+                {e.kind === 'system' ? '↩︎ ' : e.kind === 'agent' ? '🤖 ' : '→ '}
                 {e.text}
               </div>
             ))}
@@ -250,6 +306,13 @@ const S: Record<string, React.CSSProperties> = {
   stepLine: { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #f1f1f2', fontSize: 14 },
   dot: { width: 9, height: 9, borderRadius: 999, flexShrink: 0 },
   stepMeta: { fontSize: 11, color: '#9ca3af', whiteSpace: 'nowrap' },
+  agentBox: { background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: 12, padding: 14 },
+  agentRow: { display: 'flex', gap: 10, alignItems: 'center' },
+  agentName: { fontSize: 14, fontWeight: 600, color: '#3b0764' },
+  agentTitle: { fontWeight: 400, color: '#7c3aed' },
+  agentExp: { fontSize: 12, color: '#8b5cf6', marginTop: 1 },
+  agentTag: { fontSize: 11, color: '#7c3aed', background: '#f3e8ff', borderRadius: 999, padding: '3px 8px', whiteSpace: 'nowrap' },
+  agentEscalate: { fontSize: 12, color: '#6b7280', marginTop: 10 },
   logBox: { marginTop: 16, background: '#fafafa', border: '1px solid #eee', borderRadius: 12, padding: 12 },
   reset: { marginTop: 20, background: 'transparent', border: 'none', color: '#8b8b8f', fontSize: 13, cursor: 'pointer' },
 };

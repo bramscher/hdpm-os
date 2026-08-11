@@ -60,3 +60,6 @@ export * from './watcher/engine';
 
 // Escalation ladder — the safety path for agent seats (agents file, never solve)
 export * from './escalation/ladder';
+
+// Agent identity & voice — named, persona-driven seat-holders (§3)
+export * from './agent/identity';
