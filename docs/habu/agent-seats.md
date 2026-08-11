@@ -123,13 +123,21 @@ v1 it can run headless.
 
 ---
 
-## The agent roster (roles settled — ready to name)
-1. **C1** Move-Out Coordinator → PM
-2. **C2** Move-In / Leasing Coordinator (the leasing AI agent) → PM
-3. **S1** Listing / Advertising → PM
-4. **S2** Finance Closer (owns the blue owner-close-out jacket) → Penny
-5. **S3** Owner Onboarding Prep (supports the PM's meeting) → PM
-   *(+ the Watcher/escalation ladder — headless, optional persona)*
+## The agent roster (named — process names for now, team personalizes later)
+
+`agent.id` is the STABLE key; only `display_name` changes at personalization
+time, so no seat/config rewiring. Seed: `supabase/seeds/habu_hdpm_roster.sql`.
+
+| id (stable) | display_name (now) | avatar | escalates to |
+|---|---|---|---|
+| `move_out` | Move-Out Agent | 🧰 | PM (Matt, default) |
+| `leasing` | Leasing Agent | 🔑 | PM (Matt, default) |
+| `listing` | Listing Agent | 📣 | PM (Matt, default) |
+| `finance_closer` | Finance Agent | 💸 | Finance (Penny) |
+| `onboarding_prep` | Onboarding Prep Agent | 📋 | PM (Matt, default) |
+
+*(+ the Watcher/escalation ladder — headless.)* Default PM escalation is the
+Executive PM (Matt) until the property→PM map lands (below).
 
 ## Still open (non-blocking — data, or refine later)
 - **PM routing** — 3+ PMs (Matt/Jen/Kennedy + new head). A jacket escalates to

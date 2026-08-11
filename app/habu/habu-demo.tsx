@@ -15,20 +15,20 @@ import { agentActorFor, signature, type AgentIdentity } from '@habu/core/agent';
 // A named agent that HOLDS a seat (§3): a face, a voice, declared expertise.
 // NB: a NEW HABU agent (purpose-built for running jackets), not one of HDPM's
 // existing ops agents — the core is agent-agnostic, this is just an `agent` row.
-const CASEY: AgentIdentity = {
-  id: 'move_out_coordinator',
-  org_id: 'demo',
-  display_name: 'Casey',
+const MOVE_OUT_AGENT: AgentIdentity = {
+  id: 'move_out',
+  org_id: 'hdpm',
+  display_name: 'Move-Out Agent', // process name for now; the team personalizes it later
   title: 'Turnover Coordinator',
-  avatar: '🤖',
+  avatar: '🧰',
   persona: 'friendly, terse, a little dogged',
-  expertise: ['vendor scheduling', 'turnover cleans', 'follow-ups'],
+  expertise: ['turnover scheduling', 'key tracking', 'deadline watching'],
   model: 'claude-sonnet-5',
   active: true,
 };
 
 // Which demo steps are held by an agent seat (rest are human seats).
-const AGENT_STEPS: Record<string, AgentIdentity> = { 'step-1': CASEY };
+const AGENT_STEPS: Record<string, AgentIdentity> = { 'step-1': MOVE_OUT_AGENT };
 
 // A move-out jacket template (Appendix A.1, trimmed for the demo). Step 3 closes
 // ITSELF when AppFolio reports the clean is scheduled — no human comes back.
