@@ -38,3 +38,7 @@ export * from './graph';
 
 // Core Supabase accessor
 export { getSupabaseAdmin } from './db';
+
+// Seats — primitive 1 (seat tree + agent-seat escalation invariants)
+export * from './eos/types';
+export * from './eos/seat';

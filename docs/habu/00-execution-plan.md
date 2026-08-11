@@ -29,9 +29,18 @@ This tracks how the spec is being built and where we are.
       `STAFF_PEOPLE`/`PEOPLE` from `types.ts` → staff table only.
       **Status: 37 tests pass, typecheck clean, zero `@/` imports, zero runtime
       HDPM literals. hdpm-os suite still 443 green.**
-- [ ] **PR-A3 — Seats.** Port `lib/eos/org.ts`, `escalation.ts`(+run),
-      `types.ts`. Add `holder_type`, `person_id`, `agent_id`,
-      `escalation_seat_id` to `Seat` (§3). `SEAT_AGENTS` static map → DB.
+- [x] **PR-A3 — Seats.** Ported `buildSeatTree` from `lib/eos/org.ts`; extended
+      `Seat` per §3 (`holder_type`, `person_id`, `agent_id`,
+      `escalation_seat_id`). Dropped the static `SEAT_AGENTS` map (§3 redefines
+      seat→agent as one holder on the row, not a code-side many-map). Added
+      `validateSeats` (agent-seat-needs-escalation + holder/field invariants)
+      and `resolveEscalationSeat` (cycle-safe walk to first human seat).
+      **Status: 47 tests pass, typecheck clean.**
+      **Scope note:** escalation-ladder extraction was NOT bundled here — the
+      current `escalation.ts`/`-run.ts` are fused to HDPM's tripwires (import
+      `TripwireException`, hardcode tripwire #11, wire tripwire-engine +
+      estimate-chaser). Separating the generic ladder from the tenant tripwire
+      cluster is the same surgery as Watchers → folded into **A7**.
 - [ ] **PR-A4 — Migrations.** Port the 6 §1.4 migrations minus
       `20260719_staff_seed_contacts.sql`; add `jacket`, `jacket_step`,
       `jacket_template`, `watcher_rule`; extend `seat`.
@@ -42,8 +51,11 @@ This tracks how the spec is being built and where we are.
 - [ ] **PR-A6 — Brief engine.** Generalize `morning-card.ts`: cap-at-7 +
       honest totals, decision cool-off, remove `owner==='Cheryl'` filter,
       severity → per-org config.
-- [ ] **PR-A7 — Watchers.** Extract the engine from `tripwire-engine.ts` +
-      `escalation.ts`; rules become org config.
+- [ ] **PR-A7 — Watchers + escalation ladder.** Extract the engine from
+      `tripwire-engine.ts`; rules become org config. Also here: split the
+      generic escalation ladder (Todo roll/miss→issue, aging/recurrence
+      counting, IssueDraft) out of `escalation.ts` from the tenant-specific
+      tripwire parts (deferred from A3).
 - [ ] **PR-A8 — Card renderer + generalized interact endpoint** (from the
       544-line `app/api/agents/slack/interact/route.ts`).
       **Acceptance gate (§8.3):** in a sandbox Slack, post card → tap →
