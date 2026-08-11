@@ -26,11 +26,22 @@ Permanent ceilings (§3 rule 2):
   → may reach **L3/L4** once trust is earned.
 - **Legal** → **L1** max (draft/chase only).
 
-## Human seats (escalation targets)
+## Seats agents escalate to (HDPM, 2026-08-11)
 
-Agent seats route up to these (each tenant maps them to real people):
-**Property Manager**, **Finance**, **Leasing Manager**. Every agent seat below
-names one — the §3 safety rule (enforced by `validateSeats`).
+- **Property Manager** — held by **two** people: **Kennedy** and **Jen**. In
+  HABU a seat has ONE holder, so these are two PM seats; a jacket escalates to
+  the PM responsible for that property (needs a property→PM map — see open Q3).
+- **Finance** — **Penny**. The Finance Closer agent escalates here.
+- **Leasing** — **held by an AI agent** (for now), not a human. It escalates up
+  to a Property Manager. So the chain is agent → agent → human:
+  *Move-In Coordinator → Leasing (agent) → PM (Kennedy/Jen).* The §3 rule is
+  satisfied because the chain reaches a human; `resolveEscalationSeat` walks it.
+- **Intake / front desk** — **Matt Free**, a *human* seat for now (not yet an
+  agent). A future agent candidate (first tenant contact + triage), but out of
+  the initial agent roster.
+
+Every agent seat names its escalation seat — the §3 safety rule (enforced by
+`validateSeats`).
 
 ---
 
@@ -58,7 +69,10 @@ names one — the §3 safety rule (enforced by `validateSeats`).
 - **Escalates (human-only / money L2):** the security-deposit ledger, lease
   preparation & send, HUD steps.
 - **Routes to specialists:** listing takedown coordination → Listing agent.
-- **Escalates to:** Leasing Manager.
+- **Escalates to:** **Leasing (agent seat)** → which itself escalates to a
+  Property Manager. NB: "leasing is our AI agent," so this Coordinator may in
+  fact BE the leasing agent rather than report to a separate one — confirm the
+  layering (open Q4).
 
 ## Specialists (shared across jackets)
 
@@ -70,10 +84,10 @@ names one — the §3 safety rule (enforced by `validateSeats`).
 - **Money-touching (L2):** ad-fee charges → propose, human approves.
 - **Escalates to:** Property Manager.
 
-### S2 · Finance Closer  ⟨name TBD⟩
-- **Owns:** the CLOSE-OUT accounting track across jackets **and** the owner
-  close-out (blue) jacket's accounting (spec A.5 — "almost entirely a finance-seat
-  process").
+### S2 · Finance Closer  ⟨name TBD⟩ — escalates to **Penny** (Finance)
+- **Owns:** the CLOSE-OUT accounting track across jackets **and the whole owner
+  close-out (blue) jacket** (confirmed 2026-08-11 — Finance Closer owns blue,
+  spec A.5 "almost entirely a finance-seat process").
 - **Handles autonomously (L2–L3 verification):** *check* ledger = $0, all
   invoices paid, recurring charges removed, reserve = $0 — all checkable against
   AppFolio (A.5). Reports pass/fail; does not move money.
@@ -99,11 +113,16 @@ v1 it can run headless.
 ---
 
 ## Open questions to close before naming
-1. Do **owner onboarding (black)** and **owner close-out (blue)** get their own
-   coordinator, or does Finance Closer own close-out and a human own onboarding?
-2. Is there a **front-desk / intake** agent (first tenant contact, triage) that
-   isn't tied to a single jacket?
-3. Confirm the three human seats (PM / Finance / Leasing) match how you'd chart it.
+1. **RESOLVED** — Finance Closer owns owner close-out (blue). Intake/front desk
+   = Matt (human, for now). Leasing = an AI agent → PM.
+2. **Owner onboarding (black jacket)** — still unassigned. Who owns it: a
+   Property Manager (relationship-led), or a new "Owner Onboarding" agent?
+3. **PM routing** — PM is Kennedy AND Jen. How does a jacket pick which one to
+   escalate to? By property assignment (need a property→PM map)? By default (one
+   senior PM)? Round-robin?
+4. **Leasing layering** — is the Move-In Coordinator itself the leasing AI agent
+   (one seat), or a Coordinator that reports to a separate Leasing agent seat?
+   (Affects whether the chain is 2 or 3 links to a human.)
 
 ## Next
 Name each seat (C1, C2, S1, S2) → then seed `agent` (identity/persona/expertise)
