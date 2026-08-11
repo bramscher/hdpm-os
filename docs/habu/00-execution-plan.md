@@ -82,10 +82,23 @@ This tracks how the spec is being built and where we are.
       adds `issue` + `todo`. Left tenant-side: `decideTripwireIssues`,
       estimate-chaser `buildEscalationIssue`, tripwire #11, TripwireException.
       **Status: 103 tests pass, typecheck clean.**
-- [ ] **PR-A8 — Card renderer + generalized interact endpoint** (from the
-      544-line `app/api/agents/slack/interact/route.ts`).
-      **Acceptance gate (§8.3):** in a sandbox Slack, post card → tap →
-      external webhook fires → card collapses with no human ack.
+- [x] **PR-A8 — Card + self-closing loop + demo.**
+      - **A8a (core):** `jacket/card.ts` neutral CardModel → Slack blocks OR web
+        ("one line, one color, one button"; done → single ✅); `jacket/interact.ts`
+        `applyJacketAction` resolves a tap OR an external event, `matchExternalEvent`
+        closes the matching active step with no human ack (§7 step 3). Pure.
+        Added `@habu/core/jacket` + `/brief` subpath exports.
+      - **A8b (tenant/demo):** `/habu` page in hdpm-os wires `@habu/core` (added
+        `transpilePackages`, `/habu` to proxy PUBLIC_PREFIXES). Client-side,
+        drives the REAL core engine — tap advances, "Simulate AppFolio
+        wo_scheduled" fires the external event, card collapses to ✅.
+      **Acceptance gate (§8.3) MET** — verified live in-browser: tap → tap →
+      external event auto-closes step (`done · system:appfolio`) → final tap →
+      card collapses, "clean board 🎉". 110 core tests pass; `next build`
+      clean; hdpm-os deploys with the workspace.
+      **Not done here:** DB persistence store (`jacket` rows + audit_event) and
+      the Slack-native interact route — deferred to Phase B (the demo proves the
+      loop off the pure engine without a DB).
 
 ## Phase B — Re-tenant HDPM
 

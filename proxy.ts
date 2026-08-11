@@ -34,6 +34,7 @@ const PUBLIC_PREFIXES = [
   "/api/eos/cron", // Friday scorecard — CRON_SECRET-guarded in the route
   "/api/reception/sync",
   "/api/inspections/candidates/sync",
+  "/habu", // HABU jacket-loop demo — client-side only, no data; reviewable on preview
 ];
 
 // Admin-only: the entire KPI/financial dashboard and its data APIs.
