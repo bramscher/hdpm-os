@@ -49,3 +49,6 @@ export * from './jacket/engine';
 
 // Business-day date math (jacket due_rule, watcher aging)
 export * from './business-days';
+
+// Brief — primitive 4 (per-human-seat daily brief: cap-at-7, cool-off, honest totals)
+export * from './brief/engine';

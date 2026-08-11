@@ -62,9 +62,15 @@ This tracks how the spec is being built and where we are.
       Moved `business-days.ts` from tenant `lib/maintenance/` into core + added
       `addBusinessDays`/`addCalendarDays`. **Status: 77 tests pass, typecheck
       clean.** DB persistence wrapper deferred to A8 (kept engine pure).
-- [ ] **PR-A6 — Brief engine.** Generalize `morning-card.ts`: cap-at-7 +
-      honest totals, decision cool-off, remove `owner==='Cheryl'` filter,
-      severity → per-org config.
+- [x] **PR-A6 — Brief engine.** `brief/engine.ts` generalizes
+      `morning-card.ts` off tripwires onto jackets, per human seat:
+      `rankBriefItems` (attention → org-config severity → age), `buildBrief`
+      (cap-at-7 items but honest board totals; `needs_you` uncapped),
+      `buildBriefExclusions`/`applyBriefExclusions` (decision cool-off — snooze
+      until date, else 3bd; "(marked done <date> — still unresolved)" resurface),
+      `briefHeadline`. Dropped `owner==='Cheryl'`, the 12-tripwire SEVERITY_TIERS
+      const, and AppFolio deep links (tenant concerns). Clock-free (`today`
+      passed in). **Status: 86 tests pass, typecheck clean.**
 - [ ] **PR-A7 — Watchers + escalation ladder.** Extract the engine from
       `tripwire-engine.ts`; rules become org config. Also here: split the
       generic escalation ladder (Todo roll/miss→issue, aging/recurrence
