@@ -52,10 +52,16 @@ This tracks how the spec is being built and where we are.
       (scorecard/issues/meetings/rocks) — not the four v1 primitives; A7 adds
       the issue/todo tables the ladder needs. **Status: pending application
       (manual, same as all hdpm-os migrations). No TS/test change.**
-- [ ] **PR-A5 — Jacket engine (new).** Types (§4), derived-color rule,
-      one-seat-at-a-time routing = the workflow engine. Move
-      `business-days.ts` into core for `due_rule` (it currently lives in the
-      tenant-side `lib/maintenance/` — a real spec conflict, §2 vs §4).
+- [x] **PR-A5 — Jacket engine (new, pure/DB-free).** `jacket/types.ts` +
+      `jacket/engine.ts`: `resolveDueRule` (`created+3bd` grammar, bd/d units),
+      `instantiateSteps` (first step of each track activates — parallel tracks
+      per App A.1, reduces to one step for linear), `advanceStep` (completing a
+      step routes to the next in-track = the workflow engine, §4 rule 1;
+      immutable, idempotent), `deriveAttention` (the derived 🔴 dot; color stays
+      process-identity per A.0), `currentSeatId`/`leadStep`/`projectJacket`.
+      Moved `business-days.ts` from tenant `lib/maintenance/` into core + added
+      `addBusinessDays`/`addCalendarDays`. **Status: 77 tests pass, typecheck
+      clean.** DB persistence wrapper deferred to A8 (kept engine pure).
 - [ ] **PR-A6 — Brief engine.** Generalize `morning-card.ts`: cap-at-7 +
       honest totals, decision cool-off, remove `owner==='Cheryl'` filter,
       severity → per-org config.

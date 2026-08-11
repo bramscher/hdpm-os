@@ -42,3 +42,10 @@ export { getSupabaseAdmin } from './db';
 // Seats — primitive 1 (seat tree + agent-seat escalation invariants)
 export * from './eos/types';
 export * from './eos/seat';
+
+// Jackets — primitive 2 (the work object + its workflow engine)
+export * from './jacket/types';
+export * from './jacket/engine';
+
+// Business-day date math (jacket due_rule, watcher aging)
+export * from './business-days';
