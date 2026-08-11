@@ -26,19 +26,19 @@ Permanent ceilings (§3 rule 2):
   → may reach **L3/L4** once trust is earned.
 - **Legal** → **L1** max (draft/chase only).
 
-## Seats agents escalate to (HDPM, 2026-08-11)
+## The human bench (HDPM, 2026-08-11)
 
-- **Property Manager** — held by **two** people: **Kennedy** and **Jen**. In
-  HABU a seat has ONE holder, so these are two PM seats; a jacket escalates to
-  the PM responsible for that property (needs a property→PM map — see open Q3).
-- **Finance** — **Penny**. The Finance Closer agent escalates here.
-- **Leasing** — **held by an AI agent** (for now), not a human. It escalates up
-  to a Property Manager. So the chain is agent → agent → human:
-  *Move-In Coordinator → Leasing (agent) → PM (Kennedy/Jen).* The §3 rule is
-  satisfied because the chain reaches a human; `resolveEscalationSeat` walks it.
-- **Intake / front desk** — **Matt Free**, a *human* seat for now (not yet an
-  agent). A future agent candidate (first tenant contact + triage), but out of
-  the initial agent roster.
+- **Property Managers** — **Matt**, **Jen**, **Kennedy**, plus a **new head
+  being hired** (real person, TBD). Each is its own PM seat (one holder per
+  seat). A jacket escalates to the PM who owns that property — needs a
+  property→PM map (open Q3).
+- **Finance** — **Penny**. Finance Closer escalates here.
+- **Assistant** — **Jayme Payne**.
+- **PM Assistant** — seat (holder TBD).
+- **Maintenance** — seat (holder TBD).
+- **Leasing** — **held by an AI agent**, not a human; escalates up to a PM. So
+  the chain is agent → agent → human (*Move-In → Leasing → PM*). §3 is satisfied
+  because it reaches a human; `resolveEscalationSeat` walks it.
 
 Every agent seat names its escalation seat — the §3 safety rule (enforced by
 `validateSeats`).
@@ -95,6 +95,17 @@ Every agent seat names its escalation seat — the §3 safety rule (enforced by
   statement, final accounting, management-fee posting.
 - **Escalates to:** Finance.
 
+### S3 · Owner Onboarding Prep  ⟨name TBD⟩ — supports the PM, doesn't own the jacket
+- **Owns:** nothing — the owner onboarding (black) jacket is **human-PM-owned**
+  and very hands-on (confirmed 2026-08-11). This agent is a *prep* seat.
+- **Handles autonomously (L1–L2, internal):** assemble everything for the
+  onboarding meeting — owner info packet, HDPM setup checklist, property/utility
+  data, draft of the welcome materials — so the PM walks in ready.
+- **Never:** runs the meeting or the relationship; that's the PM.
+- **Escalates to:** the owning **Property Manager**.
+- **Note:** likely the same pattern as the existing EOS Meeting-Prep agent —
+  candidate to share that machinery.
+
 ## Human-only (no agent seat)
 
 ### Eviction (red) — spec A.2
@@ -112,17 +123,20 @@ v1 it can run headless.
 
 ---
 
-## Open questions to close before naming
-1. **RESOLVED** — Finance Closer owns owner close-out (blue). Intake/front desk
-   = Matt (human, for now). Leasing = an AI agent → PM.
-2. **Owner onboarding (black jacket)** — still unassigned. Who owns it: a
-   Property Manager (relationship-led), or a new "Owner Onboarding" agent?
-3. **PM routing** — PM is Kennedy AND Jen. How does a jacket pick which one to
-   escalate to? By property assignment (need a property→PM map)? By default (one
-   senior PM)? Round-robin?
-4. **Leasing layering** — is the Move-In Coordinator itself the leasing AI agent
-   (one seat), or a Coordinator that reports to a separate Leasing agent seat?
-   (Affects whether the chain is 2 or 3 links to a human.)
+## The agent roster (roles settled — ready to name)
+1. **C1** Move-Out Coordinator → PM
+2. **C2** Move-In / Leasing Coordinator (the leasing AI agent) → PM
+3. **S1** Listing / Advertising → PM
+4. **S2** Finance Closer (owns the blue owner-close-out jacket) → Penny
+5. **S3** Owner Onboarding Prep (supports the PM's meeting) → PM
+   *(+ the Watcher/escalation ladder — headless, optional persona)*
+
+## Still open (non-blocking — data, or refine later)
+- **PM routing** — 3+ PMs (Matt/Jen/Kennedy + new head). A jacket escalates to
+  the PM who owns the property; the property→PM map is tenant seed data, filled
+  when we chart it. (Fallback: a default senior PM.)
+- **Leasing layering** — assuming the Move-In Coordinator IS the leasing agent
+  (one seat → PM), not a coordinator under a separate leasing agent. Confirm.
 
 ## Next
 Name each seat (C1, C2, S1, S2) → then seed `agent` (identity/persona/expertise)
