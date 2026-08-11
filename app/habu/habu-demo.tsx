@@ -13,8 +13,10 @@ import {
 import { agentActorFor, signature, type AgentIdentity } from '@habu/core/agent';
 
 // A named agent that HOLDS a seat (§3): a face, a voice, declared expertise.
+// NB: a NEW HABU agent (purpose-built for running jackets), not one of HDPM's
+// existing ops agents — the core is agent-agnostic, this is just an `agent` row.
 const CASEY: AgentIdentity = {
-  id: 'estimate_chaser',
+  id: 'move_out_coordinator',
   org_id: 'demo',
   display_name: 'Casey',
   title: 'Turnover Coordinator',
