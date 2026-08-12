@@ -7,3 +7,4 @@ export * from './types';
 export * from './engine';
 export * from './card';
 export * from './interact';
+export * from './templates/move-out';
