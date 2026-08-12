@@ -1463,7 +1463,17 @@ async function fetchAllRaw(path: string): Promise<RawRecord[]> {
   return all;
 }
 
-export async function fetchAppFolioVendorContacts(): Promise<AppFolioContact[]> {
+/**
+ * Zoom display-name prefix for a vendor: 'EV - ' for emergency vendors (so typing
+ * "EV" in Zoom Phone surfaces only them), else the standard 'V - '. Pure.
+ */
+export function vendorZoomPrefix(appfolioId: string, emergencyIds?: Set<string>): string {
+  return emergencyIds?.has(appfolioId) ? 'EV - ' : 'V - ';
+}
+
+export async function fetchAppFolioVendorContacts(
+  emergencyIds?: Set<string>
+): Promise<AppFolioContact[]> {
   const rows = await fetchAllRaw('/vendors');
   const out: AppFolioContact[] = [];
   for (const r of rows) {
@@ -1477,7 +1487,7 @@ export async function fetchAppFolioVendorContacts(): Promise<AppFolioContact[]> 
     out.push({
       appfolioId: id,
       type: 'vendor',
-      name: `V - ${name}`,
+      name: `${vendorZoomPrefix(id, emergencyIds)}${name}`,
       phoneRaw: extractPhone(r),
       email: extractEmail(r),
       propertyAddress: null,
@@ -1560,10 +1570,11 @@ export async function fetchAppFolioTenantContacts(): Promise<AppFolioContact[]> 
 
 /** Fetch contacts for the requested types, in one call. */
 export async function fetchAppFolioZoomContacts(
-  types: ZoomContactType[]
+  types: ZoomContactType[],
+  opts?: { emergencyVendorIds?: Set<string> }
 ): Promise<AppFolioContact[]> {
   const tasks: Promise<AppFolioContact[]>[] = [];
-  if (types.includes('vendor')) tasks.push(fetchAppFolioVendorContacts());
+  if (types.includes('vendor')) tasks.push(fetchAppFolioVendorContacts(opts?.emergencyVendorIds));
   if (types.includes('owner')) tasks.push(fetchAppFolioOwnerContacts());
   if (types.includes('tenant')) tasks.push(fetchAppFolioTenantContacts());
   const results = await Promise.all(tasks);

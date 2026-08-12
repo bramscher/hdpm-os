@@ -19,6 +19,7 @@ import {
   type AppFolioContact,
   type ZoomContactType,
 } from '@/lib/appfolio';
+import { listEmergencyVendorAppfolioIds } from '@/lib/maintenance/vendors';
 import {
   isZoomConfigured,
   listAllExternalContacts,
@@ -206,7 +207,8 @@ export async function previewZoomSync(opts: {
   const types = opts.types?.length ? opts.types : ALL_CONTACT_TYPES;
   const supabase = getSupabaseAdmin();
 
-  const source = await fetchAppFolioZoomContacts(types);
+  const emergencyVendorIds = await listEmergencyVendorAppfolioIds();
+  const source = await fetchAppFolioZoomContacts(types, { emergencyVendorIds });
   const byType = {
     vendor: { source: 0, withPhone: 0 },
     owner: { source: 0, withPhone: 0 },
@@ -332,8 +334,9 @@ export async function runZoomSync(opts: {
       throw new Error('Zoom credentials not configured (ZOOM_ACCOUNT_ID / ZOOM_CLIENT_ID / ZOOM_CLIENT_SECRET)');
     }
 
-    // 1. Source contacts from AppFolio.
-    const source = await fetchAppFolioZoomContacts(types);
+    // 1. Source contacts from AppFolio (emergency vendors → 'EV - ' prefix).
+    const emergencyVendorIds = await listEmergencyVendorAppfolioIds();
+    const source = await fetchAppFolioZoomContacts(types, { emergencyVendorIds });
     totalSource = source.length;
 
     // 2. Normalize phones; keep only contacts with a usable number.
