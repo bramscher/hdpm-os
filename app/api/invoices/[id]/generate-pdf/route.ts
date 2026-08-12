@@ -43,8 +43,15 @@ export async function POST(
       completed_date: invoice.completed_date ? String(invoice.completed_date) : null,
     };
 
+    // For a linked credit memo, surface the corrected invoice's code on the PDF.
+    let originalCode: string | undefined;
+    if (invoice.doc_type === 'credit' && invoice.credits_invoice_id) {
+      const original = await getInvoiceById(invoice.credits_invoice_id);
+      originalCode = original?.invoice_code;
+    }
+
     // Generate PDF using jsPDF (pure JS, no React dependency)
-    const pdfBuffer = generateInvoicePdf(safeInvoice);
+    const pdfBuffer = generateInvoicePdf(safeInvoice, { originalCode });
 
     // Upload to Supabase Storage
     const pdfPath = await uploadInvoicePdf(pdfBuffer, invoice);

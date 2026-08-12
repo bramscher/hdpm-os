@@ -9,6 +9,8 @@ function inv(over: Partial<HdmsInvoice>): HdmsInvoice {
     invoice_number: 1,
     invoice_code: 'HDMS-INV-000001',
     status: 'generated',
+    doc_type: 'invoice',
+    credits_invoice_id: null,
     property_name: 'P',
     property_address: 'A',
     wo_reference: null,
@@ -80,5 +82,33 @@ describe('aggregate + chargedSplit', () => {
       inv({ total_amount: 705.34, line_items: [{ description: 'm', type: 'materials', amount: 705.34, cost: 560 }] }),
     ];
     expect(chargedSplit(aggregate(invoices)).total).toBeCloseTo(18705.34, 2);
+  });
+
+  it('a credit nets the total down (over-bill correction reconciles)', () => {
+    const invoices = [
+      inv({ id: 'inv', total_amount: 500, line_items: [{ description: 'work', type: 'labor', amount: 500 }] }),
+      // A $200 credit stored as negatives (as createCredit produces).
+      inv({
+        id: 'cr',
+        doc_type: 'credit',
+        invoice_code: 'HDMS-CR-000002',
+        total_amount: -200,
+        line_items: [{ description: 'over-bill correction', type: 'other', amount: -200 }],
+      }),
+    ];
+    const t = aggregate(invoices);
+    expect(t.grand).toBe(300); // 500 − 200
+    expect(chargedSplit(t).total).toBe(300);
+    expect(t.other).toBe(-200); // credit lands in the 'other' bucket, not labor
+  });
+
+  it('a void credit is excluded like any void', () => {
+    const invoices = [
+      inv({ id: 'inv', total_amount: 500, line_items: [{ description: 'work', type: 'labor', amount: 500 }] }),
+      inv({ id: 'cr', doc_type: 'credit', status: 'void', total_amount: -200, line_items: [{ description: 'x', type: 'other', amount: -200 }] }),
+    ];
+    const t = aggregate(invoices);
+    expect(t.voidCount).toBe(1);
+    expect(t.grand).toBe(500); // void credit nets nothing
   });
 });

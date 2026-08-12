@@ -82,7 +82,8 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
 };
 
 function formatCurrency(amount: number): string {
-  return `$${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}$${Math.abs(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
 function formatDate(dateStr: string): string {
@@ -736,6 +737,14 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
                         >
                           {invoice.invoice_code}
                         </span>
+                        {invoice.doc_type === "credit" && (
+                          <span
+                            title="Credit memo — a negative-amount document that offsets an invoice"
+                            className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700"
+                          >
+                            Credit
+                          </span>
+                        )}
                         <span
                           className={cn(
                             "text-xs px-2 py-0.5 rounded-full font-medium",
@@ -797,7 +806,12 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
 
                   {/* Amount — fixed-width column so totals right-align across rows */}
                   <div className="text-right shrink-0 w-36">
-                    <span className="text-lg font-semibold text-charcoal-900">
+                    <span
+                      className={cn(
+                        "text-lg font-semibold",
+                        invoice.doc_type === "credit" ? "text-red-600" : "text-charcoal-900"
+                      )}
+                    >
                       {formatCurrency(invoice.total_amount)}
                     </span>
                     {(invoice.labor_amount > 0 || invoice.materials_amount > 0) && invoice.labor_amount !== invoice.total_amount && (

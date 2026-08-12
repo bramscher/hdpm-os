@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { createInvoice, getInvoices } from '@/lib/invoices';
+import { createInvoice, createCredit, getInvoices } from '@/lib/invoices';
 import { attachAfBillsToInvoices } from '@/lib/af-bills';
 
 export async function GET(request: NextRequest) {
@@ -54,7 +54,10 @@ export async function POST(request: NextRequest) {
     const materials = parseFloat(body.materials_amount) || 0;
     const total = body.total_amount != null ? parseFloat(body.total_amount) : labor + materials;
 
-    const invoice = await createInvoice({
+    // Amounts arrive as positive magnitudes; createCredit negates them. A credit
+    // may optionally reference the invoice it corrects (standalone omits it).
+    const isCredit = body.doc_type === 'credit';
+    const common = {
       property_name: property_name.trim(),
       property_address: property_address.trim(),
       wo_reference: body.wo_reference?.trim() || undefined,
@@ -67,7 +70,11 @@ export async function POST(request: NextRequest) {
       line_items: body.line_items?.length ? body.line_items : undefined,
       internal_notes: body.internal_notes?.trim() || undefined,
       created_by: session.user.email!,
-    });
+    };
+
+    const invoice = isCredit
+      ? await createCredit({ ...common, credits_invoice_id: body.credits_invoice_id || null })
+      : await createInvoice(common);
 
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {

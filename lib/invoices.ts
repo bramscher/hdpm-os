@@ -102,7 +102,9 @@ export interface WeeklyBillableHours {
  * haven't been generated yet).
  */
 export function weeklyBillableHours(
-  invoices: Pick<HdmsInvoice, 'status' | 'line_items' | 'completed_date' | 'created_at'>[],
+  invoices: (Pick<HdmsInvoice, 'status' | 'line_items' | 'completed_date' | 'created_at'> & {
+    doc_type?: 'invoice' | 'credit';
+  })[],
   now: Date = new Date()
 ): WeeklyBillableHours {
   const weekStart = weekStartPacific(now);
@@ -113,7 +115,7 @@ export function weeklyBillableHours(
   const lastWeek = { total: 0, byTech: {} as Record<string, number> };
 
   for (const inv of invoices) {
-    if (inv.status === 'void') continue;
+    if (inv.status === 'void' || inv.doc_type === 'credit') continue; // credits carry no labor hours
     const day = (inv.completed_date ?? inv.created_at ?? '').slice(0, 10);
     if (!day) continue;
     const bucket =
@@ -175,6 +177,14 @@ export interface HdmsInvoice {
   invoice_number: number;
   invoice_code: string;
   status: 'draft' | 'generated' | 'attached' | 'void';
+  /**
+   * Document kind. 'credit' rows are credit memos — negative-amount documents
+   * that net against invoices in every aggregate/payment. They share the
+   * draft→generated→attached lifecycle and carry an 'HDMS-CR-' code.
+   */
+  doc_type: 'invoice' | 'credit';
+  /** For a credit: the invoice it corrects (null for a standalone credit). */
+  credits_invoice_id: string | null;
   property_name: string;
   property_address: string;
   wo_reference: string | null;
@@ -221,6 +231,10 @@ export interface CreateInvoiceInput {
   line_items?: LineItem[];
   internal_notes?: string;
   created_by: string;
+  /** Defaults to 'invoice'. Set 'credit' to create a credit memo (see createCredit). */
+  doc_type?: 'invoice' | 'credit';
+  /** For a credit: the invoice it corrects (optional — standalone credits omit it). */
+  credits_invoice_id?: string | null;
 }
 
 export interface UpdateInvoiceInput {
@@ -293,6 +307,8 @@ export async function createInvoice(input: CreateInvoiceInput): Promise<HdmsInvo
       line_items: input.line_items?.length ? input.line_items : null,
       internal_notes: input.internal_notes || null,
       created_by: input.created_by,
+      doc_type: input.doc_type || 'invoice',
+      credits_invoice_id: input.credits_invoice_id || null,
     })
     .select()
     .single();
@@ -303,6 +319,34 @@ export async function createInvoice(input: CreateInvoiceInput): Promise<HdmsInvo
   }
 
   return data as HdmsInvoice;
+}
+
+/**
+ * Create a credit memo — a negative-amount document that nets against invoices
+ * in every aggregate and payment reconciliation. Amounts are supplied as
+ * POSITIVE magnitudes (what the form collects) and stored negative here, so the
+ * caller never juggles signs. Optionally linked to the invoice it corrects.
+ */
+export async function createCredit(
+  input: Omit<CreateInvoiceInput, 'doc_type'>
+): Promise<HdmsInvoice> {
+  const neg = (n: number) => -Math.abs(n);
+  const line_items = input.line_items?.map((li) => ({
+    ...li,
+    // Explicit type required — analyze() defaults a typeless line to 'labor',
+    // which would wrongly credit the labor bucket. Default a credit line to 'other'.
+    type: li.type || 'other',
+    amount: neg(li.amount),
+    ...(li.cost != null ? { cost: neg(li.cost) } : {}),
+  }));
+  return createInvoice({
+    ...input,
+    doc_type: 'credit',
+    labor_amount: neg(input.labor_amount),
+    materials_amount: neg(input.materials_amount),
+    total_amount: neg(input.total_amount),
+    line_items,
+  });
 }
 
 export async function getInvoices(limit = 50, offset = 0): Promise<HdmsInvoice[]> {

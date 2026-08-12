@@ -29,6 +29,7 @@ import { CsvUploader } from "./csv-uploader";
 import { WorkOrderTable } from "./work-order-table";
 import { InvoiceForm } from "./invoice-form";
 import { InvoiceList } from "./invoice-list";
+import { CreditForm } from "./credit-form";
 import { BillableReport } from "./billable-report";
 import { DailyReport } from "./daily-report";
 import { InhouseReport } from "./inhouse-report";
@@ -192,6 +193,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const [reportInvoices, setReportInvoices] = useState<HdmsInvoice[] | null>(null);
   const [reconcileInvoices, setReconcileInvoices] = useState<HdmsInvoice[] | null>(null);
   const [paymentsReloadToken, setPaymentsReloadToken] = useState(0);
+  const [showCreditForm, setShowCreditForm] = useState(false);
 
   // Work orders state
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -1074,10 +1076,20 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           {/* ============================== */}
           {activeTab === "invoices" && (
             <>
-              <div className="bg-white rounded-xl border border-sand-200 shadow-card px-4 py-2.5 text-sm text-charcoal-600 mb-4">
-                These invoice PDFs are generated and stored here in HDPM-OS. They are
-                <strong> not</strong> pushed to AppFolio automatically — download each PDF and
-                upload it to the AppFolio work order yourself, then mark it attached.
+              <div className="flex items-start gap-3 mb-4">
+                <div className="flex-1 bg-white rounded-xl border border-sand-200 shadow-card px-4 py-2.5 text-sm text-charcoal-600">
+                  These invoice PDFs are generated and stored here in HDPM-OS. They are
+                  <strong> not</strong> pushed to AppFolio automatically — download each PDF and
+                  upload it to the AppFolio work order yourself, then mark it attached.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreditForm(true)}
+                  className="shrink-0 h-10 px-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium hover:bg-red-100 transition-colors"
+                  title="Create a credit memo to correct an over-billed or duplicate invoice"
+                >
+                  + New credit
+                </button>
               </div>
               <InvoiceList
                 invoices={invoices}
@@ -1157,6 +1169,15 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           editInvoice={editInvoice}
           onBack={handleBackFromForm}
           onSaved={handleInvoiceSaved}
+        />
+      )}
+
+      {/* New credit memo (modal) */}
+      {showCreditForm && (
+        <CreditForm
+          invoices={invoices}
+          onClose={() => setShowCreditForm(false)}
+          onCreated={fetchInvoices}
         />
       )}
 
