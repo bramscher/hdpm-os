@@ -3,6 +3,8 @@ import {
   resolvePhonePrimaries,
   orderByLastSyncedAscending,
   isSyncablePhone,
+  buildCustomIdIndex,
+  resolveZoomId,
   EXCLUDED_PHONES,
   type ContactMapRow,
   type DesiredContact,
@@ -190,5 +192,55 @@ describe('isSyncablePhone', () => {
 
   it('accepts an ordinary normalized number', () => {
     expect(isSyncablePhone('+15415550123')).toBe(true);
+  });
+});
+
+describe('buildCustomIdIndex', () => {
+  it('maps our custom id → external_contact_id, ignoring contacts without one', () => {
+    const idx = buildCustomIdIndex([
+      { external_contact_id: 'ext1', id: 'hdpm-tenant-abc' },
+      { external_contact_id: 'ext2' }, // no custom id → skipped
+      { external_contact_id: 'ext3', id: 'hdpm-vendor-xyz' },
+    ]);
+    expect(idx.get('hdpm-tenant-abc')).toBe('ext1');
+    expect(idx.get('hdpm-vendor-xyz')).toBe('ext3');
+    expect(idx.size).toBe(2);
+  });
+
+  it('keeps the first external id when a custom id repeats', () => {
+    const idx = buildCustomIdIndex([
+      { external_contact_id: 'ext1', id: 'hdpm-tenant-abc' },
+      { external_contact_id: 'ext2', id: 'hdpm-tenant-abc' },
+    ]);
+    expect(idx.get('hdpm-tenant-abc')).toBe('ext1');
+  });
+});
+
+describe('resolveZoomId', () => {
+  const phoneIndex = new Map([['+15415550001', 'ext-phone']]);
+  const idIndex = new Map([['hdpm-tenant-abc', 'ext-id']]);
+
+  it('prefers our recorded mapping above all else', () => {
+    expect(
+      resolveZoomId('ext-recorded', '+15415550001', 'hdpm-tenant-abc', phoneIndex, idIndex)
+    ).toBe('ext-recorded');
+  });
+
+  it('falls back to phone adoption when unmapped', () => {
+    expect(
+      resolveZoomId(null, '+15415550001', 'hdpm-tenant-abc', phoneIndex, idIndex)
+    ).toBe('ext-phone');
+  });
+
+  it('falls back to custom id when phone lookup misses (the "ID already exists" fix)', () => {
+    expect(
+      resolveZoomId(null, '+15419999999', 'hdpm-tenant-abc', phoneIndex, idIndex)
+    ).toBe('ext-id');
+  });
+
+  it('returns null when nothing matches → a genuine create', () => {
+    expect(
+      resolveZoomId(null, '+15419999999', 'hdpm-tenant-unknown', phoneIndex, idIndex)
+    ).toBeNull();
   });
 });
