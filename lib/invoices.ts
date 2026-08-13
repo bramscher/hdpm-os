@@ -185,6 +185,14 @@ export interface HdmsInvoice {
   doc_type: 'invoice' | 'credit';
   /** For a credit: the invoice it corrects (null for a standalone credit). */
   credits_invoice_id: string | null;
+  /**
+   * Duplicate variant marker. NULL on originals; 1,2,… on duplicates, which
+   * reuse the source's invoice_number and read as HDMS-INV-000041-1 via
+   * invoice_code. See duplicateInvoice.
+   */
+  variant_suffix: number | null;
+  /** For a duplicate: the invoice it was copied from (null for originals). */
+  duplicated_from_id: string | null;
   property_name: string;
   property_address: string;
   wo_reference: string | null;
@@ -316,6 +324,72 @@ export async function createInvoice(input: CreateInvoiceInput): Promise<HdmsInvo
   if (error) {
     console.error('Error creating invoice:', error);
     throw new Error(`Failed to create invoice: ${error.message}`);
+  }
+
+  return data as HdmsInvoice;
+}
+
+/**
+ * Next free variant suffix for a duplicate, given the suffixes already present
+ * on rows sharing the base invoice_number. Originals contribute NULL (ignored);
+ * the first duplicate is 1, then one past the current max.
+ */
+export function nextVariantSuffix(existing: (number | null | undefined)[]): number {
+  const max = existing.reduce<number>((m, s) => (s != null && s > m ? s : m), 0);
+  return max + 1;
+}
+
+/**
+ * Duplicate an invoice: create a new DRAFT that reuses the source's number with
+ * the next free suffix (HDMS-INV-000041 → …-1 → …-2), copying its content
+ * (property, description, amounts, line items). The copy is deliberately a fresh
+ * draft — pdf_path and payment_id are NOT carried over (it's un-PDF'd & unbilled).
+ * doc_type is preserved so duplicating a credit yields a credit.
+ */
+export async function duplicateInvoice(id: string, createdBy: string): Promise<HdmsInvoice> {
+  const supabase = getSupabaseAdmin();
+
+  const source = await getInvoiceById(id);
+  if (!source) throw new Error('Invoice not found');
+
+  // All rows sharing this base number → next free suffix.
+  const { data: siblings, error: sibErr } = await supabase
+    .from('hdms_invoices')
+    .select('variant_suffix')
+    .eq('invoice_number', source.invoice_number);
+  if (sibErr) throw new Error(`Failed to read invoice variants: ${sibErr.message}`);
+  const suffix = nextVariantSuffix(
+    (siblings as { variant_suffix: number | null }[]).map((r) => r.variant_suffix)
+  );
+
+  const { data, error } = await supabase
+    .from('hdms_invoices')
+    .insert({
+      invoice_number: source.invoice_number,
+      variant_suffix: suffix,
+      duplicated_from_id: source.id,
+      doc_type: source.doc_type,
+      status: 'draft',
+      property_name: source.property_name,
+      property_address: source.property_address,
+      wo_reference: source.wo_reference,
+      work_order_id: source.work_order_id,
+      completed_date: source.completed_date,
+      description: source.description,
+      labor_amount: source.labor_amount,
+      materials_amount: source.materials_amount,
+      total_amount: source.total_amount,
+      line_items: source.line_items?.length ? source.line_items : null,
+      internal_notes: source.internal_notes,
+      credits_invoice_id: source.credits_invoice_id,
+      created_by: createdBy,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error duplicating invoice:', error);
+    throw new Error(`Failed to duplicate invoice: ${error.message}`);
   }
 
   return data as HdmsInvoice;

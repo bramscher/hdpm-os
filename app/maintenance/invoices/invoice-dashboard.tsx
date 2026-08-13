@@ -560,6 +560,21 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
     setView("form");
   }
 
+  // Duplicate: create a draft copy (same number + next suffix) then open it in
+  // the editor so the user can adjust and save.
+  async function handleDuplicateInvoice(invoice: HdmsInvoice) {
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/duplicate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to duplicate invoice");
+      toast.success(`Created ${data.invoice.invoice_code} — edit and save when ready.`);
+      await fetchInvoices();
+      handleEditInvoice(data.invoice as HdmsInvoice);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not duplicate that invoice.");
+    }
+  }
+
   function handleInvoiceSaved() {
     fetchInvoices();
     setActiveTab("invoices");
@@ -1097,6 +1112,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 invoices={invoices}
                 onRefresh={fetchInvoices}
                 onEdit={handleEditInvoice}
+                onDuplicate={handleDuplicateInvoice}
                 onRunReport={isAdmin ? setReportInvoices : undefined}
                 onReconcile={setReconcileInvoices}
                 isLoading={isLoadingInvoices}
