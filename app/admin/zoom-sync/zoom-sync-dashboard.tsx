@@ -33,7 +33,12 @@ interface SyncRun {
   failed_count: number;
   deactivated_count: number;
   error_message: string | null;
-  details: { writeCapHit?: boolean; withoutPhone?: number; sampleErrors?: string[] } | null;
+  details: {
+    writeCapHit?: boolean;
+    withoutPhone?: number;
+    sampleErrors?: string[];
+    phoneCollisions?: { skippedCount: number; samples: string[] };
+  } | null;
 }
 
 interface Summary {
@@ -315,6 +320,21 @@ export function ZoomSyncDashboard() {
               were skipped.
             </p>
           ) : null}
+          {lastRun.details?.phoneCollisions && lastRun.details.phoneCollisions.skippedCount > 0 && (
+            <details className="mt-3">
+              <summary className="text-xs text-charcoal-500 cursor-pointer">
+                {lastRun.details.phoneCollisions.skippedCount} contact(s) skipped — phone shared
+                with another synced contact
+              </summary>
+              <ul className="mt-2 space-y-1 text-xs text-charcoal-400">
+                {lastRun.details.phoneCollisions.samples.map((s, i) => (
+                  <li key={i} className="font-mono">
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           {lastRun.details?.sampleErrors && lastRun.details.sampleErrors.length > 0 && (
             <details className="mt-3">
               <summary className="text-xs text-charcoal-500 cursor-pointer">
