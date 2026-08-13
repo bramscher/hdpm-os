@@ -193,6 +193,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const [reportInvoices, setReportInvoices] = useState<HdmsInvoice[] | null>(null);
   const [reconcileInvoices, setReconcileInvoices] = useState<HdmsInvoice[] | null>(null);
   const [paymentsReloadToken, setPaymentsReloadToken] = useState(0);
+  // Bumped when a payment is recorded, so the reconcile list clears its saved selection.
+  const [reconcileClearToken, setReconcileClearToken] = useState(0);
   const [showCreditForm, setShowCreditForm] = useState(false);
 
   // Work orders state
@@ -1150,6 +1152,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
               onEdit={handleEditInvoice}
               onReconcile={setReconcileInvoices}
               reloadToken={paymentsReloadToken}
+              clearSelectionToken={reconcileClearToken}
             />
           )}
         </div>
@@ -1197,6 +1200,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           onRecorded={() => {
             fetchInvoices();
             setPaymentsReloadToken((t) => t + 1);
+            setReconcileClearToken((t) => t + 1);
           }}
         />
       )}
