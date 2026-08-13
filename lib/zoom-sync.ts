@@ -191,6 +191,37 @@ export function orderByLastSyncedAscending(
   return [...items].sort((a, b) => lastSyncedTime(a) - lastSyncedTime(b));
 }
 
+/**
+ * Build a lookup from our custom contact id (hdpm-<type>-<appfolioId>, set on
+ * create) to the Zoom external_contact_id, from a Zoom contact listing.
+ */
+export function buildCustomIdIndex(
+  zoomContacts: { external_contact_id: string; id?: string }[]
+): Map<string, string> {
+  const idIndex = new Map<string, string>();
+  for (const zc of zoomContacts) {
+    if (zc.id && !idIndex.has(zc.id)) idIndex.set(zc.id, zc.external_contact_id);
+  }
+  return idIndex;
+}
+
+/**
+ * Resolve which existing Zoom contact a desired contact maps to, if any.
+ * Priority: our recorded mapping → adopt by phone → adopt by our custom id.
+ * The custom-id fallback covers contacts that already exist in Zoom under
+ * hdpm-<type>-<appfolioId> but have no phone Zoom can index — without it they
+ * fail create forever with "ID already exists".
+ */
+export function resolveZoomId(
+  existingZoomId: string | null | undefined,
+  phone: string,
+  customId: string,
+  phoneIndex: Map<string, string>,
+  idIndex: Map<string, string>
+): string | null {
+  return existingZoomId || phoneIndex.get(phone) || idIndex.get(customId) || null;
+}
+
 // ============================================
 // DB types & helpers
 // ============================================
@@ -366,6 +397,7 @@ export async function previewZoomSync(opts: {
   const mapByKey = new Map(mapRows.map((r) => [`${r.contact_type}:${r.appfolio_id}`, r]));
 
   let phoneIndex = new Map<string, string>();
+  let idIndex = new Map<string, string>();
   if (isZoomConfigured()) {
     try {
       const zoomContacts = await listAllExternalContacts();
@@ -375,8 +407,10 @@ export async function previewZoomSync(opts: {
           if (norm && !phoneIndex.has(norm)) phoneIndex.set(norm, zc.external_contact_id);
         }
       }
+      idIndex = buildCustomIdIndex(zoomContacts);
     } catch {
       phoneIndex = new Map();
+      idIndex = new Map();
     }
   }
 
@@ -387,7 +421,8 @@ export async function previewZoomSync(opts: {
   let wouldSkip = 0;
   for (const { contact, phone } of primaries) {
     const existing = mapByKey.get(`${contact.type}:${contact.appfolioId}`);
-    const zoomId = existing?.zoom_external_contact_id || phoneIndex.get(phone) || null;
+    const customId = `hdpm-${contact.type}-${contact.appfolioId}`;
+    const zoomId = resolveZoomId(existing?.zoom_external_contact_id, phone, customId, phoneIndex, idIndex);
     if (!zoomId) {
       wouldCreate++;
     } else if (
@@ -489,8 +524,10 @@ export async function runZoomSync(opts: {
     const mapRows = (mapData as ContactMapRow[]) ?? [];
     const mapByKey = new Map(mapRows.map((r) => [`${r.contact_type}:${r.appfolio_id}`, r]));
 
-    // 4. Existing Zoom contacts → phone index for first-run reconciliation
-    //    (so we adopt rather than duplicate contacts already in Zoom).
+    // 4. Existing Zoom contacts → phone + custom-id indexes for reconciliation
+    //    (so we adopt rather than duplicate contacts already in Zoom). The
+    //    custom-id index catches contacts that exist under our hdpm-<...> id but
+    //    have no phone Zoom can match, which otherwise fail create forever.
     const zoomContacts = await listAllExternalContacts();
     const phoneIndex = new Map<string, string>();
     for (const zc of zoomContacts) {
@@ -499,6 +536,7 @@ export async function runZoomSync(opts: {
         if (norm && !phoneIndex.has(norm)) phoneIndex.set(norm, zc.external_contact_id);
       }
     }
+    const idIndex = buildCustomIdIndex(zoomContacts);
 
     // 5. Collapse phone collisions to one primary per number (see
     //    resolvePhonePrimaries doc comment), then order never-synced /
@@ -519,7 +557,7 @@ export async function runZoomSync(opts: {
       const description = descriptionFor(contact);
       const customId = `hdpm-${contact.type}-${contact.appfolioId}`;
 
-      let zoomId = existing?.zoom_external_contact_id || phoneIndex.get(phone) || null;
+      let zoomId = resolveZoomId(existing?.zoom_external_contact_id, phone, customId, phoneIndex, idIndex);
       const changed =
         !existing ||
         existing.name !== contact.name ||
