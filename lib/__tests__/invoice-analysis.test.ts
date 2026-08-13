@@ -11,6 +11,8 @@ function inv(over: Partial<HdmsInvoice>): HdmsInvoice {
     status: 'generated',
     doc_type: 'invoice',
     credits_invoice_id: null,
+    variant_suffix: null,
+    duplicated_from_id: null,
     property_name: 'P',
     property_address: 'A',
     wo_reference: null,

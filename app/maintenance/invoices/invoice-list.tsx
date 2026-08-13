@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   XCircle,
   Pencil,
+  Copy,
   Trash2,
   Loader2,
   FileText,
@@ -35,6 +36,8 @@ interface InvoiceListProps {
   invoices: HdmsInvoice[];
   onRefresh: () => void;
   onEdit: (invoice: HdmsInvoice) => void;
+  /** Duplicate an invoice (same number + next suffix). Button hidden when omitted. */
+  onDuplicate?: (invoice: HdmsInvoice) => void | Promise<void>;
   /** Open the internal markup report for the selected invoices. Button hidden when omitted. */
   onRunReport?: (invoices: HdmsInvoice[]) => void;
   /** Reconcile the selected invoices to a trust-account payment. Button hidden when omitted. */
@@ -232,8 +235,9 @@ function PdfPreviewModal({
 // Invoice List
 // ============================================
 
-export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconcile, isLoading }: InvoiceListProps) {
+export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunReport, onReconcile, isLoading }: InvoiceListProps) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [previewInvoice, setPreviewInvoice] = useState<HdmsInvoice | null>(null);
 
@@ -430,6 +434,16 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
       }
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  async function handleDuplicate(invoice: HdmsInvoice) {
+    if (!onDuplicate || duplicatingId) return;
+    setDuplicatingId(invoice.id);
+    try {
+      await onDuplicate(invoice);
+    } finally {
+      setDuplicatingId(null);
     }
   }
 
@@ -852,7 +866,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
                   </div>
 
                   {/* Actions — right-aligned in a consistent-width column regardless of button count */}
-                  <div className="flex items-center justify-end gap-1 shrink-0 min-w-[224px]">
+                  <div className="flex items-center justify-end gap-1 shrink-0 min-w-[256px]">
                     {/* Preview */}
                     {hasPdf && (
                       <Button
@@ -878,6 +892,24 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onRunReport, onReconc
                         className="h-8 w-8 p-0"
                       >
                         <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+
+                    {/* Duplicate — same number with the next -1/-2 suffix, as a new draft */}
+                    {onDuplicate && !isVoid && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDuplicate(invoice)}
+                        disabled={actionLoading !== null || duplicatingId !== null}
+                        title="Duplicate — creates a draft copy with the same number and the next suffix (…-1, …-2)"
+                        className="h-8 w-8 p-0"
+                      >
+                        {duplicatingId === invoice.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
                       </Button>
                     )}
 
