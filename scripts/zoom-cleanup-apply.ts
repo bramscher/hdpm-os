@@ -9,25 +9,32 @@
  * Zoom id. With EXCLUDED_PHONES in place, the next sync leaves these alone.
  *
  * Usage:
- *   # 1. get ids from the diagnosis first:
- *   npx tsx scripts/zoom-cleanup-diagnose.ts
+ *   # 1. generate + curate the candidate file:
+ *   npx tsx scripts/zoom-cleanup-diagnose.ts       # writes scripts/zoom-cleanup.candidates.json
+ *   #    → open that file, drop any id from `delete[]` you want to KEEP
  *
  *   # 2. preview (no writes):
- *   npx tsx scripts/zoom-cleanup-apply.ts --ids ext_abc,ext_def
+ *   npx tsx scripts/zoom-cleanup-apply.ts --from-file scripts/zoom-cleanup.candidates.json
  *
  *   # 3. actually delete (Zoom + map), after you've reviewed:
+ *   npx tsx scripts/zoom-cleanup-apply.ts --from-file scripts/zoom-cleanup.candidates.json --confirm
+ *
+ *   # (ad-hoc alternative: pass ids inline)
  *   npx tsx scripts/zoom-cleanup-apply.ts --ids ext_abc,ext_def --confirm
  *
  * Flags:
- *   --ids a,b,c   (required) comma-separated Zoom external_contact_ids to delete
- *   --confirm     perform the deletes/updates (omit = dry-run)
- *   --keep-map    delete from Zoom only; leave zoom_contact_map rows untouched
+ *   --from-file p  read ids from `delete[].id` in the JSON file p (from the diagnose script)
+ *   --ids a,b,c    comma-separated Zoom external_contact_ids (use instead of --from-file)
+ *   --confirm      perform the deletes/updates (omit = dry-run)
+ *   --keep-map     delete from Zoom only; leave zoom_contact_map rows untouched
  *
+ * Provide exactly one of --from-file or --ids.
  * Requires live ZOOM_* + SUPABASE creds in .env.local.
  */
 
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+import { readFileSync } from 'fs';
 import { getSupabaseAdmin } from '../lib/supabase';
 import {
   isZoomConfigured,
@@ -41,18 +48,37 @@ function getFlag(name: string): string | null {
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : null;
 }
 
+function idsFromFile(path: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (e) {
+    console.error(`Could not read/parse ${path}: ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+  const del = (parsed as { delete?: { id?: string }[] }).delete;
+  if (!Array.isArray(del)) {
+    console.error(`${path} has no \`delete\` array — is it the file from zoom-cleanup-diagnose.ts?`);
+    process.exit(1);
+  }
+  return del.map((d) => (d?.id ?? '').trim()).filter(Boolean);
+}
+
 async function main() {
   const confirm = process.argv.includes('--confirm');
   const keepMap = process.argv.includes('--keep-map');
   const idsArg = getFlag('--ids');
+  const fromFile = getFlag('--from-file');
 
-  if (!idsArg) {
-    console.error('Missing --ids. Run scripts/zoom-cleanup-diagnose.ts first, then pass --ids a,b,c.');
+  if ((idsArg && fromFile) || (!idsArg && !fromFile)) {
+    console.error('Provide exactly one of --from-file <path> or --ids a,b,c. Run zoom-cleanup-diagnose.ts first.');
     process.exit(1);
   }
-  const ids = idsArg.split(',').map((s) => s.trim()).filter(Boolean);
+  const ids = fromFile
+    ? idsFromFile(fromFile)
+    : (idsArg as string).split(',').map((s) => s.trim()).filter(Boolean);
   if (!ids.length) {
-    console.error('--ids was empty.');
+    console.error(fromFile ? `No ids in ${fromFile} \`delete[]\`.` : '--ids was empty.');
     process.exit(1);
   }
   if (!isZoomConfigured()) {
