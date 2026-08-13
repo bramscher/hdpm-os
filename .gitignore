@@ -42,3 +42,7 @@ scripts/seed-financials.js
 
 # Ops soul/brain reference specs — parked (Craig 7/23/26): keep local, do not commit yet
 docs/soul-brain/
+
+# Generated Zoom cleanup candidate files (contain live contact ids/names — keep local)
+scripts/zoom-cleanup.candidates.json
+scripts/*.candidates.json

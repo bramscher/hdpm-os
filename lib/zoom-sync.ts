@@ -54,6 +54,19 @@ export function normalizePhone(raw: string | null | undefined): string | null {
   return null;
 }
 
+// Shared / office lines that must never become an external contact: one number
+// sits on many AppFolio records, so syncing it means Zoom duplicate-phone create
+// errors plus last-writer name churn on the single contact Zoom keeps. Excluded
+// here → treated as "no usable phone" everywhere, and the vanished-contact pass
+// then deactivates any stale map rows that used to carry the number.
+// +15415480383 = HDPM office line (was on TEST VENDOR / HDPM / HDMS).
+export const EXCLUDED_PHONES = new Set<string>(['+15415480383']);
+
+/** A normalized phone we're willing to push to Zoom (non-null, not a shared line). */
+export function isSyncablePhone(phone: string | null): phone is string {
+  return phone !== null && !EXCLUDED_PHONES.has(phone);
+}
+
 function descriptionFor(c: AppFolioContact): string {
   if (c.type === 'tenant') {
     return c.propertyAddress ? `Tenant — ${c.propertyAddress}` : 'Tenant';
@@ -339,7 +352,7 @@ export async function previewZoomSync(opts: {
   for (const c of source) {
     byType[c.type].source++;
     const phone = normalizePhone(c.phoneRaw);
-    if (phone) {
+    if (isSyncablePhone(phone)) {
       byType[c.type].withPhone++;
       desired.push({ contact: c, phone });
     } else if (samplesWithoutPhone.length < 10) {
@@ -461,10 +474,10 @@ export async function runZoomSync(opts: {
     const source = await fetchAppFolioZoomContacts(types, { emergencyVendorIds });
     totalSource = source.length;
 
-    // 2. Normalize phones; keep only contacts with a usable number.
+    // 2. Normalize phones; keep only contacts with a usable, non-shared number.
     const desired = source
       .map((c) => ({ contact: c, phone: normalizePhone(c.phoneRaw) }))
-      .filter((d): d is { contact: AppFolioContact; phone: string } => d.phone !== null);
+      .filter((d): d is { contact: AppFolioContact; phone: string } => isSyncablePhone(d.phone));
     withPhone = desired.length;
     const desiredKeys = new Set(desired.map((d) => `${d.contact.type}:${d.contact.appfolioId}`));
 

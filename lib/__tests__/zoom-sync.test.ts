@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   resolvePhonePrimaries,
   orderByLastSyncedAscending,
+  isSyncablePhone,
+  EXCLUDED_PHONES,
   type ContactMapRow,
   type DesiredContact,
 } from '../zoom-sync';
@@ -170,5 +172,23 @@ describe('orderByLastSyncedAscending', () => {
     const original = [...desired];
     orderByLastSyncedAscending(desired, new Map());
     expect(desired).toEqual(original);
+  });
+});
+
+describe('isSyncablePhone', () => {
+  it('rejects null', () => {
+    expect(isSyncablePhone(null)).toBe(false);
+  });
+
+  it('rejects excluded shared/office lines', () => {
+    for (const p of EXCLUDED_PHONES) {
+      expect(isSyncablePhone(p)).toBe(false);
+    }
+    // The known HDPM office line specifically.
+    expect(isSyncablePhone('+15415480383')).toBe(false);
+  });
+
+  it('accepts an ordinary normalized number', () => {
+    expect(isSyncablePhone('+15415550123')).toBe(true);
   });
 });
