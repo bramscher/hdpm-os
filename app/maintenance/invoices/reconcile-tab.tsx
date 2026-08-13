@@ -50,6 +50,8 @@ interface ReconcileTabProps {
   onReconcile: (invoices: HdmsInvoice[]) => void;
   /** Bump to force a re-fetch of the payments ledger (e.g. after recording). */
   reloadToken: number;
+  /** Bump when a payment is recorded, to clear the saved reconcile selection. */
+  clearSelectionToken: number;
 }
 
 export function ReconcileTab({
@@ -59,6 +61,7 @@ export function ReconcileTab({
   onEdit,
   onReconcile,
   reloadToken,
+  clearSelectionToken,
 }: ReconcileTabProps) {
   const [mode, setMode] = useState<"ledger" | "new" | "billing">("ledger");
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -233,6 +236,8 @@ export function ReconcileTab({
           onRefresh={onRefreshInvoices}
           onEdit={onEdit}
           onReconcile={onReconcile}
+          persistSelection
+          clearSelectionToken={clearSelectionToken}
           isLoading={isLoadingInvoices}
         />
       </div>
