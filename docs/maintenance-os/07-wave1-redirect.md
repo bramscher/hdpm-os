@@ -85,6 +85,35 @@ open median).
 
 **Acceptance:** Scoreboard ranks all active vendors on day one; Firkus's median visibly ≫ peers; numbers reconcile with the 2026-07-05 analysis (±normal data drift).
 
+## Session D — Ops close-out + end-of-day AppFolio write-back digest + reporting prune  *(IN PROGRESS, branch `feature/maint-os`, started 2026-08-17)*
+
+**Source:** strategy session 2026-08-17 (Craig). Concern: the system is reporting-heavy but weak on *direct* day-to-day management, and edits made in HDPM-OS that also belong in AppFolio silently don't propagate — things slip. Four codebase surveys (reporting inventory, write-back capture points, email/cron infra, doc alignment) ground this brief.
+
+**Framing correction from the surveys:** the "operations spine" is *already largely built* — the MaintOS Board already does assign/schedule/status/notes/close across 14 edit points, and the daily rhythm exists (Morning Card, Ops Brief, tripwires, `next_action_date` invariant). So this is **not** a new-spine build. The real gap is narrower: **every one of those 14 edits is Supabase-only and reaches AppFolio via nobody** (`lib/appfolio.ts` is GET-only; the mirror is AppFolio→Supabase only). That double-entry seam is where work slips.
+
+**Decisions (Craig, 2026-08-17):** write-back = **end-of-day per-person email digest** (not realtime, not the $850/mo Write API, not read-only-only); cover **all four action classes** (assign / schedule / status / notes+completion); recipient = **whoever made the change**; reporting = **audit & prune**. Start order = **prune first**.
+
+**Guardrail:** the digest is a *human-in-the-loop report*, NOT an AppFolio write — it respects "AppFolio is the system of record, no ledger writes ever." True auto-write stays behind the Sep 4 gate; the digest's own `wo_event` trail is the touch-count data that decides it. Dedup against the existing 6 AM tripwire digest + Ops Brief so nobody is double-pinged (per the `agent-os/00` Phase 0 carve-out rule).
+
+### D1 — Reporting prune  *(first; reversible — code stays in git)*
+Cut the passive layer; keep the action path (Cracks Radar + Board Exceptions/Monday + Ops Brief/tripwires already cover "untouched work"). Candidates from the inventory:
+- **Delete:** `app/maintenance/work-orders/page.tsx` — dead redirect stub (only stale ref is `help-sops.ts`).
+- **Remove from surface (home tiles / internal links; keep code):** KPI Trends (`/dashboard/trends`), Property Map (`/properties/map`), Org chart (`/company/org`).
+- **Trim/demote:** Company KPIs (`/dashboard`) — 16 cards, admin-only, low action density.
+- **Leave for now (review-in-meeting call):** Vendor Scoreboard, Rocks board.
+- Prune the feeding crons only where the surface goes (KPI/metrics snapshots feed `/dashboard` + `/agents`).
+
+### D2 — End-of-day write-back digest  *(the crack-closer)*
+- **Source:** append-only `wo_event` (already records `actor`, `event_type`, `payload.from/to/field`; machine edits tagged `payload.system_override:true` → excluded). Cron: new route under **`/api/agents/cron/eod-digest`** (nested under already-allowlisted `/api/agents` — no `proxy.ts` edit) guarded by `Bearer CRON_SECRET`, GET→POST, `?dry_run=1`. Schedule ~`0 1 * * 1-6` (≈5 PM PT, Mon–Sat to catch Fri).
+- **Send:** reuse Resend + `agent_outbox` (`enqueueOutbox` → `dispatchOutbox`, retry + kill-switch + audit for free); model on `morning-card-run.ts` email block + `haven/cron/digest` route shape. Map `actor` → `staff.email` (backfilled, `firstname@highdesertpm.com`).
+- **Per person:** group the day's human edits, render one checklist line each via the event→AppFolio-action mapping (stage_change→set WO status; assign(assigned_tech)→set assignee; schedule→set scheduled date; note/photo→add WO comment/attachment; close→mark Completed). Quiet if a person made no edits.
+- **`wo_event` coverage gaps to close first** (these mutate state but emit NO event, so a pure `wo_event` digest misses them): `priority_class` (#7), `aging_reason` (#14), `unit_turn` status/blocker (#13), `turn`/`is_turn` (#12). Fix = emit `wo_event` rows for them, or union with `updated_at` scans. Decide per-field whether it even needs an AppFolio edit (several are HDPM-internal with no AF equivalent — owner_name, aging_reason, tenant_ping).
+
+### D3 — Ops close-out ritual  *(make the board the day's end)*
+- A per-person end-of-day close-out surface/section: "your open items still needing a next-action date + what you changed today that needs an AppFolio update," so the board is where the day ends. Rides on D2's data; deduped against the 6 AM digest.
+
+**Acceptance:** (D1) the passive reporting surfaces are gone from the home/tiles, action path intact, `tsc`+suite green. (D2) dry-run produces a correct per-person "update in AppFolio" checklist from a day of real `wo_event`s, excluding machine edits, with the four coverage gaps handled. (D3) a person can end the day from one place knowing nothing they touched is stranded.
+
 ## Explicitly NOT in scope (Wave 2 gate, Sep 4)
 
 Dispatch queue, magic links (vendor accept / owner approval pages), scope-change flow, tenant notifications. TW11's *nag* here is an exception row + digest, not an owner-facing page.

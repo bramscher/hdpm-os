@@ -63,12 +63,6 @@ export const HELP_SOPS: HelpSop[] = [
     blurb: 'Invoices from WOs, CSVs, or PDFs — markup rules and bill reconciliation.',
   },
   {
-    prefix: '/maintenance/work-orders',
-    title: 'Invoice Generator',
-    notionUrl: 'https://app.notion.com/p/3a70262b514581cc9526e8d0cb8960f2',
-    blurb: 'Invoices from WOs, CSVs, or PDFs — markup rules and bill reconciliation.',
-  },
-  {
     prefix: '/comps',
     title: 'Rent Comps',
     notionUrl: 'https://app.notion.com/p/3a70262b514581a3a841d67e7addf74e',
