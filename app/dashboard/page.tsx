@@ -1036,7 +1036,7 @@ function KpiCard({
       </div>
 
       <div className="mt-1.5 flex items-baseline justify-between gap-2">
-        <p className="text-[32px] leading-none font-bold text-charcoal-900 tracking-tight tabular-nums">
+        <p className="text-[38px] leading-none font-bold text-charcoal-900 tracking-tight tabular-nums">
           {config.formatPrimary(state.data)}
         </p>
         {baselineVal && (
@@ -1100,13 +1100,13 @@ function SplitSvg({ spec }: { spec: Extract<FunnelSpec, { kind: "split" }> }) {
     );
     els.push(<rect key={`d${i}`} x={destX} y={sy} width={destW} height={Math.max(h, 3)} rx={3} fill={f.color} />);
     const cy = sy + h / 2;
-    els.push(<text key={`t${i}`} x={destX + destW + 9} y={cy - 2} fill="#1d1d1f" fontSize={13} fontWeight={700}>{f.disp}</text>);
-    els.push(<text key={`l${i}`} x={destX + destW + 9} y={cy + 12} fill="#86868b" fontSize={11}>{`${f.label} · ${Math.round((f.n / total) * 100)}%`}</text>);
+    els.push(<text key={`t${i}`} x={destX + destW + 9} y={cy - 2} fill="#1d1d1f" fontSize={16} fontWeight={700}>{f.disp}</text>);
+    els.push(<text key={`l${i}`} x={destX + destW + 9} y={cy + 12} fill="#86868b" fontSize={12.5}>{`${f.label} · ${Math.round((f.n / total) * 100)}%`}</text>);
     sy += h;
   });
-  els.push(<text key="sn" x={srcX} y={bot + 18} fill="#1d1d1f" fontSize={13} fontWeight={700}>{spec.srcDisp}</text>);
-  els.push(<text key="sl" x={srcX} y={bot + 32} fill="#86868b" fontSize={11}>{spec.srcLabel}</text>);
-  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 156 }}>{els}</svg>;
+  els.push(<text key="sn" x={srcX} y={bot + 18} fill="#1d1d1f" fontSize={16} fontWeight={700}>{spec.srcDisp}</text>);
+  els.push(<text key="sl" x={srcX} y={bot + 32} fill="#86868b" fontSize={12.5}>{spec.srcLabel}</text>);
+  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "auto" }}>{els}</svg>;
 }
 
 // Sequential narrowing stages (guest-card → move-in).
@@ -1132,10 +1132,10 @@ function StageSvg({ spec }: { spec: Extract<FunnelSpec, { kind: "stage" }> }) {
   spec.stages.forEach((st, i) => {
     const h = Math.max(st.n * scale, 3), x = xAt(i), y = midY - h / 2, pct = Math.round((st.n / max) * 100);
     els.push(<rect key={`b${i}`} x={x} y={y} width={barW} height={h} rx={3} fill={st.color} />);
-    els.push(<text key={`n${i}`} x={x} y={labelY} fill="#1d1d1f" fontSize={13} fontWeight={700}>{st.disp}</text>);
-    els.push(<text key={`sl${i}`} x={x} y={labelY + 14} fill="#86868b" fontSize={11}>{`${st.label} · ${pct}%`}</text>);
+    els.push(<text key={`n${i}`} x={x} y={labelY} fill="#1d1d1f" fontSize={16} fontWeight={700}>{st.disp}</text>);
+    els.push(<text key={`sl${i}`} x={x} y={labelY + 14} fill="#86868b" fontSize={12.5}>{`${st.label} · ${pct}%`}</text>);
   });
-  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 156 }}>{els}</svg>;
+  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "auto" }}>{els}</svg>;
 }
 
 function FunnelCard({ spec }: { spec: FunnelSpec }) {
@@ -1764,7 +1764,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="px-8 py-8 max-w-6xl">
+    <div className="px-8 py-8 max-w-[1600px] mx-auto">
       {/* Header */}
       <div className="mb-8 animate-slide-up">
         <div className="flex items-center justify-between">
