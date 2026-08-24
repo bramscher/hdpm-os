@@ -1158,6 +1158,48 @@ function FunnelCard({ spec }: { spec: FunnelSpec }) {
   );
 }
 
+// Strip a leading GL code ("6100 Maintenance…" → "Maintenance…") for readability.
+function categoryLabel(raw: string): string {
+  return raw.replace(/^\d{3,5}\s*[-·:]?\s*/, "").trim() || raw;
+}
+
+/** Ranked horizontal bar list — the right shape for skewed spend-by-category data. */
+function VendorCategoryBars({ data }: { data: MaintenanceEconomicsData | null }) {
+  if (!data?.byCategory?.length) return null;
+  const cats = [...data.byCategory].sort((a, b) => b.dollars - a.dollars).slice(0, 8);
+  const max = cats[0]?.dollars || 1;
+  const total = data.totalSpendTTM || cats.reduce((a, c) => a + c.dollars, 0) || 1;
+  const palette = ["#4b9faa", "#e8734a", "#dca02a", "#b0587a", "#5b8def", "#5fa07a", "#7d8794", "#c08a2e"];
+  return (
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card px-5 py-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[13px] font-semibold text-charcoal-600">Spend by category · TTM</p>
+        <p className="text-[12px] text-charcoal-400">{fmtMoney(total)} total</p>
+      </div>
+      <div className="flex flex-col gap-2">
+        {cats.map((c, i) => {
+          const pct = Math.round((c.dollars / total) * 100);
+          const w = Math.max(2, (c.dollars / max) * 100);
+          return (
+            <div key={c.category} className="flex items-center gap-3">
+              <div className="w-48 shrink-0 truncate text-[12.5px] text-charcoal-600" title={c.category}>
+                {categoryLabel(c.category)}
+              </div>
+              <div className="h-5 flex-1 overflow-hidden rounded-md bg-sand-100">
+                <div className="h-full rounded-md" style={{ width: `${w}%`, background: palette[i % palette.length] }} />
+              </div>
+              <div className="w-24 shrink-0 text-right font-semibold tabular-nums text-[12.5px] text-charcoal-800">
+                {fmtMoney(c.dollars)}
+              </div>
+              <div className="w-10 shrink-0 text-right tabular-nums text-[11px] text-charcoal-400">{pct}%</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ============================================
 // Config Drawer
 // ============================================
@@ -1834,6 +1876,12 @@ export default function DashboardPage() {
               const spec = funnelSpecFor(sec.key);
               return spec ? <FunnelCard spec={spec} /> : null;
             })()}
+
+            {sec.key === "vendors" && (
+              <VendorCategoryBars
+                data={(kpis.maintenance_economics?.data as MaintenanceEconomicsData | null) ?? null}
+              />
+            )}
 
             {sec.key === "money" && (
               <FinancialsPanel
