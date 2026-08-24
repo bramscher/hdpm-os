@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import {
   AreaChart,
@@ -1064,6 +1064,101 @@ function KpiCard({
 }
 
 // ============================================
+// Section funnels — live-data Sankey ribbons (Alven-style)
+// ============================================
+
+interface FunnelPart {
+  n: number;
+  label: string;
+  color: string;
+  disp: string;
+}
+type FunnelSpec =
+  | { kind: "split"; title: string; srcDisp: string; srcLabel: string; total: number; flows: FunnelPart[] }
+  | { kind: "stage"; title: string; stages: FunnelPart[] };
+
+// Source → N proportional outcome bands.
+function SplitSvg({ spec }: { spec: Extract<FunnelSpec, { kind: "split" }> }) {
+  const W = 1100, H = 160, srcX = 6, srcW = 11, top = 12, bot = H - 40, trackH = bot - top;
+  const total = spec.total || spec.flows.reduce((a, f) => a + f.n, 0) || 1;
+  const scale = trackH / total;
+  const destX = W - 220, destW = 11;
+  const els: ReactNode[] = [
+    <rect key="src" x={srcX} y={top} width={srcW} height={trackH} rx={4} fill="#c7c7cc" />,
+  ];
+  let sy = top;
+  spec.flows.forEach((f, i) => {
+    const h = Math.max(f.n * scale, 1.5);
+    const x0 = srcX + srcW, x1 = destX, mx = (x0 + x1) / 2;
+    els.push(
+      <path
+        key={`r${i}`}
+        d={`M ${x0} ${sy} C ${mx} ${sy}, ${mx} ${sy}, ${x1} ${sy} L ${x1} ${sy + h} C ${mx} ${sy + h}, ${mx} ${sy + h}, ${x0} ${sy + h} Z`}
+        fill={f.color}
+        fillOpacity={0.26}
+      />
+    );
+    els.push(<rect key={`d${i}`} x={destX} y={sy} width={destW} height={Math.max(h, 3)} rx={3} fill={f.color} />);
+    const cy = sy + h / 2;
+    els.push(<text key={`t${i}`} x={destX + destW + 9} y={cy - 2} fill="#1d1d1f" fontSize={13} fontWeight={700}>{f.disp}</text>);
+    els.push(<text key={`l${i}`} x={destX + destW + 9} y={cy + 12} fill="#86868b" fontSize={11}>{`${f.label} · ${Math.round((f.n / total) * 100)}%`}</text>);
+    sy += h;
+  });
+  els.push(<text key="sn" x={srcX} y={bot + 18} fill="#1d1d1f" fontSize={13} fontWeight={700}>{spec.srcDisp}</text>);
+  els.push(<text key="sl" x={srcX} y={bot + 32} fill="#86868b" fontSize={11}>{spec.srcLabel}</text>);
+  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 156 }}>{els}</svg>;
+}
+
+// Sequential narrowing stages (guest-card → move-in).
+function StageSvg({ spec }: { spec: Extract<FunnelSpec, { kind: "stage" }> }) {
+  const W = 1100, H = 160, top = 14, labelY = H - 24, trackH = labelY - top - 18;
+  const max = spec.stages[0]?.n || 1, scale = trackH / max, midY = top + trackH / 2;
+  const n = spec.stages.length, barW = 12, leftPad = 8, rightPad = 180, usable = W - leftPad - rightPad - barW;
+  const xAt = (i: number) => leftPad + (i * usable) / Math.max(1, n - 1);
+  const els: ReactNode[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const hi = spec.stages[i].n * scale, hj = spec.stages[i + 1].n * scale;
+    const x0 = xAt(i) + barW, x1 = xAt(i + 1), mx = (x0 + x1) / 2;
+    const y0t = midY - hi / 2, y0b = midY + hi / 2, y1t = midY - hj / 2, y1b = midY + hj / 2;
+    els.push(
+      <path
+        key={`rb${i}`}
+        d={`M ${x0} ${y0t} C ${mx} ${y0t}, ${mx} ${y1t}, ${x1} ${y1t} L ${x1} ${y1b} C ${mx} ${y1b}, ${mx} ${y0b}, ${x0} ${y0b} Z`}
+        fill={spec.stages[i].color}
+        fillOpacity={0.22}
+      />
+    );
+  }
+  spec.stages.forEach((st, i) => {
+    const h = Math.max(st.n * scale, 3), x = xAt(i), y = midY - h / 2, pct = Math.round((st.n / max) * 100);
+    els.push(<rect key={`b${i}`} x={x} y={y} width={barW} height={h} rx={3} fill={st.color} />);
+    els.push(<text key={`n${i}`} x={x} y={labelY} fill="#1d1d1f" fontSize={13} fontWeight={700}>{st.disp}</text>);
+    els.push(<text key={`sl${i}`} x={x} y={labelY + 14} fill="#86868b" fontSize={11}>{`${st.label} · ${pct}%`}</text>);
+  });
+  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 156 }}>{els}</svg>;
+}
+
+function FunnelCard({ spec }: { spec: FunnelSpec }) {
+  const parts = spec.kind === "split" ? spec.flows : spec.stages;
+  return (
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card px-5 py-4 mb-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-1.5">
+        <p className="text-[13px] font-semibold text-charcoal-600">{spec.title}</p>
+        <div className="flex gap-3 flex-wrap text-[11px] text-charcoal-400">
+          {parts.map((f) => (
+            <span key={f.label} className="inline-flex items-center gap-1.5">
+              <i className="w-2 h-2 rounded-sm inline-block" style={{ background: f.color }} />
+              {f.label}
+            </span>
+          ))}
+        </div>
+      </div>
+      {spec.kind === "split" ? <SplitSvg spec={spec} /> : <StageSvg spec={spec} />}
+    </div>
+  );
+}
+
+// ============================================
 // Config Drawer
 // ============================================
 
@@ -1593,6 +1688,81 @@ export default function DashboardPage() {
     loadFinancials();
   }, [loadFinancials, config]);
 
+  // Build a section's funnel from whatever live data we actually hold — never
+  // fabricated. Returns null (no funnel rendered) when the data isn't loaded.
+  const ACC = {
+    sage: "#5fa07a", coral: "#e8734a", amber: "#dca02a",
+    mauve: "#b0587a", blue: "#5b8def", teal: "#4b9faa", slate: "#7d8794",
+  };
+  const funnelSpecFor = (key: SectionKey): FunnelSpec | null => {
+    if (key === "money") {
+      if (!financials?.seeded || !financials.revenueTTM) return null;
+      const rev = financials.revenueTTM;
+      const flows: FunnelPart[] = [];
+      if (financials.ownerDistributableCash != null)
+        flows.push({ n: financials.ownerDistributableCash, label: "Owner cash", color: ACC.sage, disp: fmtMoney(financials.ownerDistributableCash) });
+      if (financials.staffAnnualCost)
+        flows.push({ n: financials.staffAnnualCost, label: "Staff", color: ACC.amber, disp: fmtMoney(financials.staffAnnualCost) });
+      if (financials.annualDebtService)
+        flows.push({ n: financials.annualDebtService, label: "Debt service", color: ACC.coral, disp: fmtMoney(financials.annualDebtService) });
+      if (financials.bookedOpexTTM)
+        flows.push({ n: financials.bookedOpexTTM, label: "Booked opex", color: ACC.slate, disp: fmtMoney(financials.bookedOpexTTM) });
+      const rem = rev - flows.reduce((a, f) => a + f.n, 0);
+      if (rem > rev * 0.01) flows.push({ n: rem, label: "Retained / other", color: ACC.blue, disp: fmtMoney(rem) });
+      if (flows.length < 2) return null;
+      return { kind: "split", title: "Revenue waterfall · TTM", srcDisp: fmtMoney(rev), srcLabel: "Revenue · 100%", total: rev, flows };
+    }
+    if (key === "collections") {
+      const d = kpis.delinquency?.data as DelinquencyData | null;
+      if (!d || !d.totalActive) return null;
+      const current = Math.max(0, d.totalActive - d.count);
+      return {
+        kind: "split", title: "Tenancy status", srcDisp: d.totalActive.toLocaleString(), srcLabel: "Active · 100%", total: d.totalActive,
+        flows: [
+          { n: current, label: "Current", color: ACC.sage, disp: current.toLocaleString() },
+          { n: d.count, label: "Delinquent >$50", color: ACC.coral, disp: d.count.toLocaleString() },
+        ],
+      };
+    }
+    if (key === "maintenance") {
+      const m = kpis.maintenance_economics?.data as MaintenanceEconomicsData | null;
+      if (!m || !m.totalSpendTTM) return null;
+      return {
+        kind: "split", title: "Maintenance spend · in-house vs outsourced · TTM", srcDisp: fmtMoney(m.totalSpendTTM), srcLabel: "Spend · 100%", total: m.totalSpendTTM,
+        flows: [
+          { n: m.inHouseDollars, label: "In-house", color: ACC.sage, disp: fmtMoney(m.inHouseDollars) },
+          { n: m.outsourcedDollars, label: "Outsourced", color: ACC.coral, disp: fmtMoney(m.outsourcedDollars) },
+        ],
+      };
+    }
+    if (key === "leasing") {
+      const lf = kpis.leasing_funnel?.data as LeasingFunnelData | null;
+      if (!lf?.funnel?.guestCards) return null;
+      const f = lf.funnel;
+      return {
+        kind: "stage", title: `Leasing funnel · ${lf.period ?? "last 30d"}`,
+        stages: [
+          { n: f.guestCards, label: "Guest cards", color: ACC.blue, disp: f.guestCards.toLocaleString() },
+          { n: f.applications, label: "Applications", color: ACC.teal, disp: f.applications.toLocaleString() },
+          { n: f.approvals, label: "Approved", color: ACC.sage, disp: f.approvals.toLocaleString() },
+          { n: f.moveIns, label: "Moved in", color: ACC.coral, disp: f.moveIns.toLocaleString() },
+        ],
+      };
+    }
+    if (key === "vendors") {
+      const m = kpis.maintenance_economics?.data as MaintenanceEconomicsData | null;
+      if (!m?.byCategory?.length) return null;
+      const cats = [...m.byCategory].sort((a, b) => b.dollars - a.dollars).slice(0, 5);
+      const total = m.totalSpendTTM || cats.reduce((a, c) => a + c.dollars, 0) || 1;
+      const palette = [ACC.teal, ACC.coral, ACC.amber, ACC.mauve, ACC.slate];
+      return {
+        kind: "split", title: "Spend by category · TTM", srcDisp: fmtMoney(total), srcLabel: "Spend · 100%", total,
+        flows: cats.map((c, i) => ({ n: c.dollars, label: c.category, color: palette[i % palette.length], disp: fmtMoney(c.dollars) })),
+      };
+    }
+    return null;
+  };
+
   return (
     <div className="px-8 py-8 max-w-6xl">
       {/* Header */}
@@ -1666,6 +1836,11 @@ export default function DashboardPage() {
               </span>
               <span className="flex-1 h-px bg-sand-200" />
             </div>
+
+            {(() => {
+              const spec = funnelSpecFor(sec.key);
+              return spec ? <FunnelCard spec={spec} /> : null;
+            })()}
 
             {sec.key === "money" && (
               <FinancialsPanel
