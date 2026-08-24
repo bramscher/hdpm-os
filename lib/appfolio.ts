@@ -1407,23 +1407,77 @@ function extractPhone(raw: RawRecord): string | null {
   return null;
 }
 
-function extractEmail(raw: RawRecord): string | null {
+/** A string that contains an email-shaped token (user@host.tld, no spaces). */
+function looksLikeEmail(s: string): boolean {
+  return !/\s/.test(s) && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
+}
+
+/**
+ * Bounded deep-scan for an email-shaped string. Records two candidates: the
+ * first found under a key whose name contains "email" (`keyed`, strongly
+ * preferred) and the first found anywhere (`any`). Depth-capped at 3 so it
+ * stays cheap; array elements inherit their parent key name so `Emails: [...]`
+ * still counts as keyed. Stops early once both slots are filled.
+ */
+function scanForEmail(
+  value: unknown,
+  keyName: string,
+  depth: number,
+  out: { keyed: string | null; any: string | null }
+): void {
+  if (depth > 3 || (out.keyed && out.any)) return;
+  if (typeof value === 'string') {
+    const t = value.trim();
+    if (looksLikeEmail(t)) {
+      if (!out.any) out.any = t;
+      if (!out.keyed && /email/i.test(keyName)) out.keyed = t;
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      scanForEmail(v, keyName, depth + 1, out);
+      if (out.keyed && out.any) return;
+    }
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value as RawRecord)) {
+      scanForEmail(v, k, depth + 1, out);
+      if (out.keyed && out.any) return;
+    }
+  }
+}
+
+/**
+ * Pull the first usable email from the many shapes AppFolio may use. The
+ * explicit fast paths cover the documented fields; the deep-scan fallback is
+ * the field-name-agnostic net that catches the ~99% of vendors whose email
+ * lives somewhere the explicit list misses (Craig confirmed the emails are in
+ * AppFolio, yet the named fields alone found few — see the vendor-contact
+ * audit, Brief D.5). Exported for unit testing.
+ */
+export function extractEmail(raw: RawRecord): string | null {
   const direct = asString(raw.Email) ?? asString(raw.EmailAddress) ?? asString(raw.PrimaryEmail);
-  if (direct) return direct;
+  if (direct && looksLikeEmail(direct)) return direct;
   const arr = raw.Emails ?? raw.EmailAddresses;
   if (Array.isArray(arr)) {
     for (const entry of arr) {
       if (typeof entry === 'string') {
         const s = asString(entry);
-        if (s) return s;
+        if (s && looksLikeEmail(s)) return s;
       } else if (entry && typeof entry === 'object') {
         const o = entry as RawRecord;
         const s = asString(o.EmailAddress) ?? asString(o.Email);
-        if (s) return s;
+        if (s && looksLikeEmail(s)) return s;
       }
     }
   }
-  return null;
+  // Field-name-agnostic fallback: prefer a value under an "*email*" key, else
+  // any email-shaped string anywhere in the (bounded) record.
+  const found = { keyed: null as string | null, any: null as string | null };
+  scanForEmail(raw, '', 0, found);
+  return found.keyed ?? found.any;
 }
 
 async function fetchAllRaw(path: string): Promise<RawRecord[]> {
