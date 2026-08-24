@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import {
   AreaChart,
@@ -834,16 +834,72 @@ const KPI_CARDS: KpiCardConfig[] = [
 // Components
 // ============================================
 
+// ============================================
+// Alven-style section model (KPI restyle)
+// ============================================
+
+type SectionKey = "money" | "collections" | "maintenance" | "leasing" | "vendors";
+
+const SECTIONS: { key: SectionKey; title: string; tag: string }[] = [
+  { key: "money", title: "Financial Health", tag: "owners" },
+  { key: "collections", title: "Delinquency & Tenants", tag: "collections" },
+  { key: "maintenance", title: "Maintenance & Work Orders", tag: "vendors + techs" },
+  { key: "leasing", title: "Leasing & Occupancy", tag: "tenants" },
+  { key: "vendors", title: "Vendors", tag: "supply" },
+];
+
+// Softer per-tile accents (muted, matches the Apple re-skin) + section membership.
+// `agentDriven` = a metric an agent (Dez) plausibly moves. Once DEZ_GO_LIVE is
+// set, those tiles will re-anchor their baseline to that date and label it
+// "before Dez"; until then every baseline is an honest time anchor
+// ("since <month>", derived from the earliest snapshot we actually hold).
+const DEZ_GO_LIVE: string | null = null;
+
+const CARD_META: Record<
+  string,
+  { section: SectionKey; accent: string; agentDriven?: boolean; noBaseline?: boolean }
+> = {
+  delinquency:           { section: "collections", accent: "#b0587a", agentDriven: true },
+  lease_renewal:         { section: "collections", accent: "#5fa07a", agentDriven: true },
+  notices:               { section: "collections", accent: "#dca02a" },
+  owner_retention:       { section: "money",       accent: "#5fa07a" },
+  maintenance_cost:      { section: "money",       accent: "#e8734a", agentDriven: true },
+  management_fees:       { section: "money",       accent: "#b0587a" },
+  work_orders:           { section: "maintenance", accent: "#4b9faa", agentDriven: true },
+  work_orders_completed: { section: "maintenance", accent: "#5fa07a", agentDriven: true },
+  insurance:             { section: "maintenance", accent: "#7d8794", noBaseline: true },
+  vacancy:               { section: "leasing",     accent: "#5b8def" },
+  occupancy:             { section: "leasing",     accent: "#5fa07a" },
+  days_to_lease:         { section: "leasing",     accent: "#e8734a", agentDriven: true },
+  net_doors:             { section: "leasing",     accent: "#7d8794" },
+  guest_cards:           { section: "leasing",     accent: "#5b8def" },
+  leasing_funnel:        { section: "leasing",     accent: "#4b9faa" },
+  bend_growth:           { section: "leasing",     accent: "#dca02a" },
+  lease_expirations:     { section: "leasing",     accent: "#b0587a" },
+  maintenance_economics: { section: "vendors",     accent: "#4b9faa", agentDriven: true },
+};
+
+/** Snapshot value + the date it was captured — the earliest we hold, our baseline anchor. */
+interface Baseline {
+  value: KpiData;
+  date: string;
+}
+
+/** "since Apr" from an ISO date — the honest label for a time-anchored baseline. */
+function monthAnchorLabel(iso: string | undefined): string {
+  if (!iso) return "baseline";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "baseline";
+  return `since ${d.toLocaleDateString("en-US", { month: "short" })}`;
+}
+
 function SkeletonCard() {
   return (
-    <div className="bg-white rounded-xl border border-sand-200 p-6 shadow-card animate-pulse">
-      <div className="flex items-start justify-between mb-4">
-        <div className="w-11 h-11 bg-sand-100 rounded-xl" />
-        <div className="w-16 h-4 bg-sand-100 rounded" />
-      </div>
-      <div className="w-24 h-8 bg-sand-100 rounded mb-2" />
-      <div className="w-40 h-4 bg-sand-100 rounded mb-4" />
-      <div className="h-10 bg-sand-50 rounded" />
+    <div className="bg-white rounded-2xl border border-sand-200 p-5 shadow-card animate-pulse min-h-[172px] flex flex-col">
+      <div className="w-28 h-3.5 bg-sand-100 rounded" />
+      <div className="w-24 h-8 bg-sand-100 rounded mt-2" />
+      <div className="w-20 h-3 bg-sand-100 rounded mt-2.5" />
+      <div className="h-11 bg-sand-50 rounded mt-auto" />
     </div>
   );
 }
@@ -873,29 +929,36 @@ function DeltaArrow({
   );
 }
 
-function Sparkline({
-  data,
-  color,
-  fill,
-}: {
-  data: SparklinePoint[];
-  color: string;
-  fill: string;
-}) {
+function Sparkline({ data, color }: { data: SparklinePoint[]; color: string }) {
   if (data.length < 2) return null;
+  const gid = `spark-${color.replace("#", "")}`;
+  const lastIdx = data.length - 1;
+
+  // Only the final point gets a dot — the emphasized "where we are now" marker.
+  const endDot = (props: { cx?: number; cy?: number; index?: number }) => {
+    if (props.index !== lastIdx || props.cx == null || props.cy == null) {
+      return <g key={props.index} />;
+    }
+    return <circle key="end" cx={props.cx} cy={props.cy} r={3} fill={color} />;
+  };
 
   return (
     <div className="mt-3 -mx-1">
-      <ResponsiveContainer width="100%" height={40}>
-        <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
+      <ResponsiveContainer width="100%" height={44}>
+        <AreaChart data={data} margin={{ top: 4, right: 3, left: 3, bottom: 2 }}>
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <Area
             type="monotone"
             dataKey="value"
             stroke={color}
-            strokeWidth={1.5}
-            fill={fill}
-            fillOpacity={0.3}
-            dot={false}
+            strokeWidth={2}
+            fill={`url(#${gid})`}
+            dot={endDot}
             isAnimationActive={false}
           />
         </AreaChart>
@@ -909,30 +972,29 @@ function KpiCard({
   state,
   priorSnapshot,
   sparklineData,
+  accent,
+  baseline,
   refreshing,
 }: {
   config: KpiCardConfig;
   state: KpiState<KpiData>;
   priorSnapshot: Record<string, unknown> | undefined;
   sparklineData: SparklinePoint[];
+  accent: string;
+  baseline: Baseline | undefined;
   refreshing?: boolean;
 }) {
-  const Icon = config.icon;
-
   // Only show skeleton if no data at all (first load before cache arrives)
   if (state.loading && !state.data) return <SkeletonCard />;
 
   if (state.error) {
     return (
-      <div className="bg-white rounded-xl border border-red-200 p-6 shadow-card">
-        <div className="flex items-start justify-between mb-4">
-          <div className={`w-11 h-11 ${config.bgColor} rounded-xl flex items-center justify-center opacity-50`}>
-            <Icon className={`w-5 h-5 ${config.iconColor}`} />
-          </div>
+      <div className="bg-white rounded-2xl border border-red-200 p-5 shadow-card min-h-[172px] flex flex-col">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[13px] font-medium text-charcoal-500">{config.name}</h3>
           <AlertCircle className="w-4 h-4 text-red-400" />
         </div>
-        <h3 className="text-sm font-medium text-charcoal-500 mb-1">{config.name}</h3>
-        <p className="text-xs text-red-400">{state.error}</p>
+        <p className="mt-2 text-xs text-red-400">{state.error}</p>
       </div>
     );
   }
@@ -941,46 +1003,158 @@ function KpiCard({
 
   const delta = priorSnapshot ? config.getDelta(state.data, priorSnapshot) : null;
 
+  const meta = CARD_META[config.key];
+  const showBaseline = baseline && !meta?.noBaseline;
+  const baselineVal = showBaseline ? config.formatPrimary(baseline!.value) : null;
+  const baselineLbl = showBaseline
+    ? DEZ_GO_LIVE && meta?.agentDriven
+      ? "before Dez"
+      : monthAnchorLabel(baseline!.date)
+    : null;
+
   return (
     <Link
       href="/dashboard/trends"
-      className="bg-white rounded-xl border border-sand-200 p-6 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 block cursor-pointer"
+      className="group bg-white rounded-2xl border border-sand-200 p-5 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-200 flex flex-col min-h-[172px] cursor-pointer"
     >
-      <div className="flex items-start justify-between mb-4">
-        <div className={`w-11 h-11 ${config.bgColor} rounded-xl flex items-center justify-center`}>
-          <Icon className={`w-5 h-5 ${config.iconColor}`} />
-        </div>
-        <div className="flex items-center gap-2">
-          {refreshing && (
-            <RefreshCw className="w-3 h-3 text-charcoal-300 animate-spin" />
-          )}
-          {delta && (
-            <DeltaArrow
-              direction={delta.direction}
-              sentiment={delta.sentiment}
-              label={delta.label}
-            />
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[13px] font-medium text-charcoal-500">{config.name}</h3>
+        <div className="flex items-center gap-2 shrink-0">
+          {refreshing && <RefreshCw className="w-3 h-3 text-charcoal-300 animate-spin" />}
+          {config.dataTag !== "live" && (
+            <span
+              className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
+                config.dataTag === "mock"
+                  ? "bg-charcoal-100 text-charcoal-400"
+                  : "bg-amber-100 text-amber-600"
+              }`}
+            >
+              {config.dataTag === "mock" ? "Mock" : "Est."}
+            </span>
           )}
         </div>
       </div>
-      <p className={`text-2xl font-bold ${config.color} mb-1 tracking-tight`}>
-        {config.formatPrimary(state.data)}
-      </p>
-      <div className="flex items-center gap-2 mb-1">
-        <h3 className="text-sm font-medium text-charcoal-900">{config.name}</h3>
-        {config.dataTag !== "live" && (
-          <span className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
-            config.dataTag === "mock"
-              ? "bg-charcoal-100 text-charcoal-400"
-              : "bg-amber-100 text-amber-600"
-          }`}>
-            {config.dataTag === "mock" ? "Mock Data" : "Estimated"}
-          </span>
+
+      <div className="mt-1.5 flex items-baseline justify-between gap-2">
+        <p className="text-[32px] leading-none font-bold text-charcoal-900 tracking-tight tabular-nums">
+          {config.formatPrimary(state.data)}
+        </p>
+        {baselineVal && (
+          <div className="text-right leading-tight shrink-0">
+            <p className="text-[15px] font-bold text-rose-700 tabular-nums whitespace-nowrap">{baselineVal}</p>
+            <p className="text-[10px] text-charcoal-300">{baselineLbl}</p>
+          </div>
         )}
       </div>
-      <p className="text-xs text-charcoal-400">{config.formatSecondary(state.data)}</p>
-      <Sparkline data={sparklineData} color={config.sparkColor} fill={config.sparkFill} />
+
+      {delta && (
+        <div className="mt-2 flex items-center gap-1.5">
+          <DeltaArrow direction={delta.direction} sentiment={delta.sentiment} label={delta.label} />
+          <span className="text-[11px] text-charcoal-400">vs last week</span>
+        </div>
+      )}
+
+      <p className="mt-1 text-[11px] text-charcoal-400 line-clamp-1">{config.formatSecondary(state.data)}</p>
+
+      <div className="mt-auto">
+        <Sparkline data={sparklineData} color={accent} />
+      </div>
     </Link>
+  );
+}
+
+// ============================================
+// Section funnels — live-data Sankey ribbons (Alven-style)
+// ============================================
+
+interface FunnelPart {
+  n: number;
+  label: string;
+  color: string;
+  disp: string;
+}
+type FunnelSpec =
+  | { kind: "split"; title: string; srcDisp: string; srcLabel: string; total: number; flows: FunnelPart[] }
+  | { kind: "stage"; title: string; stages: FunnelPart[] };
+
+// Source → N proportional outcome bands.
+function SplitSvg({ spec }: { spec: Extract<FunnelSpec, { kind: "split" }> }) {
+  const W = 1100, H = 160, srcX = 6, srcW = 11, top = 12, bot = H - 40, trackH = bot - top;
+  const total = spec.total || spec.flows.reduce((a, f) => a + f.n, 0) || 1;
+  const scale = trackH / total;
+  const destX = W - 220, destW = 11;
+  const els: ReactNode[] = [
+    <rect key="src" x={srcX} y={top} width={srcW} height={trackH} rx={4} fill="#c7c7cc" />,
+  ];
+  let sy = top;
+  spec.flows.forEach((f, i) => {
+    const h = Math.max(f.n * scale, 1.5);
+    const x0 = srcX + srcW, x1 = destX, mx = (x0 + x1) / 2;
+    els.push(
+      <path
+        key={`r${i}`}
+        d={`M ${x0} ${sy} C ${mx} ${sy}, ${mx} ${sy}, ${x1} ${sy} L ${x1} ${sy + h} C ${mx} ${sy + h}, ${mx} ${sy + h}, ${x0} ${sy + h} Z`}
+        fill={f.color}
+        fillOpacity={0.26}
+      />
+    );
+    els.push(<rect key={`d${i}`} x={destX} y={sy} width={destW} height={Math.max(h, 3)} rx={3} fill={f.color} />);
+    const cy = sy + h / 2;
+    els.push(<text key={`t${i}`} x={destX + destW + 9} y={cy - 2} fill="#1d1d1f" fontSize={13} fontWeight={700}>{f.disp}</text>);
+    els.push(<text key={`l${i}`} x={destX + destW + 9} y={cy + 12} fill="#86868b" fontSize={11}>{`${f.label} · ${Math.round((f.n / total) * 100)}%`}</text>);
+    sy += h;
+  });
+  els.push(<text key="sn" x={srcX} y={bot + 18} fill="#1d1d1f" fontSize={13} fontWeight={700}>{spec.srcDisp}</text>);
+  els.push(<text key="sl" x={srcX} y={bot + 32} fill="#86868b" fontSize={11}>{spec.srcLabel}</text>);
+  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 156 }}>{els}</svg>;
+}
+
+// Sequential narrowing stages (guest-card → move-in).
+function StageSvg({ spec }: { spec: Extract<FunnelSpec, { kind: "stage" }> }) {
+  const W = 1100, H = 160, top = 14, labelY = H - 24, trackH = labelY - top - 18;
+  const max = spec.stages[0]?.n || 1, scale = trackH / max, midY = top + trackH / 2;
+  const n = spec.stages.length, barW = 12, leftPad = 8, rightPad = 180, usable = W - leftPad - rightPad - barW;
+  const xAt = (i: number) => leftPad + (i * usable) / Math.max(1, n - 1);
+  const els: ReactNode[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const hi = spec.stages[i].n * scale, hj = spec.stages[i + 1].n * scale;
+    const x0 = xAt(i) + barW, x1 = xAt(i + 1), mx = (x0 + x1) / 2;
+    const y0t = midY - hi / 2, y0b = midY + hi / 2, y1t = midY - hj / 2, y1b = midY + hj / 2;
+    els.push(
+      <path
+        key={`rb${i}`}
+        d={`M ${x0} ${y0t} C ${mx} ${y0t}, ${mx} ${y1t}, ${x1} ${y1t} L ${x1} ${y1b} C ${mx} ${y1b}, ${mx} ${y0b}, ${x0} ${y0b} Z`}
+        fill={spec.stages[i].color}
+        fillOpacity={0.22}
+      />
+    );
+  }
+  spec.stages.forEach((st, i) => {
+    const h = Math.max(st.n * scale, 3), x = xAt(i), y = midY - h / 2, pct = Math.round((st.n / max) * 100);
+    els.push(<rect key={`b${i}`} x={x} y={y} width={barW} height={h} rx={3} fill={st.color} />);
+    els.push(<text key={`n${i}`} x={x} y={labelY} fill="#1d1d1f" fontSize={13} fontWeight={700}>{st.disp}</text>);
+    els.push(<text key={`sl${i}`} x={x} y={labelY + 14} fill="#86868b" fontSize={11}>{`${st.label} · ${pct}%`}</text>);
+  });
+  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 156 }}>{els}</svg>;
+}
+
+function FunnelCard({ spec }: { spec: FunnelSpec }) {
+  const parts = spec.kind === "split" ? spec.flows : spec.stages;
+  return (
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card px-5 py-4 mb-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-1.5">
+        <p className="text-[13px] font-semibold text-charcoal-600">{spec.title}</p>
+        <div className="flex gap-3 flex-wrap text-[11px] text-charcoal-400">
+          {parts.map((f) => (
+            <span key={f.label} className="inline-flex items-center gap-1.5">
+              <i className="w-2 h-2 rounded-sm inline-block" style={{ background: f.color }} />
+              {f.label}
+            </span>
+          ))}
+        </div>
+      </div>
+      {spec.kind === "split" ? <SplitSvg spec={spec} /> : <StageSvg spec={spec} />}
+    </div>
   );
 }
 
@@ -1224,16 +1398,11 @@ function FinancialsPanel({
   const needsConfig = data?.seeded && data?.needsStaffCost;
 
   return (
-    <div className="mb-8">
+    <div className="mb-4">
       <div className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold text-terra-500 uppercase tracking-widest">
-            Financials
-          </p>
-          <h2 className="text-lg font-bold text-charcoal-900 tracking-tight">
-            Net income, owner cash &amp; DSCR
-          </h2>
-        </div>
+        <p className="text-[13px] font-medium text-charcoal-500">
+          Net income, owner cash &amp; DSCR
+        </p>
         {data?.seeded && data.periodEnd && (
           <p className="text-xs text-charcoal-400">
             QuickBooks · TTM thru{" "}
@@ -1339,6 +1508,7 @@ export default function DashboardPage() {
   });
   const [priorSnapshots, setPriorSnapshots] = useState<Record<string, Record<string, unknown>>>({});
   const [sparklines, setSparklines] = useState<Record<string, SparklinePoint[]>>({});
+  const [baselines, setBaselines] = useState<Record<string, Baseline>>({});
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshingKeys, setRefreshingKeys] = useState<Set<string>>(new Set());
@@ -1377,7 +1547,7 @@ export default function DashboardPage() {
     try {
       const [snapRes, histRes] = await Promise.all([
         fetch("/api/kpi/snapshots"),
-        fetch("/api/kpi/snapshots?history=14"),
+        fetch("/api/kpi/snapshots?history=90"),
       ]);
       if (snapRes.ok) {
         setPriorSnapshots(await snapRes.json());
@@ -1385,13 +1555,24 @@ export default function DashboardPage() {
       if (histRes.ok) {
         const data: Record<string, Array<{ date: string; value: Record<string, unknown> }>> = await histRes.json();
         const sparkData: Record<string, SparklinePoint[]> = {};
+        const baseData: Record<string, Baseline> = {};
         for (const card of KPI_CARDS) {
           const history = data[card.key] || [];
-          sparkData[card.key] = history.map((h) => ({
-            value: card.getSparklineValue(h.value),
-          }));
+          // Downsample ~90 daily points to ~weekly for a clean sparkline, always
+          // keeping the most recent point as the emphasized endpoint.
+          const step = Math.max(1, Math.ceil(history.length / 13));
+          const sampled = history.filter((_, i) => i % step === 0);
+          if (history.length && sampled[sampled.length - 1] !== history[history.length - 1]) {
+            sampled.push(history[history.length - 1]);
+          }
+          sparkData[card.key] = sampled.map((h) => ({ value: card.getSparklineValue(h.value) }));
+          // Baseline = the earliest snapshot we hold (oldest-first ordering).
+          if (history.length > 1) {
+            baseData[card.key] = { value: history[0].value as unknown as KpiData, date: history[0].date };
+          }
         }
         setSparklines(sparkData);
+        setBaselines(baseData);
       }
     } catch {
       // Non-critical
@@ -1446,19 +1627,30 @@ export default function DashboardPage() {
     try {
       const [snapRes, histRes] = await Promise.all([
         fetch("/api/kpi/snapshots"),
-        fetch("/api/kpi/snapshots?history=14"),
+        fetch("/api/kpi/snapshots?history=90"),
       ]);
       if (snapRes.ok) setPriorSnapshots(await snapRes.json());
       if (histRes.ok) {
         const data: Record<string, Array<{ date: string; value: Record<string, unknown> }>> = await histRes.json();
         const sparkData: Record<string, SparklinePoint[]> = {};
+        const baseData: Record<string, Baseline> = {};
         for (const card of KPI_CARDS) {
           const history = data[card.key] || [];
-          sparkData[card.key] = history.map((h) => ({
-            value: card.getSparklineValue(h.value),
-          }));
+          // Downsample ~90 daily points to ~weekly for a clean sparkline, always
+          // keeping the most recent point as the emphasized endpoint.
+          const step = Math.max(1, Math.ceil(history.length / 13));
+          const sampled = history.filter((_, i) => i % step === 0);
+          if (history.length && sampled[sampled.length - 1] !== history[history.length - 1]) {
+            sampled.push(history[history.length - 1]);
+          }
+          sparkData[card.key] = sampled.map((h) => ({ value: card.getSparklineValue(h.value) }));
+          // Baseline = the earliest snapshot we hold (oldest-first ordering).
+          if (history.length > 1) {
+            baseData[card.key] = { value: history[0].value as unknown as KpiData, date: history[0].date };
+          }
         }
         setSparklines(sparkData);
+        setBaselines(baseData);
       }
     } catch {
       // Non-critical
@@ -1496,8 +1688,83 @@ export default function DashboardPage() {
     loadFinancials();
   }, [loadFinancials, config]);
 
+  // Build a section's funnel from whatever live data we actually hold — never
+  // fabricated. Returns null (no funnel rendered) when the data isn't loaded.
+  const ACC = {
+    sage: "#5fa07a", coral: "#e8734a", amber: "#dca02a",
+    mauve: "#b0587a", blue: "#5b8def", teal: "#4b9faa", slate: "#7d8794",
+  };
+  const funnelSpecFor = (key: SectionKey): FunnelSpec | null => {
+    if (key === "money") {
+      if (!financials?.seeded || !financials.revenueTTM) return null;
+      const rev = financials.revenueTTM;
+      const flows: FunnelPart[] = [];
+      if (financials.ownerDistributableCash != null)
+        flows.push({ n: financials.ownerDistributableCash, label: "Owner cash", color: ACC.sage, disp: fmtMoney(financials.ownerDistributableCash) });
+      if (financials.staffAnnualCost)
+        flows.push({ n: financials.staffAnnualCost, label: "Staff", color: ACC.amber, disp: fmtMoney(financials.staffAnnualCost) });
+      if (financials.annualDebtService)
+        flows.push({ n: financials.annualDebtService, label: "Debt service", color: ACC.coral, disp: fmtMoney(financials.annualDebtService) });
+      if (financials.bookedOpexTTM)
+        flows.push({ n: financials.bookedOpexTTM, label: "Booked opex", color: ACC.slate, disp: fmtMoney(financials.bookedOpexTTM) });
+      const rem = rev - flows.reduce((a, f) => a + f.n, 0);
+      if (rem > rev * 0.01) flows.push({ n: rem, label: "Retained / other", color: ACC.blue, disp: fmtMoney(rem) });
+      if (flows.length < 2) return null;
+      return { kind: "split", title: "Revenue waterfall · TTM", srcDisp: fmtMoney(rev), srcLabel: "Revenue · 100%", total: rev, flows };
+    }
+    if (key === "collections") {
+      const d = kpis.delinquency?.data as DelinquencyData | null;
+      if (!d || !d.totalActive) return null;
+      const current = Math.max(0, d.totalActive - d.count);
+      return {
+        kind: "split", title: "Tenancy status", srcDisp: d.totalActive.toLocaleString(), srcLabel: "Active · 100%", total: d.totalActive,
+        flows: [
+          { n: current, label: "Current", color: ACC.sage, disp: current.toLocaleString() },
+          { n: d.count, label: "Delinquent >$50", color: ACC.coral, disp: d.count.toLocaleString() },
+        ],
+      };
+    }
+    if (key === "maintenance") {
+      const m = kpis.maintenance_economics?.data as MaintenanceEconomicsData | null;
+      if (!m || !m.totalSpendTTM) return null;
+      return {
+        kind: "split", title: "Maintenance spend · in-house vs outsourced · TTM", srcDisp: fmtMoney(m.totalSpendTTM), srcLabel: "Spend · 100%", total: m.totalSpendTTM,
+        flows: [
+          { n: m.inHouseDollars, label: "In-house", color: ACC.sage, disp: fmtMoney(m.inHouseDollars) },
+          { n: m.outsourcedDollars, label: "Outsourced", color: ACC.coral, disp: fmtMoney(m.outsourcedDollars) },
+        ],
+      };
+    }
+    if (key === "leasing") {
+      const lf = kpis.leasing_funnel?.data as LeasingFunnelData | null;
+      if (!lf?.funnel?.guestCards) return null;
+      const f = lf.funnel;
+      return {
+        kind: "stage", title: `Leasing funnel · ${lf.period ?? "last 30d"}`,
+        stages: [
+          { n: f.guestCards, label: "Guest cards", color: ACC.blue, disp: f.guestCards.toLocaleString() },
+          { n: f.applications, label: "Applications", color: ACC.teal, disp: f.applications.toLocaleString() },
+          { n: f.approvals, label: "Approved", color: ACC.sage, disp: f.approvals.toLocaleString() },
+          { n: f.moveIns, label: "Moved in", color: ACC.coral, disp: f.moveIns.toLocaleString() },
+        ],
+      };
+    }
+    if (key === "vendors") {
+      const m = kpis.maintenance_economics?.data as MaintenanceEconomicsData | null;
+      if (!m?.byCategory?.length) return null;
+      const cats = [...m.byCategory].sort((a, b) => b.dollars - a.dollars).slice(0, 5);
+      const total = m.totalSpendTTM || cats.reduce((a, c) => a + c.dollars, 0) || 1;
+      const palette = [ACC.teal, ACC.coral, ACC.amber, ACC.mauve, ACC.slate];
+      return {
+        kind: "split", title: "Spend by category · TTM", srcDisp: fmtMoney(total), srcLabel: "Spend · 100%", total,
+        flows: cats.map((c, i) => ({ n: c.dollars, label: c.category, color: palette[i % palette.length], disp: fmtMoney(c.dollars) })),
+      };
+    }
+    return null;
+  };
+
   return (
-    <div className="px-8 py-8 max-w-5xl">
+    <div className="px-8 py-8 max-w-6xl">
       {/* Header */}
       <div className="mb-8 animate-slide-up">
         <div className="flex items-center justify-between">
@@ -1554,26 +1821,54 @@ export default function DashboardPage() {
         onSaved={setConfig}
       />
 
-      {/* Section A — Financials (QuickBooks) */}
-      <FinancialsPanel
-        data={financials}
-        loading={financialsLoading}
-        onOpenConfig={() => setConfigOpen(true)}
-      />
+      {/* Sections — money-first (Financial Health leads with the QuickBooks panel) */}
+      {SECTIONS.map((sec) => {
+        const cards = KPI_CARDS.filter(
+          (c) => (CARD_META[c.key]?.section ?? "leasing") === sec.key
+        );
+        if (sec.key !== "money" && cards.length === 0) return null;
+        return (
+          <section key={sec.key} className="mb-9 animate-slide-up">
+            <div className="flex items-center gap-3 mb-3">
+              <h2 className="text-lg font-bold text-charcoal-900 tracking-tight">{sec.title}</h2>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-charcoal-400 bg-sand-100 border border-sand-200 rounded-full px-2 py-0.5">
+                {sec.tag}
+              </span>
+              <span className="flex-1 h-px bg-sand-200" />
+            </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
-        {KPI_CARDS.map((card) => (
-          <KpiCard
-            key={card.key}
-            config={card}
-            state={kpis[card.key]}
-            priorSnapshot={priorSnapshots[card.key]}
-            sparklineData={sparklines[card.key] || []}
-            refreshing={refreshingKeys.has(card.key)}
-          />
-        ))}
-      </div>
+            {(() => {
+              const spec = funnelSpecFor(sec.key);
+              return spec ? <FunnelCard spec={spec} /> : null;
+            })()}
+
+            {sec.key === "money" && (
+              <FinancialsPanel
+                data={financials}
+                loading={financialsLoading}
+                onOpenConfig={() => setConfigOpen(true)}
+              />
+            )}
+
+            {cards.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
+                {cards.map((card) => (
+                  <KpiCard
+                    key={card.key}
+                    config={card}
+                    state={kpis[card.key]}
+                    priorSnapshot={priorSnapshots[card.key]}
+                    sparklineData={sparklines[card.key] || []}
+                    accent={CARD_META[card.key]?.accent ?? card.sparkColor}
+                    baseline={baselines[card.key]}
+                    refreshing={refreshingKeys.has(card.key)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
 
       {/* Footer note */}
       <div className="mt-8 animate-slide-up" style={{ animationDelay: "200ms" }}>
