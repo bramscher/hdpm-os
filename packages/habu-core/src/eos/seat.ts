@@ -14,11 +14,32 @@ export function buildSeatTree(seats: Seat[]): SeatNode[] {
   const bySort = [...seats].sort((a, b) => a.sort - b.sort);
   const nodes = new Map<string, SeatNode>(bySort.map((s) => [s.id, { seat: s, children: [] }]));
   const roots: SeatNode[] = [];
+
+  // Would linking `seatId` under `parentId` close a reports_to loop? Walk up
+  // from the parent; reaching seatId means a cycle (a→b→a). Without this the
+  // seats in the cycle nest into each other and vanish from the roots forest.
+  const closesCycle = (seatId: string, parentId: string): boolean => {
+    const seen = new Set<string>();
+    let cur: string | null | undefined = parentId;
+    while (cur && !seen.has(cur)) {
+      if (cur === seatId) return true;
+      seen.add(cur);
+      cur = nodes.get(cur)?.seat.reports_to_seat_id ?? null;
+    }
+    return false;
+  };
+
   for (const s of bySort) {
     const node = nodes.get(s.id)!;
-    const parent = s.reports_to_seat_id ? nodes.get(s.reports_to_seat_id) : undefined;
-    if (parent && parent.seat.id !== s.id) parent.children.push(node);
-    else roots.push(node);
+    const parentId = s.reports_to_seat_id;
+    const parent = parentId ? nodes.get(parentId) : undefined;
+    // A missing parent, a self-parent, or any reports_to cycle → treat as a
+    // root rather than silently dropping the seat.
+    if (parent && parent.seat.id !== s.id && !closesCycle(s.id, parentId!)) {
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
   }
   return roots;
 }

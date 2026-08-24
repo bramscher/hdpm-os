@@ -87,6 +87,22 @@ describe('the self-closing loop (§7)', () => {
     expect(r.card.collapsed).toBe(true); // card collapses in place
   });
 
+  it('a tap on a not-yet-active (pending) step is a no-op — never skips ahead', () => {
+    // step-1 is still 'pending' (step-0 hasn't been completed). Tapping it must
+    // not complete it or activate anything.
+    const r = applyJacketAction(makeJacket(), makeSteps(), { kind: 'tap', step_id: 'step-1', actor: 'mallory' }, ctx);
+    expect(r.transition.type).toBe('noop');
+    expect(r.steps.find((s) => s.id === 'step-1')!.state).toBe('pending'); // untouched — still not reached
+    expect(r.steps.find((s) => s.id === 'step-0')!.state).toBe('active'); // step-0 still the live one
+  });
+
+  it('a replayed tap on an already-done step is a no-op (not a phantom advance)', () => {
+    const afterTap = applyJacketAction(makeJacket(), makeSteps(), { kind: 'tap', step_id: 'step-0', actor: 'alice' }, ctx);
+    const replay = applyJacketAction(afterTap.jacket, afterTap.steps, { kind: 'tap', step_id: 'step-0', actor: 'alice' }, ctx);
+    expect(replay.transition.type).toBe('noop');
+    expect(replay.steps.find((s) => s.id === 'step-1')!.state).toBe('active'); // unchanged by the replay
+  });
+
   it('a non-matching external event is a no-op', () => {
     const afterTap = applyJacketAction(makeJacket(), makeSteps(), { kind: 'tap', step_id: 'step-0', actor: 'alice' }, ctx);
     const r = applyJacketAction(afterTap.jacket, afterTap.steps, {

@@ -35,6 +35,14 @@ describe('buildSeatTree', () => {
     const tree = buildSeatTree([seat({ id: 'x', reports_to_seat_id: 'x' })]);
     expect(tree.map((n) => n.seat.id)).toEqual(['x']);
   });
+
+  it('surfaces both seats of a reports_to cycle as roots (never drops them)', () => {
+    const tree = buildSeatTree([
+      seat({ id: 'a', reports_to_seat_id: 'b', sort: 0 }),
+      seat({ id: 'b', reports_to_seat_id: 'a', sort: 1 }),
+    ]);
+    expect(tree.map((n) => n.seat.id).sort()).toEqual(['a', 'b']);
+  });
 });
 
 describe('validateSeats', () => {

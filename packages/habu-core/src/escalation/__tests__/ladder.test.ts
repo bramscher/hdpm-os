@@ -42,6 +42,22 @@ describe('escalateWatcherHits', () => {
     expect(drafts[0].raised_by).toBe('watcher:r2'); // now first
   });
 
+  it('routes a human-held jacket to the human holder itself (not their manager)', () => {
+    const hits: WatcherHit[] = [{ rule_id: 'aged', jacket_id: 'j1', severity: 'now', detail: 'aged 30d' }];
+    const drafts = escalateWatcherHits(hits, { seatOf: () => human, allSeats: all });
+    expect(drafts[0].escalation_seat_id).toBe('human');
+  });
+
+  it('maps now→priority 2, soon→priority 3 (severity, not watcher kind)', () => {
+    const hits: WatcherHit[] = [
+      { rule_id: 'r1', jacket_id: 'j1', severity: 'now', detail: 'now' },
+      { rule_id: 'r2', jacket_id: 'j2', severity: 'soon', detail: 'soon' },
+    ];
+    const drafts = escalateWatcherHits(hits, { seatOf: () => human, allSeats: all });
+    expect(drafts.find((d) => d.source_ref === 'watcher:r1:j1')!.priority).toBe(2);
+    expect(drafts.find((d) => d.source_ref === 'watcher:r2:j2')!.priority).toBe(3);
+  });
+
   it('files with null escalation seat when the jacket has no holder', () => {
     const hits: WatcherHit[] = [{ rule_id: 'noown', jacket_id: 'j9', severity: 'now', detail: 'no owner' }];
     const drafts = escalateWatcherHits(hits, { seatOf: () => null, allSeats: all });

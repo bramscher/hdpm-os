@@ -58,14 +58,22 @@ export function applyJacketAction(
 ): JacketActionResult {
   let stepId: string | null = null;
   let actor: string;
+  let noopReason = 'unknown step';
 
   if (input.kind === 'tap') {
-    stepId = input.step_id;
+    // Only an ACTIVE step is tappable. A tap for a pending (not-yet-reached) or
+    // already-terminal step — a stale/replayed card action, or a button from a
+    // parallel track — must NOT complete it (advanceStep would happily finish
+    // any non-terminal step and skip ahead). Reject it as a no-op instead.
+    const target = steps.find((s) => s.id === input.step_id);
     actor = input.actor;
+    if (target?.state === 'active') stepId = target.id;
+    else noopReason = target ? `step not active (${target.state})` : 'unknown step';
   } else {
     const step = matchExternalEvent(steps, input.event);
     stepId = step?.id ?? null;
     actor = `system:${input.event.source}`;
+    if (!stepId) noopReason = 'no matching active step';
   }
 
   if (!stepId) {
@@ -74,7 +82,7 @@ export function applyJacketAction(
       jacket: projected,
       steps,
       card: buildCardModel(projected, steps, { today: ctx.today, detailsHref: ctx.detailsHref }),
-      transition: { type: 'noop', reason: input.kind === 'external' ? 'no matching active step' : 'unknown step' },
+      transition: { type: 'noop', reason: noopReason },
     };
   }
 

@@ -100,11 +100,14 @@ export const slackAdapter: ChannelAdapter = {
     if (!msg.recipient_address) {
       return { status: 'skipped', error: 'no recipient_address' };
     }
+    // payload is typed non-null, but a row inserted outside enqueueOutbox (which
+    // defaults it to {}) could carry a null column — guard so send never throws.
+    const payload = msg.payload ?? {};
     return sendSlackMessage({
       channel: msg.recipient_address,
       text: msg.body ?? msg.subject ?? '',
-      blocks: Array.isArray(msg.payload.blocks) ? (msg.payload.blocks as unknown[]) : undefined,
-      as: (msg.payload.as as SlackSenderIdentity | undefined) ?? undefined,
+      blocks: Array.isArray(payload.blocks) ? (payload.blocks as unknown[]) : undefined,
+      as: (payload.as as SlackSenderIdentity | undefined) ?? undefined,
     });
   },
 };

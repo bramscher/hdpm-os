@@ -16,8 +16,9 @@ import type { WatcherHit } from '../watcher/engine';
 export const ESCALATION_ACTOR = 'system:escalation';
 
 // Generic default priorities (lower = more urgent). Tenants may override.
-export const PRIORITY_RECURRING = 2;
-export const PRIORITY_AGED = 3;
+// Watcher hits are prioritized by SEVERITY, not by watcher kind.
+export const PRIORITY_WATCHER_NOW = 2;
+export const PRIORITY_WATCHER_SOON = 3;
 export const PRIORITY_TODO_TWICE_MISSED = 3;
 
 /** A rolled to-do that slips again is filed as an issue this many days out. */
@@ -59,13 +60,20 @@ export function escalateWatcherHits(
     const ref = watcherSourceRef(h.jacket_id, h.rule_id);
     if (drafts.has(ref)) continue;
     const holder = ctx.seatOf(h.jacket_id);
-    const escalationSeat = holder ? resolveEscalationSeat(holder, ctx.allSeats) : null;
+    // Agents file UP their human escalation path; a human/open holder already
+    // owns the jacket, so the issue routes to the holder itself (not the
+    // holder's manager). Null only when nobody holds it.
+    const escalationSeat = holder
+      ? holder.holder_type === 'agent'
+        ? resolveEscalationSeat(holder, ctx.allSeats)
+        : holder
+      : null;
     drafts.set(ref, {
       title: h.detail.slice(0, 300),
       detail: `${h.detail}\nJacket: ${h.jacket_id}. Holder seat: ${holder?.name ?? 'none'}.`,
       raised_by: `watcher:${h.rule_id}`,
       source_ref: ref,
-      priority: h.severity === 'now' ? PRIORITY_RECURRING : PRIORITY_AGED,
+      priority: h.severity === 'now' ? PRIORITY_WATCHER_NOW : PRIORITY_WATCHER_SOON,
       escalation_seat_id: escalationSeat?.id ?? null,
       _now: h.severity === 'now',
     });

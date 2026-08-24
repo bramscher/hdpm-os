@@ -289,6 +289,21 @@ describe('slack adapter', () => {
     vi.unstubAllGlobals();
   });
 
+  it('does not throw when payload is null (row inserted outside enqueueOutbox)', async () => {
+    vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-test');
+    const calls: { body: Record<string, unknown> }[] = [];
+    vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
+      calls.push({ body: JSON.parse(init.body) });
+      return { json: async () => ({ ok: true, channel: 'D0ABC', ts: '1.2' }) };
+    });
+    const outcome = await getAdapter('slack').send(
+      msg({ channel: 'slack', recipient_address: 'U123', payload: null as unknown as Record<string, unknown> })
+    );
+    expect(outcome.status).toBe('sent');
+    expect(calls[0].body.blocks).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+
   it('surfaces slack API errors as failed', async () => {
     vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-test');
     vi.stubGlobal('fetch', async () => ({

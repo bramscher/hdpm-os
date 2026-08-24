@@ -67,24 +67,33 @@ INSERT INTO seat (id, org_id, name, roles, reports_to_seat_id, holder_type, agen
      'aaaa0000-0000-4000-8000-000000000001', 'agent', 'onboarding_prep', 'aaaa0000-0000-4000-8000-000000000001', 14)
 ON CONFLICT (id) DO NOTHING;
 
--- ── Autonomy (agent_config): internal L3, tenant/money hard-capped at L2 ────
-INSERT INTO agent_config (agent, action_type, autonomy_level, ceiling_level, owner_role) VALUES
+-- ── Autonomy (agent_config) ─────────────────────────────────────────────────
+-- Autonomy is EARNED per action, never granted by a seed (restart plan rule 6;
+-- §7 "Nothing else enabled"). So every row ships OFF: autonomy_level 0 AND
+-- enabled=false. The ceiling_level column carries the DESIGN cap (internal L3,
+-- tenant/owner/money walls at L2) as metadata — promotion may raise
+-- autonomy_level toward it later, but only deliberately, per action, one at a
+-- time. Turning an agent on is: UPDATE agent_config SET enabled=true,
+-- autonomy_level=<n> WHERE agent=... AND action_type=... .
+-- NOTE: agent_config.enabled DEFAULTS TO true (migration 0001) — hence the
+-- explicit enabled=false here. Do not drop it.
+INSERT INTO agent_config (agent, action_type, autonomy_level, ceiling_level, owner_role, enabled) VALUES
   -- Move-Out Agent
-  ('move_out',        'schedule_clean',    3, 3, 'Matt'),
-  ('move_out',        'chase_keys',        3, 3, 'Matt'),
-  ('move_out',        'draft_tenant_msg',  1, 2, 'Matt'),   -- tenant-facing: draft, human sends
+  ('move_out',        'schedule_clean',    0, 3, 'Matt',  false),
+  ('move_out',        'chase_keys',        0, 3, 'Matt',  false),
+  ('move_out',        'draft_tenant_msg',  0, 2, 'Matt',  false),   -- tenant-facing: draft, human sends
   -- Leasing Agent
-  ('leasing',         'schedule_applicant',3, 3, 'Matt'),
-  ('leasing',         'draft_applicant_msg',1, 2, 'Matt'),  -- tenant-facing wall
-  ('leasing',         'deposit_ledger',    1, 2, 'Penny'),  -- money wall
+  ('leasing',         'schedule_applicant',0, 3, 'Matt',  false),
+  ('leasing',         'draft_applicant_msg',0, 2, 'Matt', false),  -- tenant-facing wall
+  ('leasing',         'deposit_ledger',    0, 2, 'Penny', false),  -- money wall
   -- Listing Agent
-  ('listing',         'update_listing',    3, 3, 'Matt'),
-  ('listing',         'charge_ad_fee',     1, 2, 'Penny'),  -- money wall
+  ('listing',         'update_listing',    0, 3, 'Matt',  false),
+  ('listing',         'charge_ad_fee',     0, 2, 'Penny', false),  -- money wall
   -- Finance Agent (verify only; never moves money)
-  ('finance_closer',  'verify_closeout',   2, 2, 'Penny'),
-  ('finance_closer',  'draft_owner_stmt',  1, 2, 'Penny'),  -- owner-facing wall
+  ('finance_closer',  'verify_closeout',   0, 2, 'Penny', false),
+  ('finance_closer',  'draft_owner_stmt',  0, 2, 'Penny', false),  -- owner-facing wall
   -- Onboarding Prep Agent
-  ('onboarding_prep', 'assemble_packet',   2, 2, 'Matt')
+  ('onboarding_prep', 'assemble_packet',   0, 2, 'Matt',  false)
 ON CONFLICT (agent, action_type) DO NOTHING;
 
 NOTIFY pgrst, 'reload schema';
