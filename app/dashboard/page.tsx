@@ -1749,17 +1749,10 @@ export default function DashboardPage() {
         ],
       };
     }
-    if (key === "vendors") {
-      const m = kpis.maintenance_economics?.data as MaintenanceEconomicsData | null;
-      if (!m?.byCategory?.length) return null;
-      const cats = [...m.byCategory].sort((a, b) => b.dollars - a.dollars).slice(0, 5);
-      const total = m.totalSpendTTM || cats.reduce((a, c) => a + c.dollars, 0) || 1;
-      const palette = [ACC.teal, ACC.coral, ACC.amber, ACC.mauve, ACC.slate];
-      return {
-        kind: "split", title: "Spend by category · TTM", srcDisp: fmtMoney(total), srcLabel: "Spend · 100%", total,
-        flows: cats.map((c, i) => ({ n: c.dollars, label: c.category, color: palette[i % palette.length], disp: fmtMoney(c.dollars) })),
-      };
-    }
+    // Vendors: spend-by-category is heavily skewed (one category ~75%+, the rest
+    // slivers) with long GL-coded names, so a split funnel collides its thin-band
+    // labels into an unreadable pile. A ranked bar list is the right shape — a
+    // follow-up. No funnel here for now.
     return null;
   };
 
