@@ -1781,8 +1781,23 @@ export default function DashboardPage() {
       const lf = kpis.leasing_funnel?.data as LeasingFunnelData | null;
       if (!lf?.funnel?.guestCards) return null;
       const f = lf.funnel;
+      const period = lf.period ?? "last 90d";
+      const realMoveIns = lf.dataQuality?.tenantMoveIns;
+      // AppFolio stopped linking leads→applications→tenancies (May '26), so the
+      // middle stages undercount badly. When that's flagged, show only the two
+      // numbers we trust — guest cards and ACTUAL move-ins from tenant records.
+      if (lf.dataQuality?.leadLinkageSparse && realMoveIns != null) {
+        return {
+          kind: "stage",
+          title: `Leasing · ${period} · middle stages unlinked in AppFolio`,
+          stages: [
+            { n: f.guestCards, label: "Guest cards", color: ACC.blue, disp: f.guestCards.toLocaleString() },
+            { n: realMoveIns, label: "Move-ins (actual)", color: ACC.coral, disp: realMoveIns.toLocaleString() },
+          ],
+        };
+      }
       return {
-        kind: "stage", title: `Leasing funnel · ${lf.period ?? "last 30d"}`,
+        kind: "stage", title: `Leasing funnel · ${period}`,
         stages: [
           { n: f.guestCards, label: "Guest cards", color: ACC.blue, disp: f.guestCards.toLocaleString() },
           { n: f.applications, label: "Applications", color: ACC.teal, disp: f.applications.toLocaleString() },
