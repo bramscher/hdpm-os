@@ -1,6 +1,8 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { auth } from '@/lib/auth';
 import { listAgentConfig, isGloballyKilled } from '@/lib/agents/config';
-import type { AgentConfigRow, AgentProposal, OutboxMessage } from '@/lib/agents/types';
+import type { AgentProposal, OutboxMessage } from '@/lib/agents/types';
+import AutonomyMatrix from '@/components/agents/AutonomyMatrix';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +16,6 @@ export const metadata = {
  * supervision surface: autonomy matrix, kill switch, proposal acceptance,
  * outbox health, and the Sep 4 write-path tracker.
  */
-
-const LEVEL_LABELS = ['L0 observe', 'L1 draft', 'L2 act-on-tap', 'L3 act+notify', 'L4 silent'];
 
 interface MetricValue {
   [key: string]: unknown;
@@ -149,6 +149,8 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 export default async function AgentsPage() {
   const { config, killed, proposals, outbox, latest, baseline, clarifications } = await loadData();
+  const session = await auth();
+  const isAdmin = session?.user?.isAdmin === true;
   const stats = proposalStats(proposals);
 
   const retype = latest.get('appfolio_retype_touches')?.value;
@@ -218,34 +220,7 @@ export default async function AgentsPage() {
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         Autonomy matrix
       </h2>
-      <div className="mb-8 overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
-        <table className="w-full text-sm">
-          <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
-            <tr>
-              <th className="px-3 py-2">Agent</th>
-              <th className="px-3 py-2">Action</th>
-              <th className="px-3 py-2">Level</th>
-              <th className="px-3 py-2">Ceiling</th>
-              <th className="px-3 py-2">Max/day</th>
-              <th className="px-3 py-2">Owner</th>
-              <th className="px-3 py-2">Enabled</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-sand-100">
-            {config.map((row: AgentConfigRow) => (
-              <tr key={`${row.agent}:${row.action_type}`} className={row.agent === '*' ? 'bg-amber-50' : ''}>
-                <td className="px-3 py-2 font-medium">{row.agent === '*' ? '* (kill switch)' : row.agent}</td>
-                <td className="px-3 py-2">{row.action_type}</td>
-                <td className="px-3 py-2">{LEVEL_LABELS[row.autonomy_level] ?? row.autonomy_level}</td>
-                <td className="px-3 py-2 text-charcoal-500">{LEVEL_LABELS[row.ceiling_level] ?? row.ceiling_level}</td>
-                <td className="px-3 py-2">{row.max_per_day ?? '—'}</td>
-                <td className="px-3 py-2">{row.owner_role ?? '—'}</td>
-                <td className="px-3 py-2">{row.enabled ? '✓' : <span className="font-bold text-red-600">off</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <AutonomyMatrix initialConfig={config} isAdmin={isAdmin} />
 
       {/* Proposals */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
