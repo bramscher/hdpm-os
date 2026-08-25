@@ -37,8 +37,8 @@ Dez brain ──WriteRequest──▶ WriteRouter
                               ▼
                  ┌────────────┴─────────────┐
         ApiWriteTransport            RpaWriteTransport
-        (v0 / Write API / Realm-X)   (→ Playwright worker service)
-                 │                            │
+        (v0 / Write API / Realm-X)   (HTTPS + separate key ─▶ htToolKit on
+                 │                     Railway: FastAPI + Playwright + Chromium)
                  └──────────▶ AppFolio ◀──────┘
 ```
 
@@ -151,18 +151,37 @@ Ties directly to the existing `lib/agents/config.ts` (`effectiveLevel`,
 - Pure server-side HTTP (extends `lib/appfolio.ts`, which is GET-only now).
 - `verify()` = a v0 GET read-back.
 
-### 6b. `RpaWriteTransport` → the Playwright worker
-The Next serverless runtime **cannot drive a browser**, so this adapter is a thin
-client that enqueues a job for a **separate long-running worker service**:
+### 6b. `RpaWriteTransport` → htToolKit (Railway) — the worker already exists
+The Next serverless runtime can't drive a browser, but we don't need a new
+service: **htToolKit** (`bramscher/htToolKit`, `toolkit.hangten.studio`) is
+already a FastAPI app on **Railway/Docker with Chromium in the image** and
+existing browser automation. We add AppFolio automation there and call it over
+HTTPS — **no `write_jobs` queue, no daemon, no cron.**
 
-- **Queue:** a `write_jobs` table (Supabase) — `{ id, action, subject_id, params, idempotency_key, status, result, screenshots }`. The adapter inserts a job and awaits its terminal status (poll or Realtime).
-- **Worker:** a standalone Node service (Fly.io / a small VM — *not* Vercel) running Playwright with a **persistent authenticated AppFolio session** (cookie jar; handles re-login + 2FA; one session = one seat). Consumes `write_jobs`, drives the web app, verifies, writes the result + a failure screenshot back.
-- **Deep-links, not clicks-from-scratch:** the worker navigates straight to the
-  known URL (`…/service_requests/{sr}/work_orders/{wo}`), so no search step. Per
-  the spike, that's ~3–10s/action.
-- **Single-concurrency per session**, velocity + business-hours caps (avoid
-  bot-pattern detection; limit blast radius), circuit-breaker on repeated
-  failures → marks itself unhealthy so the router stops routing to it.
+- **In htToolKit** — new `app/routers/appfolio.py` + `app/services/appfolio_service.py`
+  using **Playwright-for-Python** (added to `requirements.txt` + the Dockerfile;
+  it can reuse the system Chromium already installed). Endpoints:
+  `POST /appfolio/wo/note`, `POST /appfolio/wo/followup`, … — each loads the saved
+  session, **deep-links** to the known URL (`…/service_requests/{sr}/work_orders/{wo}`
+  — no search step), runs the DOM flow, **verifies by read-back**, and returns
+  `{ ok, verified, detail, externalRef }`. ~3–10s/action.
+- **Separate API key (as decided).** htToolKit's media endpoints keep
+  `settings.api_key` via the existing `require_api_key`. The AppFolio router is
+  guarded by a **new** `require_appfolio_key` (`settings.appfolio_api_key`), so a
+  leaked media key can't touch the PMS and vice-versa. hdpm-chatbot holds
+  `APPFOLIO_TOOLKIT_KEY` in its own env. Ideally also allowlist the caller
+  (shared secret / source) so only Dez can hit these routes.
+- **Session persistence.** Playwright `storageState` JSON on a **Railway volume**;
+  every call loads it already-authenticated. **2FA is cleared once by hand** to
+  seed it; htToolKit flags expiry so it can be re-bootstrapped. One session = one
+  AppFolio seat = **single-concurrency**.
+- **`RpaWriteTransport` (hdpm side)** is a thin HTTPS client: POST the action to
+  htToolKit with the separate key, await the JSON. `capabilities()` = the actions
+  htToolKit currently implements; `healthy()` = a `GET /appfolio/health` that
+  reports whether the stored session is still valid.
+- **Guardrails live in htToolKit:** velocity + business-hours caps and a
+  circuit-breaker; on repeated failure `/appfolio/health` returns unhealthy so the
+  router stops routing to it.
 
 ## 7. Idempotency & verification
 - `idempotencyKey` = hash(action + subjectId + normalized params + logical-date).
@@ -193,9 +212,10 @@ client that enqueues a job for a **separate long-running worker service**:
 ## 10. Rollout
 - **Phase 0 (now):** this spec + the interfaces/registry stub. No worker. Writes
   are still human (or supervised RPA like the spike).
-- **Phase 1:** build the Playwright worker + `write_jobs` for **two** actions
-  (`wo.add_note`, `wo.set_followup_date`), RPA-only, gated at **L2** (approval
-  required). First real "@dez → tap → write" loop.
+- **Phase 1:** add `POST /appfolio/wo/note` + `/appfolio/wo/followup` to
+  **htToolKit** (Playwright + `storageState`, behind `require_appfolio_key`) and a
+  thin `RpaWriteTransport` in hdpm-chatbot, RPA-only, gated at **L2** (approval
+  required). One-time 2FA session bootstrap. First real "@dez → tap → write" loop.
 - **Phase 2:** add `ApiWriteTransport` as Write API / Realm-X access lands; flip
   the high-frequency `wo.*` actions to API (registry already prefers it). RPA
   becomes the fallback + the web-app-only long tail.
@@ -203,10 +223,12 @@ client that enqueues a job for a **separate long-running worker service**:
   measured override rates clear the bar (restart plan §2 rule 6).
 
 ## 11. Open questions
-1. Worker hosting + how the persistent AppFolio session survives re-auth/2FA.
-2. Does the ToS answer permit the unattended worker session (vs. the supervised
-   spike)? — gates Phase 1 going unattended.
-3. Which two actions earn the first worker build — `add_note` + `followup` are the
-   safest; is `set_status`/`mark_done` more valuable for motion?
-4. Queue vs. direct: `write_jobs` table is simplest; revisit a real queue only if
-   volume demands it.
+1. **Hosting: resolved** → htToolKit on Railway (Docker + Chromium + FastAPI).
+   Remaining infra detail: `storageState` on a Railway volume + how often the
+   AppFolio session/2FA needs re-bootstrapping (session TTL unknown until we run it).
+2. Does the ToS answer permit the **unattended** htToolKit session (vs. today's
+   supervised spike)? — gates Phase 1 going unattended.
+3. Which two actions first — `add_note` + `followup` are safest; is
+   `set_status`/`mark_done` more valuable for motion?
+4. Caller restriction: beyond the separate `appfolio_api_key`, do we allowlist the
+   hdpm-chatbot origin / add a shared secret so only Dez can hit the AppFolio routes?
