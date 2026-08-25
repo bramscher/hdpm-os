@@ -207,9 +207,14 @@ function TierControl({
           );
         })}
       </div>
-      {current && (
+      {current ? (
         <p className="max-w-[16rem] text-[11px] leading-tight text-charcoal-400">
           {TIER_COPY[current].control}
+        </p>
+      ) : (
+        <p className="max-w-[16rem] text-[11px] leading-tight text-charcoal-400">
+          Off — <span className="font-medium">observes only (L0)</span>: watches and logs, but never
+          drafts or acts. Turn on to pick a tier.
         </p>
       )}
     </div>
