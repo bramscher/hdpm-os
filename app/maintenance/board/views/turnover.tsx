@@ -6,6 +6,7 @@ import type { MaintWorkOrder, UnitTurn } from '@/lib/maintenance/types';
 import type { BoardData } from '../board-types';
 import { daysSince, fmtDate, todayStr } from '../board-types';
 import { KpiTile } from '../components/shared';
+import { PHASES, phaseKeyFor } from '@/lib/maintenance/turn-schedule';
 
 function readiness(turn: UnitTurn): { text: string; cls: string } {
   if (!turn.target_ready) return { text: 'no target set ⚠', cls: 'flag' };
@@ -35,26 +36,6 @@ function woLabel(wo: MaintWorkOrder): string {
   return wo.wo_number ? `#${wo.wo_number}` : wo.description.slice(0, 28);
 }
 
-/** AppFolio Turn Board phases, in make-ready order — one board column each. */
-const PHASES: { key: string; label: string }[] = [
-  { key: 'Keys / Locks', label: 'Keys' },
-  { key: 'Remotes', label: 'Remotes' },
-  { key: 'Maintenance / Repair', label: 'Repair' },
-  { key: 'Floors / Carpets', label: 'Floors' },
-  { key: 'Paint', label: 'Paint' },
-  { key: 'Housekeeping', label: 'Clean' },
-  { key: 'Appliances', label: 'Appliances' },
-  { key: 'Landscape Maintenance', label: 'Landscape' },
-  { key: 'Other', label: 'Other' },
-];
-const PHASE_KEYS = new Set(PHASES.map((p) => p.key));
-
-/** Manually-linked WOs (no category) and unknown categories land in Other. */
-function phaseKeyFor(wo: MaintWorkOrder): string {
-  return wo.unit_turn_category && PHASE_KEYS.has(wo.unit_turn_category)
-    ? wo.unit_turn_category
-    : 'Other';
-}
 
 type TurnSortKey = 'unit' | 'vacant' | 'target' | 'movein' | 'actual';
 
@@ -149,7 +130,7 @@ export default function Turnover({
 
   // Phase columns: only render phases that have at least one WO on the board.
   const allTurnWos = rows.flatMap((t) => byTurn.get(t.id) ?? []);
-  const visiblePhases = PHASES.filter((p) => allTurnWos.some((wo) => phaseKeyFor(wo) === p.key));
+  const visiblePhases = PHASES.filter((p) => allTurnWos.some((wo) => phaseKeyFor(wo.unit_turn_category) === p.key));
 
   const today = todayStr();
   const weekOut = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
@@ -348,6 +329,13 @@ export default function Turnover({
                         AF↗
                       </a>
                     )}
+                    <Link
+                      href={`/maintenance/board/turn/${turn.id}`}
+                      title="Open the make-ready schedule (Gantt)"
+                      style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, textDecoration: 'none', color: '#2c4a29' }}
+                    >
+                      Schedule↗
+                    </Link>
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--muted)' }}>
                     vacated {fmtDate(turn.vacated_at)}
@@ -393,7 +381,7 @@ export default function Turnover({
                   />
                 </td>
                 {visiblePhases.map((p) => {
-                  const cellWos = wos.filter((wo) => phaseKeyFor(wo) === p.key);
+                  const cellWos = wos.filter((wo) => phaseKeyFor(wo.unit_turn_category) === p.key);
                   const allDone =
                     cellWos.length > 0 && cellWos.every((wo) => wo.stage === 'CLOSED');
                   return (
