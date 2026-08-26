@@ -11,6 +11,7 @@ import {
   tierAllowed,
   type AutonomyTier,
 } from "@/lib/agents/tiers";
+import type { AgentWorkload } from "@/lib/agents/workload";
 
 const LEVEL_LABELS = ["L0 observe", "L1 draft", "L2 act-on-tap", "L3 act+notify", "L4 silent"];
 const rowKey = (r: { agent: string; action_type: string }) => `${r.agent}:${r.action_type}`;
@@ -24,9 +25,11 @@ const rowKey = (r: { agent: string; action_type: string }) => `${r.agent}:${r.ac
 export default function AutonomyMatrix({
   initialConfig,
   isAdmin,
+  workload = {},
 }: {
   initialConfig: AgentConfigRow[];
   isAdmin: boolean;
+  workload?: Record<string, AgentWorkload>;
 }) {
   const [rows, setRows] = useState<AgentConfigRow[]>(initialConfig);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -109,9 +112,12 @@ export default function AutonomyMatrix({
       <div className="grid gap-3">
         {byAgent.map(([agent, actions]) => (
           <div key={agent} className="rounded-xl border border-sand-200 bg-white shadow-card">
-            <div className="flex items-center justify-between border-b border-sand-100 px-4 py-2.5">
-              <p className="text-sm font-semibold text-charcoal-900">{agent}</p>
-              <p className="text-xs text-charcoal-400">
+            <div className="flex items-start justify-between gap-3 border-b border-sand-100 px-4 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-charcoal-900">{agent}</p>
+                <AgentWorkloadLine w={workload[agent]} />
+              </div>
+              <p className="shrink-0 text-xs text-charcoal-400">
                 {actions.length} action{actions.length === 1 ? "" : "s"} · owner {actions[0]?.owner_role ?? "—"}
               </p>
             </div>
@@ -160,6 +166,35 @@ export default function AutonomyMatrix({
         tenant-facing actions stay capped at Assisted (L2) by policy, so &ldquo;Autonomous&rdquo;
         is locked for them.
       </p>
+    </div>
+  );
+}
+
+/** The two compact workload lines under an agent's name. */
+function AgentWorkloadLine({ w }: { w?: AgentWorkload }) {
+  if (!w) return null;
+  const hasPool = w.poolCount != null;
+  const hasPending = w.pending > 0;
+  if (!hasPool && !hasPending) {
+    return <p className="mt-0.5 text-[11px] text-charcoal-300">no backlog</p>;
+  }
+  return (
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+      {hasPool && (
+        <span className="text-charcoal-500">
+          <span className="font-semibold text-charcoal-700">{w.poolCount}</span> {w.poolLabel}
+          {w.poolAging ? <span className="text-charcoal-400"> · {w.poolAging}</span> : null}
+        </span>
+      )}
+      {hasPending && (
+        <span className="inline-flex items-center gap-1 text-amber-700">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+          {w.pending} awaiting
+          {w.oldestDays != null ? (
+            <span className="text-amber-600"> · oldest {w.oldestDays}d</span>
+          ) : null}
+        </span>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { listAgentConfig, isGloballyKilled } from '@/lib/agents/config';
 import type { AgentProposal, OutboxMessage } from '@/lib/agents/types';
 import AutonomyMatrix from '@/components/agents/AutonomyMatrix';
+import { buildWorkload } from '@/lib/agents/workload';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,7 @@ function proposalStats(proposals: AgentProposal[]) {
   };
 }
 
+
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-US', {
@@ -152,6 +154,11 @@ export default async function AgentsPage() {
   const session = await auth();
   const isAdmin = session?.user?.isAdmin === true;
   const stats = proposalStats(proposals);
+
+  // Per-agent live workload for the autonomy matrix: the pool it watches
+  // (metrics_snapshot) + its own still-proposed backlog. Both from data
+  // already loaded above.
+  const workload = buildWorkload(config, latest, proposals);
 
   const retype = latest.get('appfolio_retype_touches')?.value;
   const actions = latest.get('staff_actions')?.value;
@@ -220,7 +227,7 @@ export default async function AgentsPage() {
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         Autonomy matrix
       </h2>
-      <AutonomyMatrix initialConfig={config} isAdmin={isAdmin} />
+      <AutonomyMatrix initialConfig={config} isAdmin={isAdmin} workload={workload} />
 
       {/* Proposals */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
