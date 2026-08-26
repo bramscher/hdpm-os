@@ -258,7 +258,7 @@ export function buildVendorChaseDraft(
     chaseRound >= 2
       ? `Just checking in again — this is our ${ordinal(chaseRound)} follow-up on the estimate we requested for the work order below (${c.ageBusinessDays} business days now).`
       : `Following up on the estimate we requested for the work order below — we haven't received your bid yet (${c.ageBusinessDays} business days).`;
-  const ask = `Could you send over your bid, or let us know if you're unable to take this job so we can plan accordingly?`;
+  const ask = `Please reply to this email with your bid, or give us a call. If you're not able to take this one, just let us know so we can line up another vendor.`;
 
   const html = wrapHtml([
     `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
