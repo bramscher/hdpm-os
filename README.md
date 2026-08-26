@@ -200,18 +200,27 @@ The agent layer converts the Maintenance OS's *detection* (tripwires, exceptions
 | Agent | What it does | Autonomy | Status |
 |-------|--------------|----------|--------|
 | **Morning Action Card** | Weekday 6:30 AM PT: Cheryl's 7 most important exceptions as a Slack card with Done / Snooze / Set-date / Reassign buttons; Brody + Matt read-only copies + email mirror; one 1 PM nudge | L2 | ✅ Live |
-| **Estimate Chaser — email** | Weekday 6:45 AM PT: TW11 stuck estimates become ready-to-send Outlook drafts in Cheryl's Drafts folder (vendor bid chases + owner approval asks; never a dollar amount; 3-business-day cooldown) | L1 | ✅ Live |
-| **Estimate Chaser — SMS** | Vendor chases go SMS-first when a phone is known: Slack "Text chase queue" card, taps send from Cheryl's Zoom line via her own OAuth token | L2 | 🟡 Built; disabled pending Cheryl's one-time Zoom authorize |
-| **Estimate Chaser — escalations** | Chased 3× or stuck >45 days → Slack DM to Brody + Matt, and (via the ladder below) an EOS issue | L3 | ✅ Live |
+| **Estimate Chaser — email** | Weekday 6:45 AM PT: TW11 stuck estimates become ready-to-send Outlook drafts in the recipient's Drafts folder (vendor bid chases + owner approval asks; never a dollar amount; 3-business-day cooldown). Drafts fan out to every pilot recipient's mailbox | L1 | ✅ Live |
+| **Estimate Chaser — SMS** | Vendor chases go SMS-first when a phone is known: Slack "Text chase queue" card, taps send from the sender's Zoom line via their own OAuth token | L2 | 🟡 Built; runs in shadow during the pilot (a tap records motion, no text leaves) |
+| **Estimate Chaser — escalations** | Chased 3× or stuck >45 days → Slack DM to the maintenance leads (pilot: the cohort), and (via the ladder below) an EOS issue | L3 | ✅ Live |
 | **Ops Brief** | Daily ~5 PM PT + Monday deep brief: metrics + deltas, agent activity, open escalations with [Acknowledge] taps, brain context — Brody interactive, Matt + Craig read-only | L3 | ✅ Live |
 | **Escalation Ladder** | Weekday 7:15 AM PT: aged/recurring tripwires, chaser escalations, and twice-missed to-dos auto-file EOS issues (deduped, capped 10/rung/run) so nothing evaporates from a DM | files only | ✅ Live |
 | **Scorecard** | Friday 3 PM PT: auto-fills the weekly scorecard, nudges manual-metric owners, files issues at 2 weeks off-track, sends the one-tap Friday Rock check | L2 | ✅ Live |
 | **Meeting Prep** | Monday 7:30 AM PT: builds the L10 prep packet (scorecard deltas, aged issues, cited brain context) and DMs the facilitator | L1 | ✅ Live |
 | Email Triage, Intake, Day-Close SMS, Reconciliation, Vendor Chaser, Inspections | See the master plan roster | — | Backlog |
 
-**Key routes:** `/agents` (dashboard: config matrix, proposals, outbox) · `/api/agents/cron/morning-card` + `/api/agents/cron/estimate-chaser` (crons) · `/api/agents/slack/interact` (button taps; Slack-signature auth) · `/api/agents/dispatch` (manual outbox drain) · `/api/agents/sms-test` (Zoom SMS probe) · `/api/agents/vendor-contact-audit` (AppFolio contact-field diagnostics) · `/api/agents/zoom-oauth/start` (one-time SMS sender authorization)
+**Key routes:** `/agents` (dashboard: config matrix, proposals, outbox) · `/api/agents/cron/morning-card` + `/api/agents/cron/estimate-chaser` (crons; the latter takes `?dryRun=1` and pilot flags `?pilotSeed=N&seedChannel=sms|email`) · `/api/agents/slack/interact` (button taps; Slack-signature auth) · `/api/agents/dispatch` (manual outbox drain) · `/api/agents/sms-test` (Zoom SMS probe) · `/api/agents/vendor-contact-audit` (AppFolio contact-field diagnostics) · `/api/agents/zoom-oauth/start` (one-time SMS sender authorization)
 
-**Adoption gate (Phase 1):** ≥25 human actions/week through cards/drafts for 2 consecutive weeks (baseline ~0), then Phase 2 agents unlock. Metrics captured daily in `metrics_snapshot`; baseline frozen pre-agents.
+### Loop 1 pilot (restart rollout, 2026-08-25)
+
+Per [`docs/agent-os/10-restart-2026-08-20.md`](docs/agent-os/10-restart-2026-08-20.md), the estimate chase is the one loop being proven, with a small pilot cohort (**Craig + Brody**) before Cheryl goes live — so the drafts get judged with zero risk of a bad message reaching a real vendor. Env-driven, off by default:
+
+- `AGENT_PILOT_RECIPIENTS` (e.g. `Craig,Brody`) reroutes the SMS card, Outlook drafts, and escalations to the cohort instead of Cheryl. Tap attribution stays correct (the tapper is resolved from `staff`), and each Outlook draft is created in **every** cohort mailbox.
+- `AGENT_PILOT_SHADOW=1` makes a **Send** tap record real motion (`agent_proposal` approved + `wo_event` tagged `shadow`) while suppressing the actual vendor SMS.
+- `?pilotSeed=N&seedChannel=sms|email` forces the N oldest vendor candidates to a tappable SMS card or an Outlook draft, bypassing cooldown/escalation, so the cohort has something to test on day one. `scripts/pilot-fire.sh email|sms` is the local trigger (reads `CRON_SECRET` from `.env.local`).
+- The Outlook draft path requires the app-only Graph `ApplicationAccessPolicy` (the `agent-mail` group) to include each cohort mailbox; `AGENT_GRAPH_DRYRUN` must be **unset** for drafts to create.
+
+**Adoption gate (restart §8):** ≥15 estimate-chase sends/week for 2 consecutive weeks (baseline ~0) and Cheryl says "keep it," else stop by 2026-10-01. Metrics captured daily in `metrics_snapshot`; baseline frozen pre-agents. (The prior Phase-1 gate was ≥25 human actions/week across all cards/drafts.)
 
 ---
 
@@ -621,8 +630,10 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `HDPM_SERVICE_TOKEN` | Agent-OS | Service-caller auth for `/api/agents/*` (with `X-Agent-Actor` header) |
 | `AGENT_EMAIL_FROM` | Resend | From address for agent emails (falls back to `MAINT_DIGEST_FROM`) |
 | `AZURE_TENANT_ID` | Microsoft Graph | App-only mail tenant (distinct from `AZURE_AD_TENANT_ID`) |
-| `AGENT_GRAPH_CLIENT_ID` / `AGENT_GRAPH_CLIENT_SECRET` | Microsoft Graph | "HDPM-OS Agent Mail" app — application `Mail.ReadWrite` (ApplicationAccessPolicy-scoped to cheryl@ + info@) plus `Sites.Read.All` (already granted) which the knowledge-base OneDrive sync (`lib/onedrive-sync.ts`) uses to read the team SharePoint library |
-| `AGENT_GRAPH_DRYRUN` | Microsoft Graph | `=1` skips draft creation (staged rollout) |
+| `AGENT_GRAPH_CLIENT_ID` / `AGENT_GRAPH_CLIENT_SECRET` | Microsoft Graph | "HDPM-OS Agent Mail" app — application `Mail.ReadWrite` (ApplicationAccessPolicy-scoped via the `agent-mail` group to cheryl@ + info@, plus craig@ + brody@ for the Loop 1 pilot) plus `Sites.Read.All` (already granted) which the knowledge-base OneDrive sync (`lib/onedrive-sync.ts`) uses to read the team SharePoint library |
+| `AGENT_GRAPH_DRYRUN` | Microsoft Graph | `=1` skips draft creation (staged rollout); leave **unset** for the pilot so drafts actually create |
+| `AGENT_PILOT_RECIPIENTS` | Agent-OS | Comma-separated staff names (e.g. `Craig,Brody`) the estimate chaser routes cards/drafts/escalations to instead of Cheryl. Empty/unset → default (Cheryl, real sends) |
+| `AGENT_PILOT_SHADOW` | Agent-OS | `=1` records a Send tap as motion (approved proposal + `wo_event` tagged `shadow`) but suppresses the real vendor SMS |
 | `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET` | Zoom | Server-to-Server app ("HDPM Appfolio Sync") — contact sync; cannot send SMS |
 | `ZOOM_USER_CLIENT_ID` / `ZOOM_USER_CLIENT_SECRET` | Zoom | User-managed app ("HDPM-OS SMS Sender") — per-user OAuth for SMS sending |
 | `ZOOM_SMS_SENDER_NUMBER` | Zoom Phone | E.164 line texts send from (Cheryl's) |
@@ -682,15 +693,16 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 
 ## Deployment
 
-Deployed on **Vercel** with automatic deploys from the `main` branch.
+Deployed on **Vercel**. Production ships via a **manual `vercel --prod`** from the CLI — merging to `main` does **not** auto-deploy. Push `main` first so the build source matches, then deploy:
 
 ```bash
 npm run build    # Verify build passes locally
-git push         # Triggers Vercel deploy
+git push         # Update origin/main (does NOT ship)
+vercel --prod    # Manual production deploy (the actual ship step)
 ```
 
-**Production URL:** `hdpmchat.highdesertpm.com`
+**Production URL:** `hdpmchat.highdesertpm.com` (Vercel alias `hdpm-chatbot.vercel.app`)
 
 **Branch strategy:**
-- `main` — production, auto-deploys to Vercel
-- `feat/*` — feature branches, merged via PR
+- `main` — production source; ships only via `vercel --prod`
+- `feature/*` — feature branches, merged via `--no-ff`
