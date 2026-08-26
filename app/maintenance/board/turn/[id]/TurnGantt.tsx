@@ -67,14 +67,33 @@ function weekTicks(start: string, end: string): string[] {
   return ticks;
 }
 
-function Bar({ start, end, status, domain }: { start: string; end: string; status: TaskStatus; domain: { start: string; end: string } }) {
+function Bar({
+  start,
+  end,
+  status,
+  domain,
+  variant = 'task',
+}: {
+  start: string;
+  end: string;
+  status: TaskStatus;
+  domain: { start: string; end: string };
+  variant?: 'task' | 'group';
+}) {
   const left = datePct(start, domain);
-  const width = Math.max(datePct(end, domain) - left, 1.2);
+  const width = Math.max(datePct(end, domain) - left, 0.4);
+  const isGroup = variant === 'group';
   return (
     <div
-      className={`absolute top-1/2 h-3 -translate-y-1/2 rounded-full ${BAR_CLASS[status]}`}
-      style={{ left: `${left}%`, width: `${width}%` }}
-      title={`${STATUS_LABEL[status]} · ${fmt(start)} → ${fmt(end)}`}
+      className={`absolute top-1/2 -translate-y-1/2 ${
+        isGroup ? 'h-2 rounded-sm bg-charcoal-700' : `h-3 rounded-full ${BAR_CLASS[status]}`
+      }`}
+      style={{ left: `${left}%`, width: `${width}%`, minWidth: isGroup ? 6 : 12 }}
+      title={
+        isGroup
+          ? `${fmt(start)} → ${fmt(end)}`
+          : `${STATUS_LABEL[status]} · ${fmt(start)} → ${fmt(end)}`
+      }
     />
   );
 }
@@ -118,10 +137,11 @@ export default function TurnGantt({
         </div>
         <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-xs text-charcoal-500">
           <span><span className="font-semibold text-charcoal-800">{daysVacant}d</span> vacant</span>
-          <span>Move-out {fmt(turn.vacatedAt)}</span>
-          {turn.availableDate && <span>Available {fmt(turn.availableDate)}</span>}
-          {turn.targetReady && <span>Target {fmt(turn.targetReady)}</span>}
-          {turn.moveinDate && <span>Move-in {fmt(turn.moveinDate)}</span>}
+          {milestones.map((m) => (
+            <span key={m.kind}>
+              {m.label} {fmt(m.date)}
+            </span>
+          ))}
           {turn.budget != null && (
             <span>
               Budget ${Math.round(turn.budget).toLocaleString()}
@@ -185,7 +205,7 @@ export default function TurnGantt({
                       </span>
                     </div>
                     <div className="relative flex-1">
-                      <Bar start={phase.start} end={phase.end} status={phase.status} domain={domain} />
+                      <Bar start={phase.start} end={phase.end} status={phase.status} domain={domain} variant="group" />
                     </div>
                   </button>
 
@@ -243,13 +263,12 @@ export default function TurnGantt({
                   style={{ left: `${datePct(m.date, domain)}%` }}
                 />
               ))}
-              {datePct(today, domain) > 0 && datePct(today, domain) < 100 && (
-                <div
-                  className="absolute bottom-0 top-0 border-l-2 border-indigo-500"
-                  style={{ left: `${datePct(today, domain)}%` }}
-                  title={`Today ${fmt(today)}`}
-                />
-              )}
+              {/* Today, pinned to the right edge when the schedule is in the past. */}
+              <div
+                className="absolute bottom-0 top-0 border-l-2 border-indigo-500"
+                style={{ left: `${datePct(today, domain)}%` }}
+                title={`Today ${fmt(today)}`}
+              />
             </div>
           </div>
         </div>

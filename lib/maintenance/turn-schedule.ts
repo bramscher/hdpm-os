@@ -88,7 +88,7 @@ export interface TurnSchedule {
 }
 
 const DEFAULT_TASK_DAYS = 1;
-const DOMAIN_PAD_DAYS = 2;
+const DOMAIN_PAD_DAYS = 1;
 
 const dateOnly = (iso: string | null | undefined): string | null =>
   iso ? iso.slice(0, 10) : null;
@@ -187,13 +187,15 @@ export function buildTurnSchedule(
   pushM(turn.movein_date, 'move_in', 'Move-in');
   milestones.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Domain spans every dated thing, padded a couple days each side.
+  // Domain = move-out → latest milestone/task, so the schedule always
+  // zoom-fits edge to edge. `today` is deliberately NOT included: when it's
+  // beyond the schedule the render pins its marker to the right edge instead
+  // of stretching dead space onto the right.
   const all: string[] = [dateOnly(turn.vacated_at)!].filter(Boolean);
   for (const p of phases) {
     all.push(p.start, p.end);
   }
   for (const m of milestones) all.push(m.date);
-  all.push(today); // always keep "today" in view
   let start = all.reduce((m, d) => minDate(m, d), all[0]);
   let end = all.reduce((m, d) => maxDate(m, d), all[0]);
   start = addDays(start, -DOMAIN_PAD_DAYS);
