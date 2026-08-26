@@ -7,6 +7,7 @@ import { annotateProposalPayload, rebuildCard } from '@/lib/agents/morning-card-
 import { parseBlockAction, snoozeDate, isValidYmd } from '@/lib/agents/morning-card';
 import { parseEcActionId, ESTIMATE_CHASER_AGENT, VENDOR_CHASE_SMS_ACTION, ESCALATE_ACTION } from '@/lib/agents/estimate-chaser';
 import { rebuildSmsQueueCard } from '@/lib/agents/estimate-chaser-run';
+import { getPilotConfig } from '@/lib/agents/pilot';
 import { parseObActionId, applyAckToBlocks, OPS_BRIEF_AGENT, SEND_BRIEF_ACTION } from '@/lib/agents/ops-brief';
 import { parseRockActionId, buildRockCardBlocks, currentQuarter, type RockAction } from '@/lib/eos/rock';
 import { logAudit } from '@/lib/audit';
@@ -277,7 +278,25 @@ async function handleEcAction(
       } else {
         // Decide FIRST — null means already decided (double-tap): never send twice.
         const decided = await decideProposal(action.proposalId, 'approved', actor);
-        if (decided) {
+        if (decided && getPilotConfig().shadow) {
+          // Pilot shadow (restart §7): record real motion (approved proposal +
+          // wo_event, tagged shadow) but never text the real vendor. The tap
+          // still counts toward the §8 number and produces training signal.
+          await annotateProposalPayload(action.proposalId, {
+            resolution: `Logged in pilot — not sent to vendor by ${actor} ${tapTime}`,
+            shadow: true,
+          });
+          await recordEvent({
+            work_order_id: proposal.subject_id,
+            event_type: 'note',
+            payload: {
+              note: `Vendor chase logged in pilot — shadow, not sent (${typeof pl.wo_ref === 'string' ? pl.wo_ref : proposal.subject_id})`,
+              source: 'estimate_chaser_sms',
+              shadow: true,
+            },
+            actor,
+          });
+        } else if (decided) {
           const outboxRow = await enqueueOutbox({
             proposal_id: action.proposalId,
             channel: 'sms_zoom',
