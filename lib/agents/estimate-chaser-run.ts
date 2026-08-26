@@ -26,9 +26,10 @@ import { getAgentConfig, effectiveLevel, isGloballyKilled, isWithinQuietHours } 
 import { createProposal } from './proposals';
 import { enqueueOutbox, dispatchOutbox } from './outbox';
 import { resolveStaffByPersonOrEmail } from './staff';
+import { getPilotConfig } from './pilot';
 import { todayPacific } from './morning-card';
 import type { SendOutcome } from './channels';
-import type { AgentConfigRow, AgentProposal } from './types';
+import type { AgentConfigRow, AgentProposal, StaffRow } from './types';
 import {
   ESTIMATE_CHASER_AGENT,
   VENDOR_CHASE_ACTION,
@@ -57,8 +58,10 @@ export interface EstimateChaserRunResult {
   pool: number;
   vendorDrafts: number;
   ownerDrafts: number;
-  /** SMS chase proposals put on Cheryl's Text chase queue card. */
+  /** SMS chase proposals put on the Text chase queue card. */
   smsProposed: number;
+  /** Extra SMS cards forced by ?pilotSeed=N (bypass cooldown/escalation, test only). */
+  seeded: number;
   smsCard?: SendOutcome;
   skippedCooldown: number;
   skippedInternal: number;
@@ -151,9 +154,16 @@ export async function rebuildSmsQueueCard(
 export async function runEstimateChaser(opts: {
   dryRun?: boolean;
   now?: Date;
+  /** Pilot testing only: force the N oldest vendor candidates to a chase,
+   *  bypassing cooldown/escalation. 'sms' → tappable Slack card (needs a
+   *  phone; shadow suppresses the send); 'email' → Outlook draft in each
+   *  recipient's mailbox (no send happens — a draft is review-before-send). */
+  pilotSeed?: number;
+  pilotSeedChannel?: 'sms' | 'email';
 } = {}): Promise<EstimateChaserRunResult> {
   const now = opts.now ?? new Date();
   const dryRun = opts.dryRun === true;
+  const pilotSeedN = Math.max(0, Math.floor(opts.pilotSeed ?? 0));
   const chaseDate = todayPacific(now);
   const result: EstimateChaserRunResult = {
     dryRun,
@@ -161,6 +171,7 @@ export async function runEstimateChaser(opts: {
     vendorDrafts: 0,
     ownerDrafts: 0,
     smsProposed: 0,
+    seeded: 0,
     skippedCooldown: 0,
     skippedInternal: 0,
     skippedNoChannel: 0,
@@ -267,6 +278,18 @@ export async function runEstimateChaser(opts: {
   result.pool = candidates.length;
   result.skippedInternal = skippedInternal.length;
 
+  // Pilot seed: the N oldest vendor candidates overall (regardless of
+  // cooldown/escalation state) — these become forced tappable SMS cards below
+  // so the pilot cohort has something to try even when the live pool has aged
+  // entirely into escalation.
+  const seedCandidates: ChaseCandidate[] =
+    pilotSeedN > 0
+      ? [...candidates]
+          .filter((c) => c.kind === VENDOR_CHASE_ACTION && c.vendorId)
+          .sort((a, b) => b.ageBusinessDays - a.ageBusinessDays)
+          .slice(0, pilotSeedN)
+      : [];
+
   // Chase history + today's counts (for max_per_day) in two reads.
   const woIds = candidates.map((c) => c.workOrderId);
   let historyRows: HistoryRow[] = [];
@@ -312,11 +335,12 @@ export async function runEstimateChaser(opts: {
   const vendorEmailById = new Map<string, string>();
   const vendorPhoneById = new Map<string, string>();
   const vendorIds = [
-    ...new Set(
-      toChase
+    ...new Set([
+      ...toChase
         .filter((t) => t.candidate.kind === VENDOR_CHASE_ACTION && t.candidate.vendorId)
-        .map((t) => t.candidate.vendorId!)
-    ),
+        .map((t) => t.candidate.vendorId!),
+      ...seedCandidates.map((c) => c.vendorId!),
+    ]),
   ];
   if (vendorIds.length > 0) {
     const { data: contacts } = await supabase
@@ -402,23 +426,74 @@ export async function runEstimateChaser(opts: {
   const escalations = escalateEnabled ? toEscalate : [];
   result.escalations = escalations.length;
 
+  // Seed forces oldest vendor candidates to SMS cards, skipping the normal
+  // decision/cooldown/cap gates — but never a WO already planned as a real
+  // chase, and only when we actually have a phone to (shadow-)text.
+  const seedChannel = opts.pilotSeedChannel === 'email' ? 'email' : 'sms';
+  const plannedWoIds = new Set(capped.map((p) => p.candidate.workOrderId));
+  const seededChases: PlannedChase[] = [];
+  for (const c of seedCandidates) {
+    if (plannedWoIds.has(c.workOrderId)) continue;
+    const phone = c.vendorId ? (vendorPhoneById.get(c.vendorId) ?? null) : null;
+    const email = c.vendorId ? (vendorEmailById.get(c.vendorId) ?? null) : null;
+    const history = historyFor(historyRows, c.workOrderId, VENDOR_CHASE_ACTION);
+    if (seedChannel === 'email') {
+      // A draft needs no phone (and a missing vendor email → blank To: line).
+      seededChases.push({ candidate: c, history, action: VENDOR_CHASE_ACTION, vendorEmail: email, vendorPhone: phone });
+    } else {
+      if (!phone) continue; // SMS card needs a phone to (shadow-)text.
+      seededChases.push({ candidate: c, history, action: VENDOR_CHASE_SMS_ACTION, vendorEmail: email, vendorPhone: phone });
+    }
+    plannedWoIds.add(c.workOrderId);
+  }
+  result.seeded = seededChases.length;
+  if (pilotSeedN > 0) {
+    console.log(
+      `[Agents] estimate chaser pilot seed (${seedChannel}): forced ${seededChases.length}/${pilotSeedN}`
+    );
+  }
+
+  const seededSms = seededChases.filter((s) => s.action === VENDOR_CHASE_SMS_ACTION).length;
+  const seededEmail = seededChases.length - seededSms;
+
   if (dryRun) {
-    result.vendorDrafts = capped.filter((p) => p.action === VENDOR_CHASE_ACTION).length;
-    result.smsProposed = capped.filter((p) => p.action === VENDOR_CHASE_SMS_ACTION).length;
+    result.vendorDrafts = capped.filter((p) => p.action === VENDOR_CHASE_ACTION).length + seededEmail;
+    result.smsProposed =
+      capped.filter((p) => p.action === VENDOR_CHASE_SMS_ACTION).length + seededSms;
     result.ownerDrafts = capped.filter((p) => p.action === OWNER_APPROVAL_ACTION).length;
     return result;
   }
 
-  const cheryl = await resolveStaffByPersonOrEmail('Cheryl');
-  const emailChases = capped.filter((p) => p.action !== VENDOR_CHASE_SMS_ACTION);
-  const smsChases = capped.filter((p) => p.action === VENDOR_CHASE_SMS_ACTION);
+  // Delivery cohort: pilot recipients (Craig+Brody, restart §7 pilot) when
+  // configured, else the default owner Cheryl. The tapper is resolved
+  // separately in slack/interact, so attribution stays correct regardless.
+  const pilot = getPilotConfig();
+  const recipientNames = pilot.recipients.length > 0 ? pilot.recipients : ['Cheryl'];
+  const recipients = (
+    await Promise.all(recipientNames.map((n) => resolveStaffByPersonOrEmail(n)))
+  ).filter((s): s is StaffRow => Boolean(s));
+  // Drafts fan out to every delivery recipient with a mailbox (Cheryl by
+  // default; Craig + Brody during the pilot). Each person gets their own draft
+  // to review and send from their own Outlook.
+  const mailboxRecipients = recipients.filter((s) => s.email);
 
-  // Drafts land in Cheryl's mailbox — no email on file means nothing to do.
-  if (!cheryl?.email && emailChases.length > 0) {
-    return { ...result, halted: 'Cheryl has no email in staff' };
+  const emailChases = [
+    ...seededChases.filter((s) => s.action !== VENDOR_CHASE_SMS_ACTION),
+    ...capped.filter((p) => p.action !== VENDOR_CHASE_SMS_ACTION),
+  ];
+  const smsChases = [
+    ...seededChases.filter((s) => s.action === VENDOR_CHASE_SMS_ACTION),
+    ...capped.filter((p) => p.action === VENDOR_CHASE_SMS_ACTION),
+  ];
+
+  // No mailbox on file means nothing to do for the email path.
+  if (mailboxRecipients.length === 0 && emailChases.length > 0) {
+    return { ...result, halted: 'no delivery recipient with an email in staff' };
   }
 
-  // ── Email path (Brief D): one proposal + one outlook_draft row per chase ──
+  // ── Email path (Brief D): one proposal per chase, one outlook_draft row per
+  // (chase × mailbox). The proposal is auto_applied once ANY mailbox draft
+  // lands (the human's real send happens in Outlook and is unobservable). ──
   const outboxToProposal = new Map<string, string>();
   for (const { candidate, history, action, vendorEmail } of emailChases) {
     const chaseRound = history.chaseCount + 1;
@@ -458,22 +533,24 @@ export async function runEstimateChaser(opts: {
           : `Approval pending ${candidate.ageBusinessDays} business days — chase round ${chaseRound}`,
     });
 
-    const outboxRow = await enqueueOutbox({
-      proposal_id: proposal.id,
-      channel: 'outlook_draft',
-      recipient_person: 'Cheryl',
-      recipient_address: cheryl!.email,
-      subject: draft.subject,
-      body: draft.text,
-      payload: {
-        html: draft.html,
-        to_recipients: draft.toRecipients,
-        work_order_id: candidate.workOrderId,
-        action_type: action,
-        chase_round: chaseRound,
-      },
-    });
-    outboxToProposal.set(outboxRow.id, proposal.id);
+    for (const mailbox of mailboxRecipients) {
+      const outboxRow = await enqueueOutbox({
+        proposal_id: proposal.id,
+        channel: 'outlook_draft',
+        recipient_person: mailbox.person,
+        recipient_address: mailbox.email!,
+        subject: draft.subject,
+        body: draft.text,
+        payload: {
+          html: draft.html,
+          to_recipients: draft.toRecipients,
+          work_order_id: candidate.workOrderId,
+          action_type: action,
+          chase_round: chaseRound,
+        },
+      });
+      outboxToProposal.set(outboxRow.id, proposal.id);
+    }
 
     if (action === VENDOR_CHASE_ACTION) result.vendorDrafts++;
     else result.ownerDrafts++;
@@ -482,21 +559,25 @@ export async function runEstimateChaser(opts: {
   if (outboxToProposal.size > 0) {
     await dispatchOutbox({ channel: 'outlook_draft', now });
 
-    // Stamp delivered proposals: at L1 the sanctioned action IS "create a
-    // draft", so a created draft = auto_applied (Cheryl's real decision
-    // happens in Outlook and is unobservable). Failures stay 'proposed' for
-    // the retry/backfill path.
+    // Stamp per proposal: created draft(s) = auto_applied. A proposal is only
+    // stamped once, on its first delivered mailbox; failures stay 'proposed'
+    // for the retry/backfill path.
     const { data: sentRows } = await supabase
       .from('agent_outbox')
       .select('id, status, message_id')
       .in('id', [...outboxToProposal.keys()]);
+    const stampedProposals = new Set<string>();
     for (const row of sentRows ?? []) {
       if (row.status === 'sent') {
         result.drafts.sent++;
-        await supabase
-          .from('agent_proposal')
-          .update({ status: 'auto_applied', channel_message_id: row.message_id })
-          .eq('id', outboxToProposal.get(row.id)!);
+        const proposalId = outboxToProposal.get(row.id)!;
+        if (!stampedProposals.has(proposalId)) {
+          stampedProposals.add(proposalId);
+          await supabase
+            .from('agent_proposal')
+            .update({ status: 'auto_applied', channel_message_id: row.message_id })
+            .eq('id', proposalId);
+        }
       } else if (row.status === 'skipped') {
         result.drafts.skipped++;
       } else {
@@ -551,37 +632,46 @@ export async function runEstimateChaser(opts: {
       result.smsProposed++;
     }
 
-    if (cheryl?.slack_user_id) {
+    // Fan the queue card out to each delivery recipient (Cheryl by default,
+    // the pilot cohort when configured). Each person taps their own card; the
+    // shared proposals are double-tap guarded so a second tapper is a no-op.
+    const cardRecipients = recipients.filter((s) => s.slack_user_id);
+    if (cardRecipients.length > 0) {
       const card = buildSmsQueueCard(smsItems, chaseDate);
-      const cardRow = await enqueueOutbox({
-        channel: 'slack',
-        recipient_person: 'Cheryl',
-        recipient_address: cheryl.slack_user_id,
-        subject: 'Text chase queue',
-        body: card.text,
-        payload: { blocks: card.blocks, chase_date: chaseDate },
-      });
+      const cardRowIds: string[] = [];
+      for (const person of cardRecipients) {
+        const cardRow = await enqueueOutbox({
+          channel: 'slack',
+          recipient_person: person.person,
+          recipient_address: person.slack_user_id!,
+          subject: 'Text chase queue',
+          body: card.text,
+          payload: { blocks: card.blocks, chase_date: chaseDate },
+        });
+        cardRowIds.push(cardRow.id);
+      }
       await dispatchOutbox({ channel: 'slack', now });
-      const { data: sentRow } = await supabase
+      const { data: sentRows } = await supabase
         .from('agent_outbox')
-        .select('status, message_id, error')
-        .eq('id', cardRow.id)
-        .maybeSingle();
+        .select('id, status, message_id, error')
+        .in('id', cardRowIds);
+      const firstSent = (sentRows ?? []).find((r) => r.status === 'sent');
+      const firstRow = (sentRows ?? [])[0];
       result.smsCard = {
-        status: (sentRow?.status as SendOutcome['status']) ?? 'failed',
-        message_id: sentRow?.message_id ?? null,
-        error: sentRow?.error ?? null,
+        status: ((firstSent?.status ?? firstRow?.status) as SendOutcome['status']) ?? 'failed',
+        message_id: firstSent?.message_id ?? null,
+        error: firstSent ? null : (firstRow?.error ?? null),
       };
-      // Stamp the card's message id on every SMS proposal so the interact
-      // route can chat.update the card without a response_url.
-      if (sentRow?.status === 'sent' && sentRow.message_id) {
+      // Stamp the first delivered card's id on every SMS proposal so the
+      // interact route can chat.update the card if a response_url ever fails.
+      if (firstSent?.message_id) {
         await supabase
           .from('agent_proposal')
-          .update({ channel_message_id: sentRow.message_id })
+          .update({ channel_message_id: firstSent.message_id })
           .in('id', smsProposalIds);
       }
     } else {
-      result.smsCard = { status: 'skipped', error: 'Cheryl has no slack_user_id in staff' };
+      result.smsCard = { status: 'skipped', error: 'no delivery recipient with a slack_user_id in staff' };
     }
   }
 
@@ -617,17 +707,18 @@ export async function runEstimateChaser(opts: {
       escalateProposalIds.push(proposal.id);
     }
 
-    // Escalation DM goes to the maintenance leads (was Craig — rerouted 2026-07-23).
-    const recipients = ['Brody', 'Matt'] as const;
-    const staffRows = await Promise.all(recipients.map((p) => resolveStaffByPersonOrEmail(p)));
+    // Escalation DM goes to the maintenance leads (was Craig — rerouted
+    // 2026-07-23), or to the pilot cohort while the pilot is active.
+    const escalationNames = pilot.recipients.length > 0 ? pilot.recipients : ['Brody', 'Matt'];
+    const staffRows = await Promise.all(escalationNames.map((p) => resolveStaffByPersonOrEmail(p)));
     const dm = buildEscalationSlack(escalations, chaseDate);
     const outboxIds: string[] = [];
-    for (let i = 0; i < recipients.length; i++) {
+    for (let i = 0; i < escalationNames.length; i++) {
       const staff = staffRows[i];
       if (!staff?.slack_user_id) continue;
       const row = await enqueueOutbox({
         channel: 'slack',
-        recipient_person: recipients[i],
+        recipient_person: escalationNames[i],
         recipient_address: staff.slack_user_id,
         subject: 'Estimate Chaser escalations',
         body: dm.text,
@@ -637,7 +728,7 @@ export async function runEstimateChaser(opts: {
     }
 
     if (outboxIds.length === 0) {
-      result.escalationSlack = { status: 'skipped', error: 'Brody/Matt have no slack_user_id in staff' };
+      result.escalationSlack = { status: 'skipped', error: 'escalation recipients have no slack_user_id in staff' };
     } else {
       await dispatchOutbox({ channel: 'slack', now });
       const { data: sentRows } = await supabase
