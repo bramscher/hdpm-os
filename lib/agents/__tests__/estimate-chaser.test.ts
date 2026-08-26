@@ -242,6 +242,17 @@ describe('draft templates', () => {
     expect(vendor.text).not.toContain('checking in again');
   });
 
+  it('signs as the given sender, defaulting to Cheryl', () => {
+    expect(vendor.text).toContain('Cheryl');
+    expect(vendor.text).not.toContain('Brody');
+    const brody = buildVendorChaseDraft(candidate(), 'bids@firkus.com', 1, 'Brody');
+    expect(brody.text).toContain('Brody');
+    expect(brody.html).toContain('Brody');
+    expect(brody.text).not.toMatch(/Thank you,\nCheryl/);
+    const ownerBrody = buildOwnerApprovalDraft(candidate({ kind: OWNER_APPROVAL_ACTION }), 1, 'Brody');
+    expect(ownerBrody.text).toContain('Brody');
+  });
+
   it('escapes HTML in the description', () => {
     const d = buildVendorChaseDraft(
       candidate({ description: 'Replace <broken> & "leaky" valve' }),

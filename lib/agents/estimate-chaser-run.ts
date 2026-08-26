@@ -534,16 +534,23 @@ export async function runEstimateChaser(opts: {
     });
 
     for (const mailbox of mailboxRecipients) {
+      // Sign each draft as the mailbox owner — a draft in Brody's box that
+      // he'll send must read "Brody", not the default coordinator.
+      const senderName = mailbox.person;
+      const personalDraft =
+        action === VENDOR_CHASE_ACTION
+          ? buildVendorChaseDraft(candidate, vendorEmail, chaseRound, senderName)
+          : buildOwnerApprovalDraft(candidate, chaseRound, senderName);
       const outboxRow = await enqueueOutbox({
         proposal_id: proposal.id,
         channel: 'outlook_draft',
         recipient_person: mailbox.person,
         recipient_address: mailbox.email!,
-        subject: draft.subject,
-        body: draft.text,
+        subject: personalDraft.subject,
+        body: personalDraft.text,
         payload: {
-          html: draft.html,
-          to_recipients: draft.toRecipients,
+          html: personalDraft.html,
+          to_recipients: personalDraft.toRecipients,
           work_order_id: candidate.workOrderId,
           action_type: action,
           chase_round: chaseRound,

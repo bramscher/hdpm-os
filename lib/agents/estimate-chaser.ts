@@ -225,14 +225,19 @@ function detailBlockHtml(c: ChaseCandidate): string {
   </table>`;
 }
 
-const SIGNATURE_TEXT = ['Thank you,', 'Cheryl', 'High Desert Property Management'].join('\n');
-const SIGNATURE_HTML = `<p style="margin:16px 0 0;">Thank you,<br/>Cheryl<br/>High Desert Property Management</p>`;
+// Signature is per-sender: a draft created in Brody's mailbox must sign as
+// Brody, not the default coordinator. Defaults to Cheryl (production owner).
+const DEFAULT_SENDER = 'Cheryl';
+const signatureText = (name: string) =>
+  ['Thank you,', name, 'High Desert Property Management'].join('\n');
+const signatureHtml = (name: string) =>
+  `<p style="margin:16px 0 0;">Thank you,<br/>${escapeHtml(name)}<br/>High Desert Property Management</p>`;
 
-function wrapHtml(paragraphs: string[]): string {
+function wrapHtml(paragraphs: string[], senderName: string): string {
   return `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:640px;color:#111827;font-size:14px;line-height:1.5;">
   ${paragraphs.join('\n  ')}
-  ${SIGNATURE_HTML}
+  ${signatureHtml(senderName)}
 </div>`;
 }
 
@@ -250,7 +255,8 @@ export interface DraftContent {
 export function buildVendorChaseDraft(
   c: ChaseCandidate,
   vendorEmail: string | null,
-  chaseRound: number
+  chaseRound: number,
+  senderName: string = DEFAULT_SENDER
 ): DraftContent {
   const subject = `Bid follow-up — ${woRef(c)}`;
   const greeting = `Hi ${c.vendorName || 'there'},`;
@@ -260,12 +266,15 @@ export function buildVendorChaseDraft(
       : `Following up on the estimate we requested for the work order below — we haven't received your bid yet (${c.ageBusinessDays} business days).`;
   const ask = `Please reply to this email with your bid, or give us a call. If you're not able to take this one, just let us know so we can line up another vendor.`;
 
-  const html = wrapHtml([
-    `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
-    `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
-    detailBlockHtml(c),
-    `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
-  ]);
+  const html = wrapHtml(
+    [
+      `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
+      `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
+      detailBlockHtml(c),
+      `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
+    ],
+    senderName
+  );
 
   const text = [
     greeting,
@@ -277,7 +286,7 @@ export function buildVendorChaseDraft(
     '',
     ask,
     '',
-    SIGNATURE_TEXT,
+    signatureText(senderName),
   ].join('\n');
 
   return { subject, html, text, toRecipients: vendorEmail ? [vendorEmail] : [] };
@@ -287,7 +296,11 @@ export function buildVendorChaseDraft(
  * Owner approval request. To: always blank — Cheryl addresses it to the
  * property owner. Never states an amount (none is available, by design).
  */
-export function buildOwnerApprovalDraft(c: ChaseCandidate, chaseRound: number): DraftContent {
+export function buildOwnerApprovalDraft(
+  c: ChaseCandidate,
+  chaseRound: number,
+  senderName: string = DEFAULT_SENDER
+): DraftContent {
   const subject = `Approval needed — ${woRef(c)}`;
   const greeting = `Hi [owner name],`;
   const opener =
@@ -296,12 +309,15 @@ export function buildOwnerApprovalDraft(c: ChaseCandidate, chaseRound: number): 
       : `We have an estimate in hand for the repair below and are waiting on your go-ahead (pending ${c.ageBusinessDays} business days).`;
   const ask = `Could you reply with your approval — or any questions — so we can get the work scheduled?`;
 
-  const html = wrapHtml([
-    `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
-    `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
-    detailBlockHtml(c),
-    `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
-  ]);
+  const html = wrapHtml(
+    [
+      `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
+      `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
+      detailBlockHtml(c),
+      `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
+    ],
+    senderName
+  );
 
   const text = [
     greeting,
@@ -313,7 +329,7 @@ export function buildOwnerApprovalDraft(c: ChaseCandidate, chaseRound: number): 
     '',
     ask,
     '',
-    SIGNATURE_TEXT,
+    signatureText(senderName),
   ].join('\n');
 
   return { subject, html, text, toRecipients: [] };
