@@ -208,6 +208,13 @@ function ordinal(n: number): string {
   return `${n}th`;
 }
 
+/** Numeric ordinal for the subject line: 1 → "1st", 2 → "2nd", 3 → "3rd". */
+function ordinalNum(n: number): string {
+  const suffix = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${suffix[(v - 20) % 10] ?? suffix[v] ?? suffix[0]}`;
+}
+
 /** "WO #123 — 456 Main St, Unit 4" (address preferred; falls back to property name). */
 function woRef(c: ChaseCandidate): string {
   const where = c.propertyAddress || c.propertyName || 'property';
@@ -259,13 +266,20 @@ export function buildVendorChaseDraft(
   chaseRound: number,
   senderName: string = DEFAULT_SENDER
 ): DraftContent {
-  const subject = `Bid follow-up — ${woRef(c)}`;
+  const subject = `Bid follow-up (${ordinalNum(chaseRound)} request) — ${woRef(c)}`;
   const greeting = `Hi ${c.vendorName || 'there'},`;
   const opener =
     chaseRound >= 2
       ? `Just checking in again — this is our ${ordinal(chaseRound)} follow-up on the estimate we requested for the work order below (${c.ageBusinessDays} business days now).`
       : `Following up on the estimate we requested for the work order below — we haven't received your bid yet (${c.ageBusinessDays} business days).`;
-  const ask = `Please reply to this email with your bid, or give us a call. If you're not able to take this one, just let us know so we can line up another vendor.`;
+  // Round 3 is the last vendor-facing chase before auto-escalation to the Ops
+  // Brief (restart §4), so it carries a firmer close with a hand-filled date.
+  // NOTE for the reviewer: [date] must be filled in, and this line should be
+  // softened or removed if this is a single-vendor situation with no backup.
+  const ask =
+    chaseRound >= 3
+      ? `Please reply to this email with your bid, or give us a call. If we don't hear back by [date], we'll need to reach out to another vendor to keep this moving.`
+      : `Please reply to this email with your bid, or give us a call. If you're not able to take this one, just let us know so we can line up another vendor.`;
 
   const html = wrapHtml(
     [

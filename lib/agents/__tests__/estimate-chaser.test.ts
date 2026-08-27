@@ -232,14 +232,25 @@ describe('draft templates', () => {
     expect(owner.text).toContain('[owner name]');
   });
 
-  it('references the WO and property in the subject', () => {
-    expect(vendor.subject).toBe('Bid follow-up — WO #412 — 123 Brosterhous Rd, Unit 4');
+  it('references the WO and property in the subject, numbering the request', () => {
+    expect(vendor.subject).toBe('Bid follow-up (1st request) — WO #412 — 123 Brosterhous Rd, Unit 4');
+    expect(vendorBlankTo.subject).toBe('Bid follow-up (2nd request) — WO #412 — 123 Brosterhous Rd, Unit 4');
     expect(owner.subject).toBe('Approval needed — WO #412 — 123 Brosterhous Rd, Unit 4');
   });
 
   it('acknowledges repeat follow-ups on round ≥ 2 only', () => {
     expect(vendorBlankTo.text).toContain('second follow-up');
     expect(vendor.text).not.toContain('checking in again');
+  });
+
+  it('escalates to a firm, hand-datable close on round 3 (with a backup-vendor warning)', () => {
+    const round3 = buildVendorChaseDraft(candidate(), 'bids@firkus.com', 3);
+    expect(round3.subject).toBe('Bid follow-up (3rd request) — WO #412 — 123 Brosterhous Rd, Unit 4');
+    expect(round3.text).toContain('[date]');
+    expect(round3.text).toContain('another vendor');
+    // rounds 1–2 keep the soft close, no deadline
+    expect(vendor.text).not.toContain('[date]');
+    expect(vendorBlankTo.text).not.toContain('[date]');
   });
 
   it('signs as the given sender, defaulting to the owner (Jayme)', () => {
