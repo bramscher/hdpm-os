@@ -200,9 +200,9 @@ The agent layer converts the Maintenance OS's *detection* (tripwires, exceptions
 | Agent | What it does | Autonomy | Status |
 |-------|--------------|----------|--------|
 | **Morning Action Card** | Weekday 6:30 AM PT: Cheryl's 7 most important exceptions as a Slack card with Done / Snooze / Set-date / Reassign buttons; Brody + Matt read-only copies + email mirror; one 1 PM nudge | L2 | ✅ Live |
-| **Estimate Chaser — email** | Weekday 6:45 AM PT: TW11 stuck estimates become ready-to-send Outlook drafts in the recipient's Drafts folder (vendor bid chases + owner approval asks; never a dollar amount; 3-business-day cooldown). Drafts fan out to every pilot recipient's mailbox | L1 | ✅ Live |
+| **Estimate Chaser — email** | Weekday 6:45 AM PT: TW11 stuck estimates become ready-to-send Outlook drafts in the owner's Drafts folder (vendor bid chases + owner-approval asks; never a dollar amount; 3-business-day cooldown; subject numbers the round — "Bid follow-up (2nd request)"; round 3 carries a firm hand-datable close). Production owner **Jayme** (`ESTIMATE_CHASER_OWNER`) | L1 | ✅ Live |
 | **Estimate Chaser — SMS** | Vendor chases go SMS-first when a phone is known: Slack "Text chase queue" card, taps send from the sender's Zoom line via their own OAuth token | L2 | 🟡 Built; runs in shadow during the pilot (a tap records motion, no text leaves) |
-| **Estimate Chaser — escalations** | Chased 3× or stuck >45 days → Slack DM to the maintenance leads (pilot: the cohort), and (via the ladder below) an EOS issue | L3 | ✅ Live |
+| **Estimate Chaser — escalations** | Stuck >45 days → Slack DM to the maintenance leads + (via the ladder) an EOS issue. "Chased 3×" escalation now applies **only to vendor chases that have an assigned vendor** — owner-approval asks (bid in hand) and un-assigned Estimate-Requested WOs keep following through to the owner's Drafts instead of parking | L3 | ✅ Live |
 | **Ops Brief** | Daily ~5 PM PT + Monday deep brief: metrics + deltas, agent activity, open escalations with [Acknowledge] taps, brain context — Brody interactive, Matt + Craig read-only | L3 | ✅ Live |
 | **Escalation Ladder** | Weekday 7:15 AM PT: aged/recurring tripwires, chaser escalations, and twice-missed to-dos auto-file EOS issues (deduped, capped 10/rung/run) so nothing evaporates from a DM | files only | ✅ Live |
 | **Scorecard** | Friday 3 PM PT: auto-fills the weekly scorecard, nudges manual-metric owners, files issues at 2 weeks off-track, sends the one-tap Friday Rock check | L2 | ✅ Live |
@@ -211,16 +211,15 @@ The agent layer converts the Maintenance OS's *detection* (tripwires, exceptions
 
 **Key routes:** `/agents` (dashboard: config matrix, proposals, outbox) · `/api/agents/cron/morning-card` + `/api/agents/cron/estimate-chaser` (crons; the latter takes `?dryRun=1` and pilot flags `?pilotSeed=N&seedChannel=sms|email`) · `/api/agents/slack/interact` (button taps; Slack-signature auth) · `/api/agents/dispatch` (manual outbox drain) · `/api/agents/sms-test` (Zoom SMS probe) · `/api/agents/vendor-contact-audit` (AppFolio contact-field diagnostics) · `/api/agents/zoom-oauth/start` (one-time SMS sender authorization)
 
-### Loop 1 pilot (restart rollout, 2026-08-25)
+### Loop 1 — estimate chase (live, owner: Jayme — 2026-08-27)
 
-Per [`docs/agent-os/10-restart-2026-08-20.md`](docs/agent-os/10-restart-2026-08-20.md), the estimate chase is the one loop being proven, with a small pilot cohort (**Craig + Brody**) before Cheryl goes live — so the drafts get judged with zero risk of a bad message reaching a real vendor. Env-driven, off by default:
+Per [`docs/agent-os/10-restart-2026-08-20.md`](docs/agent-os/10-restart-2026-08-20.md), the estimate chase is the one loop being proven. It ran as a Craig + Brody shadow pilot (2026-08-25), then handed to assistant **Jayme** as the production owner. Every weekday the chaser drafts stuck-estimate follow-ups into Jayme's Outlook Drafts; she reviews and sends each — the send *is* the completed action, nothing to re-type into AppFolio.
 
-- `AGENT_PILOT_RECIPIENTS` (e.g. `Craig,Brody`) reroutes the SMS card, Outlook drafts, and escalations to the cohort instead of Cheryl. Tap attribution stays correct (the tapper is resolved from `staff`), and each Outlook draft is created in **every** cohort mailbox.
-- `AGENT_PILOT_SHADOW=1` makes a **Send** tap record real motion (`agent_proposal` approved + `wo_event` tagged `shadow`) while suppressing the actual vendor SMS.
-- `?pilotSeed=N&seedChannel=sms|email` forces the N oldest vendor candidates to a tappable SMS card or an Outlook draft, bypassing cooldown/escalation, so the cohort has something to test on day one. `scripts/pilot-fire.sh email|sms` is the local trigger (reads `CRON_SECRET` from `.env.local`).
-- The Outlook draft path requires the app-only Graph `ApplicationAccessPolicy` (the `agent-mail` group) to include each cohort mailbox; `AGENT_GRAPH_DRYRUN` must be **unset** for drafts to create.
+**What the backlog actually is (dug in 2026-08-27):** it's a **decision backlog, not a vendor-capacity one**. Of the genuinely-stuck estimate WOs, most have a **bid already in hand** and are waiting a median ~19 days (some 100+) on an approval *decision* — the vendor did its job. Only a minority are actually waiting on a vendor bid. So the chaser follows both: vendor-bid chases *and* owner-approval nudges, and no longer parks the owner-approval / un-assigned ones in the Ops Brief after 3 tries (see the escalations row above).
 
-**Adoption gate (restart §8):** ≥15 estimate-chase sends/week for 2 consecutive weeks (baseline ~0) and Cheryl says "keep it," else stop by 2026-10-01. Metrics captured daily in `metrics_snapshot`; baseline frozen pre-agents. (The prior Phase-1 gate was ≥25 human actions/week across all cards/drafts.)
+Delivery is env-driven (`ESTIMATE_CHASER_OWNER` sets the owner; the pilot `AGENT_PILOT_RECIPIENTS` / `AGENT_PILOT_SHADOW` flags still exist for reroute/shadow). The Outlook draft path requires the app-only Graph `ApplicationAccessPolicy` (`agent-mail` group) to include the owner's mailbox, and `AGENT_GRAPH_DRYRUN` unset. `?pilotSeed=N&seedChannel=sms|email` (via `scripts/pilot-fire.sh`) is a **test tool only** — it re-drafts the same oldest WOs and inflates chase rounds, so it is not used against the live owner.
+
+**Adoption gate (restart §8):** ≥15 estimate-chase sends/week for 2 consecutive weeks (baseline ~0) and the owner says "keep it," else stop by 2026-10-01. Metrics captured daily in `metrics_snapshot`; baseline frozen pre-agents.
 
 ---
 
