@@ -166,15 +166,21 @@ export default function TurnGantt({
                     {fmt(t)}
                   </div>
                 ))}
-                {milestones.map((m) => (
-                  <div
-                    key={m.kind}
-                    className={`absolute bottom-1 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-medium ${MILESTONE_COLOR[m.kind].pill}`}
-                    style={{ left: xOf(m.date) }}
-                  >
-                    ◆ {m.label}
-                  </div>
-                ))}
+                {milestones.map((m) => {
+                  const x = xOf(m.date);
+                  const pct = timelineW > 0 ? x / timelineW : 0;
+                  // Keep edge milestones (esp. move-in on the far right) in view.
+                  const anchor = pct > 0.85 ? 'translateX(-100%)' : pct < 0.12 ? 'translateX(0)' : 'translateX(-50%)';
+                  return (
+                    <div
+                      key={m.kind}
+                      className={`absolute bottom-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-medium ${MILESTONE_COLOR[m.kind].pill}`}
+                      style={{ left: x, transform: anchor }}
+                    >
+                      ◆ {m.label} {fmt(m.date)}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -191,7 +197,12 @@ export default function TurnGantt({
                       className="sticky left-0 z-10 flex shrink-0 items-center gap-2 bg-white px-4 text-left hover:bg-sand-50"
                       style={{ width: LEFT_W }}
                     >
-                      <span className="text-charcoal-400">{isCollapsed ? '▸' : '▾'}</span>
+                      <span
+                        className={`inline-block text-xs text-charcoal-500 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                        aria-hidden
+                      >
+                        ▶
+                      </span>
                       <span className="text-sm font-semibold text-charcoal-800">{phase.label}</span>
                       <span className="text-xs text-charcoal-400">{phase.tasks.length} · {phase.pctComplete}%</span>
                     </button>
