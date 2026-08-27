@@ -226,8 +226,9 @@ function detailBlockHtml(c: ChaseCandidate): string {
 }
 
 // Signature is per-sender: a draft created in Brody's mailbox must sign as
-// Brody, not the default coordinator. Defaults to Cheryl (production owner).
-const DEFAULT_SENDER = 'Cheryl';
+// Brody, not the default coordinator. Defaults to the production owner
+// (Jayme since the 2026-08-26 handoff; ESTIMATE_CHASER_OWNER overrides).
+const DEFAULT_SENDER = process.env.ESTIMATE_CHASER_OWNER?.trim() || 'Jayme';
 const signatureText = (name: string) =>
   ['Thank you,', name, 'High Desert Property Management'].join('\n');
 const signatureHtml = (name: string) =>
@@ -342,19 +343,24 @@ export function buildOwnerApprovalDraft(
 const SMS_DESC_MAX = 60;
 
 /**
- * The text Cheryl's tap sends. Same hard rules as the email templates: no
- * dollar amounts, no links. Kept under ~320 chars (two SMS segments).
+ * The text the owner's tap sends. Same hard rules as the email templates: no
+ * dollar amounts, no links. Kept under ~320 chars (two SMS segments). The
+ * vendor-facing sender name defaults to the production owner (Jayme).
  */
-export function buildVendorChaseSms(c: ChaseCandidate, chaseRound: number): string {
+export function buildVendorChaseSms(
+  c: ChaseCandidate,
+  chaseRound: number,
+  senderName: string = DEFAULT_SENDER
+): string {
   const where = c.propertyAddress || c.propertyName || 'the property';
   const unit = c.unitName ? ` #${c.unitName}` : '';
   const wo = c.woNumber ? `WO #${c.woNumber}` : 'the work order';
   const desc = (c.description ?? '').slice(0, SMS_DESC_MAX).trim();
 
   if (chaseRound >= 2) {
-    return `Hi ${c.vendorName || 'there'}, Cheryl at High Desert Property Mgmt again — still hoping to get your bid for ${wo} at ${where}${unit}. Can you let me know either way? Thanks!`;
+    return `Hi ${c.vendorName || 'there'}, ${senderName} at High Desert Property Mgmt again — still hoping to get your bid for ${wo} at ${where}${unit}. Can you let me know either way? Thanks!`;
   }
-  return `Hi ${c.vendorName || 'there'}, this is Cheryl at High Desert Property Mgmt. Following up on the bid for ${wo} at ${where}${unit}${desc ? ` (${desc})` : ''} — could you send it over, or let me know if you can't take it? Thanks!`;
+  return `Hi ${c.vendorName || 'there'}, this is ${senderName} at High Desert Property Mgmt. Following up on the bid for ${wo} at ${where}${unit}${desc ? ` (${desc})` : ''} — could you send it over, or let me know if you can't take it? Thanks!`;
 }
 
 // ── ec:* action ids (Slack interactivity namespace for the chaser) ──
