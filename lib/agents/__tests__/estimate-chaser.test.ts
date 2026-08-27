@@ -200,6 +200,29 @@ describe('decideChase', () => {
       decideChase(candidate({ ageCalendarDays: 60 }), history({ lastChaseAt: fri }), MON)
     ).toEqual({ action: 'escalate', reason: 'aged_45d' });
   });
+
+  it('owner-approval keeps chasing on count instead of escalating (bid in hand, no vendor fallback)', () => {
+    const owner = candidate({ kind: OWNER_APPROVAL_ACTION });
+    expect(decideChase(owner, history({ chaseCount: 3 }), MON)).toEqual({ action: 'chase' });
+    expect(decideChase(owner, history({ chaseCount: 9 }), MON)).toEqual({ action: 'chase' });
+  });
+
+  it('owner-approval still escalates on extreme age', () => {
+    expect(
+      decideChase(candidate({ kind: OWNER_APPROVAL_ACTION, ageCalendarDays: 46 }), history({ chaseCount: 5 }), MON)
+    ).toEqual({ action: 'escalate', reason: 'aged_45d' });
+  });
+
+  it('un-assigned Estimate Requested WOs keep following instead of escalating on count', () => {
+    // No vendor => "chased 3x" is meaningless; it must keep surfacing to Jayme.
+    const unassigned = candidate({ vendorId: null });
+    expect(decideChase(unassigned, history({ chaseCount: 4 }), MON)).toEqual({ action: 'chase' });
+    // ...but a vendor IS assigned => count escalation still applies.
+    expect(decideChase(candidate({ vendorId: 'v-9' }), history({ chaseCount: 3 }), MON)).toEqual({
+      action: 'escalate',
+      reason: 'chased_3x',
+    });
+  });
 });
 
 // ── draft templates ──
