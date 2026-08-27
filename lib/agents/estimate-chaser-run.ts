@@ -26,7 +26,7 @@ import { getAgentConfig, effectiveLevel, isGloballyKilled, isWithinQuietHours } 
 import { createProposal } from './proposals';
 import { enqueueOutbox, dispatchOutbox } from './outbox';
 import { resolveStaffByPersonOrEmail } from './staff';
-import { getPilotConfig } from './pilot';
+import { getPilotConfig, getEstimateChaserOwner } from './pilot';
 import { todayPacific } from './morning-card';
 import type { SendOutcome } from './channels';
 import type { AgentConfigRow, AgentProposal, StaffRow } from './types';
@@ -464,11 +464,11 @@ export async function runEstimateChaser(opts: {
     return result;
   }
 
-  // Delivery cohort: pilot recipients (Craig+Brody, restart §7 pilot) when
-  // configured, else the default owner Cheryl. The tapper is resolved
-  // separately in slack/interact, so attribution stays correct regardless.
+  // Delivery cohort: pilot recipients (restart §7 pilot) when configured, else
+  // the default production owner (Jayme; ESTIMATE_CHASER_OWNER). The tapper is
+  // resolved separately in slack/interact, so attribution stays correct.
   const pilot = getPilotConfig();
-  const recipientNames = pilot.recipients.length > 0 ? pilot.recipients : ['Cheryl'];
+  const recipientNames = pilot.recipients.length > 0 ? pilot.recipients : [getEstimateChaserOwner()];
   const recipients = (
     await Promise.all(recipientNames.map((n) => resolveStaffByPersonOrEmail(n)))
   ).filter((s): s is StaffRow => Boolean(s));

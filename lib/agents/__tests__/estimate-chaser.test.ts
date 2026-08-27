@@ -242,13 +242,13 @@ describe('draft templates', () => {
     expect(vendor.text).not.toContain('checking in again');
   });
 
-  it('signs as the given sender, defaulting to Cheryl', () => {
-    expect(vendor.text).toContain('Cheryl');
+  it('signs as the given sender, defaulting to the owner (Jayme)', () => {
+    expect(vendor.text).toContain('Jayme');
     expect(vendor.text).not.toContain('Brody');
     const brody = buildVendorChaseDraft(candidate(), 'bids@firkus.com', 1, 'Brody');
     expect(brody.text).toContain('Brody');
     expect(brody.html).toContain('Brody');
-    expect(brody.text).not.toMatch(/Thank you,\nCheryl/);
+    expect(brody.text).not.toMatch(/Thank you,\nJayme/);
     const ownerBrody = buildOwnerApprovalDraft(candidate({ kind: OWNER_APPROVAL_ACTION }), 1, 'Brody');
     expect(ownerBrody.text).toContain('Brody');
   });
@@ -278,8 +278,8 @@ describe('buildVendorChaseSms', () => {
     }
   });
 
-  it('identifies Cheryl/HDPM, the WO, and the property', () => {
-    expect(round1).toContain('Cheryl');
+  it('identifies the owner/HDPM, the WO, and the property', () => {
+    expect(round1).toContain('Jayme');
     expect(round1).toContain('High Desert Property Mgmt');
     expect(round1).toContain('WO #412');
     expect(round1).toContain('123 Brosterhous Rd');

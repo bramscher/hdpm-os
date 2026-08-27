@@ -36,3 +36,18 @@ export function getPilotConfig(): PilotConfig {
 export function isPilotActive(cfg: PilotConfig = getPilotConfig()): boolean {
   return cfg.recipients.length > 0;
 }
+
+/**
+ * The production owner of the estimate chase — the staff person whose Outlook
+ * drafts folder + Slack the chases route to when no pilot cohort is set.
+ *
+ * Handed off Cheryl → Jayme (2026-08-26). Env-driven so a further reassignment
+ * (or a temporary reroute while jayme@ gets Azure-scoped) is a redeploy env
+ * flip, not a code change. The name must match a `staff.person` row that has an
+ * email (for the Outlook draft) and, for the SMS/tap path, a `slack_user_id`.
+ *
+ *   ESTIMATE_CHASER_OWNER — staff person name. Unset → 'Jayme'.
+ */
+export function getEstimateChaserOwner(): string {
+  return process.env.ESTIMATE_CHASER_OWNER?.trim() || 'Jayme';
+}
