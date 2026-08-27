@@ -209,7 +209,25 @@ export async function runOpsBrief(opts: {
     const key = row.subject_id ?? row.id;
     if (!latestPerWo.has(key)) latestPerWo.set(key, row);
   }
+  // An escalation is only "needs Craig" if its WO is still open AND still in an
+  // estimate state. Escalate proposals are never retracted when a WO completes,
+  // is canceled, or moves on to scheduling — without this filter the brief was
+  // showing Craig stale items for work that's already done (~30% of the list).
+  const escWoIds = [...latestPerWo.keys()];
+  const stillStuck = new Set<string>();
+  if (escWoIds.length > 0) {
+    const { data: woRows } = await supabase
+      .from('work_orders')
+      .select('id, appfolio_status, stage')
+      .in('id', escWoIds);
+    for (const w of (woRows ?? []) as { id: string; appfolio_status: string | null; stage: string | null }[]) {
+      if (w.stage !== 'CLOSED' && ['Estimated', 'Estimate Requested'].includes(w.appfolio_status ?? '')) {
+        stillStuck.add(w.id);
+      }
+    }
+  }
   const needsCraig = [...latestPerWo.values()]
+    .filter((row) => stillStuck.has(row.subject_id ?? ''))
     .map(escalationItem)
     .filter((i) => !i.acknowledgedBy)
     .sort((a, b) => b.ageCalendarDays - a.ageCalendarDays);

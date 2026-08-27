@@ -165,8 +165,18 @@ export type ChaseDecision =
 
 /** Precedence: escalate > cooldown > chase. Pure. */
 export function decideChase(c: ChaseCandidate, h: ChaseHistory, now: Date): ChaseDecision {
-  const shouldEscalate =
-    h.chaseCount >= ESCALATE_CHASE_COUNT || c.ageCalendarDays > ESCALATE_AGE_CALENDAR_DAYS;
+  // Count-based escalation ("chased 3×, give up") only makes sense for a vendor
+  // chase that HAS a vendor — the remedy is switching vendors, which is Craig's
+  // call. Two cases keep following instead of escalating on count:
+  //   • owner-approval (bid in hand) — the decision is HDPM's to push, no
+  //     fallback vendor to switch to;
+  //   • an "Estimate Requested" WO with no vendor assigned — "chased 3×" is
+  //     meaningless (nobody was chased); it needs a vendor assigned, so it must
+  //     keep surfacing to Jayme, not dead-end in the Ops Brief.
+  // Both still escalate on extreme age (the age rule below), never on count.
+  const countEscalatable = c.kind !== OWNER_APPROVAL_ACTION && Boolean(c.vendorId);
+  const escalateOnCount = countEscalatable && h.chaseCount >= ESCALATE_CHASE_COUNT;
+  const shouldEscalate = escalateOnCount || c.ageCalendarDays > ESCALATE_AGE_CALENDAR_DAYS;
   if (shouldEscalate) {
     if (
       h.lastEscalateAt &&
@@ -176,7 +186,7 @@ export function decideChase(c: ChaseCandidate, h: ChaseHistory, now: Date): Chas
     }
     return {
       action: 'escalate',
-      reason: h.chaseCount >= ESCALATE_CHASE_COUNT ? 'chased_3x' : 'aged_45d',
+      reason: escalateOnCount ? 'chased_3x' : 'aged_45d',
     };
   }
   if (h.lastChaseAt && businessDaysBetween(h.lastChaseAt, now) < CHASE_COOLDOWN_BUSINESS_DAYS) {
