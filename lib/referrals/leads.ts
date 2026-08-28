@@ -14,6 +14,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { fetchAppFolioOwnerContacts } from '@/lib/appfolio';
 import { logAudit } from '@/lib/audit';
 import { findDuplicate, type DedupeCandidate, type Prospect } from './dedupe';
+import { notifyLeadSubmitted, notifyStatusChange } from './notify';
 import {
   OPEN_LEAD_STAGES,
   type LeadEvent,
@@ -89,12 +90,24 @@ export async function finalizeNewLead(leadId: string, actor: string): Promise<vo
   const supabase = getSupabaseAdmin();
   const { data: lead, error } = await supabase
     .from('referral_lead')
-    .select('id, prospect_name, prospect_email, prospect_phone, source, ref_code')
+    .select('id, prospect_name, prospect_email, prospect_phone, source, ref_code, partner_id')
     .eq('id', leadId)
     .single();
   if (error) throw new Error(`finalizeNewLead read: ${error.message}`);
 
   await writeLeadEvent(leadId, 'created', { source: lead.source, ref_code: lead.ref_code }, actor);
+
+  // Notify referral ops of the new lead (best-effort; never blocks).
+  try {
+    await notifyLeadSubmitted({
+      id: lead.id,
+      prospect_name: lead.prospect_name,
+      source: lead.source,
+      partner_id: lead.partner_id,
+    });
+  } catch (err) {
+    console.error('[referrals] notifyLeadSubmitted failed:', err instanceof Error ? err.message : err);
+  }
 
   const hit = await runDedupe(
     { name: lead.prospect_name, email: lead.prospect_email, phone: lead.prospect_phone },
@@ -202,6 +215,16 @@ export async function setLeadStage(id: string, stage: LeadStage, actor: string):
     .single();
   if (error) throw new Error(`setLeadStage: ${error.message}`);
   await writeLeadEvent(id, 'stage_change', { from: prev?.stage ?? null, to: stage }, actor);
+  // Notify the referrer of the status change (best-effort; never blocks).
+  try {
+    await notifyStatusChange(
+      { id: data.id, prospect_name: data.prospect_name, partner_id: data.partner_id },
+      (prev?.stage as LeadStage) ?? null,
+      stage
+    );
+  } catch (err) {
+    console.error('[referrals] notifyStatusChange failed:', err instanceof Error ? err.message : err);
+  }
   return data as ReferralLead;
 }
 

@@ -200,7 +200,7 @@ from `00-referral-portal-plan.md`. One section per batch.
 
 ## Batch 3 — Lead pipeline + attribution (2026-08-28) — VALUE CHECKPOINT
 
-**Status:** built + typechecked + guardrail-clean + 30/30 unit tests on `feature/partners`. **Awaiting Craig:** apply migration `20260828d`, run the two verifiers. This is the plan's value checkpoint — after it, onboarding + a real lead pipeline + attribution are live; everything past here is money (fees/QBO).
+**Status:** ✅ built + pipeline DB-verified on `feature/partners` (migration `20260828d` applied; `scripts/referrals-batch3-verify.mjs` returned `ALL BATCH 3 CHECKS PASSED` — attribution referral/organic, first-touch dedupe, append-only stage events; self-cleaned; 2026-08-28). Remaining: the **referrer-insert RLS** SQL verifier (SQL Editor) + the hdpm-web cross-repo change. This is the plan's value checkpoint.
 
 ### What shipped
 
@@ -253,6 +253,57 @@ from `00-referral-portal-plan.md`. One section per batch.
   routes RLS-insert via `referrer-context`; service-role work stays in `lib/`).
 - ✅ 30/30 unit tests (crypto 10, codes 5, fee-policy 6, dedupe 9).
 - ⏳ Live pipeline + referrer-insert RLS — Craig's steps above.
+
+---
+
+## Batch 4 — Notifications (2026-08-28)
+
+**Status:** built + typechecked + guardrail-clean + 37/37 unit tests on `feature/partners` (built autonomously while Craig was away). **Awaiting Craig:** apply migration `20260828e`, set `REFERRAL_ADMIN_EMAIL`, verify Resend DKIM/SPF for external mail, run the verifier + a pilot email check.
+
+### What shipped
+
+| Deliverable | File |
+|---|---|
+| `notify_email` opt-out column | `supabase/migrations/20260828e_referral_notify_prefs.sql` |
+| Pure email templates + `shouldNotify` logic (7 tests) | `lib/referrals/notify-templates.ts` |
+| Send + log service (best-effort, opt-out aware) | `lib/referrals/notify.ts` |
+| Live triggers wired into lead events | `lib/referrals/leads.ts` (finalizeNewLead, setLeadStage) |
+| Admin W-9 reminder API + button | `app/api/partners/admin/referrers/[id]/w9-reminder/route.ts`, `referrers-admin.tsx` |
+| Schema verifier | `scripts/referrals-batch4-verify.mjs` |
+
+### Behavior
+
+- **lead submitted → referral ops** (`REFERRAL_ADMIN_EMAIL`), fired from
+  `finalizeNewLead` (both submission paths).
+- **stage change → referrer**, fired from `setLeadStage`, only on a real
+  transition, only for referral leads with an email, respecting `notify_email`.
+- **W-9 missing → referrer**, admin-triggered from the referrers table.
+- Accrual/payout notifications are stubbed (functions ready) for Batches 5/7/8.
+- Every attempt writes `referral_notification_log` (`sent|skipped|failed` + detail);
+  notifications are **best-effort** and never block the triggering action (wrapped
+  in try/catch; `sendEmail` returns `skipped` when `RESEND_API_KEY` is absent).
+
+### ⚠️ Deliverability (the plan's Batch 4 caveat)
+
+Referrers are **external** recipients. Resend will only deliver to them if the
+From domain (`AGENT_EMAIL_FROM` / default) has verified **DKIM/SPF**. Verify this
+in Resend before relying on referrer email — until then, sends may log `failed`.
+The log makes gaps visible rather than silent.
+
+### Craig's steps to close Batch 4
+
+1. **Apply** `supabase/migrations/20260828e_referral_notify_prefs.sql`.
+2. Set env **`REFERRAL_ADMIN_EMAIL`** (where "new lead" alerts go) in `.env.local` + Vercel.
+3. In Resend, confirm the sending domain has **DKIM/SPF** verified for external delivery.
+4. **Verify schema:** `node scripts/referrals-batch4-verify.mjs` → `ALL BATCH 4 CHECKS PASSED`.
+5. **Pilot email check:** invite a referrer, move a lead's stage, confirm the email
+   arrives and `referral_notification_log` shows `sent`.
+
+### Verification (so far)
+
+- ✅ `npx tsc --noEmit` — 0 errors. ✅ `npm run lint:referrals` — passes.
+- ✅ 37/37 unit tests (added 7 notification-template cases).
+- ⏳ Live schema verifier + pilot email — Craig's steps above.
 
 ### Not blocking Batch 0, tracked for later
 

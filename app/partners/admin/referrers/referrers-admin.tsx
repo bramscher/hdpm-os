@@ -51,6 +51,25 @@ export default function ReferrersAdmin({
   const [inviteLink, setInviteLink] = useState<{ name: string; url: string } | null>(null);
   const [invitingId, setInvitingId] = useState<string | null>(null);
 
+  const [w9SendingId, setW9SendingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function sendW9Reminder(r: ReferralPartner) {
+    setW9SendingId(r.id);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/partners/admin/referrers/${r.id}/w9-reminder`, { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed');
+      setNotice(`W-9 reminder sent to ${r.display_name}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setW9SendingId(null);
+    }
+  }
+
   async function invite(r: ReferralPartner) {
     setInvitingId(r.id);
     setError(null);
@@ -109,6 +128,12 @@ export default function ReferrersAdmin({
 
   return (
     <div className="space-y-8">
+      {notice && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+          {notice}
+        </div>
+      )}
+
       {/* Create form */}
       <form onSubmit={createReferrer} className="rounded-xl border border-sand-200 bg-white p-5">
         <h2 className="mb-4 text-sm font-semibold text-charcoal-800">New referrer</h2>
@@ -215,6 +240,11 @@ export default function ReferrersAdmin({
                     {r.status !== 'paused' && r.status !== 'terminated' && (
                       <Button variant="ghost" size="sm" onClick={() => setStatus(r.id, 'paused')}>
                         Pause
+                      </Button>
+                    )}
+                    {r.w9_status === 'missing' && r.email && (
+                      <Button variant="ghost" size="sm" disabled={w9SendingId === r.id} onClick={() => sendW9Reminder(r)}>
+                        {w9SendingId === r.id ? '…' : 'W-9 reminder'}
                       </Button>
                     )}
                   </div>
