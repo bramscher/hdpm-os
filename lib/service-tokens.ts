@@ -15,7 +15,7 @@
 import { createHash } from 'crypto';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
-export type ServiceScope = 'agents' | 'intake';
+export type ServiceScope = 'agents' | 'intake' | 'referrals';
 
 export interface ServiceIdentity {
   name: string;          // 'legacy' for the env token

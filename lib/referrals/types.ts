@@ -75,6 +75,70 @@ export interface PartnerTermsRow {
   updated_at: string;
 }
 
+// Lead lifecycle (plan §lead lifecycle). trailing_status is separate (Batch 6+).
+export const LEAD_STAGES = [
+  'submitted',
+  'contacted',
+  'qualified',
+  'agreement_signed',
+  'onboarding',
+  'active',
+  'closed',
+  'lost',
+] as const;
+export type LeadStage = (typeof LEAD_STAGES)[number];
+export const OPEN_LEAD_STAGES: LeadStage[] = [
+  'submitted',
+  'contacted',
+  'qualified',
+  'agreement_signed',
+  'onboarding',
+  'active',
+];
+
+export const LEAD_SOURCES = ['referral', 'organic'] as const;
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+export interface ReferralLead {
+  id: string;
+  org_id: string;
+  partner_id: string | null;
+  source: LeadSource;
+  stage: LeadStage;
+  trailing_status: string;
+  prospect_name: string;
+  prospect_email: string | null;
+  prospect_phone: string | null;
+  property_addresses: string[] | null;
+  unit_count: number | null;
+  notes: string | null;
+  ref_code: string | null;
+  utm: Record<string, unknown> | null;
+  landing_page: string | null;
+  hdpm_web_lead_id: string | null;
+  appfolio_owner_id: string | null;
+  appfolio_property_ids: string[] | null;
+  doors_under_mgmt: number | null;
+  dup_of_lead_id: string | null;
+  dup_status: string | null;
+  first_touch_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadEvent {
+  id: number;
+  lead_id: string;
+  event_type: string;
+  payload: Record<string, unknown>;
+  actor: string;
+  created_at: string;
+}
+
+export function isLeadStage(v: unknown): v is LeadStage {
+  return typeof v === 'string' && (LEAD_STAGES as readonly string[]).includes(v);
+}
+
 export function isPartnerType(v: unknown): v is PartnerType {
   return typeof v === 'string' && (PARTNER_TYPES as readonly string[]).includes(v);
 }

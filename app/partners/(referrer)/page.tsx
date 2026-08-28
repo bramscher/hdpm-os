@@ -1,5 +1,6 @@
 import { requireReferrer, getReferrerPartner } from '@/lib/referrals/referrer-context';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import SignOutButton from './sign-out-button';
 
 export const dynamic = 'force-dynamic';
@@ -61,8 +62,16 @@ export default async function ReferrerDashboard() {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-3">
+        <a href="/partners/leads">
+          <Button>View your referrals</Button>
+        </a>
+        <a href="/partners/leads/new">
+          <Button variant="outline">Submit a referral</Button>
+        </a>
+      </div>
       <div className="rounded-xl border border-dashed border-sand-300 bg-white p-5 text-sm text-charcoal-400">
-        Lead submission and earnings appear here once they launch.
+        Earnings appear here once fee payouts launch.
       </div>
     </div>
   );

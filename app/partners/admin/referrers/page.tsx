@@ -23,6 +23,12 @@ export default async function ReferrersPage() {
       <PageHeader
         title="Referral partners"
         description="Owners, agents, builders and vendors who send us owner leads. Create a referrer to mint their referral code; set default fee terms once the fee type is legally enabled."
+        actions={
+          <>
+            <a href="/partners/admin/leads" className="text-sm text-charcoal-600 hover:underline">Pipeline</a>
+            <a href="/partners/admin/fee-policy" className="text-sm text-charcoal-600 hover:underline">Fee policy</a>
+          </>
+        }
       />
       <ReferrersAdmin initialReferrers={referrers} policies={policies} />
     </PageContainer>

@@ -196,6 +196,64 @@ from `00-referral-portal-plan.md`. One section per batch.
 - ⏳ **Magic-link login** — needs the redirect URLs + a browser (deploy or localhost
   dev with email). The onboarding it leads into is proven above.
 
+---
+
+## Batch 3 — Lead pipeline + attribution (2026-08-28) — VALUE CHECKPOINT
+
+**Status:** built + typechecked + guardrail-clean + 30/30 unit tests on `feature/partners`. **Awaiting Craig:** apply migration `20260828d`, run the two verifiers. This is the plan's value checkpoint — after it, onboarding + a real lead pipeline + attribution are live; everything past here is money (fees/QBO).
+
+### What shipped
+
+| Deliverable | File |
+|---|---|
+| Referrer lead-INSERT RLS policy | `supabase/migrations/20260828d_referral_lead_submit_rls.sql` |
+| Lead types + stages | `lib/referrals/types.ts` |
+| Dedupe (pure matcher: email→phone→name) | `lib/referrals/dedupe.ts` (+ 9 tests) |
+| Lead service layer (intake, dedupe, finalize, admin ops) | `lib/referrals/leads.ts` |
+| Referrer submit/list API (RLS insert + service finalize) | `app/api/partners/leads/route.ts` |
+| Website intake API (S2S, `referrals` scope) | `app/api/intake/referral-lead/route.ts` |
+| Admin pipeline API (list + stage/dedupe/link) | `app/api/partners/admin/leads/route.ts`, `[id]/route.ts` |
+| Referrer leads UI (list + submit) | `app/partners/(referrer)/leads/**` |
+| Admin pipeline UI (list + detail) | `app/partners/admin/leads/**` |
+| hdpm-web attribution spec (cross-repo) | `docs/partners/02-hdpm-web-attribution.md` |
+| `referrals` service scope | `lib/service-tokens.ts` |
+| Verifiers | `scripts/referrals-batch3-verify.mjs`, `scripts/referrals-batch3-rls-verify.sql` |
+
+### Design notes
+
+- **Two submission paths, one funnel:** the referrer portal RLS-inserts the lead
+  as the referrer (DB-enforced `partner_id=self`, `source=referral`), then a lib
+  service step writes the `created` event + runs cross-tenant dedupe (which a
+  referrer can't see, by design). The website intake (`/api/intake/referral-lead`,
+  S2S) inserts + finalizes service-side; unknown/absent `ref_code` → `organic`.
+- **First-touch-wins dedupe:** at submit, the prospect is matched (email → phone →
+  exact normalized name) against open leads + (best-effort) live AppFolio owners.
+  A hit flags `dup_status='suspected'` and points `dup_of_lead_id` at the earlier
+  lead — never auto-rejects; admin confirms/clears with a logged event. AppFolio
+  owner fetch is wrapped so a slow/failed call never blocks a submission.
+- **Cross-repo:** only the `hdpm_ref` cookie + owner-form POST live in hdpm-web —
+  spec in `02-hdpm-web-attribution.md`. The receiving endpoint is done here.
+
+### Craig's steps to close Batch 3
+
+1. **Apply** `supabase/migrations/20260828d_referral_lead_submit_rls.sql`.
+2. **Verify the pipeline:** `node scripts/referrals-batch3-verify.mjs` → expect
+   `ALL BATCH 3 CHECKS PASSED` (attribution referral/organic, dedupe first-touch,
+   stage events; self-cleans).
+3. **Verify referrer-insert RLS:** paste `scripts/referrals-batch3-rls-verify.sql`
+   into the SQL Editor → expect `ALL BATCH 3 RLS CHECKS PASSED` (referrer can
+   insert only its own `referral` leads; cross-partner + `organic` blocked; rolls back).
+4. **Schedule the hdpm-web change** (`docs/partners/02-hdpm-web-attribution.md`)
+   with whoever owns that repo — needed before `?ref` links credit partners from
+   the website. A `referrals`-scoped service token must be minted for it.
+
+### Verification (so far)
+
+- ✅ `npx tsc --noEmit` — 0 errors. ✅ `npm run lint:referrals` — passes (referrer
+  routes RLS-insert via `referrer-context`; service-role work stays in `lib/`).
+- ✅ 30/30 unit tests (crypto 10, codes 5, fee-policy 6, dedupe 9).
+- ⏳ Live pipeline + referrer-insert RLS — Craig's steps above.
+
 ### Not blocking Batch 0, tracked for later
 
 - Oregon fee-policy legal sign-off (before any `allowed=true`, batch 5 go-live).
