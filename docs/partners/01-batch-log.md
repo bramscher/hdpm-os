@@ -7,7 +7,7 @@ from `00-referral-portal-plan.md`. One section per batch.
 
 ## Batch 0 — Migrations + RLS scaffolding + isolation guardrail (2026-08-28)
 
-**Status:** ✅ built + DB-verified on `feature/partners` (migration applied + `referrals-rls-verify.sql` returned `ALL CHECKS PASSED`, 2026-08-28). **Only remaining item: add `REFERRAL_FIELD_KEY` to env** (step 3 below) before Batch 2 stores any encrypted PII.
+**Status:** ✅ built + DB-verified on `feature/partners` (migration applied + `referrals-rls-verify.sql` returned `ALL CHECKS PASSED`, 2026-08-28). `REFERRAL_FIELD_KEY` set in `.env.local` + Vercel (validated: 32-byte key, AES-256-GCM round-trips).
 
 ### What shipped
 
@@ -124,6 +124,71 @@ from `00-referral-portal-plan.md`. One section per batch.
   The underlying service layer is verified above. Manual smoke once deployed:
   create 3 referrers; Set-terms shows *no fee type enabled* until you Enable a
   cell in `/partners/admin/fee-policy`; pause/activate updates the badge.
+
+---
+
+## Batch 2 — Referrer auth + onboarding (2026-08-28)
+
+**Status:** built + typechecked + guardrail-clean on `feature/partners`. **Awaiting Craig:** apply migration `20260828c`, add Supabase redirect URLs (below), then run the verifier + a login smoke.
+
+**Decisions (from Craig):** magic-link (passwordless) login; admin **copies an invite link** (no SMTP dependency). New dep: **`@supabase/ssr`** (cookie/session handling for the second auth system — hand-rolling it would be fragile and security-sensitive).
+
+### What shipped
+
+| Deliverable | File |
+|---|---|
+| Invite tokens + agreement metadata + private W-9 bucket | `supabase/migrations/20260828c_referral_invite_and_docs.sql` |
+| Referrer Supabase clients (browser + SSR) | `lib/referrals/supabase-referrer.ts` |
+| `requireReferrer()` / referrer DB context (the sanctioned RLS path) | `lib/referrals/referrer-context.ts` |
+| Invite create/validate/consume | `lib/referrals/invites.ts` |
+| Onboarding accept (link auth user, encrypt TIN, store W-9, activate) | `lib/referrals/onboarding.ts` |
+| W-9 storage helpers | `lib/referrals/storage.ts` |
+| Versioned agreement text + hash | `lib/referrals/agreement.ts` |
+| Referrer routes (login, auth callback, invite/accept, dashboard) | `app/partners/(referrer)/**` |
+| Admin invite API + accept API | `app/api/partners/admin/referrers/[id]/invite/route.ts`, `app/api/partners/invite/accept/route.ts` |
+| Admin "Invite" button + copyable link | `app/partners/admin/referrers/referrers-admin.tsx` |
+| Live-stack onboarding verifier | `scripts/referrals-batch2-verify.mjs` |
+
+### How the two auth systems coexist
+
+- **Referrer routes self-guard via Supabase Auth**, not staff next-auth. `proxy.ts`
+  carves out `/partners` + `/api/partners` (EXCEPT the `/admin` subtree, which stays
+  admin-gated) so the staff token gate doesn't bounce referrers to `/login`.
+- **AppShell** skips the staff chrome for referrer routes (same branch as `/login`);
+  the `(referrer)` route group brings its own minimal layout. Admin keeps the shell.
+- Session cookie is `sb-<ref>-auth-token` (distinct from `next-auth.session-token`).
+- The isolation guardrail now covers `app/api/partners` too; referrer routes get
+  their DB client only via `referrer-context` (JWT-bound, RLS). Service-role work
+  (invite/onboarding) lives in `lib/`, invoked by thin routes.
+
+### Flow
+
+1. Admin clicks **Invite** on a referrer → `/partners/invite/<token>` link (copies it, sends it).
+2. Referrer opens link → confirms email, accepts the agreement, enters legal name / TIN /
+   address, uploads W-9 → **accept** links a Supabase Auth user (email pre-confirmed),
+   encrypts the TIN, stores the W-9, marks the partner active, consumes the invite.
+3. Referrer signs in at `/partners/login` via magic link → `/partners/auth/callback` →
+   dashboard, which reads their own row **through RLS**.
+
+### Craig's steps to close Batch 2
+
+1. **Apply** `supabase/migrations/20260828c_referral_invite_and_docs.sql`.
+2. **Supabase → Auth → URL Configuration → Redirect URLs:** add
+   `http://localhost:3000/partners/auth/callback` and
+   `https://<prod-domain>/partners/auth/callback`. (Needed for magic-link login to
+   return; not needed for onboarding.) Email provider should be enabled (default).
+3. **Verify onboarding:** `node scripts/referrals-batch2-verify.mjs` → expect
+   `ALL BATCH 2 CHECKS PASSED` (creates + self-cleans a test referrer/auth-user).
+4. **Login smoke** (once deployed to preview/prod, or on localhost dev with email):
+   invite a real referrer, accept, then sign in via magic link.
+
+### Verification (so far)
+
+- ✅ `npx tsc --noEmit` — 0 errors (incl. a surgical TS2589 fix in `lib/inspection-notify.ts`
+  caused by the supabase-js bump `2.47 → 2.112` that `@supabase/ssr` pulled in; runtime unchanged).
+- ✅ `npm run lint:referrals` — passes; referrer routes use `referrer-context`, not the service role.
+- ✅ 21/21 unit tests.
+- ⏳ Live onboarding + magic-link login — Craig's steps above.
 
 ### Not blocking Batch 0, tracked for later
 

@@ -47,6 +47,25 @@ export default function ReferrersAdmin({
   // terms modal
   const [termsFor, setTermsFor] = useState<ReferralPartner | null>(null);
 
+  // invite link modal
+  const [inviteLink, setInviteLink] = useState<{ name: string; url: string } | null>(null);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+
+  async function invite(r: ReferralPartner) {
+    setInvitingId(r.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/partners/admin/referrers/${r.id}/invite`, { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Invite failed');
+      setInviteLink({ name: r.display_name, url: body.url });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInvitingId(null);
+    }
+  }
+
   const allowedKinds = (type: PartnerType): FeeKind[] =>
     FEE_KINDS.filter((k) => policies.some((p) => p.partner_type === type && p.fee_kind === k && p.allowed));
 
@@ -183,6 +202,11 @@ export default function ReferrersAdmin({
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex gap-2">
+                    {r.email && (
+                      <Button variant="outline" size="sm" disabled={invitingId === r.id} onClick={() => invite(r)}>
+                        {invitingId === r.id ? '…' : r.auth_user_id ? 'Re-invite' : 'Invite'}
+                      </Button>
+                    )}
                     {r.status !== 'active' && (
                       <Button variant="ghost" size="sm" onClick={() => setStatus(r.id, 'active')}>
                         Activate
@@ -209,6 +233,28 @@ export default function ReferrersAdmin({
         </a>{' '}
         after legal sign-off.
       </p>
+
+      {inviteLink && (
+        <Modal
+          title={`Invite link — ${inviteLink.name}`}
+          onClose={() => setInviteLink(null)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setInviteLink(null)}>
+                Close
+              </Button>
+              <Button onClick={() => navigator.clipboard?.writeText(inviteLink.url)}>Copy link</Button>
+            </>
+          }
+        >
+          <p className="text-sm text-charcoal-600">
+            Send this one-time link to the referrer. It expires in 14 days and can only be used once.
+          </p>
+          <div className="mt-3 break-all rounded-md border border-sand-200 bg-sand-50 p-3 font-mono text-xs text-charcoal-700">
+            {inviteLink.url}
+          </div>
+        </Modal>
+      )}
 
       {termsFor && (
         <TermsModal

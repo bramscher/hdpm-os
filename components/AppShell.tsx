@@ -15,6 +15,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLoginPage = pathname === "/login";
+  // Referrer portal opts out of the staff chrome (sidebar/help/nav). The admin
+  // subtree keeps the staff shell. Referrer pages bring their own layout.
+  const isReferrerRoute =
+    pathname.startsWith("/partners") && !pathname.startsWith("/partners/admin");
 
   // Legacy hook: anything dispatching "open-chat" now lands on the agent page.
   useEffect(() => {
@@ -23,7 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("open-chat", handler);
   }, [router]);
 
-  if (isLoginPage) {
+  if (isLoginPage || isReferrerRoute) {
     return <>{children}</>;
   }
 

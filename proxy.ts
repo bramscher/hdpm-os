@@ -60,6 +60,19 @@ export default async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Referral portal — REFERRER side self-guards via Supabase Auth
+  // (lib/referrals/referrer-context.ts requireReferrer), NOT the staff next-auth
+  // session, so it must bypass the token gate below. The ADMIN subtree
+  // (/partners/admin, /api/partners/admin) is deliberately excluded here and
+  // falls through to the admin gate. (This is the plan's "PUBLIC_PREFIXES
+  // carve-out" — done as a branch so /partners/admin stays protected.)
+  if (
+    (pathname.startsWith("/partners") && !pathname.startsWith("/partners/admin")) ||
+    (pathname.startsWith("/api/partners") && !pathname.startsWith("/api/partners/admin"))
+  ) {
+    return NextResponse.next();
+  }
+
   const token = await getToken({
     req,
     secret: AUTH_SECRET,

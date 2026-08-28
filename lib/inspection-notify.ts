@@ -154,7 +154,10 @@ export async function getDueNotices(
       .limit(limit);
     // A machine sender (Realm-X routine) only wants notices it can actually send:
     // an email on file, not already handed off. Missing-email ones stay for staff.
-    if (options.dispatchableOnly) q = q.not('notice_email', 'is', null);
+    // `q as any` on the receiver breaks a TS2589 (excessively-deep type) that
+    // the newer @supabase/supabase-js query-builder generics trip on this
+    // conditional reassignment; runtime is unchanged.
+    if (options.dispatchableOnly) q = (q as any).not('notice_email', 'is', null);
     return q;
   };
 
