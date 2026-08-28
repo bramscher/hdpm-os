@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "lint:referrals": "eslint --no-eslintrc --config .eslintrc.referrals.json --ext .ts,.tsx --ignore-pattern \"app/partners/admin/**\" --no-error-on-unmatched-pattern app/partners",
+    "lint:referrals": "eslint --no-eslintrc --config .eslintrc.referrals.json --ext .ts,.tsx --ignore-pattern \"**/partners/admin/**\" --no-error-on-unmatched-pattern app/partners app/api/partners",
     "test": "vitest run",
     "test:watch": "vitest"
   },

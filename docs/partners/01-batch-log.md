@@ -72,6 +72,58 @@ from `00-referral-portal-plan.md`. One section per batch.
    ⚠️ This key is unrecoverable-if-lost: anything encrypted with it (TIN, payout
    details) is undecryptable if the key changes. Store it like any other secret.
 
+---
+
+## Batch 1 — Admin referrer management (2026-08-28)
+
+**Status:** built + typechecked + unit-tested on `feature/partners`. **Awaiting Craig:** apply migration `20260828b_referral_partner_terms.sql`, then the UI smoke test below (needs the table + an admin SSO session).
+
+### What shipped
+
+| Deliverable | File |
+|---|---|
+| Per-referrer default-terms table + RLS | `supabase/migrations/20260828b_referral_partner_terms.sql` |
+| Shared types (partner/policy/terms) | `lib/referrals/types.ts` |
+| Referral-code generation (unique, no look-alikes) | `lib/referrals/codes.ts` |
+| Fee-eligibility gate (pure) | `lib/referrals/fee-policy.ts` |
+| Admin service layer (`requireReferralAdmin` + CRUD + gated set-terms) | `lib/referrals/admin.ts` |
+| Referrer CRUD API | `app/api/partners/admin/referrers/route.ts`, `[id]/route.ts`, `[id]/terms/route.ts` |
+| Fee-policy API | `app/api/partners/admin/fee-policy/route.ts` |
+| Referrers admin UI | `app/partners/admin/referrers/page.tsx` + `referrers-admin.tsx` |
+| Fee-policy admin UI | `app/partners/admin/fee-policy/page.tsx` + `fee-policy-admin.tsx` |
+| Unit tests (codes, gate) | `lib/referrals/__tests__/codes.test.ts`, `fee-policy.test.ts` |
+
+### Design decisions
+
+1. **New table `referral_partner_terms`** for per-referrer DEFAULT fee terms. The
+   plan enumerated only lead-scoped `referral_fee_agreement` (frozen at signing,
+   `lead_id NOT NULL`), but Batch 1 sets terms before any lead exists. The plan's
+   prose ("fee agreements are per referrer, default by type") is exactly this
+   table; signing (Batch 3/5) snapshots FROM it INTO `referral_fee_agreement`.
+2. **`requireReferralAdmin` = admin-only** for Batch 1, so all three gates agree:
+   `proxy.ts` (added `/partners/admin` + `/api/partners/admin` to the admin edge
+   gate), the page `isAdmin` redirect, and the API guard. Widen to manager/finance
+   in one place when the payout batches need it.
+3. **Eligibility gate returns HTTP 422** (`code: fee_not_allowed`), not 500 — a
+   disallowed fee is expected policy, not an error.
+
+### Verification
+
+- ✅ `npx vitest run lib/referrals` — 21/21 (crypto 10, codes 5, fee-policy gate 6).
+- ✅ `npx tsc --noEmit` — 0 errors.
+- ✅ `npm run lint:referrals` — passes (admin routes legitimately use the service
+  role and are excluded; the ban still fires on referrer routes).
+- ⏳ **End-to-end UI** — needs migration `20260828b` applied + an admin session.
+  Craig's smoke test:
+  1. Apply `supabase/migrations/20260828b_referral_partner_terms.sql`.
+  2. Visit `/partners/admin/referrers`, create **3 referrers** (e.g. an owner, an
+     agent, a builder). Each gets a status `pending` + a referral code.
+  3. Click **Set terms** on one — it should say *no fee type enabled* (all policy
+     cells seeded OFF). Go to `/partners/admin/fee-policy`, **Enable** e.g.
+     Owner × One-time bounty, return, set a $ bounty → saves. (Proves the gate:
+     blocked before enabling, allowed after.)
+  4. Pause / Activate a referrer — status badge updates.
+
 ### Not blocking Batch 0, tracked for later
 
 - Oregon fee-policy legal sign-off (before any `allowed=true`, batch 5 go-live).

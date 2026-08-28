@@ -44,6 +44,8 @@ function isAdminPath(pathname: string): boolean {
     pathname === "/dashboard" ||
     pathname.startsWith("/dashboard/") ||
     pathname.startsWith("/admin") ||
+    pathname.startsWith("/partners/admin") || // referral portal admin side (staff-only)
+    pathname.startsWith("/api/partners/admin") ||
     pathname.startsWith("/api/kpi") ||
     pathname.startsWith("/api/config") ||
     pathname.startsWith("/api/financials") ||
