@@ -1,0 +1,31 @@
+name: Referrals guardrail
+
+# Enforces the referral portal's isolation guardrail and unit tests.
+# (Next 16 removed `next lint`, and the repo has no other lint/test CI — this
+#  workflow is the standing enforcement point referenced in
+#  docs/partners/00-referral-portal-plan.md §3 and §5 Batch 0.)
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  referrals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+
+      # 1. Isolation guardrail: no getSupabaseAdmin (service-role, RLS-bypassing)
+      #    import may exist in a referrer route under app/partners (admin excluded).
+      - name: Referrer isolation guardrail (ESLint)
+        run: npm run lint:referrals
+
+      # 2. Referral unit tests (crypto round-trip today; more as batches land).
+      - name: Referral unit tests
+        run: npx vitest run lib/referrals
