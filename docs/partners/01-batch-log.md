@@ -76,7 +76,7 @@ from `00-referral-portal-plan.md`. One section per batch.
 
 ## Batch 1 — Admin referrer management (2026-08-28)
 
-**Status:** built + typechecked + unit-tested on `feature/partners`. **Awaiting Craig:** apply migration `20260828b_referral_partner_terms.sql`, then the UI smoke test below (needs the table + an admin SSO session).
+**Status:** ✅ built + DB-verified on `feature/partners` (migration `20260828b` applied; `scripts/referrals-batch1-verify.mjs` returned `ALL BATCH 1 CHECKS PASSED` against the live DB, 2026-08-28). Optional-remaining: a click-through of the React UI (localhost SSO is blocked by the prod-only redirect URI, so this waits for a preview/prod deploy — the service layer it drives is already proven).
 
 ### What shipped
 
@@ -113,16 +113,17 @@ from `00-referral-portal-plan.md`. One section per batch.
 - ✅ `npx tsc --noEmit` — 0 errors.
 - ✅ `npm run lint:referrals` — passes (admin routes legitimately use the service
   role and are excluded; the ban still fires on referrer routes).
-- ⏳ **End-to-end UI** — needs migration `20260828b` applied + an admin session.
-  Craig's smoke test:
-  1. Apply `supabase/migrations/20260828b_referral_partner_terms.sql`.
-  2. Visit `/partners/admin/referrers`, create **3 referrers** (e.g. an owner, an
-     agent, a builder). Each gets a status `pending` + a referral code.
-  3. Click **Set terms** on one — it should say *no fee type enabled* (all policy
-     cells seeded OFF). Go to `/partners/admin/fee-policy`, **Enable** e.g.
-     Owner × One-time bounty, return, set a $ bounty → saves. (Proves the gate:
-     blocked before enabling, allowed after.)
-  4. Pause / Activate a referrer — status badge updates.
+- ✅ **Live-DB service-layer flow** — `node scripts/referrals-batch1-verify.mjs`
+  passed against the real Supabase (service role, no SSO): created a referrer with
+  a code + `pending` status; set-terms **blocked** while `owner × one_time_bounty`
+  was disallowed (seed); after flipping the policy cell on, terms **saved** ($500
+  bounty); self-cleaned (deleted the referrer, reset the cell). This exercises the
+  same create/gate/upsert logic the API + UI call.
+- ⏳ **React UI click-through** (optional) — localhost can't complete Entra SSO
+  (prod-only redirect URI), so the visual pass waits for a preview/prod deploy.
+  The underlying service layer is verified above. Manual smoke once deployed:
+  create 3 referrers; Set-terms shows *no fee type enabled* until you Enable a
+  cell in `/partners/admin/fee-policy`; pause/activate updates the badge.
 
 ### Not blocking Batch 0, tracked for later
 
