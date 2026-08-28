@@ -129,7 +129,7 @@ from `00-referral-portal-plan.md`. One section per batch.
 
 ## Batch 2 — Referrer auth + onboarding (2026-08-28)
 
-**Status:** built + typechecked + guardrail-clean on `feature/partners`. **Awaiting Craig:** apply migration `20260828c`, add Supabase redirect URLs (below), then run the verifier + a login smoke.
+**Status:** ✅ built + onboarding DB-verified on `feature/partners` (migration `20260828c` applied; `scripts/referrals-batch2-verify.mjs` returned `ALL BATCH 2 CHECKS PASSED` against the live stack — invite→accept→auth-user-linked, TIN encrypted at rest, W-9 stored, invite single-use, self-cleaned; 2026-08-28). Remaining: the **magic-link login smoke** (needs the Supabase redirect URLs + a browser; the onboarding path it leads into is proven).
 
 **Decisions (from Craig):** magic-link (passwordless) login; admin **copies an invite link** (no SMTP dependency). New dep: **`@supabase/ssr`** (cookie/session handling for the second auth system — hand-rolling it would be fragile and security-sensitive).
 
@@ -188,7 +188,13 @@ from `00-referral-portal-plan.md`. One section per batch.
   caused by the supabase-js bump `2.47 → 2.112` that `@supabase/ssr` pulled in; runtime unchanged).
 - ✅ `npm run lint:referrals` — passes; referrer routes use `referrer-context`, not the service role.
 - ✅ 21/21 unit tests.
-- ⏳ Live onboarding + magic-link login — Craig's steps above.
+- ✅ **Live onboarding** — `node scripts/referrals-batch2-verify.mjs` → `ALL BATCH 2
+  CHECKS PASSED`: referrer created, invite minted, accepted (auth user linked via
+  `auth.admin.createUser`, agreement recorded, W-9 uploaded to `referral-docs`), TIN
+  ciphertext at rest (starts `v1.`, no cleartext, decrypts to original, last4=6789),
+  invite consumed (single-use); auth user + referrer + W-9 self-cleaned.
+- ⏳ **Magic-link login** — needs the redirect URLs + a browser (deploy or localhost
+  dev with email). The onboarding it leads into is proven above.
 
 ### Not blocking Batch 0, tracked for later
 
