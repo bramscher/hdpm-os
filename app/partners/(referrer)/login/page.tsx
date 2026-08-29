@@ -26,7 +26,11 @@ export default function ReferrerLoginPage() {
           shouldCreateUser: false,
         },
       });
-      if (error) throw error;
+      // shouldCreateUser:false → Supabase errors "Signups not allowed for otp"
+      // when the email isn't a provisioned referrer. Treat it like success so we
+      // (a) don't leak which emails are registered and (b) don't show a scary
+      // raw error to a partner who simply hasn't accepted their invite yet.
+      if (error && !/signup|not allowed for otp/i.test(error.message)) throw error;
       setSent(true);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : String(e2));
