@@ -73,6 +73,24 @@ export function buildStatusChangeEmail(input: {
   };
 }
 
+export function buildInviteEmail(input: { partner_name: string; url: string }): EmailContent {
+  return {
+    subject: 'You’re invited — High Desert Property Management Referral Partners',
+    html: wrap(
+      'You’re invited to become a referral partner',
+      `<p>Hi ${input.partner_name}, High Desert Property Management has invited you to our referral
+       partner program. Set up your account to submit referrals and track what you earn.</p>
+       <p style="margin:20px 0">
+         <a href="${input.url}" style="display:inline-block;background:#2ECC52;color:#fff;text-decoration:none;
+            font-weight:600;padding:12px 22px;border-radius:8px">Accept your invite</a>
+       </p>
+       <p style="font-size:12px;color:#9a9aa5">Or paste this link into your browser:<br>${input.url}</p>
+       <p style="font-size:12px;color:#9a9aa5">This link is single-use and expires in 14 days.</p>`
+    ),
+    text: `Hi ${input.partner_name}, you're invited to the High Desert Property Management referral partner program. Accept your invite (single-use, expires in 14 days): ${input.url}`,
+  };
+}
+
 export function buildW9MissingEmail(input: { partner_name: string }): EmailContent {
   return {
     subject: 'Action needed: W-9 on file',

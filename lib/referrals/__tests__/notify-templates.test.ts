@@ -5,6 +5,7 @@ import {
   buildLeadSubmittedEmail,
   buildStatusChangeEmail,
   buildW9MissingEmail,
+  buildInviteEmail,
 } from '../notify-templates';
 
 describe('shouldNotifyStatusChange', () => {
@@ -38,6 +39,13 @@ describe('email templates', () => {
     const e = buildStatusChangeEmail({ prospect_name: 'Jane Owner', to: 'agreement_signed' });
     expect(e.subject).toContain('Agreement signed');
     expect(e.html).toContain('Jane Owner');
+  });
+
+  it('invite email carries the link (button + plaintext fallback)', () => {
+    const e = buildInviteEmail({ partner_name: 'Bob Agent', url: 'https://x.test/partners/invite/abc' });
+    expect(e.subject.toLowerCase()).toContain('invited');
+    expect(e.html).toContain('https://x.test/partners/invite/abc');
+    expect(e.text).toContain('https://x.test/partners/invite/abc');
   });
 
   it('w9 missing addresses the partner', () => {

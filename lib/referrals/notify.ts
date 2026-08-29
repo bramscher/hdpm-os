@@ -12,6 +12,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/agents/channels/email';
 import {
+  buildInviteEmail,
   buildLeadSubmittedEmail,
   buildStatusChangeEmail,
   buildW9MissingEmail,
@@ -20,16 +21,21 @@ import {
 } from './notify-templates';
 import type { LeadStage } from './types';
 
-type NotifyEvent = 'lead_submitted' | 'status_change' | 'accrual' | 'payout' | 'w9_missing';
+type NotifyEvent = 'invite' | 'lead_submitted' | 'status_change' | 'accrual' | 'payout' | 'w9_missing';
 
-/** Send one email and record the outcome. Never throws. */
+export interface SendResult {
+  status: 'sent' | 'skipped' | 'failed';
+  detail: string | null;
+}
+
+/** Send one email and record the outcome. Never throws. Returns the outcome. */
 async function recordSend(params: {
   event: NotifyEvent;
   recipient: string | null;
   content: EmailContent;
   partnerId?: string | null;
   leadId?: string | null;
-}): Promise<void> {
+}): Promise<SendResult> {
   const supabase = getSupabaseAdmin();
   let status: 'sent' | 'skipped' | 'failed' = 'skipped';
   let detail: string | null = null;
@@ -65,6 +71,24 @@ async function recordSend(params: {
   } catch (err) {
     console.error('[referrals] notification_log write failed:', err instanceof Error ? err.message : err);
   }
+
+  return { status, detail };
+}
+
+/**
+ * Email a referrer their invite link. Returns the send outcome so the admin UI
+ * can confirm delivery (or fall back to copy-link when email isn't deliverable).
+ */
+export async function notifyInvite(
+  partner: { id: string; display_name: string; email: string | null },
+  url: string
+): Promise<SendResult> {
+  return recordSend({
+    event: 'invite',
+    recipient: partner.email,
+    partnerId: partner.id,
+    content: buildInviteEmail({ partner_name: partner.display_name, url }),
+  });
 }
 
 /** New lead → notify the referral ops admin (REFERRAL_ADMIN_EMAIL). */

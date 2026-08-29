@@ -70,14 +70,29 @@ export default function ReferrersAdmin({
     }
   }
 
-  async function invite(r: ReferralPartner) {
+  async function invite(r: ReferralPartner, deliver: 'email' | 'link' = 'link') {
     setInvitingId(r.id);
     setError(null);
+    setNotice(null);
     try {
-      const res = await fetch(`/api/partners/admin/referrers/${r.id}/invite`, { method: 'POST' });
+      const res = await fetch(`/api/partners/admin/referrers/${r.id}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deliver }),
+      });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Invite failed');
-      setInviteLink({ name: r.display_name, url: body.url });
+      if (deliver === 'email') {
+        if (body.sent) {
+          setNotice(`Invite emailed to ${body.email}.`);
+        } else {
+          // Email didn't deliver (e.g. DKIM/SPF not set) — fall back to the link.
+          setInviteLink({ name: r.display_name, url: body.url });
+          setError(`Couldn't email the invite (${body.detail || body.status}). Copy the link below instead.`);
+        }
+      } else {
+        setInviteLink({ name: r.display_name, url: body.url });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -93,9 +108,9 @@ export default function ReferrersAdmin({
     if (res.ok) setReferrers((await res.json()).referrers);
   }
 
-  async function createReferrer(e: React.FormEvent) {
-    e.preventDefault();
+  async function doCreate(alsoEmailInvite: boolean) {
     setError(null);
+    setNotice(null);
     setCreating(true);
     try {
       const res = await fetch('/api/partners/admin/referrers', {
@@ -107,11 +122,17 @@ export default function ReferrersAdmin({
       if (!res.ok) throw new Error(body.error || 'Create failed');
       setReferrers((r) => [body.referrer, ...r]);
       setForm({ type: 'owner', display_name: '', company: '', email: '', phone: '', license_number: '' });
+      if (alsoEmailInvite) await invite(body.referrer, 'email');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
     }
+  }
+
+  function createReferrer(e: React.FormEvent) {
+    e.preventDefault();
+    void doCreate(false);
   }
 
   async function setStatus(id: string, status: 'active' | 'paused' | 'terminated') {
@@ -174,9 +195,18 @@ export default function ReferrersAdmin({
           </label>
         </div>
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button type="submit" disabled={creating || !form.display_name.trim()}>
             {creating ? 'Creating…' : 'Create referrer'}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={creating || !form.display_name.trim() || !form.email.trim()}
+            title={!form.email.trim() ? 'Add an email to send the invite' : undefined}
+            onClick={() => doCreate(true)}
+          >
+            Create &amp; email invite
           </Button>
         </div>
       </form>
@@ -228,8 +258,13 @@ export default function ReferrersAdmin({
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex gap-2">
                     {r.email && (
-                      <Button variant="outline" size="sm" disabled={invitingId === r.id} onClick={() => invite(r)}>
-                        {invitingId === r.id ? '…' : r.auth_user_id ? 'Re-invite' : 'Invite'}
+                      <Button variant="outline" size="sm" disabled={invitingId === r.id} onClick={() => invite(r, 'email')}>
+                        {invitingId === r.id ? '…' : r.auth_user_id ? 'Re-email invite' : 'Email invite'}
+                      </Button>
+                    )}
+                    {r.email && (
+                      <Button variant="ghost" size="sm" disabled={invitingId === r.id} onClick={() => invite(r, 'link')}>
+                        Copy link
                       </Button>
                     )}
                     {r.status !== 'active' && (
