@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { createReferrerBrowserClient } from '@/lib/referrals/supabase-referrer';
+import { createReferrerBrowserClient } from '@/lib/referrals/supabase-referrer-browser';
 
 /**
  * Referrer login (Batch 2) — passwordless magic link. Enter email → Supabase

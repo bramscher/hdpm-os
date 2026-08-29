@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { createReferrerBrowserClient } from '@/lib/referrals/supabase-referrer';
+import { createReferrerBrowserClient } from '@/lib/referrals/supabase-referrer-browser';
 
 export default function SignOutButton() {
   async function signOut() {
