@@ -23,6 +23,11 @@ import type { LeadStage } from './types';
 
 type NotifyEvent = 'invite' | 'lead_submitted' | 'status_change' | 'accrual' | 'payout' | 'w9_missing';
 
+// Referral mail is referrer-facing, so it sends from the recognizable customer
+// address (info@highdesertpm.com) rather than the internal agent default. The
+// domain is Resend-verified (DKIM/SPF), so this delivers to external referrers.
+const REFERRAL_FROM = process.env.REFERRAL_EMAIL_FROM || 'High Desert Property Management <info@highdesertpm.com>';
+
 export interface SendResult {
   status: 'sent' | 'skipped' | 'failed';
   detail: string | null;
@@ -49,6 +54,7 @@ async function recordSend(params: {
         subject: params.content.subject,
         html: params.content.html,
         text: params.content.text,
+        from: REFERRAL_FROM,
       });
       status = res.status === 'sent' ? 'sent' : res.status === 'skipped' ? 'skipped' : 'failed';
       detail = res.error ?? null;
