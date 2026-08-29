@@ -305,6 +305,14 @@ The log makes gaps visible rather than silent.
 - ✅ 37/37 unit tests (added 7 notification-template cases).
 - ⏳ Live schema verifier + pilot email — Craig's steps above.
 
+## Deferred decisions
+
+- **Hosting domain (2026-08-28):** portal stays in HDPM-OS (admin + referrer);
+  only the `?ref` attribution capture lives in hdpm-web (`02-hdpm-web-attribution.md`).
+  Pilot runs on `hdpmchat.highdesertpm.com/partners` **as-is** (Craig's call). Post-pilot
+  branding option: alias `partners.highdesertpm.com` to this Vercel app (DNS + one
+  Supabase redirect URL, zero code changes) — not moving code to hdpm-web.
+
 ### Not blocking Batch 0, tracked for later
 
 - Oregon fee-policy legal sign-off (before any `allowed=true`, batch 5 go-live).

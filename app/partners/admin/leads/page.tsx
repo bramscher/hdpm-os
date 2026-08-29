@@ -25,6 +25,7 @@ export default async function LeadsPage() {
         description="Every owner lead — referral and organic — in one funnel. Filter by stage or source; open a lead to see its history, resolve duplicates, and link it to AppFolio at signing."
         actions={
           <>
+            <a href="/partners/admin" className="text-sm text-charcoal-600 hover:underline">Overview</a>
             <a href="/partners/admin/referrers" className="text-sm text-charcoal-600 hover:underline">Referrers</a>
             <a href="/partners/admin/fee-policy" className="text-sm text-charcoal-600 hover:underline">Fee policy</a>
           </>

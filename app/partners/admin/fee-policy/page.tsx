@@ -24,6 +24,13 @@ export default async function FeePolicyPage() {
       <PageHeader
         title="Fee policy — compensation eligibility"
         description="Oregon restricts paying compensation for real-estate activity to licensed persons. Enable a cell only after your attorney confirms that referrer type may be paid that fee kind. This is a policy switch, not a bug — disabled cells block fee terms by design."
+        actions={
+          <>
+            <a href="/partners/admin" className="text-sm text-charcoal-600 hover:underline">Overview</a>
+            <a href="/partners/admin/referrers" className="text-sm text-charcoal-600 hover:underline">Referrers</a>
+            <a href="/partners/admin/leads" className="text-sm text-charcoal-600 hover:underline">Pipeline</a>
+          </>
+        }
       />
       <FeePolicyAdmin initialPolicies={policies} />
     </PageContainer>
