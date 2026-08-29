@@ -22,9 +22,9 @@ export default function ReferrerLayout({ children }: { children: ReactNode }) {
             <Image
               src="/partners/hdpm-logo-white.png"
               alt="High Desert Property Management"
-              width={148}
-              height={32}
-              className="h-8 w-auto object-contain"
+              width={200}
+              height={48}
+              className="h-9 w-auto object-contain"
               priority
             />
           </div>
