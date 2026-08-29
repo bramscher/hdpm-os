@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
+import BrandButton from '@/components/referrals/BrandButton';
 import { createReferrerBrowserClient } from '@/lib/referrals/supabase-referrer-browser';
 
 export default function SignOutButton() {
@@ -9,8 +9,8 @@ export default function SignOutButton() {
     window.location.href = '/partners/login';
   }
   return (
-    <Button variant="ghost" size="sm" onClick={signOut}>
+    <BrandButton variant="ghost" size="sm" onClick={signOut}>
       Sign out
-    </Button>
+    </BrandButton>
   );
 }

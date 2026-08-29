@@ -2,12 +2,15 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import BrandButton from '@/components/referrals/BrandButton';
+
+const fieldClass =
+  'mt-1.5 block w-full rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-brand-ink outline-none transition focus:border-brand-green focus:ring-2 focus:ring-brand-green/20';
+const labelClass = 'block text-xs font-semibold uppercase tracking-wide text-neutral-500';
 
 /**
- * Submit a referral (Batch 3). Posts to /api/partners/leads, which RLS-inserts
- * the lead as this referrer and then runs dedupe server-side.
+ * Submit a referral (Batch 3) — hdpm-web brand styling. Posts to
+ * /api/partners/leads (RLS insert as this referrer + server-side dedupe).
  */
 export default function NewLeadPage() {
   const router = useRouter();
@@ -43,43 +46,44 @@ export default function NewLeadPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="mb-1 text-xl font-semibold text-charcoal-900">Submit a referral</h1>
-      <p className="mb-5 text-sm text-charcoal-500">Tell us about a property owner who might need management.</p>
-      <form onSubmit={submit} className="space-y-4 rounded-xl border border-sand-200 bg-white p-5">
-        <label className="block text-xs text-charcoal-500">
+      <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-brand-greenDark">New referral</p>
+      <h1 className="mt-1 font-brand-heading text-2xl font-extrabold tracking-tight text-brand-ink">Submit a referral</h1>
+      <p className="mb-6 mt-1.5 text-sm text-neutral-500">Tell us about a property owner who might need management.</p>
+      <form onSubmit={submit} className="space-y-4 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <label className={labelClass}>
           Owner name *
-          <Input className="mt-1" required value={form.prospect_name} onChange={(e) => setForm({ ...form, prospect_name: e.target.value })} />
+          <input className={fieldClass} required value={form.prospect_name} onChange={(e) => setForm({ ...form, prospect_name: e.target.value })} />
         </label>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="text-xs text-charcoal-500">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClass}>
             Email
-            <Input className="mt-1" type="email" value={form.prospect_email} onChange={(e) => setForm({ ...form, prospect_email: e.target.value })} />
+            <input className={fieldClass} type="email" value={form.prospect_email} onChange={(e) => setForm({ ...form, prospect_email: e.target.value })} />
           </label>
-          <label className="text-xs text-charcoal-500">
+          <label className={labelClass}>
             Phone
-            <Input className="mt-1" value={form.prospect_phone} onChange={(e) => setForm({ ...form, prospect_phone: e.target.value })} />
+            <input className={fieldClass} value={form.prospect_phone} onChange={(e) => setForm({ ...form, prospect_phone: e.target.value })} />
           </label>
         </div>
-        <label className="block text-xs text-charcoal-500">
+        <label className={labelClass}>
           Property address
-          <Input className="mt-1" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <input className={fieldClass} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
         </label>
-        <label className="block text-xs text-charcoal-500">
+        <label className={labelClass}>
           Approx. unit count
-          <Input className="mt-1" type="number" value={form.unit_count} onChange={(e) => setForm({ ...form, unit_count: e.target.value })} />
+          <input className={fieldClass} type="number" value={form.unit_count} onChange={(e) => setForm({ ...form, unit_count: e.target.value })} />
         </label>
-        <label className="block text-xs text-charcoal-500">
+        <label className={labelClass}>
           Notes
-          <textarea className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <textarea className={fieldClass} rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </label>
         {err && <p className="text-sm text-red-600">{err}</p>}
-        <div className="flex gap-2">
-          <Button type="submit" disabled={busy || !form.prospect_name.trim()}>
+        <div className="flex gap-2 pt-1">
+          <BrandButton type="submit" disabled={busy || !form.prospect_name.trim()} withArrow>
             {busy ? 'Submitting…' : 'Submit referral'}
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => router.push('/partners/leads')}>
+          </BrandButton>
+          <BrandButton type="button" variant="ghost" onClick={() => router.push('/partners/leads')}>
             Cancel
-          </Button>
+          </BrandButton>
         </div>
       </form>
     </div>

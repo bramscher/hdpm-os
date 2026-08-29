@@ -1,13 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import BrandButton from '@/components/referrals/BrandButton';
+
+const fieldClass =
+  'mt-1.5 block w-full rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-brand-ink outline-none transition focus:border-brand-green focus:ring-2 focus:ring-brand-green/20';
+const labelClass = 'block text-xs font-semibold uppercase tracking-wide text-neutral-500';
 
 /**
- * Accept form (Batch 2). Posts multipart to /api/partners/invite/accept. The
- * TIN is sent once over HTTPS and encrypted server-side (never stored cleartext,
- * never logged). On success the referrer is directed to magic-link login.
+ * Accept form (Batch 2) — hdpm-web brand styling. Posts multipart to
+ * /api/partners/invite/accept. The TIN is sent once over HTTPS and encrypted
+ * server-side (never stored cleartext, never logged).
  */
 export default function AcceptForm({
   token,
@@ -59,90 +62,89 @@ export default function AcceptForm({
 
   if (done) {
     return (
-      <div className="rounded-xl border border-green-200 bg-green-50 p-6">
-        <h2 className="text-lg font-semibold text-green-900">You&apos;re all set</h2>
-        <p className="mt-2 text-sm text-green-800">
+      <div className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-7">
+        <h2 className="font-brand-heading text-xl font-extrabold tracking-tight text-brand-ink">You&apos;re all set</h2>
+        <p className="mt-2 text-sm leading-relaxed text-neutral-700">
           Your referral partner account is active. Sign in any time with a secure email link.
         </p>
-        <a href="/partners/login" className="mt-4 inline-block">
-          <Button>Go to sign in</Button>
-        </a>
+        <div className="mt-5">
+          <BrandButton href="/partners/login" withArrow>
+            Go to sign in
+          </BrandButton>
+        </div>
       </div>
     );
   }
 
   return (
-    <form onSubmit={submit} className="space-y-6">
-      {/* Email (confirm) */}
-      <div className="rounded-xl border border-sand-200 bg-white p-5">
-        <label className="block text-xs text-charcoal-500">
+    <form onSubmit={submit} className="space-y-5">
+      <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <label className={labelClass}>
           Your email (used to sign in)
-          <Input className="mt-1" value={email} readOnly />
+          <input className={fieldClass + ' bg-neutral-50'} value={email} readOnly />
         </label>
       </div>
 
-      {/* Agreement */}
-      <div className="rounded-xl border border-sand-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-charcoal-800">Referral agreement</h2>
-        <p className="mb-2 text-xs text-charcoal-400">Version {agreementVersion}</p>
-        <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md border border-sand-200 bg-sand-50 p-3 text-xs text-charcoal-700">
+      <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <h2 className="font-brand-heading text-base font-bold text-brand-ink">Referral agreement</h2>
+        <p className="mb-2 text-xs text-neutral-400">Version {agreementVersion}</p>
+        <div className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-lg border border-neutral-200 bg-neutral-50 p-3.5 text-xs leading-relaxed text-neutral-700">
           {agreementText}
         </div>
-        <label className="mt-3 flex items-start gap-2 text-sm text-charcoal-700">
-          <input type="checkbox" className="mt-1" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
+        <label className="mt-4 flex items-start gap-2.5 text-sm text-neutral-700">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-green" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
           I have read and agree to the referral partner agreement.
         </label>
       </div>
 
-      {/* Tax info */}
-      <div className="rounded-xl border border-sand-200 bg-white p-5">
-        <h2 className="text-sm font-semibold text-charcoal-800">Tax information (for 1099-NEC)</h2>
-        <p className="mb-3 text-xs text-charcoal-400">
-          Your tax ID is encrypted and never shown again — we keep only the last 4 digits for reference.
+      <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <h2 className="font-brand-heading text-base font-bold text-brand-ink">Tax information</h2>
+        <p className="mb-4 text-xs text-neutral-500">
+          For your 1099-NEC. Your tax ID is encrypted and never shown again — we keep only the last 4 digits.
         </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="text-xs text-charcoal-500">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className={labelClass}>
             Legal name
-            <Input className="mt-1" value={legalName} onChange={(e) => setLegalName(e.target.value)} />
+            <input className={fieldClass} value={legalName} onChange={(e) => setLegalName(e.target.value)} />
           </label>
-          <label className="text-xs text-charcoal-500">
+          <label className={labelClass}>
             Tax ID (SSN or EIN)
-            <Input className="mt-1" value={tin} onChange={(e) => setTin(e.target.value)} placeholder="•••-••-••••" />
+            <input className={fieldClass} value={tin} onChange={(e) => setTin(e.target.value)} placeholder="•••-••-••••" />
           </label>
-          <label className="text-xs text-charcoal-500 sm:col-span-2">
+          <label className={labelClass + ' sm:col-span-2'}>
             Address
-            <Input className="mt-1" value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })} placeholder="Street" />
+            <input className={fieldClass} value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })} placeholder="Street" />
           </label>
-          <label className="text-xs text-charcoal-500">
+          <label className={labelClass}>
             City
-            <Input className="mt-1" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} />
+            <input className={fieldClass} value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} />
           </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-xs text-charcoal-500">
+          <div className="grid grid-cols-2 gap-4">
+            <label className={labelClass}>
               State
-              <Input className="mt-1" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} />
+              <input className={fieldClass} value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} />
             </label>
-            <label className="text-xs text-charcoal-500">
+            <label className={labelClass}>
               ZIP
-              <Input className="mt-1" value={addr.zip} onChange={(e) => setAddr({ ...addr, zip: e.target.value })} />
+              <input className={fieldClass} value={addr.zip} onChange={(e) => setAddr({ ...addr, zip: e.target.value })} />
             </label>
           </div>
         </div>
-        <label className="mt-3 block text-xs text-charcoal-500">
+        <label className={labelClass + ' mt-4'}>
           Upload W-9 (PDF)
           <input
             type="file"
             accept="application/pdf"
-            className="mt-1 block w-full text-sm"
+            className="mt-1.5 block w-full text-sm text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-ink hover:file:bg-neutral-200"
             onChange={(e) => setW9(e.target.files?.[0] ?? null)}
           />
         </label>
       </div>
 
       {err && <p className="text-sm text-red-600">{err}</p>}
-      <Button type="submit" disabled={busy} className="w-full">
+      <BrandButton type="submit" disabled={busy} className="w-full" size="lg" withArrow>
         {busy ? 'Completing…' : 'Complete setup'}
-      </Button>
+      </BrandButton>
     </form>
   );
 }

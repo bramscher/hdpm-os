@@ -1,14 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import BrandButton from '@/components/referrals/BrandButton';
 import { createReferrerBrowserClient } from '@/lib/referrals/supabase-referrer-browser';
 
 /**
- * Referrer login (Batch 2) — passwordless magic link. Enter email → Supabase
- * emails a one-time link that lands on /partners/auth/callback and starts a
- * session. No password anywhere.
+ * Referrer login (Batch 2) — passwordless magic link, hdpm-web brand styling.
  */
 export default function ReferrerLoginPage() {
   const [email, setEmail] = useState('');
@@ -26,7 +23,7 @@ export default function ReferrerLoginPage() {
         email: email.trim(),
         options: {
           emailRedirectTo: `${window.location.origin}/partners/auth/callback?next=/partners`,
-          shouldCreateUser: false, // referrers are provisioned via invite, not self-signup
+          shouldCreateUser: false,
         },
       });
       if (error) throw error;
@@ -40,25 +37,28 @@ export default function ReferrerLoginPage() {
 
   if (sent) {
     return (
-      <div className="rounded-xl border border-sand-200 bg-white p-6">
-        <h1 className="text-lg font-semibold text-charcoal-900">Check your email</h1>
-        <p className="mt-2 text-sm text-charcoal-600">
-          If <span className="font-medium">{email}</span> is a registered referral partner, a login link is
-          on its way. Open it on this device to sign in.
+      <div className="mx-auto max-w-md rounded-xl border border-neutral-200 bg-white p-7 shadow-sm">
+        <h1 className="font-brand-heading text-xl font-extrabold tracking-tight text-brand-ink">Check your email</h1>
+        <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+          If <span className="font-semibold text-brand-ink">{email}</span> is a registered referral partner, a
+          secure sign-in link is on its way. Open it on this device to continue.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-md rounded-xl border border-sand-200 bg-white p-6">
-      <h1 className="text-lg font-semibold text-charcoal-900">Partner sign in</h1>
-      <p className="mt-1 text-sm text-charcoal-500">We&apos;ll email you a secure sign-in link.</p>
-      <form onSubmit={sendLink} className="mt-5 space-y-4">
-        <label className="block text-xs text-charcoal-500">
+    <div className="mx-auto max-w-md">
+      <div className="mb-6 text-center">
+        <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-brand-greenDark">Referral Partners</p>
+        <h1 className="mt-1 font-brand-heading text-3xl font-extrabold tracking-tight text-brand-ink">Partner sign in</h1>
+        <p className="mt-2 text-sm text-neutral-500">We&apos;ll email you a secure sign-in link — no password needed.</p>
+      </div>
+      <form onSubmit={sendLink} className="space-y-4 rounded-xl border border-neutral-200 bg-white p-7 shadow-sm">
+        <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
           Email
-          <Input
-            className="mt-1"
+          <input
+            className="mt-1.5 block h-11 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-brand-ink outline-none transition focus:border-brand-green focus:ring-2 focus:ring-brand-green/20"
             type="email"
             required
             value={email}
@@ -67,9 +67,9 @@ export default function ReferrerLoginPage() {
           />
         </label>
         {err && <p className="text-sm text-red-600">{err}</p>}
-        <Button type="submit" disabled={busy || !email.trim()} className="w-full">
+        <BrandButton type="submit" disabled={busy || !email.trim()} className="w-full" withArrow>
           {busy ? 'Sending…' : 'Email me a sign-in link'}
-        </Button>
+        </BrandButton>
       </form>
     </div>
   );

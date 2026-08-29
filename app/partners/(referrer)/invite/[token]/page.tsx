@@ -16,9 +16,9 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
 
   if (!summary) {
     return (
-      <div className="rounded-xl border border-sand-200 bg-white p-6">
-        <h1 className="text-lg font-semibold text-charcoal-900">This invite can&apos;t be used</h1>
-        <p className="mt-2 text-sm text-charcoal-600">
+      <div className="rounded-xl border border-neutral-200 bg-white p-7 shadow-sm">
+        <h1 className="font-brand-heading text-xl font-extrabold tracking-tight text-brand-ink">This invite can&apos;t be used</h1>
+        <p className="mt-2 text-sm leading-relaxed text-neutral-600">
           The link is invalid, expired, or has already been completed. Ask your HDPM contact for a fresh
           invite.
         </p>
@@ -29,9 +29,10 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-charcoal-900">Welcome, {summary.display_name}</h1>
-        <p className="mt-1 text-sm text-charcoal-500">
-          Complete your referral partner setup below. It takes a minute.
+        <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-brand-greenDark">Welcome</p>
+        <h1 className="mt-1 font-brand-heading text-2xl font-extrabold tracking-tight text-brand-ink">{summary.display_name}</h1>
+        <p className="mt-1.5 text-sm text-neutral-500">
+          Complete your referral partner setup below — it takes a minute.
         </p>
       </div>
       <AcceptForm
