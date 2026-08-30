@@ -65,7 +65,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 async function handleQuestion(event: SlackEvent): Promise<void> {
   const channel = event.channel;
   if (!channel) return;
-  const threadTs = event.thread_ts ?? event.ts;
+  // Thread channel @mentions (keeps channels tidy) and any reply already in a
+  // thread; but post top-level in 1:1 DMs — threading a DM reads as an awkward
+  // nested reply.
+  const threadTs = event.thread_ts ?? (event.channel_type === 'im' ? undefined : event.ts);
 
   try {
     const question =

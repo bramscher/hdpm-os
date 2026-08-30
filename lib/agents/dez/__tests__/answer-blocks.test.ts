@@ -23,6 +23,22 @@ describe('toSlackMrkdwn', () => {
     expect(toSlackMrkdwn('**Deposit** due')).toBe('*Deposit* due');
     expect(toSlackMrkdwn('see [the SOP](https://x.co/y)')).toBe('see <https://x.co/y|the SOP>');
   });
+
+  it('converts markdown headers to bold (Slack has no header style)', () => {
+    expect(toSlackMrkdwn('## Key Requirements')).toBe('*Key Requirements*');
+    expect(toSlackMrkdwn('### Sub')).toBe('*Sub*');
+  });
+
+  it('converts dash/asterisk bullets to • but leaves **bold** at line start alone', () => {
+    expect(toSlackMrkdwn('- Written accounting: x')).toBe('•   Written accounting: x');
+    expect(toSlackMrkdwn('* item')).toBe('•   item');
+    expect(toSlackMrkdwn('**Bold lead** text')).toBe('*Bold lead* text');
+  });
+
+  it('handles a multi-line block end to end', () => {
+    const out = toSlackMrkdwn('## Timeline\n- **31 days** after move-out\n- see [ORS](https://x.co/o)');
+    expect(out).toBe('*Timeline*\n•   *31 days* after move-out\n•   see <https://x.co/o|ORS>');
+  });
 });
 
 describe('chunkText', () => {

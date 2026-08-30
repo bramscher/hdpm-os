@@ -13,12 +13,24 @@ const SECTION_LIMIT = 2900; // under Slack's 3000-char section cap
 const MAX_SOURCES = 8; // cap the sources line — more than this reads as noise and risks the 3000-char cap
 
 /**
- * Minimal Claude-markdown → Slack-mrkdwn: **bold**→*bold* and [text](url)→
- * <url|text>. Everything else (lists, [1] citations) is left as-is — Slack
- * renders it acceptably. Pure.
+ * Claude-markdown → Slack-mrkdwn. Slack's mrkdwn has no '##' headers and no
+ * '-'/'*' bullets, so those render literally unless converted:
+ *   '## Heading'  → '*Heading*'  (bold, Slack has no header style)
+ *   '- item'      → '•   item'
+ *   '**bold**'    → '*bold*'
+ *   '[text](url)' → '<url|text>'
+ * Numbered lists and [1] citations are left as-is. Pure.
  */
 export function toSlackMrkdwn(md: string): string {
-  return md
+  const lines = md.split('\n').map((line) => {
+    const heading = line.match(/^\s{0,3}#{1,6}\s+(.*\S)\s*$/);
+    if (heading) return `*${heading[1]}*`;
+    const bullet = line.match(/^(\s*)[-*]\s+(.*)$/); // '- ' / '* ' (needs the space; '**bold' won't match)
+    if (bullet) return `${bullet[1]}•   ${bullet[2]}`;
+    return line;
+  });
+  return lines
+    .join('\n')
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<$2|$1>')
     .replace(/\*\*([^*]+)\*\*/g, '*$1*');
 }
