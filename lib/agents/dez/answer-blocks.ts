@@ -10,6 +10,7 @@
 import type { Source } from '@/lib/rag';
 
 const SECTION_LIMIT = 2900; // under Slack's 3000-char section cap
+const MAX_SOURCES = 8; // cap the sources line — more than this reads as noise and risks the 3000-char cap
 
 /**
  * Minimal Claude-markdown → Slack-mrkdwn: **bold**→*bold* and [text](url)→
@@ -66,10 +67,14 @@ export function buildAnswerBlocks(
     blocks.push({ type: 'section', text: { type: 'mrkdwn', text: chunk } });
   }
   if (sources.length) {
-    const line = renderSources(sources);
+    // Cap by COUNT (never char-slice — that cuts a <url|label> link mid-string
+    // and breaks Slack rendering). Overflow becomes a "+N more" tag.
+    const shown = sources.slice(0, MAX_SOURCES);
+    const overflow = sources.length - shown.length;
+    const line = renderSources(shown) + (overflow > 0 ? `  ·  +${overflow} more` : '');
     blocks.push({
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: line.slice(0, 2900) }],
+      elements: [{ type: 'mrkdwn', text: line }],
     });
   }
   blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: breadcrumb }] });

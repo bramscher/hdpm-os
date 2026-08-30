@@ -64,6 +64,21 @@ describe('buildAnswerBlocks', () => {
     const contexts = (blocks as Array<{ type: string }>).filter((x) => x.type === 'context');
     expect(contexts.length).toBe(1); // breadcrumb only
   });
+
+  it('caps the sources line at 8 with a "+N more" tag and never cuts a link', () => {
+    const many = Array.from({ length: 21 }, (_, i) =>
+      src({ id: String(i), title: `Doc ${i}`, url: `https://x.co/${i}` })
+    );
+    const { blocks } = buildAnswerBlocks('Answer.', many, '🔧 dez · general · 21 sources');
+    const b = blocks as Array<{ type: string; elements?: Array<{ text: string }> }>;
+    const sourceLine = b.find((x) => x.type === 'context' && /\[1\]/.test(x.elements?.[0].text ?? ''))!;
+    const text = sourceLine.elements![0].text;
+    expect(text).toContain('+13 more'); // 21 - 8
+    expect(text).toContain('[8]');
+    expect(text).not.toContain('[9]');
+    // every '<' opens a link that also closes with '>' — no dangling truncation
+    expect((text.match(/</g) ?? []).length).toBe((text.match(/>/g) ?? []).length);
+  });
 });
 
 describe('buildBreadcrumb', () => {
