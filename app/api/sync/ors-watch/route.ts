@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { detectNewOrsSections } from '@/lib/knowledge-sync';
 import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
 import { sendSlackMessage } from '@/lib/agents/channels/slack';
+import { logDezActivity } from '@/lib/agents/dez/activity';
 
 // Probes ~200 candidate URLs against a public service — needs the long budget.
 export const maxDuration = 300;
@@ -76,6 +77,13 @@ export async function POST(request: NextRequest) {
         ],
       });
     }
+
+    await logDezActivity({
+      kind: 'routine',
+      surface: 'cron',
+      summary: `ors-watch${sessionReview ? ' (session review)' : ''} · probed ${probed}, found ${found.length}`,
+      detail: { probed, found: found.map((f) => f.section), sessionReview },
+    });
 
     return NextResponse.json({ ok: true, probed, found, sessionReview, notified: Boolean(dm) });
   } catch (err) {

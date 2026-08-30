@@ -6,6 +6,7 @@ import { sendSlackMessage } from '@/lib/agents/channels/slack';
 import { routeToScope } from '@/lib/agents/dez/router';
 import { buildAnswerBlocks, buildBreadcrumb } from '@/lib/agents/dez/answer-blocks';
 import { shouldIgnoreEvent, stripMention, type SlackEvent } from '@/lib/agents/dez/event-guard';
+import { logDezActivity } from '@/lib/agents/dez/activity';
 
 export const maxDuration = 60;
 
@@ -93,7 +94,17 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
 
     await sendSlackMessage({ channel, text, blocks, thread_ts: threadTs });
 
-    logActivity(staff.name || staff.person, scope, question);
+    const q = question.length > 140 ? `${question.slice(0, 140)}…` : question;
+    await logDezActivity({
+      kind: 'question',
+      surface: event.channel_type === 'im' ? 'dm' : 'channel',
+      scope,
+      actorPerson: staff.name || staff.person,
+      actorSlackId: event.user ?? null,
+      summary: `"${q}"`,
+      detail: { question, sources: sources.length },
+      sourceChannel: channel,
+    });
   } catch (err) {
     console.error('[Dez] events handler failed:', err instanceof Error ? err.message : String(err));
     try {
@@ -106,19 +117,6 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
       /* best-effort */
     }
   }
-}
-
-/** Fire-and-forget visibility line to #dez-activity (best-effort). */
-function logActivity(person: string, scope: string, question: string): void {
-  const channel = process.env.SLACK_DEZ_ACTIVITY_CHANNEL;
-  if (!channel) return;
-  const q = question.length > 140 ? `${question.slice(0, 140)}…` : question;
-  void sendSlackMessage({
-    channel,
-    text: `🔎 ${person} asked ${scope} · "${q}"`,
-  }).catch(() => {
-    /* activity logging never blocks an answer */
-  });
 }
 
 interface SlackEventEnvelope {
