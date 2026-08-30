@@ -54,11 +54,13 @@ export async function sendSlackMessage(input: {
   channel: string; // Slack user id (U…) → DM, or a channel/D… id
   text: string; // notification fallback
   blocks?: unknown[];
+  thread_ts?: string; // reply inside a thread (channel mentions); omit for a top-level post
 }): Promise<SendOutcome> {
   return slackApi('chat.postMessage', {
     channel: input.channel,
     text: input.text,
     ...(input.blocks ? { blocks: input.blocks } : {}),
+    ...(input.thread_ts ? { thread_ts: input.thread_ts } : {}),
   });
 }
 
