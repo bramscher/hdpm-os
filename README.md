@@ -54,6 +54,7 @@ Plus the tools: inspections + route builder, invoice generation + trust-payment 
 - [Key Manager](#key-manager)
 - [Owner Reports](#owner-reports)
 - [AI Chat (ORS 90)](#ai-chat-ors-90)
+- [Dez — Slack Agent](#dez--slack-agent)
 - [Scheduled Jobs (Crons)](#scheduled-jobs-crons)
 - [Environment Variables](#environment-variables)
 - [Database](#database)
@@ -546,6 +547,26 @@ An AI assistant trained on Oregon Revised Statutes Chapter 90 (landlord-tenant l
 | Keyword | "which section mentions late fees" | Full-text + vector (merged) |
 | Semantic | "can I charge for carpet cleaning" | Vector primary + full-text supplement |
 
+> The same RAG engine also answers in Slack via **Dez** (below) — the web chat and Dez share `lib/rag.ts` and the `knowledge_chunks` corpus.
+
+---
+
+## Dez — Slack Agent
+
+**Dez** is HDPM's employee-facing agent: one Slack identity between the team, AppFolio, and HDPM's documented procedures. Internal-only — never messages tenants, owners, or vendors (that's Haven / the owner report). Every write is human-triggered. Dez runs **natively inside HDPM-OS** (it reuses the RAG engine, the agent spine, and the Slack app that already exist) — see `docs/dez/00-dez-spec.md` for the full build spec and `docs/dez/slack-app-manifest.yaml` for the Slack app config.
+
+**Phase 1 (live): conversational Q&A in Slack.**
+- **Endpoint:** `POST /api/agents/slack/events` — inbound Slack Events API. Free-text **DMs** (`message.im`) and **@Dez mentions** (`app_mention`) are answered from the knowledge base (`askRAG`), with `[1][2]` sources and a `🔧 dez · <scope>` breadcrumb. Signed with `SLACK_SIGNING_SECRET`; acks in <3s and answers in `after()` (RAG is slower than Slack's 3s window).
+- **Loop guard:** never answers a bot/self message (`lib/agents/dez/event-guard.ts`) — the critical correctness property. Slack redelivery is de-duped via the retry header.
+- **Router (v0):** channel-of-arrival → scope (`maintenance | leasing | accounting | general`) via `DEZ_CHANNEL_MAP`; DMs → `general` (`lib/agents/dez/router.ts`).
+- **Rendering:** `lib/agents/dez/answer-blocks.ts` converts markdown→Slack mrkdwn (`##`→bold, `-`→•), caps the source list at 8 (`+N more`), threads channel mentions but posts top-level in DMs.
+- **Interactivity** (existing, shared identity): button taps land at `/api/agents/slack/interact` (estimate-chaser, ops-brief, morning-card, rocks).
+
+**Proactive Routines.** Scheduled jobs that read and post as Dez (the cron layer). First one live:
+- **ORS 90 new-section watch** (`/api/sync/ors-watch`): the weekly knowledge sync only re-fetches a fixed list of ORS 90 section numbers, so a section the legislature *adds* is invisible until the list grows. This probes plausible not-yet-known numbers monthly and DMs Craig if a real new section appears (oregon.public.law serves soft-404s as HTTP 200, so detection keys on real article content, not status). `?sessionReview=1` (Apr/Aug crons, after Oregon sessions adjourn) also posts a "review the list" reminder.
+
+**Not yet built (fast-follow / gated):** scoped live-data subagent tools, `kpi-brief` into chat, the `#dez-activity` feed, and write verbs (Phase 2 — gated behind the restart plan's Oct-1 Loop-1 gate + the Sep-4 write-path decision).
+
 ---
 
 ## Scheduled Jobs (Crons)
@@ -562,7 +583,10 @@ Configured in `vercel.json`. All times are UTC.
 | **9:15 daily** | `/api/sync/af-reports` | AppFolio Reports API pulls (mgmt end dates, …) |
 | **9:30 daily** | `/api/inspections/candidates/sync` | Refresh inspection candidates (move-in-anchored cadence) |
 | **10:00 daily** | `/api/brain/cron/evolve` | Company-brain nightly consolidation (dream cycle) |
-| **10:00 Sunday** | `/api/sync/knowledge` | Notion SOP corpus → knowledge base refresh |
+| **10:00 Sunday** | `/api/sync/knowledge` | Knowledge base refresh: ORS 90 + Notion SOPs + OneDrive docs |
+| **11:00 Sunday** | `/api/sync/knowledge?target=onedrive` | OneDrive/SharePoint docs re-sync (eTag-incremental) |
+| **12:00 1st of month** | `/api/sync/ors-watch` | Dez: probe for newly-added ORS 90 sections; DM Craig on a find |
+| **13:00 Apr 5 & Aug 5** | `/api/sync/ors-watch?sessionReview=1` | Dez: post-Oregon-session "review the ORS 90 list" reminder |
 | **11:00 daily** | `/api/sync/zoom-contacts` | AppFolio → Zoom Phone contact sync |
 | **13:00 Mon–Fri** | `/api/maintenance/cron/tripwires` | Run the 12 tripwires; per-owner exception digests (6 AM PT) |
 | **13:30 Mon–Fri** | `/api/agents/cron/morning-card` | Cheryl's Morning Action Card → Slack + email mirror (6:30 AM PT) |
@@ -624,8 +648,11 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 
 | Variable | Service | Purpose |
 |----------|---------|---------|
-| `SLACK_BOT_TOKEN` | Slack | Bot token for agent cards/DMs (skipped when absent) |
-| `SLACK_SIGNING_SECRET` | Slack | Verifies `/api/agents/slack/interact` button taps |
+| `SLACK_BOT_TOKEN` | Slack | Bot token for agent cards/DMs and Dez replies (skipped when absent) |
+| `SLACK_SIGNING_SECRET` | Slack | Verifies inbound Slack requests — `/api/agents/slack/interact` button taps and `/api/agents/slack/events` (Dez) |
+| `SLACK_BOT_USER_ID` | Slack (Dez) | Dez's own bot user id (`U…`, from `auth.test`) — loop guard so Dez never answers its own messages |
+| `SLACK_DEZ_ACTIVITY_CHANNEL` | Slack (Dez) | Optional `#dez-activity` channel id (`C…`) for the visibility feed (unset → no activity log) |
+| `DEZ_CHANNEL_MAP` | Dez | Optional JSON `{channelId: scope}` mapping channels to `maintenance`/`leasing`/`accounting` for the routing breadcrumb |
 | `HDPM_SERVICE_TOKEN` | Agent-OS | Service-caller auth for `/api/agents/*` (with `X-Agent-Actor` header) |
 | `AGENT_EMAIL_FROM` | Resend | From address for agent emails (falls back to `MAINT_DIGEST_FROM`) |
 | `AZURE_TENANT_ID` | Microsoft Graph | App-only mail tenant (distinct from `AZURE_AD_TENANT_ID`) |
