@@ -224,6 +224,21 @@ export default async function AgentsPage() {
         <code className="rounded bg-sand-100 px-1">agent_config</code>.
       </p>
 
+      {/* Talk to Dez — the one place the app explains how to use the agent */}
+      <div className="mb-8 rounded-xl border border-sand-200 bg-white p-5 shadow-card">
+        <div className="text-sm font-semibold text-charcoal-900">💬 Talk to Dez</div>
+        <p className="mt-1 text-sm text-charcoal-600">
+          Dez is HDPM&apos;s Slack colleague. <b>DM Dez</b> or <b>@mention it in a channel</b> to ask
+          anything HDPM — Oregon landlord-tenant law, our SOPs and forms, or a live KPI
+          (&ldquo;what&apos;s our occupancy?&rdquo;). Answers cite their sources.
+        </p>
+        <ul className="mt-2 space-y-1 text-sm text-charcoal-600">
+          <li>• Reads are free; every write is a human-triggered, logged verb — Dez never messages tenants, owners, or vendors.</li>
+          <li>• Financial KPIs (fees, delinquency $, economics) answer only for management.</li>
+          <li>• Everything Dez does streams to <code className="rounded bg-sand-100 px-1">#dez-activity</code> and the table below.</li>
+        </ul>
+      </div>
+
       {/* Dez activity — the "Dez now" view: every question answered + routine run */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         Dez activity{' '}

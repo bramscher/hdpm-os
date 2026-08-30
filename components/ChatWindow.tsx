@@ -50,7 +50,7 @@ const WELCOME_MESSAGE: ChatMessage = {
   id: "welcome",
   role: "assistant",
   content:
-    "Hi! I'm the **HDPM Knowledge Chat**. I can help with:\n\n• **Oregon landlord-tenant law** (complete ORS Chapter 90, 163 sections)\n• **HDPM SOPs & procedures** (move-in/move-out, inspections, maintenance, key management, screening, and more from the Notion SOP library)\n• **Security deposits**, late fees, eviction notices and timelines\n• **How to use HDPM-OS** (board, inspections, invoices, Craigslist tool)\n\nAnswers cite their sources — click a citation to open the ORS section or the Notion SOP.\n\nWhat would you like to know?",
+    "Hi! I'm the **HDPM Knowledge Chat**. I can help with:\n\n• **Oregon landlord-tenant law** (complete ORS Chapter 90)\n• **HDPM SOPs & procedures** (move-in/move-out, inspections, maintenance, key management, screening, and more from the Notion + SharePoint libraries)\n• **Security deposits**, late fees, eviction notices and timelines\n• **How to use HDPM-OS** — the maintenance board, inspections, invoices & reconcile, keys, rent comps, KPI dashboard, the EOS/company layer, and the referral partner portal\n\nAnswers cite their sources — click a citation to open the ORS section or the source doc.\n\n💬 Prefer Slack? **Dez** answers the same questions there — just DM Dez or @mention it in a channel.\n\nWhat would you like to know?",
 };
 
 export function ChatWindow({
