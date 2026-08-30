@@ -216,6 +216,70 @@ export async function syncOrs90(): Promise<CorpusSyncResult> {
 }
 
 // ============================================
+// ORS 90 new-section watch
+// ============================================
+
+/**
+ * The knowledge base scans a FIXED list (ALL_ORS_90_SECTIONS). Amendments to
+ * those sections are caught weekly, but a brand-new section number the
+ * legislature adds is invisible until someone extends the list. This generates
+ * plausible not-yet-known section numbers to probe: the next few numbers after
+ * each known section (inserted sections) and a window past the current maximum
+ * (appended sections). Pure.
+ */
+export function candidateNewOrsSections(
+  known: string[] = ALL_ORS_90_SECTIONS,
+  opts: { gapAhead?: number; tail?: number } = {}
+): string[] {
+  // Politeness vs. reach: +1 after each section catches an inserted number (a
+  // multi-section insertion is caught over successive monthly runs as each new
+  // number joins the list); tail 24 catches appended sections in one pass.
+  const gapAhead = opts.gapAhead ?? 1;
+  const tail = opts.tail ?? 24;
+  const toKey = (s: string) => Math.round(parseFloat(s) * 1000); // '90.300' -> 90300
+  const fmt = (n: number) => (n / 1000).toFixed(3); // 90300 -> '90.300'
+  const set = new Set(known);
+  const nums = known.map(toKey);
+  const max = Math.max(...nums);
+  const cands = new Set<string>();
+  for (const n of nums) {
+    for (let d = 1; d <= gapAhead; d++) cands.add(fmt(n + d));
+  }
+  for (let d = 1; d <= tail; d++) cands.add(fmt(max + d));
+  for (const k of set) cands.delete(k); // never re-probe a known section
+  return [...cands].sort();
+}
+
+export interface OrsWatchResult {
+  probed: number;
+  found: { section: string; title: string; url: string }[];
+}
+
+/**
+ * Probe candidate section numbers on oregon.public.law; a real page (article
+ * with substantive text, not a "not found") that isn't in our list is a
+ * possible new statute the knowledge base is missing. Best-effort net — a
+ * false positive just prompts a human to check.
+ */
+export async function detectNewOrsSections(
+  opts: { gapAhead?: number; tail?: number } = {}
+): Promise<OrsWatchResult> {
+  const candidates = candidateNewOrsSections(ALL_ORS_90_SECTIONS, opts);
+  const found: { section: string; title: string; url: string }[] = [];
+  const CONCURRENCY = 6;
+  for (let i = 0; i < candidates.length; i += CONCURRENCY) {
+    const batch = candidates.slice(i, i + CONCURRENCY);
+    const fetched = await Promise.all(batch.map(fetchOrsSection));
+    for (const s of fetched) {
+      if (s && s.content.length >= 40 && !/not found/i.test(s.title)) {
+        found.push({ section: s.section, title: s.title, url: s.url });
+      }
+    }
+  }
+  return { probed: candidates.length, found };
+}
+
+// ============================================
 // Notion SOP refresh (requires NOTION_API_KEY)
 // ============================================
 

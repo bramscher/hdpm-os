@@ -1,0 +1,50 @@
+# Dez — Slack app manifest (single identity; the same app that sends ops-brief/
+# estimate-chaser DMs and handles button taps).
+#
+# Apply at api.slack.com/apps → Dez → App Manifest (YAML tab) → paste → Save.
+# The event_subscriptions.request_url only verifies once the code is deployed to
+# prod (Slack POSTs its url_verification challenge to the live endpoint).
+# After saving: Install App → Reinstall to Workspace (new scopes require it).
+#
+# Endpoints (both under /api/agents → public in proxy.ts, signed with
+# SLACK_SIGNING_SECRET):
+#   interactivity  → /api/agents/slack/interact  (existing: button taps)
+#   events         → /api/agents/slack/events    (Dez conversational Q&A)
+#
+# Related env: SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET (set), plus
+# SLACK_BOT_USER_ID (loop guard, from auth.test) and SLACK_DEZ_ACTIVITY_CHANNEL
+# (optional #dez-activity feed) and DEZ_CHANNEL_MAP (optional channel→scope).
+# Confirm the host below matches prod before saving.
+
+display_information:
+  name: Dez
+  description: HDPM's internal AI colleague — SOP answers, work-order help, KPI briefs.
+  background_color: "#1a1a1a"
+features:
+  bot_user:
+    display_name: Dez
+    always_online: true
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true # lets staff DM Dez 1:1
+    messages_tab_read_only_enabled: false
+oauth_config:
+  scopes:
+    bot:
+      - chat:write # post/reply (DMs + threaded channel replies)
+      - app_mentions:read # receive @Dez mentions in channels
+      - im:history # receive free-text DMs (message.im events)
+      - im:read # DM channel metadata
+      # - channels:history  # OPTIONAL, fast-follow: answer plain (non-@) channel messages
+settings:
+  interactivity:
+    is_enabled: true
+    request_url: https://hdpmchat.highdesertpm.com/api/agents/slack/interact
+  event_subscriptions:
+    request_url: https://hdpmchat.highdesertpm.com/api/agents/slack/events
+    bot_events:
+      - app_mention
+      - message.im
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

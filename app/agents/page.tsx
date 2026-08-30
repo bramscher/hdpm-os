@@ -25,7 +25,7 @@ interface MetricValue {
 async function loadData() {
   const supabase = getSupabaseAdmin();
 
-  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes, clarificationsRes] = await Promise.all([
+  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes, clarificationsRes, dezActivityRes] = await Promise.all([
     listAgentConfig(),
     isGloballyKilled(),
     supabase
@@ -56,6 +56,12 @@ async function loadData() {
       .eq('status', 'open')
       .order('created_at', { ascending: false })
       .limit(20),
+    // Missing table (migration not applied yet) → { data: null } → [] — no crash.
+    supabase
+      .from('dez_activity')
+      .select('id, created_at, kind, surface, scope, actor_person, summary')
+      .order('created_at', { ascending: false })
+      .limit(25),
   ]);
 
   const proposals = (proposalsRes.data ?? []) as AgentProposal[];
@@ -77,6 +83,7 @@ async function loadData() {
     latest,
     baseline: baselineRes.data?.[0] ?? null,
     clarifications: (clarificationsRes.data ?? []) as BrainClarification[],
+    dezActivity: (dezActivityRes.data ?? []) as DezActivityRow[],
   };
 }
 
@@ -86,6 +93,16 @@ interface BrainClarification {
   context_ref: string | null;
   status: string;
   created_at: string;
+}
+
+interface DezActivityRow {
+  id: number;
+  created_at: string;
+  kind: string;
+  surface: string | null;
+  scope: string | null;
+  actor_person: string | null;
+  summary: string;
 }
 
 function proposalStats(proposals: AgentProposal[]) {
@@ -129,6 +146,21 @@ const statusStyles: Record<string, string> = {
   skipped: 'bg-sand-200 text-charcoal-600',
 };
 
+const kindStyles: Record<string, string> = {
+  question: 'bg-blue-100 text-blue-800',
+  routine: 'bg-violet-100 text-violet-800',
+  subagent: 'bg-teal-100 text-teal-800',
+  verb: 'bg-amber-100 text-amber-800',
+};
+
+function KindPill({ kind }: { kind: string }) {
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${kindStyles[kind] ?? 'bg-sand-200 text-charcoal-600'}`}>
+      {kind}
+    </span>
+  );
+}
+
 function Pill({ status }: { status: string }) {
   return (
     <span
@@ -150,7 +182,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 export default async function AgentsPage() {
-  const { config, killed, proposals, outbox, latest, baseline, clarifications } = await loadData();
+  const { config, killed, proposals, outbox, latest, baseline, clarifications, dezActivity } = await loadData();
   const session = await auth();
   const isAdmin = session?.user?.isAdmin === true;
   const stats = proposalStats(proposals);
@@ -191,6 +223,47 @@ export default async function AgentsPage() {
         Supervision surface — the action surface is Slack. Autonomy changes are row updates in{' '}
         <code className="rounded bg-sand-100 px-1">agent_config</code>.
       </p>
+
+      {/* Dez activity — the "Dez now" view: every question answered + routine run */}
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
+        Dez activity{' '}
+        <span className="font-normal normal-case text-charcoal-400">
+          (last {dezActivity.length} — questions answered, routines run; live feed in #dez-activity)
+        </span>
+      </h2>
+      <div className="mb-8 overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
+        <table className="w-full text-sm">
+          <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
+            <tr>
+              <th className="px-3 py-2">When</th>
+              <th className="px-3 py-2">Kind</th>
+              <th className="px-3 py-2">Scope</th>
+              <th className="px-3 py-2">Who</th>
+              <th className="px-3 py-2">What</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-sand-100">
+            {dezActivity.map((a) => (
+              <tr key={a.id}>
+                <td className="whitespace-nowrap px-3 py-2 text-charcoal-500">{fmtDate(a.created_at)}</td>
+                <td className="px-3 py-2">
+                  <KindPill kind={a.kind} />
+                </td>
+                <td className="px-3 py-2 text-charcoal-600">{a.scope ?? '—'}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-charcoal-600">{a.actor_person ?? '—'}</td>
+                <td className="max-w-[22rem] truncate px-3 py-2 text-charcoal-600">{a.summary}</td>
+              </tr>
+            ))}
+            {dezActivity.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-charcoal-400">
+                  No Dez activity yet — DM Dez or @mention it in a channel.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
 
       {/* Sep 4 tracker */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
