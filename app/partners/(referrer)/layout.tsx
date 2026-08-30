@@ -6,7 +6,11 @@ import { Plus_Jakarta_Sans, Inter } from 'next/font/google';
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], weight: ['700', '800'], variable: '--font-brand-heading', display: 'swap' });
 const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-brand-body', display: 'swap' });
 
-export const metadata = { title: 'HDPM — Referral Partners' };
+// noindex while piloting — belt-and-suspenders with app/robots.ts (Craig, 2026-08-29).
+export const metadata = {
+  title: 'HDPM — Referral Partners',
+  robots: { index: false, follow: false },
+};
 
 /**
  * Referrer portal chrome — styled to match highdesertpm.com (hdpm-web): dark
