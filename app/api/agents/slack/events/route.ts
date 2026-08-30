@@ -7,6 +7,7 @@ import { routeToScope } from '@/lib/agents/dez/router';
 import { buildAnswerBlocks, buildBreadcrumb } from '@/lib/agents/dez/answer-blocks';
 import { shouldIgnoreEvent, stripMention, type SlackEvent } from '@/lib/agents/dez/event-guard';
 import { logDezActivity } from '@/lib/agents/dez/activity';
+import { matchKpiIntent, answerKpiQuestion, kpiAdmins } from '@/lib/agents/dez/kpi-brief';
 
 export const maxDuration = 60;
 
@@ -86,6 +87,32 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
       return;
     }
 
+    const surface = event.channel_type === 'im' ? 'dm' : 'channel';
+    const person = staff.name || staff.person;
+    const q = question.length > 140 ? `${question.slice(0, 140)}…` : question;
+
+    // KPI lane — a metrics question is answered from kpi_snapshots (financial
+    // KPIs gated to admins), NOT the SOP corpus. Falls through to askRAG when
+    // the question isn't KPI-shaped.
+    const kpiNames = matchKpiIntent(question);
+    if (kpiNames.length) {
+      const isAdmin = kpiAdmins().includes(staff.person);
+      const { answer, kpis } = await answerKpiQuestion({ question, names: kpiNames, isAdmin });
+      const { text, blocks } = buildAnswerBlocks(answer, [], buildBreadcrumb('kpi', 0));
+      await sendSlackMessage({ channel, text, blocks, thread_ts: threadTs });
+      await logDezActivity({
+        kind: 'question',
+        surface,
+        scope: 'kpi',
+        actorPerson: person,
+        actorSlackId: event.user ?? null,
+        summary: `"${q}"`,
+        detail: { question, kpis },
+        sourceChannel: channel,
+      });
+      return;
+    }
+
     const { scope, label } = routeToScope(channel, event.channel_type);
 
     const { answer, sources } = await askRAG(question);
@@ -94,12 +121,11 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
 
     await sendSlackMessage({ channel, text, blocks, thread_ts: threadTs });
 
-    const q = question.length > 140 ? `${question.slice(0, 140)}…` : question;
     await logDezActivity({
       kind: 'question',
-      surface: event.channel_type === 'im' ? 'dm' : 'channel',
+      surface,
       scope,
-      actorPerson: staff.name || staff.person,
+      actorPerson: person,
       actorSlackId: event.user ?? null,
       summary: `"${q}"`,
       detail: { question, sources: sources.length },
