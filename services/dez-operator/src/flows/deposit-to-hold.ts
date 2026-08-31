@@ -68,6 +68,28 @@ async function firstPresent(cands: Locator[]): Promise<Locator | null> {
   return null;
 }
 
+/**
+ * Click the first visible clickable element whose text matches `re`, regardless
+ * of element type — the wizard renders results/templates as <a>/<button>/<div>,
+ * so ARIA-role matching (getByRole('button')) misses the anchor-styled ones.
+ */
+async function clickByText(page: Page, re: RegExp, timeout = FIND_TIMEOUT): Promise<boolean> {
+  // Prefer a true interactive element carrying the text; fall back to the text
+  // node itself (click bubbles to its clickable ancestor).
+  const clickable = page.locator('button, a, [role="button"], [role="option"]').filter({ hasText: re });
+  const byText = page.getByText(re);
+  for (const loc of [clickable, byText]) {
+    try {
+      await loc.first().waitFor({ state: 'visible', timeout });
+      await loc.first().click();
+      return true;
+    } catch {
+      /* try the next strategy */
+    }
+  }
+  return false;
+}
+
 export async function runDepositToHold(
   page: Page,
   input: { tenantQuery: string; mode: 'prepare' | 'send' }
@@ -104,36 +126,23 @@ export async function runDepositToHold(
   await unit.fill(input.tenantQuery);
   steps.push(`typed unit/resident: ${input.tenantQuery}`);
 
-  // The matching unit renders as a clickable BUTTON (not a role=option), e.g.
-  // "Bryce Bramscher - Bramscher 001 - 2741 NE Laramie Way Bend, OR".
-  const unitBtn = page.getByRole('button', { name: new RegExp(reEscape(input.tenantQuery), 'i') });
-  try {
-    await unitBtn.first().waitFor({ state: 'visible', timeout: FIND_TIMEOUT });
-    await unitBtn.first().click();
-  } catch {
-    return fail('no matching unit/resident button', `for "${input.tenantQuery}". DOM=${await describePage(page)}`);
+  // The matching unit renders as a clickable element (often an <a> styled as a
+  // button), e.g. "Bryce Bramscher - Bramscher 001 - 2741 NE Laramie Way Bend".
+  if (!(await clickByText(page, new RegExp(reEscape(input.tenantQuery), 'i')))) {
+    return fail('no matching unit/resident result', `for "${input.tenantQuery}". DOM=${await describePage(page)}`);
   }
   steps.push('selected unit/resident');
 
-  // ── Choose Templates — "Deposit to Hold" is a button in the template list ──
-  const tplBtn = page.getByRole('button', { name: TEMPLATE_LABEL, exact: true });
-  try {
-    await tplBtn.first().waitFor({ state: 'visible', timeout: FIND_TIMEOUT });
-    await tplBtn.first().click();
-  } catch {
+  // ── Choose Templates — "Deposit to Hold" is a clickable item in the list ──
+  if (!(await clickByText(page, new RegExp(`^${reEscape(TEMPLATE_LABEL)}$`, 'i')))) {
     return fail('template "Deposit to Hold" not found', `DOM=${await describePage(page)}`);
   }
   steps.push(`chose template: ${TEMPLATE_LABEL}`);
 
   // ── Prepare Form — the merge step ──
-  const prepare = await firstPresent([
-    page.getByRole('button', { name: /prepare form/i }),
-    page.getByRole('button', { name: /prepare/i }),
-  ]);
-  if (!prepare) {
+  if (!(await clickByText(page, /prepare form/i))) {
     return fail('Prepare Form button not found', `DOM=${await describePage(page)}`);
   }
-  await prepare.click();
   await page.waitForLoadState('networkidle').catch(() => {});
   steps.push('clicked Prepare Form — merged preview generated');
 
