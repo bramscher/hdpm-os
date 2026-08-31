@@ -25,7 +25,7 @@ interface MetricValue {
 async function loadData() {
   const supabase = getSupabaseAdmin();
 
-  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes, clarificationsRes, dezActivityRes] = await Promise.all([
+  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes, clarificationsRes, dezActivityRes, dezFlagsRes] = await Promise.all([
     listAgentConfig(),
     isGloballyKilled(),
     supabase
@@ -62,6 +62,13 @@ async function loadData() {
       .select('id, created_at, kind, surface, scope, actor_person, summary')
       .order('created_at', { ascending: false })
       .limit(25),
+    // Dez quality flags — form answers Dez routed to Craig for review.
+    supabase
+      .from('dez_activity')
+      .select('id, created_at, actor_person, summary, detail')
+      .eq('detail->>needs_attention', 'true')
+      .order('created_at', { ascending: false })
+      .limit(15),
   ]);
 
   const proposals = (proposalsRes.data ?? []) as AgentProposal[];
@@ -84,7 +91,16 @@ async function loadData() {
     baseline: baselineRes.data?.[0] ?? null,
     clarifications: (clarificationsRes.data ?? []) as BrainClarification[],
     dezActivity: (dezActivityRes.data ?? []) as DezActivityRow[],
+    dezFlags: (dezFlagsRes.data ?? []) as DezFlagRow[],
   };
+}
+
+interface DezFlagRow {
+  id: number;
+  created_at: string;
+  actor_person: string | null;
+  summary: string;
+  detail: { flag_reason?: string | null; flagged_title?: string | null } | null;
 }
 
 interface BrainClarification {
@@ -182,7 +198,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 export default async function AgentsPage() {
-  const { config, killed, proposals, outbox, latest, baseline, clarifications, dezActivity } = await loadData();
+  const { config, killed, proposals, outbox, latest, baseline, clarifications, dezActivity, dezFlags } = await loadData();
   const session = await auth();
   const isAdmin = session?.user?.isAdmin === true;
   const stats = proposalStats(proposals);
@@ -238,6 +254,31 @@ export default async function AgentsPage() {
           <li>• Everything Dez does streams to <code className="rounded bg-sand-100 px-1">#dez-activity</code> and the table below.</li>
         </ul>
       </div>
+
+      {/* Dez needs-attention queue — form answers Dez flagged and routed to Craig */}
+      {dezFlags.length > 0 ? (
+        <>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
+            🚩 Needs attention{' '}
+            <span className="font-normal normal-case text-charcoal-400">
+              (forms Dez flagged as possibly out-of-date — confirm the current version, then it can be used)
+            </span>
+          </h2>
+          <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 shadow-card">
+            <ul className="divide-y divide-amber-100">
+              {dezFlags.map((f) => (
+                <li key={f.id} className="px-4 py-3">
+                  <div className="text-sm text-charcoal-900">{f.detail?.flagged_title ?? f.summary}</div>
+                  <div className="mt-0.5 text-xs text-charcoal-500">
+                    {fmtDate(f.created_at)} · asked by {f.actor_person ?? '—'}
+                    {f.detail?.flag_reason ? ` · ${f.detail.flag_reason}` : ''}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : null}
 
       {/* Dez activity — the "Dez now" view: every question answered + routine run */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">

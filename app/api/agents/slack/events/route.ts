@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature } from '@/lib/webhook-verify';
-import { resolveStaffBySlackId } from '@/lib/agents/staff';
+import { resolveStaffBySlackId, resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
 import { askRAG } from '@/lib/rag';
 import { sendSlackMessage } from '@/lib/agents/channels/slack';
 import { routeToScope } from '@/lib/agents/dez/router';
@@ -8,6 +8,7 @@ import { buildAnswerBlocks, buildBreadcrumb } from '@/lib/agents/dez/answer-bloc
 import { shouldIgnoreEvent, stripMention, type SlackEvent } from '@/lib/agents/dez/event-guard';
 import { logDezActivity } from '@/lib/agents/dez/activity';
 import { matchKpiIntent, answerKpiQuestion, kpiAdmins } from '@/lib/agents/dez/kpi-brief';
+import { looksLikeFormRequest, assessFormSources } from '@/lib/agents/dez/quality-flag';
 
 export const maxDuration = 60;
 
@@ -116,10 +117,21 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
     const { scope, label } = routeToScope(channel, event.channel_type);
 
     const { answer, sources } = await askRAG(question);
+
+    // Freshness/quality flag — if the ask is for an actual form/document, check
+    // whether what we found looks current (branded) before they use it, and
+    // route the doubtful ones to Craig.
+    const flag = looksLikeFormRequest(question) ? assessFormSources(sources) : null;
+    const finalAnswer = flag?.caveat ? `${answer}\n\n${flag.caveat}` : answer;
+
     const breadcrumb = buildBreadcrumb(label, sources.length);
-    const { text, blocks } = buildAnswerBlocks(answer, sources, breadcrumb);
+    const { text, blocks } = buildAnswerBlocks(finalAnswer, sources, breadcrumb);
 
     await sendSlackMessage({ channel, text, blocks, thread_ts: threadTs });
+
+    if (flag?.needsAttention) {
+      await notifyCraigReview({ asker: person, question, reason: flag.reason ?? '', title: flag.flaggedTitle });
+    }
 
     await logDezActivity({
       kind: 'question',
@@ -128,7 +140,13 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
       actorPerson: person,
       actorSlackId: event.user ?? null,
       summary: `"${q}"`,
-      detail: { question, sources: sources.length },
+      detail: {
+        question,
+        sources: sources.length,
+        needs_attention: flag?.needsAttention ?? false,
+        flag_reason: flag?.reason ?? null,
+        flagged_title: flag?.flaggedTitle ?? null,
+      },
       sourceChannel: channel,
     });
   } catch (err) {
@@ -142,6 +160,39 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
     } catch {
       /* best-effort */
     }
+  }
+}
+
+/** DM Craig when Dez flags a form as possibly-outdated (best-effort). */
+async function notifyCraigReview(input: {
+  asker: string;
+  question: string;
+  reason: string;
+  title: string | null;
+}): Promise<void> {
+  try {
+    const craig = await resolveStaffByPersonOrEmail('Craig');
+    if (!craig?.slack_user_id) return;
+    await sendSlackMessage({
+      channel: craig.slack_user_id,
+      text: '🚩 Dez flagged a form for your review',
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text:
+              `🚩 *Dez flagged a form for review*\n` +
+              `*Asked by:* ${input.asker}\n` +
+              `*Question:* ${input.question}\n` +
+              `*Doc:* ${input.title ?? '—'}\n` +
+              `*Why:* ${input.reason}`,
+          },
+        },
+      ],
+    });
+  } catch (err) {
+    console.error('[Dez] craig review notify failed:', err instanceof Error ? err.message : String(err));
   }
 }
 
