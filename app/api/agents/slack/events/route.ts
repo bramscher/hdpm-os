@@ -9,6 +9,16 @@ import { shouldIgnoreEvent, stripMention, type SlackEvent } from '@/lib/agents/d
 import { logDezActivity } from '@/lib/agents/dez/activity';
 import { matchKpiIntent, answerKpiQuestion, kpiAdmins } from '@/lib/agents/dez/kpi-brief';
 import { looksLikeFormRequest, assessFormSources } from '@/lib/agents/dez/quality-flag';
+import {
+  matchOperatorRequest,
+  callOperator,
+  buildOperatorCard,
+  OPERATOR_AGENT,
+  FORM_MERGE_ACTION,
+  type OperatorRequest,
+} from '@/lib/agents/dez/operator';
+import { getAgentConfig, effectiveLevel, isGloballyKilled } from '@/lib/agents/config';
+import { createProposal } from '@/lib/agents/proposals';
 
 export const maxDuration = 60;
 
@@ -92,6 +102,22 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
     const person = staff.name || staff.person;
     const q = question.length > 140 ? `${question.slice(0, 140)}…` : question;
 
+    // Operator verb — a web-app-only AppFolio action (form merge) routed to the
+    // Playwright worker. Gated + logged; stops at a merged preview. Falls
+    // through to Q&A when it isn't an operator request.
+    const operatorReq = matchOperatorRequest(question);
+    if (operatorReq) {
+      await handleOperatorRequest({
+        channel,
+        threadTs,
+        surface,
+        person,
+        actorSlackId: event.user ?? null,
+        req: operatorReq,
+      });
+      return;
+    }
+
     // KPI lane — a metrics question is answered from kpi_snapshots (financial
     // KPIs gated to admins), NOT the SOP corpus. Falls through to askRAG when
     // the question isn't KPI-shaped.
@@ -161,6 +187,75 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
       /* best-effort */
     }
   }
+}
+
+/**
+ * Operator verb — prepare a merged form via the AppFolio operator worker.
+ * Gated by the kill switch + agent_config('dez_operator','form_merge') and by
+ * DEZ_OPERATOR_URL being set. Stops at a merged preview; posts an approve card.
+ */
+async function handleOperatorRequest(ctx: {
+  channel: string;
+  threadTs: string | undefined;
+  surface: 'dm' | 'channel';
+  person: string;
+  actorSlackId: string | null;
+  req: OperatorRequest;
+}): Promise<void> {
+  const { channel, threadTs, req } = ctx;
+  const reply = (text: string) => sendSlackMessage({ channel, text, thread_ts: threadTs });
+
+  // Gate: global kill switch + per-action autonomy level.
+  if (await isGloballyKilled()) {
+    await reply('Dez agents are paused (kill switch is on).');
+    return;
+  }
+  if (effectiveLevel(await getAgentConfig(OPERATOR_AGENT, FORM_MERGE_ACTION)) < 1) {
+    await reply("The AppFolio operator isn't enabled yet — ask Craig to turn on `dez_operator` on the /agents page.");
+    return;
+  }
+
+  const proposal = await createProposal({
+    agent: OPERATOR_AGENT,
+    action_type: FORM_MERGE_ACTION,
+    subject_type: 'form_merge',
+    payload: { template: req.template, tenant_query: req.tenantQuery, mode: 'prepare' },
+    rationale: `Prepare ${req.template} for ${req.tenantQuery} (requested by ${ctx.person})`,
+  });
+
+  const result = await callOperator({
+    template: req.template,
+    tenantQuery: req.tenantQuery,
+    mode: 'prepare',
+    requestId: proposal.id,
+  });
+
+  if (!result) {
+    await reply("The AppFolio operator worker isn't reachable right now (not configured). Nothing was done.");
+    return;
+  }
+  if (result.status !== 'prepared') {
+    await reply(`I couldn't prepare that: ${result.error ?? 'unknown error'}. Nothing was sent.`);
+  } else {
+    const card = buildOperatorCard({
+      proposalId: proposal.id,
+      template: req.template,
+      tenantQuery: req.tenantQuery,
+      steps: result.steps ?? [],
+    });
+    await sendSlackMessage({ channel, text: card.text, blocks: card.blocks, thread_ts: threadTs });
+  }
+
+  await logDezActivity({
+    kind: 'verb',
+    surface: ctx.surface,
+    scope: 'operator',
+    actorPerson: ctx.person,
+    actorSlackId: ctx.actorSlackId,
+    summary: `prepare ${req.template} for ${req.tenantQuery}`,
+    detail: { template: req.template, tenant_query: req.tenantQuery, status: result.status, proposal_id: proposal.id },
+    sourceChannel: channel,
+  });
 }
 
 /** DM Craig when Dez flags a form as possibly-outdated (best-effort). */
