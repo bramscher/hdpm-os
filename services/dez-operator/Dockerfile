@@ -1,5 +1,7 @@
 # Playwright's official image ships Chromium + system deps — no postinstall download needed.
-FROM mcr.microsoft.com/playwright:v1.48.0-jammy
+# NOTE: this tag MUST match the pinned "playwright" version in package.json, or
+# Playwright looks for a Chromium build the image doesn't have.
+FROM mcr.microsoft.com/playwright:v1.62.1-jammy
 
 WORKDIR /app
 
