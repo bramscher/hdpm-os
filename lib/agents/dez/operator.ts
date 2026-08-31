@@ -26,14 +26,24 @@ export interface OperatorRequest {
 const TEMPLATE_PHRASES: { re: RegExp; template: 'deposit-to-hold' }[] = [
   { re: /deposit[\s-]*to[\s-]*hold|deposit to hold agreement|deposit hold/i, template: 'deposit-to-hold' },
 ];
-const REQUEST_VERBS = /\b(prepare|fill|generate|create|draft|start)\b/i;
+// Action verbs staff actually use to ask Dez to PRODUCE a form. Kept broad so
+// natural phrasing ("can I get… for…", "make me a… for…") works.
+const REQUEST_VERBS =
+  /\b(prepare|prep|fill|generate|create|draft|start|make|do|issue|get|need|want|run|produce|put\s+together|set\s+up|send\s+out)\b/i;
+
+// Genuine how-it-works questions ABOUT the form (not a request to produce one) —
+// these must still fall through to the SOP/RAG answer, not fire the worker.
+const QUESTION_GUARD =
+  /\b(how|what|what's|whats|when|why|which|where|explain|policy|process|procedure|difference|meaning|means|do i need|should i)\b/i;
 
 /**
  * Detect an operator request like "prepare the deposit-to-hold for Bryce
- * Bramscher". Requires an action verb + a known template + a "for <name>".
+ * Bramscher" or "can I get a deposit to hold for Jane Doe?". Requires an action
+ * verb + a known template + a "for <name>", and is NOT a how-it-works question.
  * Pure. Returns null when it isn't an operator request (falls through to Q&A).
  */
 export function matchOperatorRequest(question: string): OperatorRequest | null {
+  if (QUESTION_GUARD.test(question)) return null; // asking ABOUT the form, not for one
   if (!REQUEST_VERBS.test(question)) return null;
   const tpl = TEMPLATE_PHRASES.find((t) => t.re.test(question));
   if (!tpl) return null;
