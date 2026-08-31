@@ -215,6 +215,10 @@ async function handleOperatorRequest(ctx: {
     return;
   }
 
+  // The operator drives AppFolio in a real browser (~15-30s) — acknowledge now
+  // so the requester isn't staring at dead air until the preview card lands.
+  await reply(`🛠️ On it — preparing the *${req.template}* for *${req.tenantQuery}* in AppFolio. Give me a few seconds…`);
+
   const proposal = await createProposal({
     agent: OPERATOR_AGENT,
     action_type: FORM_MERGE_ACTION,
