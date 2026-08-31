@@ -30,6 +30,11 @@ export interface MergeResult {
 const TEMPLATE_LABEL = 'Deposit to Hold';
 const FIND_TIMEOUT = 8_000;
 
+/** Escape a user string for safe use inside a RegExp. */
+function reEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** Compact inventory of a page's interactive elements — for tuning selectors. */
 async function describePage(page: Page): Promise<string> {
   const info = await page
@@ -99,31 +104,22 @@ export async function runDepositToHold(
   await unit.fill(input.tenantQuery);
   steps.push(`typed unit/resident: ${input.tenantQuery}`);
 
-  // Pick the matching option from the dropdown.
-  const option = page.getByRole('option', { name: new RegExp(input.tenantQuery.split(/\s+/)[0], 'i') });
+  // The matching unit renders as a clickable BUTTON (not a role=option), e.g.
+  // "Bryce Bramscher - Bramscher 001 - 2741 NE Laramie Way Bend, OR".
+  const unitBtn = page.getByRole('button', { name: new RegExp(reEscape(input.tenantQuery), 'i') });
   try {
-    await option.first().waitFor({ state: 'visible', timeout: FIND_TIMEOUT });
-    await option.first().click();
+    await unitBtn.first().waitFor({ state: 'visible', timeout: FIND_TIMEOUT });
+    await unitBtn.first().click();
   } catch {
-    return fail('no matching unit/resident option', `for "${input.tenantQuery}". DOM=${await describePage(page)}`);
+    return fail('no matching unit/resident button', `for "${input.tenantQuery}". DOM=${await describePage(page)}`);
   }
   steps.push('selected unit/resident');
 
-  // ── Choose Templates — "Deposit to Hold" ──
-  const templates = await firstPresent([
-    page.getByLabel(/choose templates?/i),
-    page.getByPlaceholder(/template/i),
-    page.getByRole('combobox', { name: /template/i }),
-  ]);
-  if (templates) {
-    await templates.click();
-  }
-  const tplOption = page.getByRole('option', { name: new RegExp(TEMPLATE_LABEL, 'i') });
-  const tplText = page.getByText(new RegExp(TEMPLATE_LABEL, 'i'));
+  // ── Choose Templates — "Deposit to Hold" is a button in the template list ──
+  const tplBtn = page.getByRole('button', { name: TEMPLATE_LABEL, exact: true });
   try {
-    const opt = (await tplOption.count()) ? tplOption : tplText;
-    await opt.first().waitFor({ state: 'visible', timeout: FIND_TIMEOUT });
-    await opt.first().click();
+    await tplBtn.first().waitFor({ state: 'visible', timeout: FIND_TIMEOUT });
+    await tplBtn.first().click();
   } catch {
     return fail('template "Deposit to Hold" not found', `DOM=${await describePage(page)}`);
   }
