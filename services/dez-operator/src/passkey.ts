@@ -36,7 +36,8 @@ export function loadPasskey(): PasskeyCredential {
   }
   let cred: PasskeyCredential;
   try {
-    cred = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+    // Strip any whitespace/newlines a copy-paste into a host's env UI may inject.
+    cred = JSON.parse(Buffer.from(raw.replace(/\s+/g, ''), 'base64').toString('utf8'));
   } catch {
     throw new Error('APPFOLIO_DEZ_PASSKEY is not valid base64-encoded JSON');
   }
