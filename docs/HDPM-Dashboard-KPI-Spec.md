@@ -1,3 +1,5 @@
+> **STATUS: HISTORICAL / partly-stale.** The original KPI spec (references the old repo name `hdpm-webchat` and a QuickBooks data source that is not wired up). Partly realized as the live `/dashboard` (18 KPIs from AppFolio + financials, `kpi_snapshots`). Kept for the metric definitions; verify against the live dashboard before relying on it. See `docs/README.md`.
+
 HDPM Dashboard — KPI & Reporting Spec
 
 Repo: hdpm-webchat  ·  Data sources: AppFolio Property Manager Reporting API + QuickBooks Online/Payroll API (+ small manual-config layer)

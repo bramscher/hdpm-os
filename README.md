@@ -1,6 +1,6 @@
 # HDPM-OS
 
-The operating system for **High Desert Property Management** (~835 doors across 467 properties, Central Oregon).
+The operating system for **High Desert Property Management** (~850 doors across 467 properties, Central Oregon).
 
 > **Mission: run HDPM like a system — every door, every dollar, and every decision visible, owned, and remembered.** Humans decide; agents watch, chase, brief, and file; the brain remembers. Full mission, system schematic, and agent org chart: [`docs/hdpm-os/13-mission-agents-and-schematic.md`](docs/hdpm-os/13-mission-agents-and-schematic.md).
 
@@ -53,6 +53,9 @@ Plus the tools: inspections + route builder, invoice generation + trust-payment 
   - [Comps Analysis Wizard](#comps-analysis-wizard)
 - [Key Manager](#key-manager)
 - [Owner Reports](#owner-reports)
+- [Referral Partner Portal](#referral-partner-portal)
+- [Haven (Leasing & Reception)](#haven-leasing--reception)
+- [Properties Map](#properties-map)
 - [AI Chat (ORS 90)](#ai-chat-ors-90)
 - [Dez — Slack Agent](#dez--slack-agent)
 - [Scheduled Jobs (Crons)](#scheduled-jobs-crons)
@@ -88,7 +91,7 @@ Landing page with a time-aware greeting, live portfolio stats, and one-click ent
 
 ## Maintenance OS (Live Board)
 
-**Path:** `/maintenance/board` · **Sidebar:** Maintenance (wrench icon) · **Spec:** `docs/maintenance-os/`
+**Path:** `/maintenance/board` · **Sidebar:** MaintOS (wrench icon) · **Spec:** `docs/maintenance-os/`
 
 The maintenance command center: every work order moves through an 8-stage lifecycle (`NEW → TRIAGED → SCHEDULED → IN PROGRESS → WAITING ON → VERIFY → BILL → CLOSED`) with one accountable **HDPM owner** and a **next-action date** at all times. **AppFolio stays the system of record** — status, scheduling, and vendor assignment are edited *there* (every card has an "Open in AppFolio ↗" link); the board mirrors AppFolio within 15 minutes and adds the accountability layer AppFolio can't track: owners, dates, priorities, the closure gate, and 12 automated tripwires.
 
@@ -200,7 +203,7 @@ The agent layer converts the Maintenance OS's *detection* (tripwires, exceptions
 
 | Agent | What it does | Autonomy | Status |
 |-------|--------------|----------|--------|
-| **Morning Action Card** | Weekday 6:30 AM PT: Cheryl's 7 most important exceptions as a Slack card with Done / Snooze / Set-date / Reassign buttons; Brody + Matt read-only copies + email mirror; one 1 PM nudge | L2 | ✅ Live |
+| **Morning Action Card** | Weekday 6:30 AM PT: Cheryl's 7 most important exceptions as a Slack card with Done / Snooze / Set-date / Reassign buttons; Brody + Matt read-only copies + email mirror; one 1 PM nudge | L2 | ⏸️ Built; gated off until Loop 1 clears |
 | **Estimate Chaser — email** | Weekday 6:45 AM PT: TW11 stuck estimates become ready-to-send Outlook drafts in the owner's Drafts folder (vendor bid chases + owner-approval asks; never a dollar amount; 3-business-day cooldown; subject numbers the round — "Bid follow-up (2nd request)"; round 3 carries a firm hand-datable close). Production owner **Jayme** (`ESTIMATE_CHASER_OWNER`) | L1 | ✅ Live |
 | **Estimate Chaser — SMS** | Vendor chases go SMS-first when a phone is known: Slack "Text chase queue" card, taps send from the sender's Zoom line via their own OAuth token | L2 | 🟡 Built; runs in shadow during the pilot (a tap records motion, no text leaves) |
 | **Estimate Chaser — escalations** | Stuck >45 days → Slack DM to the maintenance leads + (via the ladder) an EOS issue. "Chased 3×" escalation now applies **only to vendor chases that have an assigned vendor** — owner-approval asks (bid in hand) and un-assigned Estimate-Requested WOs keep following through to the owner's Drafts instead of parking | L3 | ✅ Live |
@@ -210,7 +213,7 @@ The agent layer converts the Maintenance OS's *detection* (tripwires, exceptions
 | **Meeting Prep** | Monday 7:30 AM PT: builds the L10 prep packet (scorecard deltas, aged issues, cited brain context) and DMs the facilitator | L1 | ✅ Live |
 | Email Triage, Intake, Day-Close SMS, Reconciliation, Vendor Chaser, Inspections | See the master plan roster | — | Backlog |
 
-**Key routes:** `/agents` (dashboard: config matrix, proposals, outbox) · `/api/agents/cron/morning-card` + `/api/agents/cron/estimate-chaser` (crons; the latter takes `?dryRun=1` and pilot flags `?pilotSeed=N&seedChannel=sms|email`) · `/api/agents/slack/interact` (button taps; Slack-signature auth) · `/api/agents/dispatch` (manual outbox drain) · `/api/agents/sms-test` (Zoom SMS probe) · `/api/agents/vendor-contact-audit` (AppFolio contact-field diagnostics) · `/api/agents/zoom-oauth/start` (one-time SMS sender authorization)
+**Key routes:** `/agents` (dashboard: config matrix, proposals, outbox) · `/api/agents/cron/morning-card` (built, not scheduled) + `/api/agents/cron/estimate-chaser` (cron; takes `?dryRun=1` and pilot flags `?pilotSeed=N&seedChannel=sms|email`) · `/api/agents/slack/interact` (button taps; Slack-signature auth) · `/api/agents/dispatch` (manual outbox drain) · `/api/agents/sms-test` (Zoom SMS probe) · `/api/agents/vendor-contact-audit` (AppFolio contact-field diagnostics) · `/api/agents/zoom-oauth/start` (one-time SMS sender authorization)
 
 ### Loop 1 — estimate chase (live, owner: Jayme — 2026-08-27)
 
@@ -524,9 +527,47 @@ Per-owner portfolio report builder used for owner statements, quarterly reviews,
 
 ---
 
+## Referral Partner Portal
+
+**Paths:** `/partners` (referrer-facing) · `/partners/admin` (staff)
+
+A self-service portal for referral partners to send HDPM new-owner leads, plus a staff console to work the pipeline.
+
+- **`/partners`** — partners refer an owner, track the status of their referrals, and sign in through a **secure emailed magic-link** (no password).
+- **`/partners/admin`** — staff manage referral partners, the lead pipeline, the fee policy, and W-9 / referral-agreement tracking.
+
+**Oregon compliance:** paying referral compensation for real-estate activity is restricted to licensed persons. The fee policy enforces this — the compensation model available to a partner depends on their license status (e.g. credit vs. cash + 1099).
+
+---
+
+## Haven (Leasing & Reception)
+
+**Path:** `/haven`
+
+The AI leasing and reception surface, backed by the Haven integration (conversation sync via `/api/haven/sync`).
+
+- **Leasing pipeline** — inbound leasing conversations synced from Haven, with the stage each prospect sits at.
+- **Needs-a-human flags** — conversations Haven has escalated for a person to pick up.
+- **Tour scheduling** — self-guided and scheduled tour activity.
+- **Reception / call metrics** — main-line call handling and response-time reporting (Haven response-time digest cron + the Zoom reception call report).
+
+---
+
+## Properties Map
+
+**Path:** `/properties/map`
+
+Managed properties plotted on a map: **green** = active under management, **yellow** = pending management-end (from the AppFolio Reports API management-end dates).
+
+---
+
+> **Admin-gated pages:** `/dashboard` (KPI Dashboard) and `/admin/zoom-sync` appear only for admins (gated via `ADMIN_EMAILS`).
+
+---
+
 ## AI Chat (ORS 90)
 
-**Sidebar:** Click **ORS 90 Chat** in the left navigation
+**Sidebar:** Click **Knowledge Chat** in the left navigation
 
 An AI assistant trained on Oregon Revised Statutes Chapter 90 (landlord-tenant law), HDPM policy documents, and Loom training videos.
 
@@ -557,15 +598,18 @@ An AI assistant trained on Oregon Revised Statutes Chapter 90 (landlord-tenant l
 
 **Phase 1 (live): conversational Q&A in Slack.**
 - **Endpoint:** `POST /api/agents/slack/events` — inbound Slack Events API. Free-text **DMs** (`message.im`) and **@Dez mentions** (`app_mention`) are answered from the knowledge base (`askRAG`), with `[1][2]` sources and a `🔧 dez · <scope>` breadcrumb. Signed with `SLACK_SIGNING_SECRET`; acks in <3s and answers in `after()` (RAG is slower than Slack's 3s window).
+- **KPI answers:** operational questions like "what's our occupancy?" are answered from the latest `kpi_snapshots`. Financial KPIs (rent roll, fees, delinquency dollars) are gated to an allowlist via `DEZ_KPI_ADMINS`; everyone else gets the operational subset.
 - **Loop guard:** never answers a bot/self message (`lib/agents/dez/event-guard.ts`) — the critical correctness property. Slack redelivery is de-duped via the retry header.
 - **Router (v0):** channel-of-arrival → scope (`maintenance | leasing | accounting | general`) via `DEZ_CHANNEL_MAP`; DMs → `general` (`lib/agents/dez/router.ts`).
 - **Rendering:** `lib/agents/dez/answer-blocks.ts` converts markdown→Slack mrkdwn (`##`→bold, `-`→•), caps the source list at 8 (`+N more`), threads channel mentions but posts top-level in DMs.
 - **Interactivity** (existing, shared identity): button taps land at `/api/agents/slack/interact` (estimate-chaser, ops-brief, morning-card, rocks).
 
+**Visibility.** Every Dez interaction and routine is logged to the **`#dez-activity`** Slack feed (`SLACK_DEZ_ACTIVITY_CHANNEL`, unset → no feed) and surfaced in the **"Dez activity" panel on `/agents`**, so the team can see what Dez has been asked and answered.
+
 **Proactive Routines.** Scheduled jobs that read and post as Dez (the cron layer). First one live:
 - **ORS 90 new-section watch** (`/api/sync/ors-watch`): the weekly knowledge sync only re-fetches a fixed list of ORS 90 section numbers, so a section the legislature *adds* is invisible until the list grows. This probes plausible not-yet-known numbers monthly and DMs Craig if a real new section appears (oregon.public.law serves soft-404s as HTTP 200, so detection keys on real article content, not status). `?sessionReview=1` (Apr/Aug crons, after Oregon sessions adjourn) also posts a "review the list" reminder.
 
-**Not yet built (fast-follow / gated):** scoped live-data subagent tools, `kpi-brief` into chat, the `#dez-activity` feed, and write verbs (Phase 2 — gated behind the restart plan's Oct-1 Loop-1 gate + the Sep-4 write-path decision).
+**Not yet built (fast-follow / gated):** scoped live-data subagent tools and write verbs (Phase 2 — gated behind the restart plan's Oct-1 Loop-1 gate + the Sep-4 write-path decision).
 
 ---
 
@@ -589,7 +633,6 @@ Configured in `vercel.json`. All times are UTC.
 | **13:00 Apr 5 & Aug 5** | `/api/sync/ors-watch?sessionReview=1` | Dez: post-Oregon-session "review the ORS 90 list" reminder |
 | **11:00 daily** | `/api/sync/zoom-contacts` | AppFolio → Zoom Phone contact sync |
 | **13:00 Mon–Fri** | `/api/maintenance/cron/tripwires` | Run the 12 tripwires; per-owner exception digests (6 AM PT) |
-| **13:30 Mon–Fri** | `/api/agents/cron/morning-card` | Cheryl's Morning Action Card → Slack + email mirror (6:30 AM PT) |
 | **13:30 daily** | `/api/maintenance/cron/metrics` | Daily `metrics_snapshot` capture (agent-layer KPIs) |
 | **13:45 Mon–Fri** | `/api/agents/cron/estimate-chaser` | Estimate Chaser: Outlook drafts + SMS queue + escalations (6:45 AM PT) |
 | **13:45 daily** | `/api/haven/sync` | Haven.AI conversation sync |
@@ -601,7 +644,6 @@ Configured in `vercel.json`. All times are UTC.
 | **14:30 Monday** | `/api/eos/cron/meeting-prep` | L10 prep packet + facilitator DM (7:30 AM PT) |
 | **15:00 daily** | `/api/sync/vacancies` | AppFolio vacancy cache refresh |
 | **15:00 Monday** | `/api/agents/cron/ops-brief?deep=1` | Monday deep Ops Brief (8 AM PT) |
-| **20:00 Mon–Fri** | `/api/agents/cron/morning-card?nudge=1` | One (and only one) 1 PM PT nudge if the card is untouched |
 | **22:00 Friday** | `/api/eos/cron/scorecard` | Scorecard auto-fill + owner nudges + Rock check cards (3 PM PT) |
 | **00:00 Tue–Sat** | `/api/agents/cron/ops-brief` | Daily Ops Brief (~5 PM PT) |
 | **Jan 1 annually** | `/api/sync/hud` | HUD Fair Market Rent data refresh |
@@ -627,9 +669,11 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `APPFOLIO_CLIENT_ID` | AppFolio | v0 API client ID |
 | `APPFOLIO_CLIENT_SECRET` | AppFolio | v0 API client secret |
 | `APPFOLIO_DEVELOPER_ID` | AppFolio | Developer ID header value |
-| `CLAUDE_API_KEY` | Anthropic | Claude AI for listings, invoice rewrites, chat |
+| `ANTHROPIC_API_KEY` | Anthropic | Claude AI for listings, invoice rewrites, chat (`CLAUDE_API_KEY` is accepted as a legacy fallback — code resolves `ANTHROPIC_API_KEY \|\| CLAUDE_API_KEY`) |
 | `GOOGLE_PLACES_API_KEY` | Google | Server-side geocoding API key |
 | `NEXT_PUBLIC_GOOGLE_MAPS_KEY` | Google | Client-side Maps JavaScript API key |
+
+> **Auth.js v5 aliases:** the app runs Auth.js (NextAuth) v5, which also recognizes `AUTH_SECRET` (alias of `NEXTAUTH_SECRET`) and `AUTH_REDIRECT_PROXY_URL` (preview-deploy login proxy) alongside the documented `NEXTAUTH_SECRET` / `NEXTAUTH_URL`.
 
 ### Optional
 
@@ -644,6 +688,23 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `MAINT_DIGEST_RECIPIENTS` | Maintenance OS | Fallback JSON map of owner → email. Normally unnecessary — admins manage opt-ins in the app (Maintenance → Exceptions → Digest recipients, backed by `maint_digest_recipient`) |
 | `MAINT_DIGEST_FROM` | Maintenance OS | From address for digests (default `HDMS Maintenance <maintenance@highdesertpm.com>`) |
 
+### Integrations
+
+| Variable | Service | Purpose |
+|----------|---------|---------|
+| `HAVEN_API_KEY` | Haven | API key for the Haven leasing/reception integration |
+| `HAVEN_BASE_URL` | Haven | Haven API base URL |
+| `HAVEN_RECEPTION_NUMBER` | Haven | Reception line number for the call-report / reception metrics |
+| `REFERRAL_ADMIN_EMAIL` | Referral portal | Staff address notified of new referral partner activity |
+| `REFERRAL_EMAIL_FROM` | Referral portal | From address for referral invites + magic-link sign-in emails |
+| `REFERRAL_FIELD_KEY` | Referral portal | Field key used when writing referral leads |
+| `HDPM_WEB_BASE_URL` | Referral portal | Public base URL used to build magic-link sign-in URLs |
+| `NOTION_API_KEY` | Notion | Notion SOP corpus sync into the knowledge base / company brain |
+| `ADMIN_EMAILS` | HDPM-OS | Comma-separated emails that get the admin nav (`/dashboard`, `/admin/zoom-sync`) |
+| `APPFOLIO_REPORTS_CLIENT_ID` | AppFolio | Reports API client ID — distinct credential from the v0 API |
+| `APPFOLIO_REPORTS_CLIENT_SECRET` | AppFolio | Reports API client secret |
+| `APPFOLIO_HDMS_VENDOR_ID` | AppFolio | HDMS vendor id used to filter `af_bills` for invoice auto-matching |
+
 ### Agent-OS
 
 | Variable | Service | Purpose |
@@ -653,11 +714,13 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `SLACK_BOT_USER_ID` | Slack (Dez) | Dez's own bot user id (`U…`, from `auth.test`) — loop guard so Dez never answers its own messages |
 | `SLACK_DEZ_ACTIVITY_CHANNEL` | Slack (Dez) | Optional `#dez-activity` channel id (`C…`) for the visibility feed (unset → no activity log) |
 | `DEZ_CHANNEL_MAP` | Dez | Optional JSON `{channelId: scope}` mapping channels to `maintenance`/`leasing`/`accounting` for the routing breadcrumb |
+| `DEZ_KPI_ADMINS` | Dez | Allowlist (comma-separated) for Dez's financial-KPI answers; others get only the operational subset (default `Craig,Matt,Penny`) |
 | `HDPM_SERVICE_TOKEN` | Agent-OS | Service-caller auth for `/api/agents/*` (with `X-Agent-Actor` header) |
 | `AGENT_EMAIL_FROM` | Resend | From address for agent emails (falls back to `MAINT_DIGEST_FROM`) |
 | `AZURE_TENANT_ID` | Microsoft Graph | App-only mail tenant (distinct from `AZURE_AD_TENANT_ID`) |
 | `AGENT_GRAPH_CLIENT_ID` / `AGENT_GRAPH_CLIENT_SECRET` | Microsoft Graph | "HDPM-OS Agent Mail" app — application `Mail.ReadWrite` (ApplicationAccessPolicy-scoped via the `agent-mail` group to cheryl@ + info@, plus craig@ + brody@ for the Loop 1 pilot) plus `Sites.Read.All` (already granted) which the knowledge-base OneDrive sync (`lib/onedrive-sync.ts`) uses to read the team SharePoint library |
 | `AGENT_GRAPH_DRYRUN` | Microsoft Graph | `=1` skips draft creation (staged rollout); leave **unset** for the pilot so drafts actually create |
+| `ESTIMATE_CHASER_OWNER` | Agent-OS | Staff name that owns the estimate-chaser Outlook drafts (production owner **Jayme**); their mailbox must be in the `agent-mail` ApplicationAccessPolicy group |
 | `AGENT_PILOT_RECIPIENTS` | Agent-OS | Comma-separated staff names (e.g. `Craig,Brody`) the estimate chaser routes cards/drafts/escalations to instead of Cheryl. Empty/unset → default (Cheryl, real sends) |
 | `AGENT_PILOT_SHADOW` | Agent-OS | `=1` records a Send tap as motion (approved proposal + `wo_event` tagged `shadow`) but suppresses the real vendor SMS |
 | `ZOOM_ACCOUNT_ID` / `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET` | Zoom | Server-to-Server app ("HDPM Appfolio Sync") — contact sync; cannot send SMS |

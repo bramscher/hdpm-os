@@ -1825,6 +1825,11 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold text-charcoal-900 tracking-tight">
               Weekly Metrics
             </h1>
+            <p className="text-sm text-charcoal-500 mt-1 max-w-2xl">
+              Business KPIs from AppFolio + financials, snapshotted daily (a cron writes each metric to
+              a history table for the trend charts). Admin-only. Staff can ask the same numbers in Slack
+              via Dez (&ldquo;what&apos;s our vacancy this week?&rdquo;).
+            </p>
             {lastUpdated && (
               <p className="text-xs text-charcoal-400 mt-1">
                 Last updated{" "}
