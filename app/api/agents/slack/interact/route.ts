@@ -10,6 +10,14 @@ import { rebuildSmsQueueCard } from '@/lib/agents/estimate-chaser-run';
 import { getPilotConfig } from '@/lib/agents/pilot';
 import { parseObActionId, applyAckToBlocks, OPS_BRIEF_AGENT, SEND_BRIEF_ACTION } from '@/lib/agents/ops-brief';
 import { parseRockActionId, buildRockCardBlocks, currentQuarter, type RockAction } from '@/lib/eos/rock';
+import {
+  parseOperatorActionId,
+  callOperator,
+  buildOperatorCard,
+  OPERATOR_AGENT,
+  FORM_MERGE_ACTION,
+  type OperatorAction,
+} from '@/lib/agents/dez/operator';
 import { logAudit } from '@/lib/audit';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
 import { updateSlackMessage, splitSlackMessageId } from '@/lib/agents/channels/slack';
@@ -84,6 +92,13 @@ export async function POST(request: NextRequest) {
     typeof rawAction?.action_id === 'string' ? parseRockActionId(rawAction.action_id) : null;
   if (rockAction) {
     return handleRockAction(rockAction, actor, payload.response_url);
+  }
+
+  // Operator namespace (op:*) — [Approve & Send] / [Discard] on a merged-form preview.
+  const opAction =
+    typeof rawAction?.action_id === 'string' ? parseOperatorActionId(rawAction.action_id) : null;
+  if (opAction) {
+    return handleOpAction(opAction, actor, payload.response_url);
   }
 
   const action = parseBlockAction(payload.actions[0]);
@@ -373,6 +388,69 @@ async function handleEcAction(
     }
   }
 
+  return new NextResponse(null, { status: 200 });
+}
+
+// ── Operator (op:*) — approve/discard a merged-form preview ──
+
+/**
+ * approve: decide the proposal, then ask the worker to SEND. The worker refuses
+ * send until it is deliberately enabled, so approving surfaces that state rather
+ * than sending anything. discard: reject. Either way the card re-renders with a
+ * resolution and no buttons.
+ */
+async function handleOpAction(
+  action: OperatorAction,
+  actor: string,
+  responseUrl: string | undefined
+): Promise<NextResponse> {
+  const supabase = getSupabaseAdmin();
+  const { data: proposalRow } = await supabase
+    .from('agent_proposal')
+    .select('*')
+    .eq('id', action.proposalId)
+    .maybeSingle();
+  const proposal = proposalRow as AgentProposal | null;
+  if (!proposal || proposal.agent !== OPERATOR_AGENT || proposal.action_type !== FORM_MERGE_ACTION) {
+    return new NextResponse(null, { status: 200 });
+  }
+  const pl = proposal.payload as Record<string, unknown>;
+  const template = typeof pl.template === 'string' ? pl.template : 'form';
+  const tenantQuery = typeof pl.tenant_query === 'string' ? pl.tenant_query : '';
+  const tapTime = new Date().toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  let resolution: string;
+  if (action.kind === 'discard') {
+    await decideProposal(action.proposalId, 'rejected', actor);
+    resolution = `🗑 Discarded by ${actor} ${tapTime} — nothing sent.`;
+  } else {
+    const decided = await decideProposal(action.proposalId, 'approved', actor);
+    if (!decided) {
+      resolution = `Already decided.`;
+    } else {
+      const sent = await callOperator({
+        template: template as 'deposit-to-hold',
+        tenantQuery,
+        mode: 'send',
+        requestId: proposal.id,
+      });
+      resolution =
+        sent && sent.status === 'prepared'
+          ? `✅ Sent for signing by ${actor} ${tapTime}.`
+          : `Approved by ${actor} ${tapTime}, but sending is not enabled yet (${sent?.error ?? 'send disabled'}). Review the preview in AppFolio.`;
+    }
+  }
+
+  const card = buildOperatorCard({ proposalId: proposal.id, template, tenantQuery, steps: [], resolution });
+  const replaced = await respond(responseUrl, { replace_original: true, text: card.text, blocks: card.blocks });
+  if (!replaced && proposal.channel_message_id) {
+    const target = splitSlackMessageId(proposal.channel_message_id);
+    if (target) await updateSlackMessage({ ...target, text: card.text, blocks: card.blocks });
+  }
   return new NextResponse(null, { status: 200 });
 }
 

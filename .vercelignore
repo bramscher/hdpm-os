@@ -1,4 +1,6 @@
 # Untracked sibling workstream (habu-core) — not part of the deployed app.
 packages
+# Dez AppFolio operator worker — deployed separately to Railway, not with the Next app.
+services
 # Local scratch / verifier scripts don't need to ship.
 scripts/*-verify.mjs
