@@ -223,9 +223,18 @@ export async function runDepositToHold(
   }
   steps.push(`chose template: ${TEMPLATE_LABEL}`);
 
-  // ── Prepare Form — the merge step ──
-  if (!(await clickByText(page, /prepare\s+form/i))) {
-    return await fail('Prepare Form button not found', `DOM=${await describePage(page)}`);
+  // Close the still-open template dropdown so Prepare Form becomes actionable.
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.mouse.click(5, 5).catch(() => {});
+  await page.waitForTimeout(600);
+
+  // ── Prepare Form — the merge step (enabled once a template is chosen) ──
+  const prepareBtn = page.getByRole('button', { name: /prepare\s+form/i });
+  try {
+    await prepareBtn.first().waitFor({ state: 'visible', timeout: FIND_TIMEOUT });
+    await prepareBtn.first().click({ timeout: 8000 }); // waits for it to enable
+  } catch {
+    return await fail('Prepare Form not clickable (still disabled?)', `DOM=${await describePage(page)}`);
   }
   await page.waitForLoadState('networkidle').catch(() => {});
   steps.push('clicked Prepare Form — merged preview generated');
