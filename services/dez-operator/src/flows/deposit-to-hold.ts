@@ -183,14 +183,42 @@ export async function runDepositToHold(
   await clickByText(page, new RegExp(reEscape(firstName), 'i'), 2500).catch(() => false);
   steps.push('selected unit/resident');
 
-  // ── Choose Templates — "Deposit to Hold" is a clickable item in the list ──
-  // AppFolio renders text with irregular (often double) spaces, so match each
-  // word with flexible whitespace between.
+  // ── Choose Templates ── It's a searchable dropdown (react-select style): the
+  // option only renders once the dropdown is open + filtered. Its search box has
+  // aria-label "Filter options" — there's one per dropdown (Resident, Template),
+  // so try each. AppFolio uses irregular (double) spaces, so match flexibly.
   const tplRe = new RegExp(TEMPLATE_LABEL.split(/\s+/).map(reEscape).join('\\s+'), 'i');
-  if (!(await clickByText(page, tplRe))) {
+  const filters = page.locator('input[aria-label="Filter options"]');
+  const fcount = await filters.count().catch(() => 0);
+  let tplDone = false;
+  for (let i = fcount - 1; i >= 0 && !tplDone; i--) {
+    // Template is typically the last dropdown, so iterate from the end.
+    const f = filters.nth(i);
+    try {
+      await f.click();
+      await f.fill(TEMPLATE_LABEL);
+      await page.waitForTimeout(1000); // let options filter
+      // Prefer clicking the now-visible option; else keyboard-select the first.
+      if (!(await clickByText(page, tplRe, 3000))) {
+        await f.press('ArrowDown').catch(() => {});
+        await f.press('Enter').catch(() => {});
+        await page.waitForTimeout(600);
+      }
+      // Confirm a template was chosen — "Please choose a template" disappears.
+      const stillEmpty = await page
+        .getByText(/please choose a template/i)
+        .isVisible()
+        .catch(() => false);
+      if (!stillEmpty) tplDone = true;
+      else await f.fill('').catch(() => {}); // clear before trying the next filter
+    } catch {
+      /* try the next filter input */
+    }
+  }
+  if (!tplDone) {
     return await fail(
-      'template "Deposit to Hold" not selectable',
-      `tplMatch=${await describeMatch(page, 'Deposit')} DOM=${await describePage(page)}`
+      'could not choose "Deposit to Hold" in the Templates dropdown',
+      `filters=${fcount} DOM=${await describePage(page)}`
     );
   }
   steps.push(`chose template: ${TEMPLATE_LABEL}`);
