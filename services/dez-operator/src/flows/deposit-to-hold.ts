@@ -256,6 +256,15 @@ export async function runDepositToHold(
   await page.waitForLoadState('networkidle').catch(() => {});
   steps.push('clicked Prepare Form — merged preview generated');
 
+  // Let the merged PDF actually paint before capturing (the viewer renders async;
+  // otherwise the screenshot is a blank/dark canvas).
+  await page
+    .locator('canvas, iframe, embed, object')
+    .first()
+    .waitFor({ state: 'visible', timeout: 8000 })
+    .catch(() => {});
+  await page.waitForTimeout(3500);
+
   // Capture the merged preview (stop here — nothing sent).
   const shot = await page.screenshot({ fullPage: true });
   return { status: 'prepared', previewImageBase64: shot.toString('base64'), steps };
