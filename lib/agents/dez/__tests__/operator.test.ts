@@ -18,10 +18,27 @@ describe('matchOperatorRequest', () => {
     });
   });
 
+  it('accepts natural request phrasings', () => {
+    expect(matchOperatorRequest('can I get a deposit to hold for Hunter Penn?')).toEqual({
+      template: 'deposit-to-hold',
+      tenantQuery: 'Hunter Penn',
+    });
+    expect(matchOperatorRequest('make me a deposit to hold for Jane Doe')).toEqual({
+      template: 'deposit-to-hold',
+      tenantQuery: 'Jane Doe',
+    });
+  });
+
   it('requires an action verb + template + a "for <name>"', () => {
-    expect(matchOperatorRequest('what is a deposit to hold agreement?')).toBeNull(); // no verb
+    expect(matchOperatorRequest('what is a deposit to hold agreement?')).toBeNull(); // question
     expect(matchOperatorRequest('prepare the lease for Bryce')).toBeNull(); // unknown template
     expect(matchOperatorRequest('prepare the deposit to hold')).toBeNull(); // no tenant
+  });
+
+  it('ignores how-it-works questions even when they name a tenant', () => {
+    // "how" makes this a process question, not a request to produce a form.
+    expect(matchOperatorRequest('how do I do a deposit to hold for Hunter Penn?')).toBeNull();
+    expect(matchOperatorRequest("what's the deposit to hold process for new tenants?")).toBeNull();
   });
 
   it('strips trailing punctuation from the tenant', () => {

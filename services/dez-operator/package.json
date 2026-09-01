@@ -9,13 +9,15 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
+    "register-passkey": "tsx src/register-passkey.ts",
+    "test-login": "tsx src/test-login.ts",
+    "debug-login": "tsx src/debug-login.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "postinstall": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "fastify": "^5.1.0",
-    "otplib": "^12.0.1",
-    "playwright": "^1.48.0"
+    "playwright": "1.62.1"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

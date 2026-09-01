@@ -1,5 +1,6 @@
 # Dependencies
 /node_modules
+node_modules/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
@@ -46,3 +47,8 @@ docs/soul-brain/
 # Generated Zoom cleanup candidate files (contain live contact ids/names — keep local)
 scripts/zoom-cleanup.candidates.json
 scripts/*.candidates.json
+
+# Dez operator local helpers — hold dez@ password/passkey/login link, never commit
+services/dez-operator/register-passkey.sh
+services/dez-operator/test-login.sh
+services/dez-operator/data/

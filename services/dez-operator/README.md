@@ -9,8 +9,23 @@ Full design: [`../../docs/dez/01-operator-worker.md`](../../docs/dez/01-operator
 
 ## Why a separate service
 Vercel is serverless and can't hold a persistent authenticated browser session. This worker keeps a
-warm AppFolio session (logged in as `dez@` with authenticator-app TOTP) and replays the mapped merge
-flow with DOM selectors — fast, unlike screenshot-driven control.
+warm AppFolio session (logged in as `dez@`) and replays the mapped merge flow with DOM selectors —
+fast, unlike screenshot-driven control.
+
+## Auth (passkey, not TOTP)
+AppFolio's 2FA offers only SMS or **passkeys** — there is no authenticator-app (TOTP) option — so the
+worker's second factor is a **passkey it owns**. A Chromium *virtual authenticator* (CDP `WebAuthn`
+domain) carries the stored credential (`APPFOLIO_DEZ_PASSKEY`) and satisfies the login challenge with no
+human and no phone. Register it **once**:
+
+```
+# 1. AppFolio (admin): "Reset Login" on dez@ → emails a setup link to dez@highdesertpm.com
+# 2. Open that email, copy the setup link, then:
+SETUP_URL="https://…setup link…" NEW_PASSWORD="…" npm run register-passkey
+# 3. Paste the printed APPFOLIO_DEZ_PASSKEY into the worker env (with USER + PASSWORD).
+```
+
+See [`src/register-passkey.ts`](src/register-passkey.ts) and [`src/passkey.ts`](src/passkey.ts).
 
 ## Contract
 `POST /operator/form-merge` — HMAC-signed (`x-dez-timestamp`, `x-dez-signature: v1=…`, 300s replay
@@ -33,9 +48,10 @@ window; secret `OPERATOR_SHARED_SECRET`). Body:
 ```
 cp .env.example .env   # fill secrets
 npm install            # installs Chromium via postinstall
+npm run register-passkey  # ONE-TIME: mint dez@'s passkey → APPFOLIO_DEZ_PASSKEY (see Auth above)
 npm run dev
 ```
-Requires `dez@` with **authenticator-app** MFA and the setup key in `APPFOLIO_DEZ_TOTP_SECRET`.
+Requires `dez@`'s **passkey** in `APPFOLIO_DEZ_PASSKEY` (from `npm run register-passkey`).
 
 ## Deploy (Railway)
 Dockerfile-based (`railway.json`). Mount a volume at `/data` for `storageState.json` so the session
@@ -47,4 +63,5 @@ share `OPERATOR_SHARED_SECRET` with the Vercel app's `DEZ_OPERATOR_SECRET`.
 
 ## Note on selectors
 The navigation URLs and the merge flow were mapped during discovery and are accurate. The **login-page**
-selectors (`appfolio-auth.ts`) are a first pass — tune them against the real login on the first run.
+and **passkey-registration** selectors (`appfolio-auth.ts`, `register-passkey.ts`) are a first pass —
+tune them against the real pages on the first run. Run `register-passkey` headed (default) to watch it.

@@ -31,8 +31,9 @@ Slack → Dez (Vercel /api/agents/slack/events)   matchOperatorRequest → gate 
 ```
 
 - **Worker** (`services/dez-operator/`, own repo/deploy): `POST /operator/form-merge` (HMAC-signed,
-  `OPERATOR_SHARED_SECRET`), logs into AppFolio as `dez@` (creds + **authenticator TOTP** via otplib),
-  keeps a warm session (`storageState`), replays the flow. Stateless re: our DB.
+  `OPERATOR_SHARED_SECRET`), logs into AppFolio as `dez@` (password + **passkey** it owns, via a
+  Chromium virtual authenticator — AppFolio has no TOTP option), keeps a warm session (`storageState`),
+  replays the flow. Stateless re: our DB.
 - **Dez side** (`lib/agents/dez/operator.ts`): intent detection, the signed client, and the `op:*` Slack
   action-id + card helpers. The verb lives in the events route; approve/discard in the interact route.
 
@@ -51,18 +52,22 @@ Slack → Dez (Vercel /api/agents/slack/events)   matchOperatorRequest → gate 
 **Vercel (Dez):** `DEZ_OPERATOR_URL` (the Railway URL), `DEZ_OPERATOR_SECRET` (== worker
 `OPERATOR_SHARED_SECRET`).
 **Railway (worker):** `OPERATOR_SHARED_SECRET`, `OPERATOR_ENABLED`, `APPFOLIO_DEZ_USER/_PASSWORD/
-_TOTP_SECRET`, `APPFOLIO_BASE_URL`, `APPFOLIO_STORAGE_STATE` (volume). See `services/dez-operator/.env.example`.
+_PASSKEY`, `APPFOLIO_BASE_URL`, `APPFOLIO_STORAGE_STATE` (volume). See `services/dez-operator/.env.example`.
+`APPFOLIO_DEZ_PASSKEY` is minted once via `npm run register-passkey` (see below).
 
 ## Gates before going live (not code)
 
 - **AppFolio ToS** on an automated operator seat (Sep-4 rep question) — required before running against
   live AppFolio at scale. Until then: **preview only**.
-- **`dez@` login** working with **authenticator-app MFA**, setup key saved into `APPFOLIO_DEZ_TOTP_SECRET`.
+- **`dez@` login** working with its **passkey** (AppFolio offers no TOTP): run `npm run register-passkey`
+  once — reset dez@'s login (admin), open the setup link emailed to dez@highdesertpm.com, and the script
+  mints a portable passkey into `APPFOLIO_DEZ_PASSKEY`.
 - Restart plan Oct-1 gate (write path).
 
 ## Deferred / not built
 
 `send` mode (past preview — must be mapped + deliberately enabled); templates beyond deposit-to-hold
 (each is a `flows/*` file); embedding the merged-preview image in Slack (Slack file upload — the worker
-returns it as base64 today); doc-age freshness; owner-facing forms. The **login-page selectors** in
-`appfolio-auth.ts` are a first pass to tune on the first real login (the merge navigation is accurate).
+returns it as base64 today); doc-age freshness; owner-facing forms. The **login-page selectors** in `appfolio-auth.ts` and the
+**passkey-registration selectors** in `register-passkey.ts` are a first pass to tune on the first real
+run (the merge navigation is accurate).
