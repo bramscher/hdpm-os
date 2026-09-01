@@ -166,7 +166,10 @@ export async function runDepositToHold(
   steps.push('selected unit/resident');
 
   // ── Choose Templates — "Deposit to Hold" is a clickable item in the list ──
-  if (!(await clickByText(page, new RegExp(`^\\s*${reEscape(TEMPLATE_LABEL)}\\s*$`, 'i')))) {
+  // AppFolio renders text with irregular (often double) spaces, so match each
+  // word with flexible whitespace between.
+  const tplRe = new RegExp(TEMPLATE_LABEL.split(/\s+/).map(reEscape).join('\\s+'), 'i');
+  if (!(await clickByText(page, tplRe))) {
     return fail(
       'template "Deposit to Hold" not selectable (unit may not have been selected)',
       `unitMatch=${await describeMatch(page, firstName)} DOM=${await describePage(page)}`
@@ -175,7 +178,7 @@ export async function runDepositToHold(
   steps.push(`chose template: ${TEMPLATE_LABEL}`);
 
   // ── Prepare Form — the merge step ──
-  if (!(await clickByText(page, /prepare form/i))) {
+  if (!(await clickByText(page, /prepare\s+form/i))) {
     return fail('Prepare Form button not found', `DOM=${await describePage(page)}`);
   }
   await page.waitForLoadState('networkidle').catch(() => {});
