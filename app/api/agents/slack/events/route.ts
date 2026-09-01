@@ -19,6 +19,7 @@ import {
 } from '@/lib/agents/dez/operator';
 import { getAgentConfig, effectiveLevel, isGloballyKilled } from '@/lib/agents/config';
 import { createProposal } from '@/lib/agents/proposals';
+import { alertOperatorFailure } from '@/lib/agents/dez/operator-alert';
 
 export const maxDuration = 60;
 
@@ -240,6 +241,13 @@ async function handleOperatorRequest(ctx: {
   }
   if (result.status !== 'prepared') {
     await reply(`I couldn't prepare that: ${result.error ?? 'unknown error'}. Nothing was sent.`);
+    await alertOperatorFailure({
+      context: 'request',
+      template: req.template,
+      tenantQuery: req.tenantQuery,
+      error: result.error ?? 'unknown error',
+      requestedBy: ctx.person,
+    });
   } else {
     const card = buildOperatorCard({
       proposalId: proposal.id,
