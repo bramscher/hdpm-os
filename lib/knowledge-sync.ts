@@ -215,6 +215,42 @@ export async function syncOrs90(): Promise<CorpusSyncResult> {
   return result;
 }
 
+/**
+ * Ingest a SINGLE ORS 90 section into the knowledge base on demand — powers the
+ * "Digest this" button on the ors-watch alert. Fetch → embed → upsert (same
+ * shape as syncOrs90's per-section loop). The row persists across weekly syncs
+ * (syncOrs90 only deletes the sections it re-inserts), so a digested section
+ * stays answerable; add it to ALL_ORS_90_SECTIONS to also get amendment refresh.
+ */
+export async function ingestOrsSection(
+  section: string
+): Promise<{ ok: boolean; title?: string; error?: string }> {
+  const s = await fetchOrsSection(section);
+  if (!s || !s.content || s.content.length < 20) {
+    return { ok: false, error: `no usable statute text found for ORS ${section}` };
+  }
+  const full = `ORS ${s.section} - ${s.title}\n\n${s.content}`;
+  const text = full.length > 8000 ? `${full.slice(0, 8000)}...` : full;
+  const [embedding] = await embedBatch([text]);
+
+  const supabase = getSupabaseAdmin();
+  await supabase
+    .from('knowledge_chunks')
+    .delete()
+    .eq('source_type', 'ors_90')
+    .eq('source_section', s.section);
+  const { error } = await supabase.from('knowledge_chunks').insert({
+    content: text,
+    embedding,
+    source_type: 'ors_90',
+    source_title: `ORS ${s.section} - ${s.title}`,
+    source_url: s.url,
+    source_section: s.section,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, title: s.title };
+}
+
 // ============================================
 // ORS 90 new-section watch
 // ============================================

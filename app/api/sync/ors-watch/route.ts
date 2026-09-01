@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { detectNewOrsSections } from '@/lib/knowledge-sync';
+import { buildOrsDigestActionId } from '@/lib/agents/ors-digest';
 import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
 import { sendSlackMessage } from '@/lib/agents/channels/slack';
 import { logDezActivity } from '@/lib/agents/dez/activity';
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
       const list = found
         .map((f) => `• *${f.section}* — ${f.title}  <${f.url}|open>`)
         .join('\n');
+      const them = found.length > 1 ? 'them' : 'it';
       await sendSlackMessage({
         channel: dm,
         text: `📕 Possible new ORS 90 section(s) not yet in the knowledge base (${found.length}).`,
@@ -51,10 +53,28 @@ export async function POST(request: NextRequest) {
               type: 'mrkdwn',
               text:
                 `📕 *Possible new ORS 90 section(s)* — not in the knowledge base yet:\n${list}\n\n` +
-                `Add the number(s) to \`ALL_ORS_90_SECTIONS\` in \`lib/knowledge-sync.ts\`, then run \`/api/sync/knowledge?target=ors\`.`,
+                `Want me to digest ${them} so Dez can answer about ${them}?`,
             },
           },
-          { type: 'context', elements: [{ type: 'mrkdwn', text: `🔧 dez · ors-watch · probed ${probed}` }] },
+          {
+            type: 'actions',
+            // Slack caps an actions block at 5 elements; alerts are ~1–2 sections.
+            elements: found.slice(0, 5).map((f) => ({
+              type: 'button',
+              style: 'primary',
+              text: { type: 'plain_text', text: `📥 Digest ${f.section}` },
+              action_id: buildOrsDigestActionId(f.section),
+            })),
+          },
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `🔧 dez · ors-watch · probed ${probed} · (for amendment tracking, also add to \`ALL_ORS_90_SECTIONS\`)`,
+              },
+            ],
+          },
         ],
       });
     }

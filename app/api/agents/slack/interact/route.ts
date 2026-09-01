@@ -10,6 +10,9 @@ import { rebuildSmsQueueCard } from '@/lib/agents/estimate-chaser-run';
 import { getPilotConfig } from '@/lib/agents/pilot';
 import { parseObActionId, applyAckToBlocks, OPS_BRIEF_AGENT, SEND_BRIEF_ACTION } from '@/lib/agents/ops-brief';
 import { parseRockActionId, buildRockCardBlocks, currentQuarter, type RockAction } from '@/lib/eos/rock';
+import { parseOrsDigestActionId } from '@/lib/agents/ors-digest';
+import { ingestOrsSection } from '@/lib/knowledge-sync';
+import { logDezActivity } from '@/lib/agents/dez/activity';
 import {
   parseOperatorActionId,
   callOperator,
@@ -99,6 +102,14 @@ export async function POST(request: NextRequest) {
     typeof rawAction?.action_id === 'string' ? parseOperatorActionId(rawAction.action_id) : null;
   if (opAction) {
     return handleOpAction(opAction, actor, payload.response_url);
+  }
+
+  // ORS-watch namespace (ors:digest:*) — [Digest this] ingests a newly-found
+  // ORS 90 section into the knowledge base on the spot.
+  const orsDigest =
+    typeof rawAction?.action_id === 'string' ? parseOrsDigestActionId(rawAction.action_id) : null;
+  if (orsDigest) {
+    return handleOrsDigest(orsDigest, actor, payload.response_url);
   }
 
   const action = parseBlockAction(payload.actions[0]);
@@ -451,6 +462,45 @@ async function handleOpAction(
     const target = splitSlackMessageId(proposal.channel_message_id);
     if (target) await updateSlackMessage({ ...target, text: card.text, blocks: card.blocks });
   }
+  return new NextResponse(null, { status: 200 });
+}
+
+// ── ORS-watch (ors:digest:*) — ingest a newly-found ORS 90 section on tap ──
+
+/**
+ * Fetch the section's statute text, embed it, and upsert it into the knowledge
+ * base so Dez/Knowledge Chat can answer about it immediately. Replaces the alert
+ * with a confirmation. Ingestion is a few seconds (fetch + embed); Slack shows
+ * the result via response_url like the other handlers.
+ */
+async function handleOrsDigest(
+  action: { section: string },
+  actor: string,
+  responseUrl: string | undefined
+): Promise<NextResponse> {
+  const result = await ingestOrsSection(action.section);
+  const time = new Date().toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  const text = result.ok
+    ? `✅ Digested *ORS ${action.section}${result.title ? ` — ${result.title}` : ''}* into the knowledge base (${actor}, ${time}). Dez can answer about it now.`
+    : `⚠️ Couldn't digest ORS ${action.section}: ${result.error ?? 'unknown error'}. Nothing changed.`;
+
+  await respond(responseUrl, {
+    replace_original: true,
+    text,
+    blocks: [{ type: 'section', text: { type: 'mrkdwn', text } }],
+  });
+  await logDezActivity({
+    kind: 'routine',
+    surface: 'dm',
+    scope: 'ors-watch',
+    actorPerson: actor,
+    summary: result.ok ? `digested ORS ${action.section}` : `digest failed ORS ${action.section}`,
+    detail: { section: action.section, ok: result.ok, error: result.error ?? null },
+  });
   return new NextResponse(null, { status: 200 });
 }
 
