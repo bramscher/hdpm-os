@@ -137,14 +137,18 @@ export async function runDepositToHold(
   input: { tenantQuery: string; mode: 'prepare' | 'send' }
 ): Promise<MergeResult> {
   const steps: string[] = [];
-  const fail = (where: string, extra: string): MergeResult => ({
-    status: 'error',
-    steps,
-    error: `${where} — ${extra}`,
-  });
+  const fail = async (where: string, extra: string): Promise<MergeResult> => {
+    let shot: string | undefined;
+    try {
+      shot = (await page.screenshot({ fullPage: true })).toString('base64');
+    } catch {
+      /* best-effort */
+    }
+    return { status: 'error', steps, error: `${where} — ${extra}`, previewImageBase64: shot };
+  };
 
   if (input.mode === 'send') {
-    return fail('send mode is not enabled', 'this worker stops at the merged preview by design');
+    return await fail('send mode is not enabled', 'this worker stops at the merged preview by design');
   }
 
   await page.goto(`${APPFOLIO_BASE_URL}/forms/documents/new`, { waitUntil: 'domcontentloaded' });
@@ -162,7 +166,7 @@ export async function runDepositToHold(
     page.getByLabel(/unit|resident|tenant/i),
   ]);
   if (!unit) {
-    return fail('unit search field not found', `DOM=${await describePage(page)}`);
+    return await fail('unit search field not found', `DOM=${await describePage(page)}`);
   }
   await unit.click();
   await unit.fill(input.tenantQuery);
@@ -184,7 +188,7 @@ export async function runDepositToHold(
   // word with flexible whitespace between.
   const tplRe = new RegExp(TEMPLATE_LABEL.split(/\s+/).map(reEscape).join('\\s+'), 'i');
   if (!(await clickByText(page, tplRe))) {
-    return fail(
+    return await fail(
       'template "Deposit to Hold" not selectable',
       `tplMatch=${await describeMatch(page, 'Deposit')} DOM=${await describePage(page)}`
     );
@@ -193,7 +197,7 @@ export async function runDepositToHold(
 
   // ── Prepare Form — the merge step ──
   if (!(await clickByText(page, /prepare\s+form/i))) {
-    return fail('Prepare Form button not found', `DOM=${await describePage(page)}`);
+    return await fail('Prepare Form button not found', `DOM=${await describePage(page)}`);
   }
   await page.waitForLoadState('networkidle').catch(() => {});
   steps.push('clicked Prepare Form — merged preview generated');
