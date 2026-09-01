@@ -60,6 +60,34 @@ async function describePage(page: Page): Promise<string> {
   return JSON.stringify(info);
 }
 
+/** Detailed report on elements whose own text contains `needle` — tag, class,
+ * role, visibility, and char codes (to spot non-breaking spaces etc.). */
+async function describeMatch(page: Page, needle: string): Promise<string> {
+  return page
+    .evaluate((n) => {
+      const out: unknown[] = [];
+      for (const el of Array.from(document.querySelectorAll('*'))) {
+        const t = el.textContent || '';
+        if (t.toLowerCase().includes(n.toLowerCase()) && el.children.length <= 1) {
+          const h = el as HTMLElement;
+          const s = getComputedStyle(h);
+          out.push({
+            tag: el.tagName.toLowerCase(),
+            cls: (el.getAttribute('class') || '').slice(0, 50),
+            role: el.getAttribute('role'),
+            href: el.getAttribute('href'),
+            visible: s.display !== 'none' && s.visibility !== 'hidden' && h.offsetParent !== null,
+            codes: Array.from(t.slice(0, 24)).map((c) => c.charCodeAt(0)),
+            text: t.slice(0, 60),
+          });
+          if (out.length >= 5) break;
+        }
+      }
+      return JSON.stringify(out);
+    }, needle)
+    .catch(() => '[]');
+}
+
 /** First candidate locator that exists on the page, else null. */
 async function firstPresent(cands: Locator[]): Promise<Locator | null> {
   for (const c of cands) {
@@ -124,18 +152,25 @@ export async function runDepositToHold(
   }
   await unit.click();
   await unit.fill(input.tenantQuery);
+  await page.waitForTimeout(1500); // let the async result list render
   steps.push(`typed unit/resident: ${input.tenantQuery}`);
 
-  // The matching unit renders as a clickable element (often an <a> styled as a
-  // button), e.g. "Bryce Bramscher - Bramscher 001 - 2741 NE Laramie Way Bend".
-  if (!(await clickByText(page, new RegExp(reEscape(input.tenantQuery), 'i')))) {
-    return fail('no matching unit/resident result', `for "${input.tenantQuery}". DOM=${await describePage(page)}`);
-  }
+  // Select the unit. Canonical combobox selection (ArrowDown → Enter) is robust
+  // to dropdown visibility + whitespace quirks; also try clicking the result by
+  // first name as a fallback.
+  const firstName = input.tenantQuery.split(/\s+/)[0];
+  await unit.press('ArrowDown').catch(() => {});
+  await unit.press('Enter').catch(() => {});
+  await page.waitForTimeout(600);
+  await clickByText(page, new RegExp(reEscape(firstName), 'i'), 2500).catch(() => false);
   steps.push('selected unit/resident');
 
   // ── Choose Templates — "Deposit to Hold" is a clickable item in the list ──
-  if (!(await clickByText(page, new RegExp(`^${reEscape(TEMPLATE_LABEL)}$`, 'i')))) {
-    return fail('template "Deposit to Hold" not found', `DOM=${await describePage(page)}`);
+  if (!(await clickByText(page, new RegExp(`^\\s*${reEscape(TEMPLATE_LABEL)}\\s*$`, 'i')))) {
+    return fail(
+      'template "Deposit to Hold" not selectable (unit may not have been selected)',
+      `unitMatch=${await describeMatch(page, firstName)} DOM=${await describePage(page)}`
+    );
   }
   steps.push(`chose template: ${TEMPLATE_LABEL}`);
 
