@@ -68,7 +68,7 @@ async function describeMatch(page: Page, needle: string): Promise<string> {
       const out: unknown[] = [];
       for (const el of Array.from(document.querySelectorAll('*'))) {
         const t = el.textContent || '';
-        if (t.toLowerCase().includes(n.toLowerCase()) && el.children.length <= 1) {
+        if (t.toLowerCase().includes(n.toLowerCase()) && el.children.length <= 3) {
           const h = el as HTMLElement;
           const s = getComputedStyle(h);
           out.push({
@@ -102,18 +102,32 @@ async function firstPresent(cands: Locator[]): Promise<Locator | null> {
  * so ARIA-role matching (getByRole('button')) misses the anchor-styled ones.
  */
 async function clickByText(page: Page, re: RegExp, timeout = FIND_TIMEOUT): Promise<boolean> {
-  // Prefer a true interactive element carrying the text; fall back to the text
-  // node itself (click bubbles to its clickable ancestor).
-  const clickable = page.locator('button, a, [role="button"], [role="option"]').filter({ hasText: re });
-  const byText = page.getByText(re);
-  for (const loc of [clickable, byText]) {
-    try {
-      await loc.first().waitFor({ state: 'visible', timeout });
-      await loc.first().click();
-      return true;
-    } catch {
-      /* try the next strategy */
+  // Click the first VISIBLE element carrying the text — a true interactive
+  // element (button/a/role) or, failing that, the text node itself (click
+  // bubbles to its clickable ancestor). Retry until timeout, since the list may
+  // render/settle after the unit is chosen.
+  const deadline = Date.now() + timeout;
+  const selectors = ['button, a, [role="button"], [role="option"]'];
+  while (Date.now() < deadline) {
+    const candidates = [
+      ...selectors.map((s) => page.locator(s).filter({ hasText: re })),
+      page.getByText(re),
+    ];
+    for (const loc of candidates) {
+      const n = await loc.count().catch(() => 0);
+      for (let i = 0; i < n; i++) {
+        const el = loc.nth(i);
+        if (!(await el.isVisible().catch(() => false))) continue;
+        try {
+          await el.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => {});
+          await el.click({ timeout: 2500 });
+          return true;
+        } catch {
+          /* try the next match */
+        }
+      }
     }
+    await page.waitForTimeout(400);
   }
   return false;
 }
@@ -171,8 +185,8 @@ export async function runDepositToHold(
   const tplRe = new RegExp(TEMPLATE_LABEL.split(/\s+/).map(reEscape).join('\\s+'), 'i');
   if (!(await clickByText(page, tplRe))) {
     return fail(
-      'template "Deposit to Hold" not selectable (unit may not have been selected)',
-      `unitMatch=${await describeMatch(page, firstName)} DOM=${await describePage(page)}`
+      'template "Deposit to Hold" not selectable',
+      `tplMatch=${await describeMatch(page, 'Deposit')} DOM=${await describePage(page)}`
     );
   }
   steps.push(`chose template: ${TEMPLATE_LABEL}`);
