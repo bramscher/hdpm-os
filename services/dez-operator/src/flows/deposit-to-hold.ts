@@ -181,7 +181,24 @@ export async function runDepositToHold(
   await unit.press('Enter').catch(() => {});
   await page.waitForTimeout(600);
   await clickByText(page, new RegExp(reEscape(firstName), 'i'), 2500).catch(() => false);
-  steps.push('selected unit/resident');
+  steps.push('selected unit');
+
+  // ── Select Resident(s) — required, or Prepare Form stays disabled. It's the
+  // FIRST "Filter options" dropdown (Resident precedes Templates). Keyboard-
+  // select the first option (the unit's resident) — safer than clicking, which
+  // could hit the unit chip. ──
+  const residentFilter = page.locator('input[aria-label="Filter options"]').first();
+  try {
+    await residentFilter.click();
+    await page.waitForTimeout(700);
+    await residentFilter.press('ArrowDown').catch(() => {});
+    await residentFilter.press('Enter').catch(() => {});
+    await page.waitForTimeout(400);
+    await page.keyboard.press('Escape').catch(() => {});
+    steps.push('selected resident');
+  } catch {
+    /* resident may be optional for some units; Prepare Form gate will tell */
+  }
 
   // ── Choose Templates ── It's a searchable dropdown (react-select style): the
   // option only renders once the dropdown is open + filtered. Its search box has
