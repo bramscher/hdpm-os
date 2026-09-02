@@ -21,6 +21,15 @@ import {
   FORM_MERGE_ACTION,
   type OperatorAction,
 } from '@/lib/agents/dez/operator';
+import {
+  parseNoticeActionId,
+  buildInspectionNoticeCard,
+  DEZ_NOTICE_AGENT,
+  INSPECTION_NOTICE_ACTION,
+  type NoticeAction,
+  type NoticeCardItem,
+} from '@/lib/agents/dez/inspection-notice';
+import { markNoticesSent } from '@/lib/inspection-notify';
 import { logAudit } from '@/lib/audit';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
 import { updateSlackMessage, splitSlackMessageId } from '@/lib/agents/channels/slack';
@@ -102,6 +111,14 @@ export async function POST(request: NextRequest) {
     typeof rawAction?.action_id === 'string' ? parseOperatorActionId(rawAction.action_id) : null;
   if (opAction) {
     return handleOpAction(opAction, actor, payload.response_url);
+  }
+
+  // Inspection-notice namespace (dznotice:*) — [Mark all sent] / [Dismiss] on the
+  // schedule-of-inspections notice card DM'd to the inspections owner.
+  const noticeAction =
+    typeof rawAction?.action_id === 'string' ? parseNoticeActionId(rawAction.action_id) : null;
+  if (noticeAction) {
+    return handleNoticeAction(noticeAction, actor, payload.response_url);
   }
 
   // ORS-watch namespace (ors:digest:*) — [Digest this] ingests a newly-found
@@ -458,6 +475,80 @@ async function handleOpAction(
 
   const card = buildOperatorCard({ proposalId: proposal.id, template, tenantQuery, steps: [], resolution });
   const replaced = await respond(responseUrl, { replace_original: true, text: card.text, blocks: card.blocks });
+  if (!replaced && proposal.channel_message_id) {
+    const target = splitSlackMessageId(proposal.channel_message_id);
+    if (target) await updateSlackMessage({ ...target, text: card.text, blocks: card.blocks });
+  }
+  return new NextResponse(null, { status: 200 });
+}
+
+// ── Inspection notices (dznotice:*) — mark-sent / dismiss the notice card ──
+
+/**
+ * sent: decide the proposal (double-tap guard), then mark the sendable notices
+ * (the ones with a tenant email) as sent via the manual bridge — channel
+ * 'manual', because a human sent them through AppFolio / Realm-X. dismiss: reject
+ * and leave them in the manual notice queue. Either way the card re-renders from
+ * the payload's stored items with a resolution line and no buttons.
+ */
+async function handleNoticeAction(
+  action: NoticeAction,
+  actor: string,
+  responseUrl: string | undefined
+): Promise<NextResponse> {
+  const supabase = getSupabaseAdmin();
+  const { data: proposalRow } = await supabase
+    .from('agent_proposal')
+    .select('*')
+    .eq('id', action.proposalId)
+    .maybeSingle();
+  const proposal = proposalRow as AgentProposal | null;
+  if (
+    !proposal ||
+    proposal.agent !== DEZ_NOTICE_AGENT ||
+    proposal.action_type !== INSPECTION_NOTICE_ACTION
+  ) {
+    return new NextResponse(null, { status: 200 });
+  }
+  const pl = proposal.payload as Record<string, unknown>;
+  const routeDate = typeof pl.route_date === 'string' ? pl.route_date : null;
+  const items = Array.isArray(pl.items) ? (pl.items as NoticeCardItem[]) : [];
+  const sendableIds = Array.isArray(pl.sendable_ids) ? (pl.sendable_ids as string[]) : [];
+  const tapTime = new Date().toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  let resolution: string;
+  try {
+    if (action.kind === 'dismiss') {
+      await decideProposal(action.proposalId, 'rejected', actor);
+      resolution = `Dismissed by ${actor} ${tapTime} — notices left in the queue at /maintenance/inspections.`;
+    } else {
+      // Decide FIRST — null means already decided (double-tap): never mark twice.
+      const decided = await decideProposal(action.proposalId, 'approved', actor);
+      if (!decided) {
+        resolution = 'Already handled.';
+      } else if (sendableIds.length === 0) {
+        resolution = `Marked by ${actor} ${tapTime}, but none had a tenant email to send — add addresses in AppFolio.`;
+      } else {
+        const { updated } = await markNoticesSent(supabase, sendableIds);
+        resolution = `✅ ${updated} notice${updated === 1 ? '' : 's'} marked sent by ${actor} ${tapTime}.`;
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Agents] dznotice action failed:', msg);
+    resolution = `Couldn't complete that (${msg}) — nothing changed.`;
+  }
+
+  const card = buildInspectionNoticeCard({ proposalId: proposal.id, routeDate, items, resolution });
+  const replaced = await respond(responseUrl, {
+    replace_original: true,
+    text: card.text,
+    blocks: card.blocks,
+  });
   if (!replaced && proposal.channel_message_id) {
     const target = splitSlackMessageId(proposal.channel_message_id);
     if (target) await updateSlackMessage({ ...target, text: card.text, blocks: card.blocks });

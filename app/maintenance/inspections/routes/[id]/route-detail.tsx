@@ -39,6 +39,7 @@ interface RouteStop {
   address: string;
   city: string | null;
   unit_name: string | null;
+  resident_name: string | null;
   property_name: string | null;
   inspection_type: string | null;
   due_date: string | null;
@@ -203,6 +204,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
             address: prop.address_1 || "Unknown",
             city: prop.city || null,
             unit_name: insp.unit_name || null,
+            resident_name: (insp.resident_name as string) || (prop.resident_name as string) || null,
             property_name: null,
             inspection_type: insp.inspection_type || null,
             due_date: insp.due_date || null,
@@ -689,6 +691,11 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
                       {stop.property_name && (
                         <p className="text-sm text-charcoal-600 truncate">
                           {stop.address}
+                        </p>
+                      )}
+                      {stop.resident_name && (
+                        <p className="text-sm font-medium text-charcoal-700 truncate">
+                          {stop.resident_name}
                         </p>
                       )}
                       {stop.city && (

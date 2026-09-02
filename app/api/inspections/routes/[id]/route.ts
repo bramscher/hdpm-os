@@ -56,7 +56,8 @@ export async function GET(
             state,
             zip,
             latitude,
-            longitude
+            longitude,
+            resident_name
           )
         )
       `)
@@ -197,7 +198,8 @@ export async function PATCH(
             state,
             zip,
             latitude,
-            longitude
+            longitude,
+            resident_name
           )
         )
       `)
