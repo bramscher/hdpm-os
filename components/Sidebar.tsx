@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FileText, BarChart3, Home, MessageCircle, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X } from "lucide-react";
+import { FileText, BarChart3, Home, MessageCircle, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { springDefault } from "@/lib/motion";
 
@@ -43,6 +43,8 @@ const NAV_SECTIONS: NavSection[] = [
         matchExclude: "/maintenance/inspections/routes",
       },
       { label: "Route Builder", href: "/maintenance/inspections/routes", icon: Navigation, matchPrefix: "/maintenance/inspections/routes" },
+      { label: "Turns", href: "/turn-estimator/turns", icon: RefreshCw, matchPrefix: "/turn-estimator/turns" },
+      { label: "Price Book", href: "/turn-estimator/price-book", icon: BookOpen, matchPrefix: "/turn-estimator/price-book" },
     ],
   },
   {

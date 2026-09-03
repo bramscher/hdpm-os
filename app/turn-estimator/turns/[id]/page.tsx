@@ -35,9 +35,17 @@ export default async function TurnDetailPage({ params }: { params: Promise<{ id:
         {turn.property_name ?? 'Turn'}
         {turn.unit_name ? <span className="text-charcoal-400"> · #{turn.unit_name}</span> : null}
       </h1>
-      <p className="mb-6 mt-1 text-sm text-charcoal-500">
-        Vacated {turn.vacated_at ?? '—'} · Target ready {turn.target_ready ?? '—'}
-      </p>
+      <div className="mb-6 mt-1 flex items-center justify-between gap-3">
+        <p className="text-sm text-charcoal-500">
+          Vacated {turn.vacated_at ?? '—'} · Target ready {turn.target_ready ?? '—'}
+        </p>
+        <a
+          href={`/turn-estimator/estimates/new?turn=${turn.id}`}
+          className="shrink-0 rounded-lg bg-charcoal-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-charcoal-800"
+        >
+          + New estimate
+        </a>
+      </div>
 
       <TurnLifecyclePanel
         turnId={turn.id}
