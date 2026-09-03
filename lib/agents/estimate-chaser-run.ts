@@ -767,3 +767,75 @@ export async function runEstimateChaser(opts: {
 
   return result;
 }
+
+// ── Read-only pool listing (for the Dez "open estimates" card) ──────────────
+
+export type OpenEstimateState = 'escalated' | 'approval' | 'waiting' | 'cooldown';
+
+export interface OpenEstimateItem {
+  workOrderId: string;
+  woNumber: string | null;
+  propertyName: string | null;
+  propertyAddress: string | null;
+  unitName: string | null;
+  vendorName: string | null;
+  ageBusinessDays: number;
+  ageCalendarDays: number;
+  appfolioLink: string | null;
+  /** escalated | approval (bid in hand) | waiting (on vendor bid) | cooldown */
+  state: OpenEstimateState;
+}
+
+/**
+ * Every open estimate WO (the TW11 pool), classified by current state. Reuses
+ * the exact gather + decision path the chase run uses, but performs NO contact
+ * lookups, drafts, sends, or proposals — it's purely a read for the Dez card.
+ */
+export async function gatherOpenEstimates(now: Date = new Date()): Promise<OpenEstimateItem[]> {
+  const supabase = getSupabaseAdmin();
+  const snapshot = await loadTripwireSnapshot();
+  const exceptions = tripwire11(snapshot);
+  const wosById = new Map(snapshot.openWorkOrders.map((wo) => [wo.id, wo]));
+  const calendarAgeByWo = new Map(
+    snapshot.openWorkOrders.map((wo) => [wo.id, daysBetween(statusSinceFor(wo, snapshot), now)])
+  );
+  const dashConfig = await getDashboardConfig();
+  const { candidates } = classifyPool(
+    exceptions,
+    wosById,
+    dashConfig.internalVendorIds,
+    calendarAgeByWo
+  );
+  if (candidates.length === 0) return [];
+
+  // One history read for cooldown/escalation state (same query the run uses).
+  const woIds = candidates.map((c) => c.workOrderId);
+  const { data, error } = await supabase
+    .from('agent_proposal')
+    .select('id, subject_id, action_type, status, created_at')
+    .eq('agent', ESTIMATE_CHASER_AGENT)
+    .in('subject_id', woIds);
+  if (error) throw new Error(`Open-estimates history read failed: ${error.message}`);
+  const historyRows = (data ?? []) as HistoryRow[];
+
+  const stateFor = (candidate: ChaseCandidate): OpenEstimateState => {
+    const history = historyFor(historyRows, candidate.workOrderId, candidate.kind);
+    const decision = decideChase(candidate, history, now);
+    if (decision.action === 'escalate') return 'escalated';
+    if (decision.action === 'skip') return 'cooldown';
+    return candidate.kind === OWNER_APPROVAL_ACTION ? 'approval' : 'waiting';
+  };
+
+  return candidates.map((c) => ({
+    workOrderId: c.workOrderId,
+    woNumber: c.woNumber,
+    propertyName: c.propertyName,
+    propertyAddress: c.propertyAddress,
+    unitName: c.unitName,
+    vendorName: c.vendorName,
+    ageBusinessDays: c.ageBusinessDays,
+    ageCalendarDays: c.ageCalendarDays,
+    appfolioLink: c.appfolioLink,
+    state: stateFor(c),
+  }));
+}

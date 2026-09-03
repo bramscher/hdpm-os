@@ -8,6 +8,7 @@ import { buildAnswerBlocks, buildBreadcrumb } from '@/lib/agents/dez/answer-bloc
 import { shouldIgnoreEvent, stripMention, type SlackEvent } from '@/lib/agents/dez/event-guard';
 import { logDezActivity } from '@/lib/agents/dez/activity';
 import { matchKpiIntent, answerKpiQuestion, kpiAdmins } from '@/lib/agents/dez/kpi-brief';
+import { matchOpenEstimatesRequest, postOpenEstimatesCard } from '@/lib/agents/dez/open-estimates';
 import { looksLikeFormRequest, assessFormSources } from '@/lib/agents/dez/quality-flag';
 import {
   matchOperatorRequest,
@@ -115,6 +116,31 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
         person,
         actorSlackId: event.user ?? null,
         req: operatorReq,
+      });
+      return;
+    }
+
+    // Open-estimates card — "show me the open estimates", "send Craig the open
+    // estimates". Posts a read-only, grouped, AppFolio-linked card of the whole
+    // TW11 pool to the named person (default: the asker). Before the KPI lane so
+    // "open estimates" doesn't get read as a metric.
+    const openEst = matchOpenEstimatesRequest(question);
+    if (openEst) {
+      const res = await postOpenEstimatesCard({
+        requesterPerson: person,
+        sourceChannel: channel,
+        threadTs,
+        targetName: openEst.targetName,
+      });
+      await logDezActivity({
+        kind: 'verb',
+        surface,
+        scope: 'open-estimates',
+        actorPerson: person,
+        actorSlackId: event.user ?? null,
+        summary: `open estimates → ${res.targetPerson ?? person} (${res.count})`,
+        detail: { target: res.targetPerson, count: res.count, delivered: res.delivered },
+        sourceChannel: channel,
       });
       return;
     }
