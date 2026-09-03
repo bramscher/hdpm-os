@@ -2,7 +2,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { auth } from '@/lib/auth';
 import { listAgentConfig, isGloballyKilled } from '@/lib/agents/config';
 import type { AgentProposal, OutboxMessage } from '@/lib/agents/types';
-import AutonomyMatrix from '@/components/agents/AutonomyMatrix';
+import AutonomyMatrix, { type StaffOption } from '@/components/agents/AutonomyMatrix';
 import { buildWorkload } from '@/lib/agents/workload';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +25,7 @@ interface MetricValue {
 async function loadData() {
   const supabase = getSupabaseAdmin();
 
-  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes, clarificationsRes, dezActivityRes, dezFlagsRes] = await Promise.all([
+  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes, clarificationsRes, dezActivityRes, dezFlagsRes, staffRes] = await Promise.all([
     listAgentConfig(),
     isGloballyKilled(),
     supabase
@@ -69,6 +69,13 @@ async function loadData() {
       .eq('detail->>needs_attention', 'true')
       .order('created_at', { ascending: false })
       .limit(15),
+    // Staff with a linked Slack account — the options for the recipients editor.
+    supabase
+      .from('staff')
+      .select('person, name, slack_user_id')
+      .eq('active', true)
+      .not('slack_user_id', 'is', null)
+      .order('person'),
   ]);
 
   const proposals = (proposalsRes.data ?? []) as AgentProposal[];
@@ -92,6 +99,10 @@ async function loadData() {
     clarifications: (clarificationsRes.data ?? []) as BrainClarification[],
     dezActivity: (dezActivityRes.data ?? []) as DezActivityRow[],
     dezFlags: (dezFlagsRes.data ?? []) as DezFlagRow[],
+    staffOptions: (staffRes.data ?? []).map((s) => ({
+      person: s.person as string,
+      label: (s.name as string) || (s.person as string),
+    })) as StaffOption[],
   };
 }
 
@@ -198,7 +209,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 export default async function AgentsPage() {
-  const { config, killed, proposals, outbox, latest, baseline, clarifications, dezActivity, dezFlags } = await loadData();
+  const { config, killed, proposals, outbox, latest, baseline, clarifications, dezActivity, dezFlags, staffOptions } = await loadData();
   const session = await auth();
   const isAdmin = session?.user?.isAdmin === true;
   const stats = proposalStats(proposals);
@@ -356,7 +367,7 @@ export default async function AgentsPage() {
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         Autonomy matrix
       </h2>
-      <AutonomyMatrix initialConfig={config} isAdmin={isAdmin} workload={workload} />
+      <AutonomyMatrix initialConfig={config} isAdmin={isAdmin} workload={workload} staffOptions={staffOptions} />
 
       {/* Proposals */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">

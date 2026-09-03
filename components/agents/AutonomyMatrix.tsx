@@ -22,14 +22,22 @@ const rowKey = (r: { agent: string; action_type: string }) => `${r.agent}:${r.ac
  * agent. Editing is admin-only; everyone else sees it read-only. Tiers clamp to
  * each action's ceiling, so owner/tenant rows can't leave "Assisted".
  */
+/** A selectable Slack recipient (staff member with a linked Slack account). */
+export interface StaffOption {
+  person: string; // staff.person — what's stored in slack_recipients
+  label: string; // display name (staff.name || person)
+}
+
 export default function AutonomyMatrix({
   initialConfig,
   isAdmin,
   workload = {},
+  staffOptions = [],
 }: {
   initialConfig: AgentConfigRow[];
   isAdmin: boolean;
   workload?: Record<string, AgentWorkload>;
+  staffOptions?: StaffOption[];
 }) {
   const [rows, setRows] = useState<AgentConfigRow[]>(initialConfig);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -164,6 +172,7 @@ export default function AutonomyMatrix({
 
                     <RecipientsEditor
                       value={row.slack_recipients}
+                      options={staffOptions}
                       disabled={!isAdmin || saving}
                       onSave={(names) => patch(row, { slack_recipients: names })}
                     />
@@ -214,65 +223,116 @@ function AgentWorkloadLine({ w }: { w?: AgentWorkload }) {
 }
 
 /**
- * Per-action Slack-recipient editor. Comma-separated staff person names; [0] is
- * the interactive/primary recipient. Empty clears the override so the agent falls
- * back to its built-in default list.
+ * Per-action Slack-recipient editor. An ordered multi-select of staff who have a
+ * linked Slack account — no typing names. Element [0] is the interactive/primary
+ * recipient (gets the buttons); the rest are read-only copies. Empty clears the
+ * override so the agent falls back to its built-in default list.
  */
 function RecipientsEditor({
   value,
+  options,
   disabled,
   onSave,
 }: {
   value: string[] | null;
+  options: StaffOption[];
   disabled: boolean;
   onSave: (names: string[]) => void;
 }) {
-  const serverText = (value ?? []).join(", ");
-  const [text, setText] = useState(serverText);
+  const server = value ?? [];
+  const [selected, setSelected] = useState<string[]>(server);
   useEffect(() => {
-    setText(serverText);
-  }, [serverText]);
+    setSelected(server);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server.join("")]);
 
-  const parsed = text
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const dirty = parsed.join(", ") !== serverText;
+  const dirty = selected.join("") !== server.join("");
+  const labelFor = (person: string) => options.find((o) => o.person === person)?.label ?? person;
+  const available = options.filter((o) => !selected.includes(o.person));
+
+  const add = (person: string) => person && setSelected((s) => [...s, person]);
+  const remove = (person: string) => setSelected((s) => s.filter((p) => p !== person));
+  const makePrimary = (person: string) =>
+    setSelected((s) => [person, ...s.filter((p) => p !== person)]);
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <span
         className="text-[11px] font-medium uppercase tracking-wide text-charcoal-400"
-        title="Who gets DM'd in Slack for this action. Comma-separated staff names; the first is the interactive recipient. Empty = default."
+        title="Who gets DM'd in Slack for this action. The first (★) is the interactive recipient; the rest get read-only copies. None = built-in default."
       >
         🔔 Slack
       </span>
-      <input
-        type="text"
-        value={text}
-        disabled={disabled}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="default recipients"
-        className="min-w-[14rem] flex-1 rounded-lg border border-sand-200 bg-white px-2 py-1 text-xs text-charcoal-800 placeholder:text-charcoal-300 disabled:opacity-50"
-      />
+
+      {selected.map((person, i) => (
+        <span
+          key={person}
+          className="inline-flex items-center gap-1 rounded-full border border-sand-200 bg-sand-50 py-0.5 pl-2 pr-1 text-xs text-charcoal-700"
+        >
+          {i === 0 ? (
+            <span title="Primary — gets the interactive card">★</span>
+          ) : !disabled ? (
+            <button
+              type="button"
+              onClick={() => makePrimary(person)}
+              title="Make primary"
+              className="text-charcoal-300 hover:text-amber-500"
+            >
+              ☆
+            </button>
+          ) : null}
+          {labelFor(person)}
+          {!disabled && (
+            <button
+              type="button"
+              onClick={() => remove(person)}
+              title="Remove"
+              className="ml-0.5 rounded-full px-1 text-charcoal-400 hover:bg-sand-200 hover:text-charcoal-700"
+            >
+              ×
+            </button>
+          )}
+        </span>
+      ))}
+
+      {!disabled && available.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => {
+            add(e.target.value);
+            e.target.value = "";
+          }}
+          className="rounded-lg border border-sand-200 bg-white px-2 py-1 text-xs text-charcoal-700"
+        >
+          <option value="" disabled>
+            + add staff…
+          </option>
+          {available.map((o) => (
+            <option key={o.person} value={o.person}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      )}
+
       {dirty && !disabled ? (
         <>
           <button
             type="button"
-            onClick={() => onSave(parsed)}
+            onClick={() => onSave(selected)}
             className="rounded-lg bg-charcoal-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-charcoal-800"
           >
             Save
           </button>
           <button
             type="button"
-            onClick={() => setText(serverText)}
+            onClick={() => setSelected(server)}
             className="rounded-lg px-2 py-1 text-xs text-charcoal-400 hover:text-charcoal-700"
           >
             Cancel
           </button>
         </>
-      ) : !value ? (
+      ) : selected.length === 0 ? (
         <span className="text-[11px] text-charcoal-300">using built-in default</span>
       ) : null}
     </div>
