@@ -1025,14 +1025,23 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                                 {formatDate(wo.created_at)}
                               </td>
                               <td className="px-2 py-2.5 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleCreateInvoiceFromWo(wo)}
-                                  title="Create Invoice"
-                                  className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-terra-50/80 text-terra-600 hover:bg-terra-100 hover:text-terra-800 transition-colors"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
+                                <div className="inline-flex items-center gap-1">
+                                  <a
+                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}`}
+                                    title="Create Estimate"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-green-50/80 text-green-700 hover:bg-green-100 hover:text-green-900 transition-colors"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCreateInvoiceFromWo(wo)}
+                                    title="Create Invoice"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-terra-50/80 text-terra-600 hover:bg-terra-100 hover:text-terra-800 transition-colors"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
