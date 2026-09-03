@@ -9,6 +9,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
+import { tryAdvanceTurn } from './turns';
 import type { LineItem, LineItemType } from '@/lib/invoices';
 import type { PricingMethod } from './types';
 
@@ -44,7 +45,7 @@ export async function convertEstimateVersionToInvoice(
 
   const { data: est, error: eErr } = await supabase
     .from('estimate')
-    .select('id, status, property_name, unit_name, property_id')
+    .select('id, status, property_name, unit_name, property_id, unit_turn_id')
     .eq('id', version.estimate_id)
     .single();
   if (eErr || !est) throw new Error(`estimate not found: ${eErr?.message}`);
@@ -124,6 +125,8 @@ export async function convertEstimateVersionToInvoice(
     invoice_code: inv.invoice_code,
     total_amount: inv.total_amount,
   });
+  // Advance the linked turn into billing (best-effort).
+  await tryAdvanceTurn(est.unit_turn_id as string | null, 'INVOICE_REVIEW', actor, `invoice ${inv.invoice_code} drafted`);
 
   return {
     invoice_id: inv.id as string,
