@@ -11,6 +11,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { priceEstimate, evaluateAuthorization } from './pricing';
 import { getEstimatorConfig } from './config';
+import { tryAdvanceTurn } from './turns';
 import type { LineInput, PricedLine } from './types';
 
 export interface CreateEstimateInput {
@@ -82,7 +83,7 @@ export async function issueEstimateVersion(
 
   const { data: est, error: estErr } = await supabase
     .from('estimate')
-    .select('id, status, current_version_id, authorization_limit')
+    .select('id, status, current_version_id, authorization_limit, unit_turn_id')
     .eq('id', estimateId)
     .single();
   if (estErr || !est) throw new Error(`estimate not found: ${estErr?.message}`);
@@ -172,6 +173,19 @@ export async function issueEstimateVersion(
     limit,
   });
 
+  // Advance the linked turn's lifecycle (best-effort; leaves the turn alone if
+  // it isn't at a compatible state). Issue → ESTIMATE_READY → APPROVED/pending.
+  const turnId = est.unit_turn_id as string | null;
+  if (turnId) {
+    await tryAdvanceTurn(turnId, 'ESTIMATE_READY', actor, `estimate v${versionNumber} issued`);
+    await tryAdvanceTurn(
+      turnId,
+      authorization === 'auto_approved' ? 'APPROVED' : 'APPROVAL_PENDING',
+      actor,
+      `estimate v${versionNumber} ${authorization}`
+    );
+  }
+
   return {
     version_id: version.id,
     version_number: versionNumber,
@@ -244,7 +258,13 @@ export async function decideApproval(
       .eq('id', appr.estimate_version_id)
       .single();
     if (ver?.estimate_id) {
-      await supabase.from('estimate').update({ status: 'approved' }).eq('id', ver.estimate_id);
+      const { data: e } = await supabase
+        .from('estimate')
+        .update({ status: 'approved' })
+        .eq('id', ver.estimate_id)
+        .select('unit_turn_id')
+        .single();
+      await tryAdvanceTurn(e?.unit_turn_id as string | null, 'APPROVED', actor, 'estimate approved');
     }
   } else if (decision === 'DECLINED') {
     const { data: ver } = await supabase
