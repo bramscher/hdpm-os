@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { buildRoutePlans } from '@/lib/route-engine';
 import { computeInspectionDueDate } from '@/lib/inspection-candidates';
+import { postInspectionNoticeCard } from '@/lib/agents/dez/inspection-notice';
 import type { GeoInspection } from '@/types/routes';
 
 interface ScheduleRequest {
@@ -280,6 +281,14 @@ export async function POST(request: NextRequest) {
         .from('inspection_properties')
         .update({ candidate_status: 'scheduled' })
         .in('id', [...scheduledPropertyIds]);
+    }
+
+    // Dez: DM the inspections owner (Brody) a card of the tenant notices these
+    // newly-scheduled inspections need, so a human sends them via AppFolio /
+    // Realm-X. Human-gated, ships dark behind DEZ_INSPECTION_NOTICES. Awaited but
+    // never fatal — a Slack hiccup must not fail the schedule the user just made.
+    if (process.env.DEZ_INSPECTION_NOTICES === '1' && scheduledInspectionIds.length > 0) {
+      await postInspectionNoticeCard(supabase, scheduledInspectionIds);
     }
 
     return NextResponse.json({

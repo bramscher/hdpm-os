@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AgentConfigRow } from "@/lib/agents/types";
 import {
   TIERS,
@@ -47,7 +47,10 @@ export default function AutonomyMatrix({
     return [...m.entries()];
   }, [agentRows]);
 
-  async function patch(row: AgentConfigRow, body: { tier?: AutonomyTier; enabled?: boolean }) {
+  async function patch(
+    row: AgentConfigRow,
+    body: { tier?: AutonomyTier; enabled?: boolean; slack_recipients?: string[] }
+  ) {
     if (!isAdmin) return;
     const key = rowKey(row);
     setSavingKey(key);
@@ -56,6 +59,9 @@ export default function AutonomyMatrix({
     const optimistic: Partial<AgentConfigRow> = {};
     if (body.tier) optimistic.autonomy_level = tierToLevel(body.tier, row.ceiling_level);
     if (body.enabled !== undefined) optimistic.enabled = body.enabled;
+    if (body.slack_recipients !== undefined) {
+      optimistic.slack_recipients = body.slack_recipients.length > 0 ? body.slack_recipients : null;
+    }
     setRows((prev) => prev.map((r) => (rowKey(r) === key ? { ...r, ...optimistic } : r)));
     try {
       const res = await fetch("/api/agents/config", {
@@ -127,31 +133,39 @@ export default function AutonomyMatrix({
                 const current = row.enabled ? levelToTier(row.autonomy_level) : null;
                 const saving = savingKey === key;
                 return (
-                  <div key={key} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-                    <div className="min-w-[9rem] flex-1">
-                      <p className="text-sm font-medium text-charcoal-800">{row.action_type}</p>
-                      <p className="text-xs text-charcoal-400">
-                        {row.enabled ? LEVEL_LABELS[row.autonomy_level] : "L0 observe (off)"} · ceiling{" "}
-                        {LEVEL_LABELS[row.ceiling_level]}
-                        {row.ceiling_level <= 2 && (
-                          <span className="ml-1 text-charcoal-300">· owner/tenant wall</span>
-                        )}
-                      </p>
+                  <div key={key} className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <div className="min-w-[9rem] flex-1">
+                        <p className="text-sm font-medium text-charcoal-800">{row.action_type}</p>
+                        <p className="text-xs text-charcoal-400">
+                          {row.enabled ? LEVEL_LABELS[row.autonomy_level] : "L0 observe (off)"} · ceiling{" "}
+                          {LEVEL_LABELS[row.ceiling_level]}
+                          {row.ceiling_level <= 2 && (
+                            <span className="ml-1 text-charcoal-300">· owner/tenant wall</span>
+                          )}
+                        </p>
+                      </div>
+
+                      <TierControl
+                        current={current}
+                        ceiling={row.ceiling_level}
+                        disabled={!isAdmin || !row.enabled || saving}
+                        onPick={(tier) => patch(row, { tier })}
+                      />
+
+                      <Toggle
+                        on={row.enabled}
+                        disabled={!isAdmin || saving}
+                        onChange={(v) => patch(row, { enabled: v })}
+                        labelOn="On"
+                        labelOff="Off"
+                      />
                     </div>
 
-                    <TierControl
-                      current={current}
-                      ceiling={row.ceiling_level}
-                      disabled={!isAdmin || !row.enabled || saving}
-                      onPick={(tier) => patch(row, { tier })}
-                    />
-
-                    <Toggle
-                      on={row.enabled}
+                    <RecipientsEditor
+                      value={row.slack_recipients}
                       disabled={!isAdmin || saving}
-                      onChange={(v) => patch(row, { enabled: v })}
-                      labelOn="On"
-                      labelOff="Off"
+                      onSave={(names) => patch(row, { slack_recipients: names })}
                     />
                   </div>
                 );
@@ -195,6 +209,72 @@ function AgentWorkloadLine({ w }: { w?: AgentWorkload }) {
           ) : null}
         </span>
       )}
+    </div>
+  );
+}
+
+/**
+ * Per-action Slack-recipient editor. Comma-separated staff person names; [0] is
+ * the interactive/primary recipient. Empty clears the override so the agent falls
+ * back to its built-in default list.
+ */
+function RecipientsEditor({
+  value,
+  disabled,
+  onSave,
+}: {
+  value: string[] | null;
+  disabled: boolean;
+  onSave: (names: string[]) => void;
+}) {
+  const serverText = (value ?? []).join(", ");
+  const [text, setText] = useState(serverText);
+  useEffect(() => {
+    setText(serverText);
+  }, [serverText]);
+
+  const parsed = text
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const dirty = parsed.join(", ") !== serverText;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span
+        className="text-[11px] font-medium uppercase tracking-wide text-charcoal-400"
+        title="Who gets DM'd in Slack for this action. Comma-separated staff names; the first is the interactive recipient. Empty = default."
+      >
+        🔔 Slack
+      </span>
+      <input
+        type="text"
+        value={text}
+        disabled={disabled}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="default recipients"
+        className="min-w-[14rem] flex-1 rounded-lg border border-sand-200 bg-white px-2 py-1 text-xs text-charcoal-800 placeholder:text-charcoal-300 disabled:opacity-50"
+      />
+      {dirty && !disabled ? (
+        <>
+          <button
+            type="button"
+            onClick={() => onSave(parsed)}
+            className="rounded-lg bg-charcoal-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-charcoal-800"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => setText(serverText)}
+            className="rounded-lg px-2 py-1 text-xs text-charcoal-400 hover:text-charcoal-700"
+          >
+            Cancel
+          </button>
+        </>
+      ) : !value ? (
+        <span className="text-[11px] text-charcoal-300">using built-in default</span>
+      ) : null}
     </div>
   );
 }

@@ -8,7 +8,8 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase';
-import type { AgentConfigRow, AutonomyLevel } from './types';
+import { resolveStaffByPersonOrEmail } from './staff';
+import type { AgentConfigRow, AutonomyLevel, StaffRow } from './types';
 
 export async function getAgentConfig(
   agent: string,
@@ -40,6 +41,26 @@ export async function listAgentConfig(): Promise<AgentConfigRow[]> {
     return [];
   }
   return (data ?? []) as AgentConfigRow[];
+}
+
+/**
+ * Resolve the Slack recipients for an agent action, in order. Uses the config
+ * row's slack_recipients when set (non-empty), otherwise the caller's built-in
+ * fallback list — so an unconfigured agent behaves exactly as before. Names are
+ * resolved through the staff table and only those with a slack_user_id are
+ * returned. Order is preserved: element [0] is the primary/interactive recipient
+ * for cards that distinguish primary from read-only copies.
+ */
+export async function getNotifyRecipients(
+  agent: string,
+  actionType: string,
+  fallbackNames: string[]
+): Promise<StaffRow[]> {
+  const row = await getAgentConfig(agent, actionType);
+  const names =
+    row?.slack_recipients && row.slack_recipients.length > 0 ? row.slack_recipients : fallbackNames;
+  const resolved = await Promise.all(names.map((n) => resolveStaffByPersonOrEmail(n)));
+  return resolved.filter((s): s is StaffRow => Boolean(s?.slack_user_id));
 }
 
 /** The global kill switch: row ('*','*') with enabled=false halts all agents. */

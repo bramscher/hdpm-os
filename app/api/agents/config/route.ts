@@ -27,18 +27,27 @@ export async function GET(request: NextRequest) {
  * PATCH /api/agents/config — set an agent action's autonomy tier and/or enabled
  * flag. Admin-only (autonomy is granted deliberately, never self-service).
  *
- * Body: { agent, action_type, tier?: 'supervised'|'assisted'|'autonomous', enabled?: boolean }
+ * Body: { agent, action_type, tier?: 'supervised'|'assisted'|'autonomous',
+ *         enabled?: boolean, slack_recipients?: string[] }
  *
  * The tier is translated to an autonomy_level CLAMPED to the row's own
  * ceiling_level (read here, never taken from the client) — so owner/tenant
  * actions stay ≤ L2 whatever tier is chosen. Ceilings themselves are policy and
- * are not editable through this route.
+ * are not editable through this route. slack_recipients is the ordered notify
+ * list ([0] = interactive/primary); an empty array clears it (agent reverts to
+ * its built-in default recipients).
  */
 export async function PATCH(request: NextRequest) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
-  let body: { agent?: unknown; action_type?: unknown; tier?: unknown; enabled?: unknown };
+  let body: {
+    agent?: unknown;
+    action_type?: unknown;
+    tier?: unknown;
+    enabled?: unknown;
+    slack_recipients?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -56,8 +65,24 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: `tier must be one of ${TIERS.join(', ')}` }, { status: 400 });
   }
   const enabled = typeof body.enabled === 'boolean' ? body.enabled : undefined;
-  if (tier === undefined && enabled === undefined) {
-    return NextResponse.json({ error: 'nothing to update (provide tier and/or enabled)' }, { status: 400 });
+
+  // slack_recipients: an array of staff person names, or [] to clear.
+  let slackRecipients: string[] | undefined;
+  if (body.slack_recipients !== undefined) {
+    if (
+      !Array.isArray(body.slack_recipients) ||
+      !body.slack_recipients.every((n) => typeof n === 'string')
+    ) {
+      return NextResponse.json({ error: 'slack_recipients must be an array of strings' }, { status: 400 });
+    }
+    slackRecipients = (body.slack_recipients as string[]).map((n) => n.trim()).filter(Boolean);
+  }
+
+  if (tier === undefined && enabled === undefined && slackRecipients === undefined) {
+    return NextResponse.json(
+      { error: 'nothing to update (provide tier, enabled, and/or slack_recipients)' },
+      { status: 400 }
+    );
   }
 
   const supabase = getSupabaseAdmin();
@@ -79,6 +104,10 @@ export async function PATCH(request: NextRequest) {
       patch.autonomy_level = tierToLevel(tier as AutonomyTier, (current as AgentConfigRow).ceiling_level);
     }
     if (enabled !== undefined) patch.enabled = enabled;
+    // Empty array clears the override (NULL) → agent falls back to its default.
+    if (slackRecipients !== undefined) {
+      patch.slack_recipients = slackRecipients.length > 0 ? slackRecipients : null;
+    }
 
     const { data: updated, error: writeErr } = await supabase
       .from('agent_config')
@@ -92,7 +121,8 @@ export async function PATCH(request: NextRequest) {
     console.log(
       `[Agents] ${guard.email} set ${agent}/${actionType} →`,
       tier !== undefined ? `tier=${tier} (L${patch.autonomy_level})` : '',
-      enabled !== undefined ? `enabled=${enabled}` : ''
+      enabled !== undefined ? `enabled=${enabled}` : '',
+      slackRecipients !== undefined ? `slack_recipients=[${slackRecipients.join(', ')}]` : ''
     );
     return NextResponse.json({ row: updated });
   } catch (err) {

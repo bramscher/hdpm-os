@@ -11,10 +11,9 @@ import { tripwire8 } from '@/lib/maintenance/tripwires';
 import { computeVendorScores } from '@/lib/maintenance/vendors';
 import { daysBetween } from '@/lib/maintenance/business-days';
 import { getDashboardConfig } from '@/lib/dashboard-config';
-import { getAgentConfig, effectiveLevel, isGloballyKilled, isWithinQuietHours } from './config';
+import { getAgentConfig, effectiveLevel, isGloballyKilled, isWithinQuietHours, getNotifyRecipients } from './config';
 import { createProposal } from './proposals';
 import { enqueueOutbox, dispatchOutbox } from './outbox';
-import { resolveStaffByPersonOrEmail } from './staff';
 import { todayPacific } from './morning-card';
 import { readLatestMetrics, readMetricsAsOf, readBaselineFreeze, type MetricMap } from './metrics-history';
 import type { SendOutcome } from './channels';
@@ -93,7 +92,8 @@ export interface OpsBriefRunResult {
   needsCraig: number;
   unacked: number;
   agentsReported: number;
-  slack: { brody?: SendOutcome; matt?: SendOutcome; craig?: SendOutcome };
+  /** keyed by lowercased recipient person name (configurable via agent_config) */
+  slack: Record<string, SendOutcome>;
 }
 
 function num(map: MetricMap, metric: string, field: string): number | null {
@@ -387,63 +387,53 @@ export async function runOpsBrief(opts: {
     rationale: `${deep ? 'Monday deep' : 'Daily'} ops brief — ${needsCraig.length} needs-decision item(s)`,
   });
 
-  const [brody, matt, craig] = await Promise.all([
-    resolveStaffByPersonOrEmail('Brody'),
-    resolveStaffByPersonOrEmail('Matt'),
-    resolveStaffByPersonOrEmail('Craig'),
+  // Recipients are configurable per-agent (agent_config.slack_recipients for
+  // ops_brief/send_brief); [0] is the interactive brief (gets the ack buttons +
+  // the auto_applied proposal stamp), the rest get read-only copies. Defaults to
+  // Brody (interactive), Matt + Craig (copies).
+  const recipients = await getNotifyRecipients(OPS_BRIEF_AGENT, SEND_BRIEF_ACTION, [
+    'Brody',
+    'Matt',
+    'Craig',
   ]);
+  const [primary, ...copies] = recipients;
 
-  let brodyOutboxId: string | null = null;
-  if (brody?.slack_user_id) {
+  let primaryOutboxId: string | null = null;
+  if (primary) {
     const row = await enqueueOutbox({
       proposal_id: proposal.id,
       channel: 'slack',
-      recipient_person: 'Brody',
-      recipient_address: brody.slack_user_id,
+      recipient_person: primary.person,
+      recipient_address: primary.slack_user_id!,
       subject: 'Ops Brief',
       body: interactive.text,
       payload: { blocks: interactive.blocks, brief_date: briefDate },
     });
-    brodyOutboxId = row.id;
+    primaryOutboxId = row.id;
   } else {
-    result.slack.brody = { status: 'skipped', error: 'Brody has no slack_user_id in staff' };
+    result.slack.primary = { status: 'skipped', error: 'no ops_brief recipient with a slack_user_id' };
   }
-  if (matt?.slack_user_id) {
+  for (const staff of copies) {
     await enqueueOutbox({
       proposal_id: proposal.id,
       channel: 'slack',
-      recipient_person: 'Matt',
-      recipient_address: matt.slack_user_id,
+      recipient_person: staff.person,
+      recipient_address: staff.slack_user_id!,
       subject: 'Ops Brief (copy)',
       body: readOnly.text,
       payload: { blocks: readOnly.blocks, brief_date: briefDate },
     });
-  } else {
-    result.slack.matt = { status: 'skipped', error: 'Matt has no slack_user_id in staff' };
-  }
-  if (craig?.slack_user_id) {
-    await enqueueOutbox({
-      proposal_id: proposal.id,
-      channel: 'slack',
-      recipient_person: 'Craig',
-      recipient_address: craig.slack_user_id,
-      subject: 'Ops Brief (copy)',
-      body: readOnly.text,
-      payload: { blocks: readOnly.blocks, brief_date: briefDate },
-    });
-  } else {
-    result.slack.craig = { status: 'skipped', error: 'Craig has no slack_user_id in staff' };
   }
 
   await dispatchOutbox({ channel: 'slack', now });
 
-  if (brodyOutboxId) {
+  if (primaryOutboxId && primary) {
     const { data: sentRow } = await supabase
       .from('agent_outbox')
       .select('status, message_id, error')
-      .eq('id', brodyOutboxId)
+      .eq('id', primaryOutboxId)
       .maybeSingle();
-    result.slack.brody = {
+    result.slack[primary.person.toLowerCase()] = {
       status: (sentRow?.status as SendOutcome['status']) ?? 'failed',
       message_id: sentRow?.message_id ?? null,
       error: sentRow?.error ?? null,
@@ -455,11 +445,8 @@ export async function runOpsBrief(opts: {
         .eq('id', proposal.id);
     }
   }
-  if (matt?.slack_user_id && result.slack.matt === undefined) {
-    result.slack.matt = { status: 'sent' };
-  }
-  if (craig?.slack_user_id && result.slack.craig === undefined) {
-    result.slack.craig = { status: 'sent' };
+  for (const staff of copies) {
+    result.slack[staff.person.toLowerCase()] = { status: 'sent' };
   }
 
   return result;
