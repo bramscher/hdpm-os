@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { getTurnLifecycle } from '@/lib/turn-estimator/turns';
 import { getTurnDispatch } from '@/lib/turn-estimator/dispatch';
 import TurnLifecyclePanel from '@/components/turn-estimator/TurnLifecyclePanel';
@@ -15,6 +16,15 @@ export default async function TurnDetailPage({ params }: { params: Promise<{ id:
   if (!result) notFound();
   const { turn, events } = result;
   const { workOrders, variance } = await getTurnDispatch(id);
+
+  // The turn's latest estimate (for the owner-facing PDF link).
+  const { data: latestEstimate } = await getSupabaseAdmin()
+    .from('estimate')
+    .select('id, current_version_id')
+    .eq('unit_turn_id', id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -49,8 +59,21 @@ export default async function TurnDetailPage({ params }: { params: Promise<{ id:
         <TurnDispatchSync turnId={turn.id} />
       </div>
 
+      {latestEstimate?.current_version_id && (
+        <div className="mt-2">
+          <a
+            href={`/api/turn-estimator/estimates/${latestEstimate.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800"
+          >
+            📄 Download owner estimate (HDMS PDF)
+          </a>
+        </div>
+      )}
+
       {/* Variance card */}
-      <div className="mt-2 grid grid-cols-3 gap-3">
+      <div className="mt-4 grid grid-cols-3 gap-3">
         <Stat label="Approved estimate" value={money(variance.approved)} />
         <Stat label="Actual (invoiced)" value={money(variance.actual)} sub={`${variance.invoice_count} invoice(s)`} />
         <Stat
