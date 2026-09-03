@@ -16,7 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getDueNotices, type DueNotice } from '@/lib/inspection-notify';
 import { createProposal } from '@/lib/agents/proposals';
-import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
+import { getNotifyRecipients } from '@/lib/agents/config';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
 
 export const DEZ_NOTICE_AGENT = 'dez_notice';
@@ -182,9 +182,12 @@ export async function postInspectionNoticeCard(
     const routeDate = notices[0].target_date ?? null;
     const items = toNoticeCardItems(notices);
 
-    const owner = await resolveStaffByPersonOrEmail(getNoticeOwner());
-    if (!owner?.slack_user_id) {
-      return { posted: false, count: notices.length, reason: `no slack_user_id for ${getNoticeOwner()}` };
+    // Recipients configurable per-agent (agent_config.slack_recipients for
+    // inspections/tenant_notice); defaults to the notice owner (Brody). All
+    // recipients get the same card; the proposal is double-tap guarded.
+    const recipients = await getNotifyRecipients('inspections', 'tenant_notice', [getNoticeOwner()]);
+    if (recipients.length === 0) {
+      return { posted: false, count: notices.length, reason: `no slack recipient for inspections/tenant_notice` };
     }
 
     const proposal = await createProposal({
@@ -210,30 +213,34 @@ export async function postInspectionNoticeCard(
       items,
     });
 
-    const row = await enqueueOutbox({
-      proposal_id: proposal.id,
-      channel: 'slack',
-      recipient_person: owner.person,
-      recipient_address: owner.slack_user_id,
-      subject: 'Inspection notices ready',
-      body: card.text,
-      payload: { blocks: card.blocks, route_date: routeDate },
-    });
+    const rowIds: string[] = [];
+    for (const r of recipients) {
+      const row = await enqueueOutbox({
+        proposal_id: proposal.id,
+        channel: 'slack',
+        recipient_person: r.person,
+        recipient_address: r.slack_user_id!,
+        subject: 'Inspection notices ready',
+        body: card.text,
+        payload: { blocks: card.blocks, route_date: routeDate },
+      });
+      rowIds.push(row.id);
+    }
     await dispatchOutbox({ channel: 'slack' });
 
-    const { data: sent } = await supabase
+    const { data: sentRows } = await supabase
       .from('agent_outbox')
       .select('status, message_id')
-      .eq('id', row.id)
-      .maybeSingle();
-    if (sent?.message_id) {
+      .in('id', rowIds);
+    const firstSent = (sentRows ?? []).find((r) => r.status === 'sent');
+    if (firstSent?.message_id) {
       await supabase
         .from('agent_proposal')
-        .update({ channel_message_id: sent.message_id })
+        .update({ channel_message_id: firstSent.message_id })
         .eq('id', proposal.id);
     }
 
-    return { posted: sent?.status === 'sent', count: notices.length };
+    return { posted: Boolean(firstSent), count: notices.length };
   } catch (err) {
     console.error('[dez/inspection-notice] post card failed:', err instanceof Error ? err.message : err);
     return { posted: false, count: 0, reason: 'error' };

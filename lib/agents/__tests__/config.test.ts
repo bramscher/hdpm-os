@@ -12,6 +12,7 @@ function row(overrides: Partial<AgentConfigRow> = {}): AgentConfigRow {
     quiet_hours: null,
     owner_role: 'Cheryl',
     enabled: true,
+    slack_recipients: null,
     updated_at: '2026-07-19T00:00:00Z',
     ...overrides,
   };

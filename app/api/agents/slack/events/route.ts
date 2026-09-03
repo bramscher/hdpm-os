@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import { verifySlackSignature } from '@/lib/webhook-verify';
-import { resolveStaffBySlackId, resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
+import { resolveStaffBySlackId } from '@/lib/agents/staff';
 import { askRAG } from '@/lib/rag';
 import { sendSlackMessage } from '@/lib/agents/channels/slack';
 import { routeToScope } from '@/lib/agents/dez/router';
@@ -17,7 +17,7 @@ import {
   FORM_MERGE_ACTION,
   type OperatorRequest,
 } from '@/lib/agents/dez/operator';
-import { getAgentConfig, effectiveLevel, isGloballyKilled } from '@/lib/agents/config';
+import { getAgentConfig, effectiveLevel, isGloballyKilled, getNotifyRecipients } from '@/lib/agents/config';
 import { createProposal } from '@/lib/agents/proposals';
 import { alertOperatorFailure } from '@/lib/agents/dez/operator-alert';
 
@@ -270,7 +270,9 @@ async function handleOperatorRequest(ctx: {
   });
 }
 
-/** DM Craig when Dez flags a form as possibly-outdated (best-effort). */
+/** DM the form-review recipients when Dez flags a form as possibly-outdated
+ *  (best-effort). Recipients are configurable via agent_config.slack_recipients
+ *  for dez/form_flag; defaults to Craig. */
 async function notifyCraigReview(input: {
   asker: string;
   question: string;
@@ -278,28 +280,29 @@ async function notifyCraigReview(input: {
   title: string | null;
 }): Promise<void> {
   try {
-    const craig = await resolveStaffByPersonOrEmail('Craig');
-    if (!craig?.slack_user_id) return;
-    await sendSlackMessage({
-      channel: craig.slack_user_id,
-      text: '🚩 Dez flagged a form for your review',
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text:
-              `🚩 *Dez flagged a form for review*\n` +
-              `*Asked by:* ${input.asker}\n` +
-              `*Question:* ${input.question}\n` +
-              `*Doc:* ${input.title ?? '—'}\n` +
-              `*Why:* ${input.reason}`,
+    const recipients = await getNotifyRecipients('dez', 'form_flag', ['Craig']);
+    for (const r of recipients) {
+      await sendSlackMessage({
+        channel: r.slack_user_id!,
+        text: '🚩 Dez flagged a form for your review',
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text:
+                `🚩 *Dez flagged a form for review*\n` +
+                `*Asked by:* ${input.asker}\n` +
+                `*Question:* ${input.question}\n` +
+                `*Doc:* ${input.title ?? '—'}\n` +
+                `*Why:* ${input.reason}`,
+            },
           },
-        },
-      ],
-    });
+        ],
+      });
+    }
   } catch (err) {
-    console.error('[Dez] craig review notify failed:', err instanceof Error ? err.message : String(err));
+    console.error('[Dez] form review notify failed:', err instanceof Error ? err.message : String(err));
   }
 }
 

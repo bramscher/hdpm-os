@@ -9,10 +9,9 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { loadTripwireSnapshot, runTripwires } from '@/lib/maintenance/tripwire-engine';
 import { proposalCounts } from '@/lib/maintenance/triage-batch';
-import { getAgentConfig, effectiveLevel, isGloballyKilled } from './config';
+import { getAgentConfig, effectiveLevel, isGloballyKilled, getNotifyRecipients } from './config';
 import { createProposal, listProposals } from './proposals';
 import { enqueueOutbox, dispatchOutbox } from './outbox';
-import { resolveStaffByPersonOrEmail } from './staff';
 import type { SendOutcome } from './channels';
 import type { AgentProposal } from './types';
 import {
@@ -126,7 +125,8 @@ export interface MorningCardRunResult {
   halted?: string;
   expired: number;
   items: number;
-  slack: { cheryl?: SendOutcome; brody?: SendOutcome; matt?: SendOutcome };
+  /** keyed by lowercased recipient person name (configurable via agent_config) */
+  slack: Record<string, SendOutcome>;
   email?: SendOutcome;
   nudge?: 'sent' | 'not_needed' | 'no_card';
   dryRun: boolean;
@@ -272,59 +272,56 @@ export async function runMorningCard(opts: {
   }
   result.items = items.length;
 
-  // Slack: Cheryl interactive + Brody/Matt read-only copies.
-  const [cheryl, brody, matt] = await Promise.all([
-    resolveStaffByPersonOrEmail('Cheryl'),
-    resolveStaffByPersonOrEmail('Brody'),
-    resolveStaffByPersonOrEmail('Matt'),
+  // Slack recipients are configurable per-agent (agent_config.slack_recipients
+  // for morning_card/daily_card); [0] is the interactive card (its proposals get
+  // the channel_message_id stamp for later chat.update), the rest get read-only
+  // copies. Defaults to Cheryl (interactive), Brody + Matt (copies).
+  const recipients = await getNotifyRecipients(MORNING_CARD_AGENT, MORNING_CARD_ACTION, [
+    'Cheryl',
+    'Brody',
+    'Matt',
   ]);
+  const [primary, ...copies] = recipients;
 
   const fallbackText = `Morning Action Card — ${cardDate}: ${items.length} items`;
-  let cherylOutboxId: string | null = null;
+  let primaryOutboxId: string | null = null;
 
-  if (cheryl?.slack_user_id) {
+  if (primary) {
     const row = await enqueueOutbox({
       channel: 'slack',
-      recipient_person: 'Cheryl',
-      recipient_address: cheryl.slack_user_id,
+      recipient_person: primary.person,
+      recipient_address: primary.slack_user_id!,
       subject: 'Morning Action Card',
       body: fallbackText,
       payload: { blocks: buildCardBlocks({ header, items, readOnly: false }), card_date: cardDate },
     });
-    cherylOutboxId = row.id;
+    primaryOutboxId = row.id;
   } else {
-    result.slack.cheryl = { status: 'skipped', error: 'Cheryl has no slack_user_id in staff' };
+    result.slack.primary = { status: 'skipped', error: 'no morning_card recipient with a slack_user_id' };
   }
 
-  for (const [person, staff, key] of [
-    ['Brody', brody, 'brody'],
-    ['Matt', matt, 'matt'],
-  ] as const) {
-    if (staff?.slack_user_id) {
-      await enqueueOutbox({
-        channel: 'slack',
-        recipient_person: person,
-        recipient_address: staff.slack_user_id,
-        subject: 'Morning Action Card (copy)',
-        body: fallbackText,
-        payload: { blocks: buildCardBlocks({ header, items, readOnly: true }), card_date: cardDate },
-      });
-    } else {
-      result.slack[key] = { status: 'skipped', error: `${person} has no slack_user_id in staff` };
-    }
+  for (const staff of copies) {
+    await enqueueOutbox({
+      channel: 'slack',
+      recipient_person: staff.person,
+      recipient_address: staff.slack_user_id!,
+      subject: 'Morning Action Card (copy)',
+      body: fallbackText,
+      payload: { blocks: buildCardBlocks({ header, items, readOnly: true }), card_date: cardDate },
+    });
   }
 
   await dispatchOutbox({ channel: 'slack' });
 
-  // Read back Cheryl's send result; stamp channel_message_id on the proposals
-  // so later code can chat.update the card without a response_url.
-  if (cherylOutboxId) {
+  // Read back the primary's send result; stamp channel_message_id on the
+  // proposals so later code can chat.update the card without a response_url.
+  if (primaryOutboxId && primary) {
     const { data: sentRow } = await supabase
       .from('agent_outbox')
       .select('status, message_id, error')
-      .eq('id', cherylOutboxId)
+      .eq('id', primaryOutboxId)
       .maybeSingle();
-    result.slack.cheryl = {
+    result.slack[primary.person.toLowerCase()] = {
       status: (sentRow?.status as SendOutcome['status']) ?? 'failed',
       message_id: sentRow?.message_id ?? null,
       error: sentRow?.error ?? null,
@@ -336,15 +333,20 @@ export async function runMorningCard(opts: {
         .in('id', items.map((i) => i.proposalId));
     }
   }
+  for (const staff of copies) {
+    if (result.slack[staff.person.toLowerCase()] === undefined) {
+      result.slack[staff.person.toLowerCase()] = { status: 'sent' };
+    }
+  }
 
-  // Email mirror to Cheryl.
-  const emailTo = cheryl?.email ?? null;
-  if (emailTo) {
+  // Email mirror to the primary (interactive) recipient.
+  const emailTo = primary?.email ?? null;
+  if (emailTo && primary) {
     const baseUrl = process.env.NEXTAUTH_URL || 'https://hdpmchat.highdesertpm.com';
     const mail = buildCardEmailHtml(header, items, baseUrl);
     await enqueueOutbox({
       channel: 'email',
-      recipient_person: 'Cheryl',
+      recipient_person: primary.person,
       recipient_address: emailTo,
       subject: mail.subject,
       body: mail.text,
@@ -353,7 +355,7 @@ export async function runMorningCard(opts: {
     await dispatchOutbox({ channel: 'email' });
     result.email = { status: 'sent' };
   } else {
-    result.email = { status: 'skipped', error: 'Cheryl has no email in staff' };
+    result.email = { status: 'skipped', error: 'primary recipient has no email in staff' };
   }
 
   return result;
@@ -378,16 +380,17 @@ async function runNudge(
     routeSummary: null,
   }) as CardHeader;
 
-  const cheryl = await resolveStaffByPersonOrEmail('Cheryl');
-  if (!cheryl?.slack_user_id) {
+  // Nudge the interactive owner (primary recipient) if the card is untouched.
+  const [primary] = await getNotifyRecipients(MORNING_CARD_AGENT, MORNING_CARD_ACTION, ['Cheryl']);
+  if (!primary?.slack_user_id) {
     return { ...result, nudge: 'no_card' };
   }
 
   const nudge = buildNudge(items, header);
   await enqueueOutbox({
     channel: 'slack',
-    recipient_person: 'Cheryl',
-    recipient_address: cheryl.slack_user_id,
+    recipient_person: primary.person,
+    recipient_address: primary.slack_user_id,
     subject: 'Morning card nudge',
     body: nudge.text,
     payload: { blocks: nudge.blocks, card_date: cardDate },

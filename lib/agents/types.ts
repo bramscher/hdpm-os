@@ -81,6 +81,10 @@ export interface AgentConfigRow {
   quiet_hours: string | null;
   owner_role: string | null;
   enabled: boolean;
+  /** staff.person names to DM in Slack for this action; [0] is the primary
+   *  (interactive) recipient, the rest are read-only copies. Null/empty →
+   *  the agent falls back to its built-in default recipient list. */
+  slack_recipients: string[] | null;
   updated_at: string;
 }
 

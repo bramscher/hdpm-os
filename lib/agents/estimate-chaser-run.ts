@@ -22,7 +22,7 @@ import { daysBetween } from '@/lib/maintenance/business-days';
 import { getDashboardConfig } from '@/lib/dashboard-config';
 import { fetchAppFolioVendorContacts } from '@/lib/appfolio';
 import { normalizePhone } from '@/lib/zoom-sync';
-import { getAgentConfig, effectiveLevel, isGloballyKilled, isWithinQuietHours } from './config';
+import { getAgentConfig, effectiveLevel, isGloballyKilled, isWithinQuietHours, getNotifyRecipients } from './config';
 import { createProposal } from './proposals';
 import { enqueueOutbox, dispatchOutbox } from './outbox';
 import { resolveStaffByPersonOrEmail } from './staff';
@@ -639,10 +639,15 @@ export async function runEstimateChaser(opts: {
       result.smsProposed++;
     }
 
-    // Fan the queue card out to each delivery recipient (Cheryl by default,
-    // the pilot cohort when configured). Each person taps their own card; the
+    // Fan the queue card out to each delivery recipient. Configurable per-agent
+    // via agent_config.slack_recipients (/agents page); falls back to the draft
+    // cohort (owner/pilot) when unset. Each person taps their own card; the
     // shared proposals are double-tap guarded so a second tapper is a no-op.
-    const cardRecipients = recipients.filter((s) => s.slack_user_id);
+    const cardRecipients = await getNotifyRecipients(
+      ESTIMATE_CHASER_AGENT,
+      'vendor_chase',
+      recipients.map((s) => s.person)
+    );
     if (cardRecipients.length > 0) {
       const card = buildSmsQueueCard(smsItems, chaseDate);
       const cardRowIds: string[] = [];
@@ -714,19 +719,21 @@ export async function runEstimateChaser(opts: {
       escalateProposalIds.push(proposal.id);
     }
 
-    // Escalation DM goes to the maintenance leads (was Craig — rerouted
-    // 2026-07-23), or to the pilot cohort while the pilot is active.
-    const escalationNames = pilot.recipients.length > 0 ? pilot.recipients : ['Brody', 'Matt'];
-    const staffRows = await Promise.all(escalationNames.map((p) => resolveStaffByPersonOrEmail(p)));
+    // Escalation DM recipients: configurable per-agent (agent_config
+    // slack_recipients for estimate_chaser/escalate); defaults to the pilot
+    // cohort while active, else the maintenance leads (Brody/Matt).
+    const escStaff = await getNotifyRecipients(
+      ESTIMATE_CHASER_AGENT,
+      ESCALATE_ACTION,
+      pilot.recipients.length > 0 ? pilot.recipients : ['Brody', 'Matt']
+    );
     const dm = buildEscalationSlack(escalations, chaseDate);
     const outboxIds: string[] = [];
-    for (let i = 0; i < escalationNames.length; i++) {
-      const staff = staffRows[i];
-      if (!staff?.slack_user_id) continue;
+    for (const staff of escStaff) {
       const row = await enqueueOutbox({
         channel: 'slack',
-        recipient_person: escalationNames[i],
-        recipient_address: staff.slack_user_id,
+        recipient_person: staff.person,
+        recipient_address: staff.slack_user_id!,
         subject: 'Estimate Chaser escalations',
         body: dm.text,
         payload: { blocks: dm.blocks, chase_date: chaseDate },
