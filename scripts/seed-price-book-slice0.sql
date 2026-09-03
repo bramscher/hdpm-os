@@ -1,9 +1,14 @@
--- Slice 0 price-book seed (placeholder). Run once after 20260904 migration.
+-- Slice 0 price-book seed (placeholder).
 --
 -- Rates from spec §6.2 launch defaults, with labor at the CURRENT $95/hr (not
 -- the spec's stale $85). Cleaning / painting / flooring prices are PLACEHOLDERS
 -- pending the real vendor schedules (spec §18.8) — replace via the price-book
 -- admin UI (reprice) before real use.
+--
+-- IDEMPOTENT: requires migration 20260906 (the partial unique index on the
+-- current row per item_code). Re-running this is a no-op — the ON CONFLICT
+-- below targets that index. If you seeded BEFORE 20260906 and got duplicates,
+-- apply 20260906 first (it dedupes), then this is safe to re-run.
 
 INSERT INTO price_book_item
   (item_code, category, name, owner_description, pricing_method, base_price,
@@ -57,4 +62,4 @@ VALUES
   ('PKG_STD_TURN', 'handyman', 'Standard maintenance turn package [PLACEHOLDER]',
    'Up to 4 hours make-ready labor; materials additional', 'package', 450,
    240, 15, 21.25, 240, 'each', NULL, false, false, NULL, CURRENT_DATE, 'system:seed')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (org_id, item_code) WHERE effective_to IS NULL AND active DO NOTHING;
