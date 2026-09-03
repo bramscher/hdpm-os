@@ -15,6 +15,8 @@ import {
   canTransition,
   deriveLegacyStatus,
   isTurnStatus,
+  isMainState,
+  TURN_STATES,
   type TurnLifecycleStatus,
 } from './turn-lifecycle';
 
@@ -128,6 +130,36 @@ export async function tryAdvanceTurn(
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Advance a turn FORWARD along the main chain toward `target`, one valid step at
+ * a time (used by WO-progress sync). Never moves backward, never leaves an
+ * exception state automatically, and stops at the first step it can't take. All
+ * best-effort — never throws.
+ */
+export async function advanceTurnToward(
+  turnId: string,
+  target: string,
+  actor: string,
+  reason?: string
+): Promise<void> {
+  if (!isMainState(target)) return;
+  const supabase = getSupabaseAdmin();
+  const targetIdx = TURN_STATES.indexOf(target);
+  for (let guard = 0; guard < TURN_STATES.length; guard++) {
+    const { data: turn } = await supabase
+      .from('unit_turn')
+      .select('lifecycle_status')
+      .eq('id', turnId)
+      .maybeSingle();
+    const cur = turn?.lifecycle_status as string | undefined;
+    if (!cur || !isMainState(cur)) return; // don't auto-move out of an exception
+    const curIdx = TURN_STATES.indexOf(cur);
+    if (curIdx >= targetIdx) return; // already at/past target
+    const ok = await tryAdvanceTurn(turnId, TURN_STATES[curIdx + 1], actor, reason);
+    if (!ok) return;
   }
 }
 
