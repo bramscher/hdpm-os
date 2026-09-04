@@ -20,7 +20,7 @@ import { loadTripwireSnapshot } from '@/lib/maintenance/tripwire-engine';
 import { tripwire11, statusSinceFor } from '@/lib/maintenance/tripwires';
 import { daysBetween } from '@/lib/maintenance/business-days';
 import { getDashboardConfig } from '@/lib/dashboard-config';
-import { fetchAppFolioVendorContacts } from '@/lib/appfolio';
+import { fetchAppFolioVendorContacts, fetchAppFolioPropertyOwnerMap } from '@/lib/appfolio';
 import { normalizePhone } from '@/lib/zoom-sync';
 import { getAgentConfig, effectiveLevel, isGloballyKilled, isWithinQuietHours, getNotifyRecipients } from './config';
 import { createProposal } from './proposals';
@@ -65,6 +65,9 @@ export interface EstimateChaserRunResult {
   smsCard?: SendOutcome;
   skippedCooldown: number;
   skippedInternal: number;
+  /** "Estimated" WOs NOT drafted as owner-approval — no undecided OWNER approval
+   *  record, so not proven owner-gated (Craig 2026-09-04). */
+  skippedNotOwnerGated: number;
   /** Vendor chases droppable to no channel (no phone + email path disabled). */
   skippedNoChannel: number;
   skippedCap: { vendor_chase: number; vendor_chase_sms: number; owner_approval: number };
@@ -174,6 +177,7 @@ export async function runEstimateChaser(opts: {
     seeded: 0,
     skippedCooldown: 0,
     skippedInternal: 0,
+    skippedNotOwnerGated: 0,
     skippedNoChannel: 0,
     skippedCap: { vendor_chase: 0, vendor_chase_sms: 0, owner_approval: 0 },
     disabled: [],
@@ -311,12 +315,27 @@ export async function runEstimateChaser(opts: {
   const todayCount = (action: string) =>
     (todayRows ?? []).filter((r) => r.action_type === action).length;
 
+  // Owner-gated = there's an UNDECIDED owner-approval record on the WO. Only
+  // these get an owner-approval email; a plain "Estimated" status is not proof
+  // the owner is the gate (it's often HDPM's internal decision), so we don't
+  // presume to email the owner about it (Craig 2026-09-04).
+  const ownerGatedWoIds = new Set(
+    snapshot.approvals
+      .filter((a) => !a.decided_at && a.kind === 'OWNER')
+      .map((a) => a.work_order_id)
+  );
+
   // Decisions. Vendor candidates are eligible when either vendor channel is
   // enabled; the channel (and thus action_type) is assigned after the
   // contact lookup below.
   const toChase: { candidate: ChaseCandidate; history: ChaseHistory }[] = [];
   const toEscalate: EscalationItem[] = [];
   for (const candidate of candidates) {
+    // Owner-approval draft only when the WO is genuinely owner-gated.
+    if (candidate.kind === OWNER_APPROVAL_ACTION && !ownerGatedWoIds.has(candidate.workOrderId)) {
+      result.skippedNotOwnerGated++;
+      continue;
+    }
     const kindEnabled =
       candidate.kind === VENDOR_CHASE_ACTION ? vendorEnabled || smsEnabled : ownerEnabled;
     const history = historyFor(historyRows, candidate.workOrderId, candidate.kind);
@@ -327,6 +346,29 @@ export async function runEstimateChaser(opts: {
       if (decision.reason === 'cooldown') result.skippedCooldown++;
     } else if (kindEnabled) {
       toChase.push({ candidate, history });
+    }
+  }
+
+  // Resolve real property-owner names for the owner-approval drafts (AppFolio is
+  // the only reliable source; work_orders.owner_name is the internal staff
+  // owner). Guarded to owner-approval chases; skipped in dry runs.
+  const ownerChaseProps = [
+    ...new Set(
+      toChase
+        .filter((t) => t.candidate.kind === OWNER_APPROVAL_ACTION && t.candidate.propertyId)
+        .map((t) => t.candidate.propertyId!)
+    ),
+  ];
+  if (ownerChaseProps.length > 0 && !dryRun) {
+    try {
+      const ownerMap = await fetchAppFolioPropertyOwnerMap(ownerChaseProps);
+      for (const t of toChase) {
+        if (t.candidate.kind === OWNER_APPROVAL_ACTION && t.candidate.propertyId) {
+          t.candidate.ownerName = ownerMap.get(t.candidate.propertyId) ?? null;
+        }
+      }
+    } catch (err) {
+      console.error('[Agents] owner-name lookup failed:', err instanceof Error ? err.message : err);
     }
   }
 
