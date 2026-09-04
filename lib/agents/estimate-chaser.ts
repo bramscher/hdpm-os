@@ -55,6 +55,7 @@ export type ChaseKind = typeof VENDOR_CHASE_ACTION | typeof OWNER_APPROVAL_ACTIO
 export interface WorkOrderLite {
   id: string;
   wo_number: string | null;
+  property_id: string | null;
   property_name: string;
   property_address: string | null;
   unit_name: string | null;
@@ -69,12 +70,15 @@ export interface ChaseCandidate {
   workOrderId: string;
   kind: ChaseKind;
   woNumber: string | null;
+  propertyId: string | null;
   propertyName: string | null;
   propertyAddress: string | null;
   unitName: string | null;
   description: string | null;
   vendorId: string | null;
   vendorName: string | null;
+  /** Property owner name (AppFolio), resolved only for owner-approval drafts. */
+  ownerName?: string | null;
   /** Internal-only — never rendered into draft bodies. */
   appfolioLink: string | null;
   /** Business days in status, from the TW11 exception. */
@@ -125,6 +129,7 @@ export function classifyPool(
       workOrderId: wo.id,
       kind,
       woNumber: wo.wo_number,
+      propertyId: wo.property_id,
       propertyName: wo.property_name || null,
       propertyAddress: wo.property_address,
       unitName: wo.unit_name,
@@ -327,7 +332,9 @@ export function buildOwnerApprovalDraft(
   senderName: string = DEFAULT_SENDER
 ): DraftContent {
   const subject = `Approval needed — ${woRef(c)}`;
-  const greeting = `Hi [owner name],`;
+  // Real property-owner name (from AppFolio) when resolved; else the fill-in
+  // placeholder. Never the internal workflow owner (that column is staff).
+  const greeting = c.ownerName?.trim() ? `Hi ${c.ownerName.trim()},` : `Hi [owner name],`;
   const opener =
     chaseRound >= 2
       ? `Just checking in again on the repair approval below — it has been pending ${c.ageBusinessDays} business days and we'd love to get it moving.`

@@ -38,6 +38,7 @@ function wo(overrides: Partial<WorkOrderLite> = {}): WorkOrderLite {
   return {
     id: 'wo-1',
     wo_number: '412',
+    property_id: 'prop-1',
     property_name: 'Brosterhous Commons',
     property_address: '123 Brosterhous Rd',
     unit_name: '4',
@@ -55,6 +56,7 @@ function candidate(overrides: Partial<ChaseCandidate> = {}): ChaseCandidate {
     workOrderId: 'wo-1',
     kind: VENDOR_CHASE_ACTION,
     woNumber: '412',
+    propertyId: 'prop-1',
     propertyName: 'Brosterhous Commons',
     propertyAddress: '123 Brosterhous Rd',
     unitName: '4',
@@ -237,6 +239,17 @@ describe('draft templates', () => {
       expect(d.html + d.text + d.subject).not.toMatch(/\$/);
       expect(d.html + d.text).not.toMatch(/amount|price|cost/i);
     }
+  });
+
+  it('owner draft greets the real property owner when resolved, else the placeholder', () => {
+    const named = buildOwnerApprovalDraft(
+      candidate({ kind: OWNER_APPROVAL_ACTION, ownerName: 'Jane Landlord' }),
+      1
+    );
+    expect(named.text).toContain('Hi Jane Landlord,');
+    expect(named.text).not.toContain('[owner name]');
+    // No owner name resolved → keep the fill-in placeholder (never the staff owner).
+    expect(owner.text).toContain('Hi [owner name],');
   });
 
   it('never leaks the internal AppFolio link into draft bodies', () => {
