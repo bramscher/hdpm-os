@@ -350,3 +350,30 @@
   border-left: 4px solid var(--gr); background: var(--lt);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
 }
+
+/* ── Dashboard (default view) ── */
+/* Pipeline strip: tiles joined by arrows; wraps on narrow screens. */
+.maint-os .pipe {
+  display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.maint-os .pipe > .kpi { flex: 1 1 150px; min-width: 150px; position: relative; padding-bottom: 12px; }
+.maint-os .pipe-arrow {
+  align-self: center; color: var(--muted); font-size: 18px; font-weight: 300; padding: 0 2px;
+}
+.maint-os .kpi .sub {
+  font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.35;
+}
+/* "N over" pill — a nested drill into the over-threshold subset. */
+.maint-os .kpi .over {
+  display: inline-block; margin-top: 6px; padding: 1px 8px; border-radius: 10px;
+  background: #ffe0dd; color: var(--red); font-size: 11px; font-weight: 800;
+  border: 1px solid transparent; cursor: pointer;
+}
+.maint-os .kpi .over:hover { border-color: var(--red); }
+.maint-os .dash .chips .chip { display: inline-flex; align-items: center; gap: 4px; }
+.maint-os .dash .chips .chip .wtag { min-width: 0; padding: 1px 6px; font-size: 9.5px; }
+/* Drill bar shown above a list view once a dashboard number was clicked. */
+.maint-os .drill-bar { gap: 10px; }
+.maint-os .drill-chip {
+  font-size: 12px; color: var(--ink); background: var(--tint); border-radius: 999px; padding: 4px 12px;
+}

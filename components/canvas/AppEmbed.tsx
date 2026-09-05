@@ -35,7 +35,7 @@ export function AppEmbed({ appKey }: { appKey: AppEmbedKey }) {
       return (
         <div className="h-full overflow-auto">
           <Suspense fallback={null}>
-            <BoardClient embedded initialView="open" />
+            <BoardClient embedded initialView="dashboard" />
           </Suspense>
         </div>
       );

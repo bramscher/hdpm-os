@@ -114,6 +114,27 @@ Cut the passive layer; keep the action path (Cracks Radar + Board Exceptions/Mon
 
 **Acceptance:** (D1) the passive reporting surfaces are gone from the home/tiles, action path intact, `tsc`+suite green. (D2) dry-run produces a correct per-person "update in AppFolio" checklist from a day of real `wo_event`s, excluding machine edits, with the four coverage gaps handled. (D3) a person can end the day from one place knowing nothing they touched is stranded.
 
+## Session E — Maintenance Dashboard → simplify → reminders → Dez WO writes  *(Phase 1 SHIPPED 2026-09-04, branch `feature/maintenance-dashboard`)*
+
+**Source:** Craig, 2026-09-04. Nobody could answer "where are we on maintenance?" from one screen: 8 board tabs (+4 Open Board sub-modes) and 8 home tiles, every number recomputed client-side, `metrics_snapshot` read by no maintenance view. Direction, in order: (1) one dashboard — open counts by step, time-in-step vs. typical, for WOs, vendor estimates, owner approvals, unit turns, drill-down; (2) *then* retire the tabs it makes redundant; (3) *then* derive Slack reminders from the same thresholds; (4) confirm whether Dez operating AppFolio removes the need for the Write API. Plan mode first; full plan in the session's plan file.
+
+**Decisions (Craig):** pipeline axis = **AppFolio status** (HDPM `IN_PROGRESS/VERIFY/BILL` are dead for AppFolio-origin work); Dez's first WO write = **add internal note**; scope = dashboard now, phases sketched. Restart-plan §9 "no new dashboard views" acknowledged — this is a consolidation that removes views in Phase 2.
+
+### E1 — Dashboard  *(shipped)*
+- `lib/maintenance/dashboard-thresholds.ts` — the ONE threshold table (`DASHBOARD_THRESHOLDS`) + `isOverThreshold`. Phase 3 reminders read the same object.
+- `lib/maintenance/dashboard.ts` — `loadDashboardInputs()` (tripwire snapshot, 90d `sync_update` events, 90d closed WOs, decided approvals, `agent_proposal` chase rows, `unit_turn` + `turn_status_event`) and pure `computeDashboard()`: pipeline `New → Assigned → Scheduled → Work completed` (+ `other`), `Closed (7d)` with created→completed cycle time, estimate lane (`Estimate requested`, `Estimated`, **owner-gated = undecided `approval.kind='OWNER'` only**, chase stats), waiting pocket (AppFolio Waiting ∪ stage WAITING_ON, by reason), turns by `lifecycle_status` (legacy fallback if 20260905 unapplied), attention (tripwires + needs-a-date). Every WO in exactly one bucket. Reuses `statusSinceFor`, `statusSpells`, `transitionsFrom`, `medianOf/p90Of`, `businessDaysBetween`.
+- `GET /api/maintenance/dashboard`; new default `Dashboard` view in `board-client.tsx` with in-memory drill (`lib/maintenance/dashboard-drill.ts`) → existing list views → detail pages; `/maintenance` redirect; home tiles collapsed to Maintenance (badge = attention) + Turnovers + Vendors; canvas embed lands on the dashboard; daily `dashboard_pipeline` row in `metrics_snapshot`.
+- 29 new unit tests (`lib/maintenance/__tests__/dashboard.test.ts`); suite 691 green; `tsc` clean.
+
+### E2 — Simplify  *(next, after ~1 week on the dashboard)*
+Retire from nav (code stays in git, then delete): Aging, Waiting-On, Monday Review, Kanban sub-mode; fold Exceptions into the dashboard's attention section (move the digest-recipients panel to `/agents`). Keep: Open Board By Property / By Vendor, Turnover + Gantt, Vendor Scoreboard; Triage Review off primary nav. Delete dead API routes `turns/[woId]`, `vendors` GET/POST, `unit-turns` GET; drop the legacy `turn` table with Monday Review. Decide build-UI-vs-drop for tripwires #4/#6/#10/#11's `assignments`/`approvals`/`recommendations` records (no UI creates them today). Target: ≤4 tabs.
+
+### E3 — Slack reminders  *(after E2)*
+One rule per `DASHBOARD_THRESHOLDS` entry; recipients via `getNotifyRecipients` (`/agents` editor); send via `agent_outbox`; dedupe via `agent_proposal`; one persona (Dez), a "why" line, one nudge max, ≤7 items. The 6 AM tripwire **email** digest becomes the Slack card — enable the already-built Morning Action Card capped at 7 rather than a new sender.
+
+### E4 — Dez adds a WO internal note  *(supervised spike, Craig present)*
+Map the AppFolio WO note flow once with Claude-in-Chrome; add `flows/wo-add-note.ts` + `POST /operator/wo/note` to `services/dez-operator` (prepare/commit + read-back verify); Dez intent + `agent_config('dez_operator','wo_note')` at L2; `wo_event('note', {source:'dez_operator', transport:'rpa', verified})` actor `agent:dez`; extend the weekly canary. **Write-API verdict:** not confirmable until (a) the AppFolio ToS/automated-seat answer and (b) one verified WO write land. Today Dez writes nothing to AppFolio (operator = deposit-to-hold preview only).
+
 ## Explicitly NOT in scope (Wave 2 gate, Sep 4)
 
 Dispatch queue, magic links (vendor accept / owner approval pages), scope-change flow, tenant notifications. TW11's *nag* here is an exception row + digest, not an owner-facing page.

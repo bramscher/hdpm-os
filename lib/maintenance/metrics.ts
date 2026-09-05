@@ -401,6 +401,17 @@ export async function computeAllMetrics(
     errors.triage = err instanceof Error ? err.message : String(err);
   }
 
+  // Maintenance dashboard counts (open by step, over-threshold, turns by state).
+  // Point-in-time numbers that cannot be reconstructed from events later —
+  // ~300 bytes/day so the dashboard can grow sparklines as a pure read.
+  // Dynamic import: dashboard.ts imports this module's status-clock helpers.
+  try {
+    const { loadDashboardInputs, computeDashboard, dashboardMetric } = await import('./dashboard');
+    rows.push(dashboardMetric(computeDashboard(await loadDashboardInputs(now), now)));
+  } catch (err) {
+    errors.dashboard = err instanceof Error ? err.message : String(err);
+  }
+
   // In-house billable hours from invoice labor lines (target 30–36/wk).
   // 30d created_at over-fetch; the pure function windows on completed_date.
   try {

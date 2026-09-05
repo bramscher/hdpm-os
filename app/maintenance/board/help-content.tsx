@@ -11,6 +11,17 @@ export interface HelpGuide {
 }
 
 export const HELP_GUIDES: Record<string, HelpGuide> = {
+  dashboard: {
+    title: 'Dashboard',
+    intro: 'Where we are on maintenance, on one screen. The axis is the AppFolio status — what the team actually changes in the system of record.',
+    bullets: [
+      <>Each tile: how many work orders are in the step, how long they have been there (median · p90), and how long the step typically takes over the last 90 days.</>,
+      <>A <span className="flag">red &quot;N over&quot;</span> pill means past the threshold (New &gt;1 business day, Assigned &gt;5, estimates &gt;3, Waiting &gt;5 days, visit date passed, turn behind target). Click the pill to see just those.</>,
+      <>Click any number to drill into the list behind it; the filter chip above the list clears with one tap. Each row links on to the work order or turn.</>,
+      <>Heads-up: <b>Estimated</b> does not mean waiting on the property owner. Only a recorded owner-approval request counts as owner-gated.</>,
+      <>No dollar amounts anywhere — the AppFolio API exposes none. Estimate metrics are ages and counts.</>,
+    ],
+  },
   open: {
     title: 'Open Board',
     intro: 'Every open work order, one column per stage. AppFolio is the system of record — status, scheduling, and vendors are edited there; this board follows within 15 minutes.',
