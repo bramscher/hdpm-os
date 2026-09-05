@@ -59,9 +59,8 @@ interface RouteStats {
 
 interface BoardKpis {
   open: number;
-  pastDue: number;
-  aging30Plus: number;
-  p1ThisWeek: number;
+  /** Today's tripwire hits — the one badge on the Maintenance tile. */
+  attention: number;
 }
 
 interface CrackItem {
@@ -244,10 +243,16 @@ export function DashboardCanvas() {
   })();
 
   useEffect(() => {
-    // Fetch maintenance board KPIs
-    fetch("/api/maintenance/board")
+    // Fetch maintenance dashboard headline numbers (open + today's attention)
+    fetch("/api/maintenance/dashboard")
       .then((r) => r.json())
-      .then((data) => setBoardKpis(data.kpis ?? null))
+      .then((data) =>
+        setBoardKpis(
+          data && typeof data.openTotal === "number"
+            ? { open: data.openTotal, attention: data.attention?.total ?? 0 }
+            : null
+        )
+      )
       .catch(() => {});
 
     // Fetch inspection stats
@@ -496,14 +501,20 @@ export function DashboardCanvas() {
       {/* Streamdeck grid — every feature, one small tile each */}
       <div className="stagger-children">
         <TileSection label="Maintenance OS">
+          {/* One door in. The Dashboard tab is the default and drills into every
+              other board view, so the per-tab tiles were retired (2026-09-04). */}
           <Tile
             href="/maintenance/board"
             icon={Wrench}
-            label="WO Board"
+            label="Maintenance"
             tone="terra"
-            badge={boardKpis?.open}
-            badgeTone="terra"
-            title="Open work orders — NEW through BILL"
+            badge={boardKpis?.attention}
+            badgeTone="red"
+            title={
+              boardKpis
+                ? `${boardKpis.open} open work orders · ${boardKpis.attention} need attention today`
+                : "Maintenance dashboard — open work by step, estimates, turns, attention"
+            }
           />
           <Tile
             href="/maintenance/board?view=turnover"
@@ -513,50 +524,11 @@ export function DashboardCanvas() {
             title="Unit turnover board"
           />
           <Tile
-            href="/maintenance/board?view=triage"
-            icon={ListTodo}
-            label="Triage"
-            tone="blue"
-            title="Review and classify incoming work orders"
-          />
-          <Tile
-            href="/maintenance/board?view=wait"
-            icon={Hourglass}
-            label="Waiting On"
-            tone="amber"
-            title="Work orders blocked on tenants, owners, parts, or vendors"
-          />
-          <Tile
             href="/maintenance/board?view=vendor"
             icon={Users}
             label="Vendors"
             tone="charcoal"
             title="Vendor scoreboard"
-          />
-          <Tile
-            href="/maintenance/board?view=aging"
-            icon={Clock}
-            label="Aging"
-            tone="amber"
-            badge={boardKpis?.aging30Plus}
-            badgeTone="amber"
-            title="Open work orders created 30+ days ago"
-          />
-          <Tile
-            href="/maintenance/board?view=exceptions"
-            icon={AlertTriangle}
-            label="Exceptions"
-            tone="red"
-            badge={boardKpis?.pastDue}
-            badgeTone="red"
-            title="Past-due next actions — each with an accountable owner"
-          />
-          <Tile
-            href="/maintenance/board?view=monday"
-            icon={CalendarDays}
-            label="Monday Review"
-            tone="green"
-            title="Weekly review sweep"
           />
         </TileSection>
 

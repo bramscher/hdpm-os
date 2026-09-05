@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { BoardData, ExceptionsData, ScoreboardRow, WoSortKey } from './board-types';
 import { filterWorkOrders, sortWorkOrders, WO_SORT_OPTIONS } from './board-types';
+import type { DashboardData } from '@/lib/maintenance/dashboard';
+import type { Drill } from '@/lib/maintenance/dashboard-drill';
+import { applyTurnDrill, applyWoDrill } from '@/lib/maintenance/dashboard-drill';
+import Dashboard from './views/dashboard';
 import OpenBoard from './views/open-board';
 import WaitingOn from './views/waiting-on';
 import VendorScoreboard from './views/vendor-scoreboard';
@@ -15,6 +19,11 @@ import TriageReview from './views/triage-review';
 import InfoHelp from './components/info-help';
 
 const VIEWS = [
+  {
+    key: 'dashboard',
+    label: 'Dashboard',
+    hint: 'Where we are on maintenance at a glance: open work by AppFolio step with time-in-step vs. typical, estimates and owner approvals, waiting, unit turns, and today’s attention list. Click any number to drill.',
+  },
   {
     key: 'open',
     label: 'Open Board',
@@ -58,13 +67,14 @@ const VIEWS = [
 ] as const;
 
 type ViewKey = (typeof VIEWS)[number]['key'];
+const DEFAULT_VIEW: ViewKey = 'dashboard';
 
 /** Views whose content is the open-WO list — the search/sort toolbar drives these. */
 const WO_LIST_VIEWS = new Set<ViewKey>(['open', 'wait', 'aging', 'turnover', 'monday']);
 
 export default function BoardClient({
   embedded = false,
-  initialView = 'open',
+  initialView = DEFAULT_VIEW,
 }: {
   /** Canvas-pane mode: view state stays local and the URL is never touched. */
   embedded?: boolean;
@@ -73,27 +83,35 @@ export default function BoardClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [embedView, setEmbedView] = useState<ViewKey>(initialView as ViewKey);
-  const view = embedded ? embedView : (searchParams.get('view') as ViewKey) || 'open';
+  const view = embedded ? embedView : (searchParams.get('view') as ViewKey) || DEFAULT_VIEW;
 
   const [board, setBoard] = useState<BoardData | null>(null);
+  const [dash, setDash] = useState<DashboardData | null>(null);
   const [exceptions, setExceptions] = useState<ExceptionsData | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreboardRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<WoSortKey>('default');
+  // Dashboard drill-down: an id set narrowing the lists below. In-memory only —
+  // id lists are too long for the URL, and `?view=` alone keeps deep links working.
+  const [drill, setDrill] = useState<Drill | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [boardRes, excRes, sbRes] = await Promise.all([
+      const [boardRes, dashRes, excRes, sbRes] = await Promise.all([
         fetch('/api/maintenance/board'),
+        fetch('/api/maintenance/dashboard'),
         fetch('/api/maintenance/exceptions'),
         fetch('/api/maintenance/vendors/scoreboard'),
       ]);
       if (!boardRes.ok) throw new Error(`Board load failed (${boardRes.status})`);
       setBoard(await boardRes.json());
+      // The dashboard/exceptions/scoreboard payloads are non-fatal: the list views
+      // still work without them.
+      setDash(dashRes.ok ? await dashRes.json() : null);
       if (excRes.ok) setExceptions(await excRes.json());
       if (sbRes.ok) setScoreboard((await sbRes.json()).scoreboard ?? []);
     } catch (err) {
@@ -121,20 +139,35 @@ export default function BoardClient({
     }
   };
 
-  // Apply the search + sort to the open-WO list, then hand the derived board to
-  // every WO-list view so one toolbar drives them all.
+  /** Nav click = a fresh look at a view, so any dashboard drill is cleared. */
+  const navTo = (key: ViewKey) => {
+    setDrill(null);
+    setView(key);
+  };
+
+  const onDrill = (d: Drill) => {
+    setDrill(d.ids || d.turnIds ? d : null);
+    setView(d.view);
+  };
+
+  // Apply the dashboard drill, then the search + sort, to the open-WO list, and
+  // hand the derived board to every WO-list view so one toolbar drives them all.
   const filteredBoard = useMemo<BoardData | null>(() => {
     if (!board) return null;
-    const open = sortWorkOrders(filterWorkOrders(board.open, query), sortKey);
+    const drilledOpen = applyWoDrill(board.open, drill?.ids);
+    const open = sortWorkOrders(filterWorkOrders(drilledOpen, query), sortKey);
     const closedThisWeek = filterWorkOrders(board.closedThisWeek, query);
-    return { ...board, open, closedThisWeek };
-  }, [board, query, sortKey]);
+    const unitTurns = applyTurnDrill(board.unitTurns ?? [], drill?.turnIds);
+    return { ...board, open, closedThisWeek, unitTurns };
+  }, [board, query, sortKey, drill]);
 
   const activeBoard = filteredBoard ?? board;
   const showToolbar = WO_LIST_VIEWS.has(view);
   const searching = query.trim().length > 0;
+  const drilled = !!drill && view !== 'dashboard';
 
   const counts: Partial<Record<ViewKey, number>> = {
+    dashboard: dash?.attention.total,
     open: activeBoard?.open.length,
     wait: activeBoard?.open.filter((wo) => wo.stage === 'WAITING_ON').length,
     exceptions: exceptions?.exceptions.length,
@@ -158,7 +191,7 @@ export default function BoardClient({
           <button
             key={v.key}
             className={view === v.key ? 'active' : ''}
-            onClick={() => setView(v.key)}
+            onClick={() => navTo(v.key)}
             data-tip={v.hint}
           >
             {v.label}
@@ -170,6 +203,22 @@ export default function BoardClient({
         </button>
         <InfoHelp viewKey={view} />
       </nav>
+
+      {drilled && (
+        <div className="mo-toolbar drill-bar">
+          <span className="drill-chip">
+            Dashboard filter: <b>{drill!.label}</b>
+            {drill!.ids && activeBoard && ` (${activeBoard.open.length})`}
+            {drill!.turnIds && activeBoard && ` (${activeBoard.unitTurns?.length ?? 0})`}
+          </span>
+          <button className="mo-btn secondary" onClick={() => setDrill(null)}>
+            Clear
+          </button>
+          <button className="mo-btn secondary" onClick={() => navTo('dashboard')}>
+            ← Dashboard
+          </button>
+        </div>
+      )}
 
       {showToolbar && board && (
         <div className="mo-toolbar">
@@ -223,6 +272,7 @@ export default function BoardClient({
 
       {board && activeBoard && (
         <>
+          {view === 'dashboard' && <Dashboard dash={dash} scoreboard={scoreboard} onDrill={onDrill} />}
           {view === 'open' && <OpenBoard board={activeBoard} exceptions={exceptions} />}
           {view === 'triage' && <TriageReview onChanged={load} />}
           {view === 'wait' && <WaitingOn board={activeBoard} />}

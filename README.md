@@ -95,7 +95,20 @@ Landing page with a time-aware greeting, live portfolio stats, and one-click ent
 
 The maintenance command center: every work order moves through an 8-stage lifecycle (`NEW → TRIAGED → SCHEDULED → IN PROGRESS → WAITING ON → VERIFY → BILL → CLOSED`) with one accountable **HDPM owner** and a **next-action date** at all times. **AppFolio stays the system of record** — status, scheduling, and vendor assignment are edited *there* (every card has an "Open in AppFolio ↗" link); the board mirrors AppFolio within 15 minutes and adds the accountability layer AppFolio can't track: owners, dates, priorities, the closure gate, and 12 automated tripwires.
 
-Seven tabs plus the Triage Review — each deep-linkable via `?view=`.
+The **Dashboard** tab is the default landing; eight further tabs sit behind it — each deep-linkable via `?view=`. `/maintenance` redirects here.
+
+### Dashboard (default)
+
+*Where are we on maintenance?* on one screen, so the daily sweep and the Monday meeting start from the same numbers. Served by `GET /api/maintenance/dashboard` (`lib/maintenance/dashboard.ts`, pure and unit-tested).
+
+- **Axis = AppFolio status**, not the HDPM stage: `New → Assigned → Scheduled → Work completed → Closed (7d)`, plus an **estimate lane** (`Estimate requested → Estimated → Owner approval pending`, with estimate-chaser activity) and a **Waiting** pocket. Every open work order lands in exactly one bucket, so the tiles sum to the open total.
+- **Each tile** shows the count, how long the current occupants have been in the step (median · p90, from the `sync_update` status log), and how long the step *typically* takes (completed spells over the last 90 days, with `n`).
+- **"N over" pill** = past the shared threshold table in `lib/maintenance/dashboard-thresholds.ts` (New >1 business day, Assigned >5, estimates >3, Waiting >5 days, visit date passed, turn behind target). The same table will drive the Slack reminders, so the number you see and the nudge you get can never disagree.
+- **Unit turns** by lifecycle state (`turn_status_event` clocks; falls back to the legacy status if migration `20260905` is not applied), days vacant, and behind-target.
+- **Needs attention today**: tripwire total, needs-a-date backlog, vendors with overdue work, and the eight oldest exceptions.
+- **Drill-down**: click any number → the matching list view narrowed to those ids (a filter chip above the list clears it) → the work-order or turn detail page.
+- **Not measured** (no timestamp exists): request → WO, reschedules, estimate dollar amounts, vendor bill timing. "Estimated" is *not* treated as waiting on the property owner — only a recorded owner-approval request is.
+- A daily `dashboard_pipeline` row (counts only) is written to `metrics_snapshot` by the 6:30 AM metrics cron for future trends.
 
 ### Open Board
 
