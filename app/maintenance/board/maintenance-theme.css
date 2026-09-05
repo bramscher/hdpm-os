@@ -356,7 +356,7 @@
 .maint-os .pipe {
   display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
 }
-.maint-os .pipe > .kpi { flex: 1 1 150px; min-width: 150px; position: relative; padding-bottom: 12px; }
+.maint-os .pipe > .kpi { flex: 1 1 150px; min-width: 150px; max-width: 300px; position: relative; padding-bottom: 12px; }
 .maint-os .pipe-arrow {
   align-self: center; color: var(--muted); font-size: 18px; font-weight: 300; padding: 0 2px;
 }
