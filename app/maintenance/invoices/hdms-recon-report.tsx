@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import {
   HDMS_RECON_CATEGORIES,
   HDMS_RECON_LABELS,
+  PRE_LAUNCH_CUTOFF,
   type HdmsReconciliation,
   type HdmsReconCategory,
   type HdmsReconRow,
-} from "@/lib/maintenance/hdms-reconcile";
+  type HdmsReconSummaryBucket,
+} from "@/lib/maintenance/hdms-reconcile-shared";
 
 // ============================================
 // HDMS Billing Reconciliation (ADMIN ONLY)
@@ -104,6 +106,10 @@ export function HdmsReconReport() {
   const [error, setError] = useState<string | null>(null);
   const [windowDays, setWindowDays] = useState(180);
   const [filter, setFilter] = useState<HdmsReconCategory | "all">("all");
+  // Grandfathered pre-launch jobs (completed before the invoicing module
+  // existed) were billed directly in AppFolio — hidden by default so the counts
+  // reflect actionable work, not history.
+  const [hidePre, setHidePre] = useState(true);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -125,9 +131,29 @@ export function HdmsReconReport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Rows in scope after the pre-launch toggle (drives both tiles and table).
+  const scoped = useMemo(
+    () => (data ? (hidePre ? data.rows.filter((r) => !r.pre_launch) : data.rows) : []),
+    [data, hidePre]
+  );
+  const preLaunchCount = useMemo(
+    () => (data ? data.rows.filter((r) => r.pre_launch).length : 0),
+    [data]
+  );
+
+  // Tile counts recomputed from the scoped set so they match what's shown.
+  const counts = useMemo(() => {
+    const m = {} as Record<HdmsReconCategory, HdmsReconSummaryBucket>;
+    for (const c of HDMS_RECON_CATEGORIES) m[c] = { count: 0, invoicedTotal: 0 };
+    for (const r of scoped) {
+      m[r.category].count += 1;
+      m[r.category].invoicedTotal += r.invoice_total ?? 0;
+    }
+    return m;
+  }, [scoped]);
+
   const visibleRows = useMemo(() => {
-    if (!data) return [];
-    const rows = filter === "all" ? data.rows : data.rows.filter((r) => r.category === filter);
+    const rows = filter === "all" ? scoped : scoped.filter((r) => r.category === filter);
     // Leaks first, then premature bills, then in-flight, then healthy/canceled.
     const order = new Map(HDMS_RECON_CATEGORIES.map((c, i) => [c, i]));
     return [...rows].sort(
@@ -135,18 +161,18 @@ export function HdmsReconReport() {
         (order.get(a.category) ?? 99) - (order.get(b.category) ?? 99) ||
         (a.completed_date ?? "").localeCompare(b.completed_date ?? "")
     );
-  }, [data, filter]);
+  }, [scoped, filter]);
 
   const downloadCsv = useCallback(() => {
     if (!data) return;
-    const blob = new Blob([toCsv(data.rows)], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([toCsv(scoped)], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `hdms-billing-recon-${windowDays}d.csv`;
+    a.download = `hdms-billing-recon-${windowDays}d${hidePre ? "-post-launch" : ""}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [data, windowDays]);
+  }, [data, scoped, windowDays, hidePre]);
 
   return (
     <div className="space-y-4">
@@ -159,6 +185,18 @@ export function HdmsReconReport() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <label
+            className="flex items-center gap-1.5 h-8 px-2 rounded-md border border-sand-300 bg-white text-xs text-charcoal-600 cursor-pointer select-none"
+            title={`Jobs completed before ${PRE_LAUNCH_CUTOFF} predate the invoicing module — they were billed directly in AppFolio.`}
+          >
+            <input
+              type="checkbox"
+              checked={hidePre}
+              onChange={(e) => setHidePre(e.target.checked)}
+              className="accent-terra-500"
+            />
+            Hide pre-launch
+          </label>
           <select
             value={windowDays}
             onChange={(e) => setWindowDays(Number(e.target.value))}
@@ -180,7 +218,7 @@ export function HdmsReconReport() {
             variant="outline"
             size="sm"
             onClick={downloadCsv}
-            disabled={!data || data.rows.length === 0}
+            disabled={scoped.length === 0}
             className="text-xs h-8"
           >
             <Download className="h-3.5 w-3.5 mr-1.5" />
@@ -212,11 +250,11 @@ export function HdmsReconReport() {
               }`}
             >
               <p className="text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider mb-1">All HDMS WOs</p>
-              <p className="text-xl font-bold text-charcoal-900">{data.rows.length.toLocaleString()}</p>
+              <p className="text-xl font-bold text-charcoal-900">{scoped.length.toLocaleString()}</p>
               <p className="text-[10px] text-charcoal-400 mt-0.5">last {data.windowDays} days</p>
             </button>
             {HDMS_RECON_CATEGORIES.map((cat) => {
-              const b = data.summary[cat];
+              const b = counts[cat];
               const s = CATEGORY_STYLE[cat];
               return (
                 <button
@@ -326,8 +364,13 @@ export function HdmsReconReport() {
           <p className="text-[10px] text-charcoal-400">
             &ldquo;Done&rdquo; = AppFolio-Completed <em>or</em> HDPM-verified. A work order is
             &ldquo;billed&rdquo; when a non-void HDMS invoice (not a credit memo) links to it by
-            work-order id or WO reference. Amounts are <code>hdms_invoices.total_amount</code> — AppFolio&rsquo;s
-            v0 API exposes no estimate/bill dollar fields. Generated {formatDate(data.generatedAt)}.
+            work-order id or WO reference — so a job billed directly in AppFolio (bypassing the
+            invoice module) can still read as unbilled here; confirm via the AppFolio link.
+            {hidePre
+              ? ` Hiding ${preLaunchCount.toLocaleString()} pre-launch job${preLaunchCount === 1 ? "" : "s"} (completed before ${PRE_LAUNCH_CUTOFF}, billed directly in AppFolio).`
+              : ` Showing all jobs, including ${preLaunchCount.toLocaleString()} pre-launch (before ${PRE_LAUNCH_CUTOFF}).`}{" "}
+            Amounts are <code>hdms_invoices.total_amount</code> — AppFolio&rsquo;s v0 API exposes no
+            estimate/bill dollar fields. Generated {formatDate(data.generatedAt)}.
           </p>
         </>
       )}

@@ -3,9 +3,10 @@ import {
   categorizeHdmsReconciliation,
   isWorkOrderDone,
   isWorkOrderCanceled,
+  PRE_LAUNCH_CUTOFF,
   type HdmsReconWorkOrder,
   type HdmsReconInvoice,
-} from '../hdms-reconcile';
+} from '../hdms-reconcile-shared';
 
 function wo(overrides: Partial<HdmsReconWorkOrder> & { id: string }): HdmsReconWorkOrder {
   return {
@@ -107,6 +108,21 @@ describe('categorizeHdmsReconciliation', () => {
     // The WO row should read as done-unbilled; neither void nor credit counts.
     const woRow = r.rows.find((x) => x.wo_id === 'w1');
     expect(woRow?.category).toBe('done_unbilled');
+  });
+
+  it('flags pre-launch completions (grandfathered) via pre_launch', () => {
+    const wos = [
+      wo({ id: 'old', wo_number: '1-1', appfolio_status: 'Completed', completed_date: '2026-05-15' }),
+      wo({ id: 'new', wo_number: '2-1', appfolio_status: 'Completed', completed_date: '2026-08-15' }),
+    ];
+    const r = categorizeHdmsReconciliation(wos, []);
+    const byWo = new Map(r.rows.map((x) => [x.wo_id, x]));
+    expect(PRE_LAUNCH_CUTOFF).toBe('2026-07-01');
+    expect(byWo.get('old')?.pre_launch).toBe(true);
+    expect(byWo.get('new')?.pre_launch).toBe(false);
+    // Both are the same leak category; pre_launch is an orthogonal flag.
+    expect(byWo.get('old')?.category).toBe('done_unbilled');
+    expect(byWo.get('new')?.category).toBe('done_unbilled');
   });
 
   it('surfaces an orphan invoice with no matching WO as billed_not_done', () => {
