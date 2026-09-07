@@ -16,6 +16,7 @@ import {
   Plus,
   TrendingUp,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
@@ -1033,6 +1034,13 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                                     className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-green-50/80 text-green-700 hover:bg-green-100 hover:text-green-900 transition-colors"
                                   >
                                     <FileText className="h-4 w-4" />
+                                  </a>
+                                  <a
+                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}&draft=1`}
+                                    title="Draft estimate with the agent"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-blue-50/80 text-blue-600 hover:bg-blue-100 hover:text-blue-800 transition-colors"
+                                  >
+                                    <Sparkles className="h-4 w-4" />
                                   </a>
                                   <button
                                     type="button"

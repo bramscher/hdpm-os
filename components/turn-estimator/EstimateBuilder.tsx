@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 
 export interface BuilderSeed {
+  work_order_id?: string | null;
   property_name?: string;
   property_id?: string | null;
   unit_id?: string | null;
@@ -11,6 +12,16 @@ export interface BuilderSeed {
   unit_turn_id?: string | null;
   wo_number?: string | null;
   wo_description?: string | null;
+}
+
+/** One agent-drafted line, as returned by /api/turn-estimator/estimates/draft. */
+interface DraftedLine {
+  item_code: string;
+  qty: number;
+  minutes: number | null;
+  est_material_cost: number | null;
+  room: string | null;
+  description: string;
 }
 
 interface Row {
@@ -35,7 +46,15 @@ const newRow = (): Row => ({
   description: "",
 });
 
-export default function EstimateBuilder({ items, seed }: { items: PriceBookItem[]; seed: BuilderSeed }) {
+export default function EstimateBuilder({
+  items,
+  seed,
+  autoDraft = false,
+}: {
+  items: PriceBookItem[];
+  seed: BuilderSeed;
+  autoDraft?: boolean;
+}) {
   const itemByCode = useMemo(() => {
     const m = new Map<string, PriceBookItem>();
     for (const it of items) m.set(it.item_code, it);
@@ -46,6 +65,11 @@ export default function EstimateBuilder({ items, seed }: { items: PriceBookItem[
   const [unitName, setUnitName] = useState(seed.unit_name ?? "");
   const [authLimit, setAuthLimit] = useState("");
   const [rows, setRows] = useState<Row[]>([newRow()]);
+  // Agent-draft state (autoDraft): pre-populate rows from the estimate-drafter.
+  const [drafting, setDrafting] = useState(autoDraft);
+  const [draftSummary, setDraftSummary] = useState<string | null>(null);
+  const [draftUnmapped, setDraftUnmapped] = useState<string[]>([]);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{
     owner_total: number;
     authorization: "auto_approved" | "approval_pending";
@@ -112,6 +136,45 @@ export default function EstimateBuilder({ items, seed }: { items: PriceBookItem[
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
+  // On load with ?draft=1, run the estimate-drafter agent and pre-populate rows.
+  // The result is advisory — staff review/edit before Save & Issue.
+  useEffect(() => {
+    if (!autoDraft || !seed.work_order_id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/turn-estimator/estimates/draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ work_order_id: seed.work_order_id }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "draft failed");
+        if (cancelled) return;
+        const draftRows: Row[] = (data.draft.lines as DraftedLine[]).map((l) => ({
+          key: newRow().key,
+          item_code: l.item_code,
+          qty: l.qty != null ? String(l.qty) : "1",
+          minutes: l.minutes != null ? String(l.minutes) : "",
+          material_cost: l.est_material_cost != null ? String(l.est_material_cost) : "",
+          room: l.room ?? "",
+          description: l.description ?? "",
+        }));
+        if (draftRows.length) setRows(draftRows);
+        setDraftSummary(data.draft.summary || null);
+        setDraftUnmapped(data.draft.unmapped_notes || []);
+      } catch (e) {
+        if (!cancelled) setDraftError(e instanceof Error ? e.message : "draft failed");
+      } finally {
+        if (!cancelled) setDrafting(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function issue() {
     setError(null);
     const specs = validSpecs();
@@ -129,6 +192,8 @@ export default function EstimateBuilder({ items, seed }: { items: PriceBookItem[
           unit_id: seed.unit_id ?? null,
           unit_name: unitName.trim() || null,
           unit_turn_id: seed.unit_turn_id ?? null,
+          work_order_id: seed.work_order_id ?? null,
+          wo_number: seed.wo_number ?? null,
           authorization_limit: authLimit ? Number(authLimit) : null,
         }),
       });
@@ -268,6 +333,35 @@ export default function EstimateBuilder({ items, seed }: { items: PriceBookItem[
   return (
     <div className="space-y-4">
       {error && <Banner>{error}</Banner>}
+
+      {drafting && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          ✨ Drafting line items from the work order… (~15s). You can edit everything before issuing.
+        </div>
+      )}
+      {draftError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Couldn&rsquo;t draft from the work order ({draftError}). Add line items manually below.
+        </div>
+      )}
+      {!drafting && (draftSummary || draftUnmapped.length > 0) && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <div className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+            ✨ Drafted by agent — review &amp; edit before issuing
+          </div>
+          {draftSummary && <p className="mt-1 text-blue-800">{draftSummary}</p>}
+          {draftUnmapped.length > 0 && (
+            <div className="mt-2">
+              <div className="text-xs font-semibold text-amber-700">Not mapped to the price book — add manually:</div>
+              <ul className="mt-0.5 list-disc pl-5 text-xs text-amber-800">
+                {draftUnmapped.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {seed.wo_description && (
         <div className="rounded-xl border border-sand-200 bg-sand-50 p-3 text-sm text-charcoal-600">

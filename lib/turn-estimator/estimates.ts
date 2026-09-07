@@ -16,6 +16,8 @@ import type { LineInput, PricedLine } from './types';
 
 export interface CreateEstimateInput {
   unit_turn_id?: string | null;
+  work_order_id?: string | null;
+  wo_number?: string | null;
   property_id?: string | null;
   property_name?: string | null;
   unit_id?: string | null;
@@ -39,6 +41,8 @@ export async function createEstimate(input: CreateEstimateInput, actor: string):
     .from('estimate')
     .insert({
       unit_turn_id: input.unit_turn_id ?? null,
+      work_order_id: input.work_order_id ?? null,
+      wo_number: input.wo_number ?? null,
       property_id: input.property_id ?? null,
       property_name: input.property_name ?? null,
       unit_id: input.unit_id ?? null,

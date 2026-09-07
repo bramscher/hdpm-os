@@ -15,9 +15,9 @@ export const metadata = { title: 'HDPM-OS — New Estimate' };
 export default async function NewEstimatePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from_wo?: string; turn?: string }>;
+  searchParams: Promise<{ from_wo?: string; turn?: string; draft?: string }>;
 }) {
-  const { from_wo, turn } = await searchParams;
+  const { from_wo, turn, draft } = await searchParams;
   const items = await listPriceBookItems();
 
   let seed: BuilderSeed = {};
@@ -25,6 +25,7 @@ export default async function NewEstimatePage({
     const wo = await getWorkOrderById(from_wo);
     if (wo) {
       seed = {
+        work_order_id: wo.id,
         property_name: wo.property_name,
         property_id: wo.property_id,
         unit_id: wo.unit_id,
@@ -60,7 +61,7 @@ export default async function NewEstimatePage({
           : ''}
         Add price-book line items, issue the estimate, get approval, then convert it to an HDMS invoice.
       </p>
-      <EstimateBuilder items={items} seed={seed} />
+      <EstimateBuilder items={items} seed={seed} autoDraft={draft === '1' && !!seed.work_order_id} />
     </div>
   );
 }
