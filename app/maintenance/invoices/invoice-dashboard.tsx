@@ -33,6 +33,7 @@ import { CreditForm } from "./credit-form";
 import { BillableReport } from "./billable-report";
 import { DailyReport } from "./daily-report";
 import { InhouseReport } from "./inhouse-report";
+import { HdmsReconReport } from "./hdms-recon-report";
 import { SelectionReport } from "./selection-report";
 import { ReconcileTab } from "./reconcile-tab";
 import { PaymentReconcileModal } from "./payment-reconcile-modal";
@@ -182,7 +183,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const isAdmin = session?.user?.isAdmin === true;
   const [view, setView] = useState<View>("main");
   const [activeTab, setActiveTab] = useState<Tab>("work-orders");
-  const [reportView, setReportView] = useState<"billable" | "daily" | "inhouse">("billable");
+  const [reportView, setReportView] = useState<"billable" | "daily" | "inhouse" | "hdms-recon">("billable");
   const [parsedRows, setParsedRows] = useState<WorkOrderRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<WorkOrderRow | null>(null);
   const [editInvoice, setEditInvoice] = useState<HdmsInvoice | null>(null);
@@ -1140,6 +1141,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                       { id: "billable", label: "Billable" },
                       { id: "daily", label: "Daily Labor & Markup" },
                       { id: "inhouse", label: "In-house vs Vendor" },
+                      { id: "hdms-recon", label: "Billing Recon" },
                     ] as const
                   ).map((v) => (
                     <button
@@ -1160,6 +1162,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 <DailyReport />
               ) : reportView === "inhouse" ? (
                 <InhouseReport />
+              ) : reportView === "hdms-recon" ? (
+                <HdmsReconReport />
               ) : (
                 <BillableReport />
               )}
