@@ -1,31 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Toaster } from "sonner";
 import { Sidebar, MobileNav } from "@/components/Sidebar";
 import { HelpButton } from "@/components/HelpButton";
 
 /**
- * App chrome: fixed sidebar + page content. The Knowledge Chat lives on the
- * home page as a persistent panel (the agent interface), so the old full-page
- * chat overlay is gone — the sidebar chat button simply navigates home.
+ * App chrome: fixed sidebar + page content. The in-app Knowledge Chat has been
+ * retired — that role now lives in Dez (Slack) — and `/` is the tile dashboard.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const isLoginPage = pathname === "/login";
   // Referrer portal opts out of the staff chrome (sidebar/help/nav). The admin
   // subtree keeps the staff shell. Referrer pages bring their own layout.
   const isReferrerRoute =
     pathname.startsWith("/partners") && !pathname.startsWith("/partners/admin");
-
-  // Legacy hook: anything dispatching "open-chat" now lands on the agent page.
-  useEffect(() => {
-    const handler = () => router.push("/");
-    window.addEventListener("open-chat", handler);
-    return () => window.removeEventListener("open-chat", handler);
-  }, [router]);
 
   if (isLoginPage || isReferrerRoute) {
     return <>{children}</>;
@@ -33,14 +23,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen page-texture">
-      <Sidebar
-        onToggleChat={() => router.push("/")}
-        isChatOpen={pathname === "/"}
-      />
-      <MobileNav
-        onToggleChat={() => router.push("/")}
-        isChatOpen={pathname === "/"}
-      />
+      <Sidebar />
+      <MobileNav />
 
       {/* Page content */}
       <main className="min-h-screen md:ml-[220px]">{children}</main>

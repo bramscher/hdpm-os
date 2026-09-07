@@ -10,7 +10,6 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
-import { collectCracks } from '@/lib/cracks';
 import { createProposal } from '@/lib/agents/proposals';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
 import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
@@ -196,25 +195,6 @@ export async function runMeetingPrep(opts: { dryRun?: boolean; now?: Date } = {}
   const memory = await packetMemoryContext(issues.map((i) => i.title));
   result.memoryUsed = memory !== null;
 
-  // Cracks Radar — best-effort; a collector failure never blocks the packet.
-  let cracksTop: {
-    label: string;
-    detail: string;
-    action: string | null;
-    owner: string | null;
-    ageDays: number;
-  }[] = [];
-  let crackTotal = 0;
-  try {
-    const report = await collectCracks(today);
-    crackTotal = report.cracks.length;
-    cracksTop = report.cracks
-      .slice(0, 10)
-      .map(({ label, detail, action, owner, ageDays }) => ({ label, detail, action, owner, ageDays }));
-  } catch (err) {
-    console.error('[meeting-prep] cracks collect failed:', err);
-  }
-
   const packet = buildPrepPacket({
     weekStart,
     metrics: metricLines,
@@ -226,8 +206,6 @@ export async function runMeetingPrep(opts: { dryRun?: boolean; now?: Date } = {}
       effectiveOn: d.effective_on as string,
     })),
     memory,
-    cracks: cracksTop,
-    crackTotal,
   });
   result.packetChars = packet.length;
 

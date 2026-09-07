@@ -11,7 +11,6 @@ import {
   ClipboardCheck,
   Route,
   MapPin,
-  AlertTriangle,
   CalendarDays,
   Car,
   Megaphone,
@@ -62,37 +61,6 @@ interface BoardKpis {
   /** Today's tripwire hits — the one badge on the Maintenance tile. */
   attention: number;
 }
-
-interface CrackItem {
-  kind: string;
-  label: string;
-  detail: string;
-  action: string | null;
-  owner: string | null;
-  ageDays: number;
-  href: string | null;
-}
-
-// The situation string is "<where> — <problem>"; split so the where reads as a
-// bold lead and the problem as lighter follow-on. Falls back to the whole
-// string as the lead when there's no separator (to-dos, nudges).
-function splitCrackDetail(detail: string): { lead: string; rest: string } {
-  const i = detail.indexOf(" — ");
-  if (i === -1) return { lead: detail, rest: "" };
-  return { lead: detail.slice(0, i), rest: detail.slice(i + 3) };
-}
-
-// Cracks bucket order (most severe first) + compact tab labels. Mirrors the
-// CrackKind union in lib/cracks.ts; the API returns per-kind `counts`.
-const CRACK_KINDS = [
-  { kind: "exception", tab: "Exceptions", href: "/maintenance/board" },
-  { kind: "needs_date", tab: "No next action", href: "/maintenance/board" },
-  { kind: "stale_nudge", tab: "Nudges", href: "/agents" },
-  { kind: "overdue_todo", tab: "Overdue", href: "/company/issues" },
-  { kind: "missed_todo", tab: "Missed", href: "/company/issues" },
-] as const;
-
-type CrackCounts = Partial<Record<string, number>>;
 
 interface TodayRouteStop {
   work_order_id: string;
@@ -227,9 +195,6 @@ export function DashboardCanvas() {
   const [vacancyCount, setVacancyCount] = useState<number | null>(null);
   const [boardKpis, setBoardKpis] = useState<BoardKpis | null>(null);
   const [todayRoutes, setTodayRoutes] = useState<TodayRoute[]>([]);
-  const [cracks, setCracks] = useState<CrackItem[]>([]);
-  const [crackCounts, setCrackCounts] = useState<CrackCounts>({});
-  const [activeCrackKind, setActiveCrackKind] = useState<string | null>(null);
 
   const firstName = (() => {
     const n = session?.user?.name;
@@ -279,20 +244,6 @@ export function DashboardCanvas() {
       .then((data) => setTodayRoutes(data.routes ?? []))
       .catch(() => {});
 
-    // Fetch the Cracks Radar (work nobody is touching)
-    fetch("/api/maintenance/cracks")
-      .then((r) => r.json())
-      .then((data) => {
-        const list = Array.isArray(data.cracks) ? (data.cracks as CrackItem[]) : [];
-        const counts = (data.counts ?? {}) as CrackCounts;
-        setCracks(list);
-        setCrackCounts(counts);
-        // Default to the most severe bucket that actually has items.
-        const first = CRACK_KINDS.find((k) => (counts[k.kind] ?? 0) > 0);
-        setActiveCrackKind(first?.kind ?? null);
-      })
-      .catch(() => {});
-
     // Fetch cached vacancy count
     fetch("/api/cached-vacancies")
       .then((r) => r.json())
@@ -315,105 +266,6 @@ export function DashboardCanvas() {
           Your automation tools are ready.
         </p>
       </div>
-
-      {/* Cracks Radar — work nobody is touching, split into buckets by kind */}
-      {cracks.length > 0 && (() => {
-        const total = CRACK_KINDS.reduce((s, k) => s + (crackCounts[k.kind] ?? 0), 0);
-        const activeMeta = CRACK_KINDS.find((k) => k.kind === activeCrackKind);
-        const activeItems = cracks.filter((c) => c.kind === activeCrackKind);
-        const activeCount = crackCounts[activeCrackKind ?? ""] ?? activeItems.length;
-        const shown = activeItems.slice(0, 8);
-        return (
-        <div className="mb-6 bg-white rounded-xl border border-sand-200 shadow-card animate-slide-up">
-          <div className="flex items-center gap-2 px-5 pt-4 pb-3">
-            <AlertTriangle className="w-4 h-4 text-amber-600" />
-            <h2 className="text-heading text-charcoal-900 flex-1">Falling through the cracks</h2>
-            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
-              {total}
-            </span>
-          </div>
-
-          {/* Bucket tabs — all five kinds; empty ones are dimmed and disabled */}
-          <div className="flex flex-wrap gap-1.5 px-5 pb-3">
-            {CRACK_KINDS.map((k) => {
-              const count = crackCounts[k.kind] ?? 0;
-              const active = k.kind === activeCrackKind;
-              const empty = count === 0;
-              return (
-                <button
-                  key={k.kind}
-                  type="button"
-                  disabled={empty}
-                  onClick={() => setActiveCrackKind(k.kind)}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
-                    active
-                      ? "bg-charcoal-900 text-white"
-                      : empty
-                        ? "bg-transparent text-charcoal-300 cursor-default"
-                        : "bg-sand-50 text-charcoal-600 hover:bg-sand-100"
-                  )}
-                >
-                  <span>{k.tab}</span>
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
-                      active
-                        ? "bg-white/20 text-white"
-                        : empty
-                          ? "bg-transparent text-charcoal-300"
-                          : "bg-white text-charcoal-500"
-                    )}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Items for the selected bucket — subject/problem on top, fix beneath */}
-          <ul className="px-2 pb-2">
-            {shown.map((c, i) => {
-              const { lead, rest } = splitCrackDetail(c.detail);
-              return (
-                <li key={i}>
-                  <Link
-                    href={c.href ?? "/maintenance/board"}
-                    className="block rounded-lg px-3 py-2 hover:bg-sand-50 transition-colors"
-                  >
-                    <div className="flex items-baseline gap-2">
-                      <p className="min-w-0 flex-1 truncate text-sm">
-                        <span className="font-semibold text-charcoal-900">{lead}</span>
-                        {rest && <span className="text-charcoal-500"> · {rest}</span>}
-                      </p>
-                      {c.owner && (
-                        <span className="shrink-0 text-xs font-medium text-charcoal-500">
-                          {c.owner}
-                        </span>
-                      )}
-                      <span className="shrink-0 text-xs tabular-nums text-charcoal-400">
-                        {c.ageDays}d
-                      </span>
-                    </div>
-                    {c.action && (
-                      <p className="mt-0.5 truncate text-xs text-charcoal-400">→ {c.action}</p>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-          {activeCount > shown.length && activeMeta && (
-            <p className="px-5 pb-3 text-xs text-charcoal-400">
-              <Link href={activeMeta.href} className="hover:text-charcoal-600 hover:underline">
-                +{activeCount - shown.length} more {activeMeta.tab.toLowerCase()} →
-              </Link>
-            </p>
-          )}
-        </div>
-        );
-      })()}
 
       {/* Today's field route (published from the maintenance board) */}
       {todayRoutes.map((route) => {
