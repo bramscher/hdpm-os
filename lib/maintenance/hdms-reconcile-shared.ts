@@ -52,6 +52,16 @@ export interface HdmsReconInvoice {
   wo_reference: string | null;
 }
 
+/**
+ * Where the "billed" signal came from:
+ *  - 'system'   a non-void hdms_invoices row (our invoice module)
+ *  - 'appfolio' an HDMS bill on the WO in AppFolio (Reports API bill_detail),
+ *               billed directly without going through our invoice module
+ *  - 'both'     both of the above
+ *  - null       not billed anywhere we can see → a real leak when done
+ */
+export type BilledSource = 'system' | 'appfolio' | 'both' | null;
+
 export interface HdmsReconRow {
   category: HdmsReconCategory;
   wo_id: string | null;
@@ -69,6 +79,9 @@ export interface HdmsReconRow {
   invoice_code: string | null;
   invoice_status: string | null;
   invoice_total: number | null;
+  billed_source: BilledSource;
+  /** HDMS bill total on this WO in AppFolio (Reports API), when known. */
+  appfolio_bill_total: number | null;
 }
 
 export interface HdmsReconSummaryBucket {
@@ -79,6 +92,8 @@ export interface HdmsReconSummaryBucket {
 export interface HdmsReconciliation {
   generatedAt: string;
   windowDays: number;
+  /** Whether AppFolio-direct HDMS bills were folded in (Reports API configured). */
+  appfolioBillsIncluded: boolean;
   summary: Record<HdmsReconCategory, HdmsReconSummaryBucket>;
   rows: HdmsReconRow[];
 }
@@ -152,7 +167,10 @@ function emptySummary(): Record<HdmsReconCategory, HdmsReconSummaryBucket> {
  */
 export function categorizeHdmsReconciliation(
   workOrders: HdmsReconWorkOrder[],
-  invoices: HdmsReconInvoice[]
+  invoices: HdmsReconInvoice[],
+  // wo_number → HDMS bill total on that WO in AppFolio (Reports API bill_detail).
+  // Empty when the Reports API isn't configured (falls back to system-only).
+  appfolioBilledWos: Map<string, number> = new Map()
 ): HdmsReconciliation {
   const bills = invoices.filter((i) => i.doc_type === 'invoice' && i.status !== 'void');
 
@@ -175,7 +193,9 @@ export function categorizeHdmsReconciliation(
   const woRow = (
     wo: HdmsReconWorkOrder,
     category: HdmsReconCategory,
-    inv: HdmsReconInvoice | null
+    inv: HdmsReconInvoice | null,
+    billed_source: BilledSource,
+    appfolio_bill_total: number | null
   ): HdmsReconRow => ({
     category,
     wo_id: wo.id,
@@ -192,6 +212,8 @@ export function categorizeHdmsReconciliation(
     invoice_code: inv?.invoice_code ?? null,
     invoice_status: inv?.status ?? null,
     invoice_total: inv?.total_amount ?? null,
+    billed_source,
+    appfolio_bill_total,
   });
 
   for (const wo of workOrders) {
@@ -199,16 +221,29 @@ export function categorizeHdmsReconciliation(
       byWoId.get(wo.id) ?? (wo.wo_number ? byWoRef.get(wo.wo_number) : undefined) ?? null;
     if (inv) matchedInvoiceIds.add(inv.id);
 
+    // A WO counts as billed if it has our invoice OR an HDMS bill in AppFolio.
+    const afBillTotal = wo.wo_number ? appfolioBilledWos.get(wo.wo_number) ?? null : null;
+    const hasSystem = !!inv;
+    const hasAppfolio = afBillTotal != null;
+    const billed = hasSystem || hasAppfolio;
+    const billed_source: BilledSource = hasSystem
+      ? hasAppfolio
+        ? 'both'
+        : 'system'
+      : hasAppfolio
+        ? 'appfolio'
+        : null;
+
     let category: HdmsReconCategory;
     if (isWorkOrderCanceled(wo)) {
       category = 'canceled';
     } else if (isWorkOrderDone(wo)) {
-      category = inv ? 'done_billed' : 'done_unbilled';
+      category = billed ? 'done_billed' : 'done_unbilled';
     } else {
-      category = inv ? 'billed_not_done' : 'not_done';
+      category = billed ? 'billed_not_done' : 'not_done';
     }
 
-    const row = woRow(wo, category, inv);
+    const row = woRow(wo, category, inv, billed_source, afBillTotal);
     rows.push(row);
     summary[category].count += 1;
     summary[category].invoicedTotal += row.invoice_total ?? 0;
@@ -233,11 +268,19 @@ export function categorizeHdmsReconciliation(
       invoice_code: inv.invoice_code,
       invoice_status: inv.status,
       invoice_total: inv.total_amount ?? null,
+      billed_source: 'system',
+      appfolio_bill_total: null,
     };
     rows.push(row);
     summary.billed_not_done.count += 1;
     summary.billed_not_done.invoicedTotal += inv.total_amount ?? 0;
   }
 
-  return { generatedAt: new Date().toISOString(), windowDays: 0, summary, rows };
+  return {
+    generatedAt: new Date().toISOString(),
+    windowDays: 0,
+    appfolioBillsIncluded: appfolioBilledWos.size > 0,
+    summary,
+    rows,
+  };
 }

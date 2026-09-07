@@ -125,6 +125,38 @@ describe('categorizeHdmsReconciliation', () => {
     expect(byWo.get('new')?.category).toBe('done_unbilled');
   });
 
+  it('counts an AppFolio-direct HDMS bill as billed (no system invoice)', () => {
+    const wos = [
+      wo({ id: 'af', wo_number: '55-1', appfolio_status: 'Completed', completed_date: '2026-08-01' }),
+      wo({ id: 'leak', wo_number: '66-1', appfolio_status: 'Completed', completed_date: '2026-08-01' }),
+    ];
+    const afBills = new Map<string, number>([['55-1', 123.45]]);
+    const r = categorizeHdmsReconciliation(wos, [], afBills);
+    const byWo = new Map(r.rows.map((x) => [x.wo_id, x]));
+    expect(byWo.get('af')?.category).toBe('done_billed');
+    expect(byWo.get('af')?.billed_source).toBe('appfolio');
+    expect(byWo.get('af')?.appfolio_bill_total).toBe(123.45);
+    // No system invoice, no AppFolio bill → still a leak.
+    expect(byWo.get('leak')?.category).toBe('done_unbilled');
+    expect(byWo.get('leak')?.billed_source).toBe(null);
+    expect(r.appfolioBillsIncluded).toBe(true);
+  });
+
+  it('marks billed_source "both" when invoice and AppFolio bill coexist', () => {
+    const wos = [wo({ id: 'x', wo_number: '77-1', appfolio_status: 'Completed', completed_date: '2026-08-01' })];
+    const invoices = [inv({ id: 'i1', work_order_id: 'x' })];
+    const r = categorizeHdmsReconciliation(wos, invoices, new Map([['77-1', 50]]));
+    expect(r.rows[0].category).toBe('done_billed');
+    expect(r.rows[0].billed_source).toBe('both');
+  });
+
+  it('defaults to system-only (appfolioBillsIncluded false) with no AppFolio map', () => {
+    const wos = [wo({ id: 'x', wo_number: '88-1', appfolio_status: 'Completed', completed_date: '2026-08-01' })];
+    const r = categorizeHdmsReconciliation(wos, []);
+    expect(r.appfolioBillsIncluded).toBe(false);
+    expect(r.rows[0].category).toBe('done_unbilled');
+  });
+
   it('surfaces an orphan invoice with no matching WO as billed_not_done', () => {
     const wos = [wo({ id: 'w1', wo_number: '10-1', appfolio_status: 'Completed', completed_date: '2026-09-01' })];
     const invoices = [

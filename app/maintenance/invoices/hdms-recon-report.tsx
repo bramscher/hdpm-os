@@ -69,9 +69,11 @@ function toCsv(rows: HdmsReconRow[]): string {
     "assigned_tech",
     "owner",
     "completed_date",
+    "billed_source",
     "invoice_code",
     "invoice_status",
     "invoice_total",
+    "appfolio_bill_total",
     "appfolio_link",
   ];
   const esc = (v: unknown) => {
@@ -89,9 +91,11 @@ function toCsv(rows: HdmsReconRow[]): string {
       r.assigned_tech,
       r.owner_name,
       r.completed_date,
+      r.billed_source ?? "",
       r.invoice_code,
       r.invoice_status,
       r.invoice_total,
+      r.appfolio_bill_total,
       r.appfolio_link,
     ]
       .map(esc)
@@ -234,7 +238,7 @@ export function HdmsReconReport() {
       {isLoading && !data && (
         <div className="flex items-center justify-center py-16 text-charcoal-400">
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          <span className="text-sm">Scoping HDMS work orders and joining invoices…</span>
+          <span className="text-sm">Scoping HDMS work orders, invoices, and AppFolio bills (~15s)…</span>
         </div>
       )}
 
@@ -326,13 +330,24 @@ export function HdmsReconReport() {
                             <span>
                               {r.invoice_code}
                               {r.invoice_status ? <span className="text-charcoal-300"> · {r.invoice_status}</span> : null}
+                              {r.billed_source === "both" ? (
+                                <span className="ml-1 text-[10px] font-semibold text-blue-600">+AF</span>
+                              ) : null}
+                            </span>
+                          ) : r.billed_source === "appfolio" ? (
+                            <span className="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-700">
+                              AppFolio bill
                             </span>
                           ) : (
                             "—"
                           )}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap text-right text-charcoal-600">
-                          {r.invoice_total != null ? formatCurrency(r.invoice_total) : "—"}
+                          {r.invoice_total != null
+                            ? formatCurrency(r.invoice_total)
+                            : r.appfolio_bill_total != null
+                              ? formatCurrency(r.appfolio_bill_total)
+                              : "—"}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {r.appfolio_link ? (
@@ -362,10 +377,13 @@ export function HdmsReconReport() {
           </div>
 
           <p className="text-[10px] text-charcoal-400">
-            &ldquo;Done&rdquo; = AppFolio-Completed <em>or</em> HDPM-verified. A work order is
-            &ldquo;billed&rdquo; when a non-void HDMS invoice (not a credit memo) links to it by
-            work-order id or WO reference — so a job billed directly in AppFolio (bypassing the
-            invoice module) can still read as unbilled here; confirm via the AppFolio link.
+            &ldquo;Done&rdquo; = AppFolio-Completed <em>or</em> HDPM-verified. A work order counts as
+            &ldquo;billed&rdquo; when a non-void HDMS invoice (not a credit memo) links to it{" "}
+            <strong>or</strong> HDMS billed it directly in AppFolio (Reports API bill_detail, shown as
+            &ldquo;AppFolio bill&rdquo;). {data.appfolioBillsIncluded
+              ? "AppFolio-direct bills are included."
+              : "AppFolio-direct bills are NOT included (Reports API unavailable) — a job billed only in AppFolio may read as unbilled here; confirm via the AppFolio link."}{" "}
+            Note: tenant-expense charges are not HDMS bills and won&rsquo;t count.
             {hidePre
               ? ` Hiding ${preLaunchCount.toLocaleString()} pre-launch job${preLaunchCount === 1 ? "" : "s"} (completed before ${PRE_LAUNCH_CUTOFF}, billed directly in AppFolio).`
               : ` Showing all jobs, including ${preLaunchCount.toLocaleString()} pre-launch (before ${PRE_LAUNCH_CUTOFF}).`}{" "}

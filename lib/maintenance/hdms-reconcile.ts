@@ -12,6 +12,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { getDashboardConfig } from '@/lib/dashboard-config';
 import { INTERNAL_VENDOR_MATCH } from '@/app/maintenance/board/board-types';
+import { runReport, reportsApiConfigured } from '@/lib/appfolio-reports';
 import {
   categorizeHdmsReconciliation,
   type HdmsReconWorkOrder,
@@ -119,7 +120,56 @@ export async function buildHdmsReconciliation(
     if (batch.length < PAGE) break;
   }
 
-  const result = categorizeHdmsReconciliation(workOrders, [...invoiceById.values()]);
+  // AppFolio-direct HDMS bills (Reports API bill_detail) — a WO billed in
+  // AppFolio without going through our invoice module still counts as billed.
+  // Keyed by wo_number (bill_detail.work_order matches work_orders.wo_number,
+  // same join lib/inhouse-analysis.ts uses). Graceful: if the Reports API isn't
+  // configured, fall back to system invoices only.
+  const appfolioBilledWos = new Map<string, number>();
+  const appfolioAvailable = reportsApiConfigured();
+  if (appfolioAvailable) {
+    try {
+      const billLines = await runReport<AppfolioBillLine>('bill_detail', {
+        occurred_on_from: cutoff.slice(0, 10),
+        occurred_on_to: new Date().toISOString().slice(0, 10),
+        columns: ['work_order', 'payee_name', 'paid', 'unpaid'],
+      });
+      for (const b of billLines) {
+        if (!isHdmsPayee(b.payee_name)) continue;
+        const wo = String(b.work_order ?? '').trim();
+        if (!wo) continue;
+        appfolioBilledWos.set(wo, (appfolioBilledWos.get(wo) ?? 0) + money(b.paid) + money(b.unpaid));
+      }
+    } catch (err) {
+      // A Reports API hiccup shouldn't fail the whole report — degrade to
+      // system-only and let the response flag that AppFolio bills are missing.
+      console.error('HDMS reconcile: bill_detail fetch failed, using system invoices only:', err);
+    }
+  }
+
+  const result = categorizeHdmsReconciliation(
+    workOrders,
+    [...invoiceById.values()],
+    appfolioBilledWos
+  );
   result.windowDays = windowDays;
+  result.appfolioBillsIncluded = appfolioAvailable && appfolioBilledWos.size > 0;
   return result;
 }
+
+interface AppfolioBillLine {
+  work_order: string | null;
+  payee_name: string | null;
+  paid: string | number | null;
+  unpaid: string | number | null;
+}
+
+const money = (v: string | number | null | undefined): number =>
+  parseFloat(String(v ?? '0').replace(/,/g, '')) || 0;
+
+// Match lib/inhouse-analysis.ts / lib/af-payment-import.ts: the HDMS payee reads
+// "High Desert Maintenance Services - Division of HDPM", but match on the
+// shorter fragment so a shortened payee variant still counts.
+const HDMS_PAYEE_FRAGMENT = 'high desert maintenance';
+const isHdmsPayee = (payee: string | null | undefined): boolean =>
+  (payee ?? '').toLowerCase().includes(HDMS_PAYEE_FRAGMENT);
