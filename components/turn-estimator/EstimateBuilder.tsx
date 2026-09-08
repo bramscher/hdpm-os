@@ -385,16 +385,16 @@ export default function EstimateBuilder({
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
-        <table className="w-full text-sm">
+      <div className="rounded-xl border border-sand-200 bg-white shadow-card">
+        <table className="w-full table-fixed text-sm">
           <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
               <th className="px-3 py-2">Item</th>
-              <th className="px-3 py-2">Qty</th>
-              <th className="px-3 py-2">Minutes</th>
-              <th className="px-3 py-2">Material $</th>
-              <th className="px-3 py-2">Room / note</th>
-              <th className="px-3 py-2"></th>
+              <th className="w-16 px-3 py-2">Qty</th>
+              <th className="w-20 px-3 py-2">Minutes</th>
+              <th className="w-24 px-3 py-2">Material $</th>
+              <th className="w-40 px-3 py-2">Room / note</th>
+              <th className="w-8 px-2 py-2"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-sand-100">
@@ -404,7 +404,7 @@ export default function EstimateBuilder({
               return (
                 <tr key={r.key}>
                   <td className="px-3 py-2">
-                    <select className={input} value={r.item_code} onChange={(e) => setRow(r.key, { item_code: e.target.value })}>
+                    <select className={`${input} w-full min-w-0`} value={r.item_code} onChange={(e) => setRow(r.key, { item_code: e.target.value })}>
                       <option value="">— select —</option>
                       {items.map((it) => (
                         <option key={it.id} value={it.item_code}>
@@ -414,11 +414,11 @@ export default function EstimateBuilder({
                     </select>
                   </td>
                   <td className="px-3 py-2">
-                    <input className={`${input} w-16`} value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} />
+                    <input className={`${input} w-full min-w-0`} value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} />
                   </td>
                   <td className="px-3 py-2">
                     <input
-                      className={`${input} w-20`}
+                      className={`${input} w-full min-w-0`}
                       value={r.minutes}
                       onChange={(e) => setRow(r.key, { minutes: e.target.value })}
                       placeholder={method === "service_min" || method === "hourly" ? "min" : "—"}
@@ -427,7 +427,7 @@ export default function EstimateBuilder({
                   </td>
                   <td className="px-3 py-2">
                     <input
-                      className={`${input} w-20`}
+                      className={`${input} w-full min-w-0`}
                       value={r.material_cost}
                       onChange={(e) => setRow(r.key, { material_cost: e.target.value })}
                       placeholder={method === "cost_plus" ? "cost" : "—"}
@@ -435,7 +435,7 @@ export default function EstimateBuilder({
                     />
                   </td>
                   <td className="px-3 py-2">
-                    <input className={`${input} w-full`} value={r.room} onChange={(e) => setRow(r.key, { room: e.target.value })} />
+                    <input className={`${input} w-full min-w-0`} value={r.room} onChange={(e) => setRow(r.key, { room: e.target.value })} />
                   </td>
                   <td className="px-3 py-2">
                     <button type="button" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
