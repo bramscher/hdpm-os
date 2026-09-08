@@ -910,6 +910,9 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-charcoal-100/80">
+                        <th className="sticky left-0 z-10 bg-white text-center px-2 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider whitespace-nowrap border-r border-charcoal-100/80">
+                          Actions
+                        </th>
                         <th className="text-left px-4 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider whitespace-nowrap w-[80px]">
                           WO #
                         </th>
@@ -959,9 +962,6 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                             Created <WoSortIcon field="created_at" />
                           </span>
                         </th>
-                        <th className="sticky right-0 z-10 bg-white text-center px-2 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider whitespace-nowrap border-l border-charcoal-100/80">
-                          Actions
-                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -990,6 +990,32 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                               key={wo.id}
                               className="group border-b border-charcoal-50/80 hover:bg-charcoal-50 transition-colors"
                             >
+                              <td className="sticky left-0 bg-white group-hover:bg-charcoal-50 border-r border-charcoal-100/80 px-2 py-2.5 text-center transition-colors">
+                                <div className="inline-flex items-center gap-1">
+                                  <a
+                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}`}
+                                    title="Create Estimate"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-green-50/80 text-green-700 hover:bg-green-100 hover:text-green-900 transition-colors"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </a>
+                                  <a
+                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}&draft=1`}
+                                    title="Draft estimate with the agent"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-blue-50/80 text-blue-600 hover:bg-blue-100 hover:text-blue-800 transition-colors"
+                                  >
+                                    <Sparkles className="h-4 w-4" />
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCreateInvoiceFromWo(wo)}
+                                    title="Create Invoice"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-terra-50/80 text-terra-600 hover:bg-terra-100 hover:text-terra-800 transition-colors"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
                               <td className="px-4 py-2.5 text-charcoal-600 font-mono text-[11px] whitespace-nowrap">
                                 {wo.wo_number || wo.appfolio_id.slice(0, 8)}
                               </td>
@@ -1026,32 +1052,6 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                               </td>
                               <td className="px-4 py-2.5 text-charcoal-500 text-[11px] hidden md:table-cell">
                                 {formatDate(wo.created_at)}
-                              </td>
-                              <td className="sticky right-0 bg-white group-hover:bg-charcoal-50 border-l border-charcoal-100/80 px-2 py-2.5 text-center transition-colors">
-                                <div className="inline-flex items-center gap-1">
-                                  <a
-                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}`}
-                                    title="Create Estimate"
-                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-green-50/80 text-green-700 hover:bg-green-100 hover:text-green-900 transition-colors"
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                  </a>
-                                  <a
-                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}&draft=1`}
-                                    title="Draft estimate with the agent"
-                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-blue-50/80 text-blue-600 hover:bg-blue-100 hover:text-blue-800 transition-colors"
-                                  >
-                                    <Sparkles className="h-4 w-4" />
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCreateInvoiceFromWo(wo)}
-                                    title="Create Invoice"
-                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-terra-50/80 text-terra-600 hover:bg-terra-100 hover:text-terra-800 transition-colors"
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                  </button>
-                                </div>
                               </td>
                             </tr>
                           );
