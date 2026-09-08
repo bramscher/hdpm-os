@@ -50,7 +50,9 @@ export default async function TurnsPage() {
 
   // Per-turn work-order counts (total + still-open) and the best estimate state.
   const woByTurn = new Map<string, { total: number; open: number }>();
-  const estByTurn = new Map<string, string>();
+  const estByTurn = new Map<string, { status: string; versionId: string | null }>();
+  // Owner total per current estimate version (shown on approved turns).
+  const versionTotal = new Map<string, number>();
   if (turnIds.length > 0) {
     const { data: wos } = await supabase
       .from('work_orders')
@@ -64,14 +66,29 @@ export default async function TurnsPage() {
     }
     const { data: ests } = await supabase
       .from('estimate')
-      .select('unit_turn_id, status')
+      .select('unit_turn_id, status, current_version_id')
       .in('unit_turn_id', turnIds)
       .neq('status', 'void');
-    for (const e of (ests ?? []) as { unit_turn_id: string | null; status: string }[]) {
+    for (const e of (ests ?? []) as {
+      unit_turn_id: string | null;
+      status: string;
+      current_version_id: string | null;
+    }[]) {
       if (!e.unit_turn_id) continue;
       const cur = estByTurn.get(e.unit_turn_id);
-      if (!cur || (ESTIMATE_RANK[e.status] ?? 0) > (ESTIMATE_RANK[cur] ?? 0)) {
-        estByTurn.set(e.unit_turn_id, e.status);
+      if (!cur || (ESTIMATE_RANK[e.status] ?? 0) > (ESTIMATE_RANK[cur.status] ?? 0)) {
+        estByTurn.set(e.unit_turn_id, { status: e.status, versionId: e.current_version_id });
+      }
+    }
+    // Pull the owner total for each winning version so approved turns show $.
+    const versionIds = [...estByTurn.values()].map((e) => e.versionId).filter((v): v is string => !!v);
+    if (versionIds.length > 0) {
+      const { data: versions } = await supabase
+        .from('estimate_version')
+        .select('id, owner_total')
+        .in('id', versionIds);
+      for (const v of (versions ?? []) as { id: string; owner_total: number | null }[]) {
+        if (v.owner_total != null) versionTotal.set(v.id, Number(v.owner_total));
       }
     }
   }
@@ -100,7 +117,11 @@ export default async function TurnsPage() {
             {turns.map((t) => {
               const wo = woByTurn.get(t.id);
               const est = estByTurn.get(t.id);
-              const badge = est ? ESTIMATE_BADGE[est] : null;
+              const badge = est ? ESTIMATE_BADGE[est.status] : null;
+              const total =
+                est && est.status === 'approved' && est.versionId
+                  ? versionTotal.get(est.versionId)
+                  : undefined;
               return (
                 <tr key={t.id} className="hover:bg-sand-50">
                   <td className="px-3 py-2">
@@ -121,8 +142,15 @@ export default async function TurnsPage() {
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {badge ? (
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge.style}`}>
-                        {badge.label}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge.style}`}>
+                          {badge.label}
+                        </span>
+                        {total != null && (
+                          <span className="text-xs font-medium text-charcoal-700">
+                            ${Math.round(total).toLocaleString('en-US')}
+                          </span>
+                        )}
                       </span>
                     ) : (
                       <span className="text-charcoal-400">—</span>
