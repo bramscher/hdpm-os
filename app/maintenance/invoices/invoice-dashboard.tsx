@@ -959,7 +959,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                             Created <WoSortIcon field="created_at" />
                           </span>
                         </th>
-                        <th className="text-center px-2 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider w-[44px]">
+                        <th className="sticky right-0 z-10 bg-white text-center px-2 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider whitespace-nowrap border-l border-charcoal-100/80">
+                          Actions
                         </th>
                       </tr>
                     </thead>
@@ -987,7 +988,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                           return (
                             <tr
                               key={wo.id}
-                              className="border-b border-charcoal-50/80 hover:bg-charcoal-50 transition-colors"
+                              className="group border-b border-charcoal-50/80 hover:bg-charcoal-50 transition-colors"
                             >
                               <td className="px-4 py-2.5 text-charcoal-600 font-mono text-[11px] whitespace-nowrap">
                                 {wo.wo_number || wo.appfolio_id.slice(0, 8)}
@@ -1026,7 +1027,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                               <td className="px-4 py-2.5 text-charcoal-500 text-[11px] hidden md:table-cell">
                                 {formatDate(wo.created_at)}
                               </td>
-                              <td className="px-2 py-2.5 text-center">
+                              <td className="sticky right-0 bg-white group-hover:bg-charcoal-50 border-l border-charcoal-100/80 px-2 py-2.5 text-center transition-colors">
                                 <div className="inline-flex items-center gap-1">
                                   <a
                                     href={`/turn-estimator/estimates/new?from_wo=${wo.id}`}
