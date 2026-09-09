@@ -22,6 +22,8 @@
  */
 
 import { getSupabaseAdmin } from './supabase';
+import { computeDoorMovement, type DoorRoster } from './door-movement';
+import { OPEN_LEAD_STAGES } from './referrals/types';
 import { getDashboardConfig } from './dashboard-config';
 import { havenResponseMetrics } from './haven';
 
@@ -864,6 +866,150 @@ export async function fetchNetDoorsKpi(): Promise<NetDoorsKpi> {
     currentProperties,
     netThisMonth,
   };
+}
+
+// ============================================
+// KPI: Door Movement (Growth & Retention)
+// ============================================
+
+/** Build { propertyId → active door count } + totals from the live v0 data. */
+async function buildDoorRoster(config: NonNullable<ReturnType<typeof getKpiConfig>>): Promise<{
+  roster: DoorRoster;
+  currentDoors: number;
+  currentProperties: number;
+}> {
+  const [units, properties] = await Promise.all([
+    v0FetchAll<V0Unit>('/units', { 'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z' }, config),
+    v0FetchAll<V0Property>('/properties', { 'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z' }, config, 1000, 10),
+  ]);
+  const activeProps = new Set(properties.filter((p) => !p.HiddenAt).map((p) => p.Id));
+  const roster: DoorRoster = {};
+  let currentDoors = 0;
+  for (const u of units) {
+    if (u.HiddenAt) continue;
+    const pid = u.PropertyId;
+    // Count a door only if its property is active; group orphans under 'unknown'.
+    if (pid && !activeProps.has(pid)) continue;
+    const key = pid ?? 'unknown';
+    roster[key] = (roster[key] ?? 0) + 1;
+    currentDoors += 1;
+  }
+  return { roster, currentDoors, currentProperties: activeProps.size };
+}
+
+export interface DoorRosterKpi {
+  roster: DoorRoster;
+  currentDoors: number;
+  currentProperties: number;
+  capturedFor: string; // YYYY-MM-DD
+}
+
+/** Daily roster snapshot (kpi_name 'door_roster') — the baseline future movement diffs against. */
+export async function fetchDoorRoster(): Promise<DoorRosterKpi> {
+  const config = getKpiConfig();
+  if (!config) return { roster: {}, currentDoors: 0, currentProperties: 0, capturedFor: new Date().toISOString().slice(0, 10) };
+  const { roster, currentDoors, currentProperties } = await buildDoorRoster(config);
+  return { roster, currentDoors, currentProperties, capturedFor: new Date().toISOString().slice(0, 10) };
+}
+
+interface DoorMovementWindow {
+  gained: number;
+  lost: number;
+  net: number;
+  churnPct: number | null;
+  baselineDoors: number;
+  baselineAt: string | null;
+}
+
+export interface DoorMovementKpi {
+  currentDoors: number;
+  currentProperties: number;
+  /** Month-to-date and trailing-12-month movement. null when no baseline roster exists yet. */
+  month: DoorMovementWindow | null;
+  ttm: DoorMovementWindow | null;
+  /** Open referral-lead pipeline (tracked leads only — organic CRM owners not joined). */
+  pipelineDoors: number;
+  pipelineLeads: number;
+  /** Earliest door_roster snapshot we have, for the "collecting baseline since" state. */
+  firstRosterAt: string | null;
+}
+
+/** Read the earliest door_roster snapshot at/after `sinceIso` (baseline for a window). */
+async function readBaselineRoster(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  sinceIso: string
+): Promise<{ roster: DoorRoster; capturedAt: string } | null> {
+  const { data } = await supabase
+    .from('kpi_snapshots')
+    .select('value, captured_at')
+    .eq('kpi_name', 'door_roster')
+    .gte('captured_at', sinceIso)
+    .order('captured_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const roster = (data?.value as { roster?: DoorRoster } | null)?.roster;
+  if (!roster || !data) return null;
+  return { roster, capturedAt: data.captured_at as string };
+}
+
+function toWindow(current: DoorRoster, baseline: { roster: DoorRoster; capturedAt: string } | null): DoorMovementWindow | null {
+  if (!baseline) return null;
+  const m = computeDoorMovement(current, baseline.roster);
+  return {
+    gained: m.gained,
+    lost: m.lost,
+    net: m.net,
+    churnPct: m.churnPct,
+    baselineDoors: m.baselineDoors,
+    baselineAt: baseline.capturedAt.slice(0, 10),
+  };
+}
+
+export async function fetchDoorMovementKpi(): Promise<DoorMovementKpi> {
+  const config = getKpiConfig();
+  if (!config) {
+    return { currentDoors: 0, currentProperties: 0, month: null, ttm: null, pipelineDoors: 0, pipelineLeads: 0, firstRosterAt: null };
+  }
+  const { roster, currentDoors, currentProperties } = await buildDoorRoster(config);
+  const supabase = getSupabaseAdmin();
+
+  const now = new Date();
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const yearAgo = new Date(now.getTime() - 365 * 86_400_000).toISOString();
+
+  let month: DoorMovementWindow | null = null;
+  let ttm: DoorMovementWindow | null = null;
+  let firstRosterAt: string | null = null;
+  try {
+    const [mBase, tBase, first] = await Promise.all([
+      readBaselineRoster(supabase, startOfMonth),
+      readBaselineRoster(supabase, yearAgo),
+      readBaselineRoster(supabase, '1970-01-01T00:00:00Z'),
+    ]);
+    month = toWindow(roster, mBase);
+    ttm = toWindow(roster, tBase);
+    firstRosterAt = first ? first.capturedAt.slice(0, 10) : null;
+  } catch (e) {
+    console.warn('[KPI] door_movement baseline lookup failed:', e);
+  }
+
+  // Open referral-lead pipeline doors (tracked leads only).
+  let pipelineDoors = 0;
+  let pipelineLeads = 0;
+  try {
+    const { data } = await supabase
+      .from('referral_lead')
+      .select('doors_under_mgmt, unit_count')
+      .eq('org_id', 'hdpm')
+      .in('stage', OPEN_LEAD_STAGES);
+    const rows = (data ?? []) as { doors_under_mgmt: number | null; unit_count: number | null }[];
+    pipelineLeads = rows.length;
+    pipelineDoors = rows.reduce((s, r) => s + (r.doors_under_mgmt ?? r.unit_count ?? 0), 0);
+  } catch (e) {
+    console.warn('[KPI] door_movement pipeline lookup failed:', e);
+  }
+
+  return { currentDoors, currentProperties, month, ttm, pipelineDoors, pipelineLeads, firstRosterAt };
 }
 
 // ============================================

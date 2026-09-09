@@ -102,6 +102,24 @@ interface NetDoorsData {
   netThisMonth: number;
 }
 
+interface DoorMovementWindowData {
+  gained: number;
+  lost: number;
+  net: number;
+  churnPct: number | null;
+  baselineDoors: number;
+  baselineAt: string | null;
+}
+interface DoorMovementData {
+  currentDoors: number;
+  currentProperties: number;
+  month: DoorMovementWindowData | null;
+  ttm: DoorMovementWindowData | null;
+  pipelineDoors: number;
+  pipelineLeads: number;
+  firstRosterAt: string | null;
+}
+
 interface GuestCardData {
   today: number;
   thisWeek: number;
@@ -200,7 +218,7 @@ type KpiData = DelinquencyData | VacancyData | WorkOrderData | NoticeData | Insu
   | OwnerRetentionData | MaintenanceCostData | DaysToLeaseData | LeaseRenewalData | NetDoorsData
   | GuestCardData | LeasingFunnelData | ManagementFeesData
   | OccupancyData | BendGrowthData | LeaseExpirationsData | WorkOrdersCompletedData
-  | MaintenanceEconomicsData;
+  | MaintenanceEconomicsData | DoorMovementData;
 
 // Compact money formatter for maintenance economics ($1.41M / $842k / $312)
 function fmtMoney(n: number): string {
@@ -506,6 +524,48 @@ const KPI_CARDS: KpiCardConfig[] = [
         direction: diff > 0 ? "up" : "down",
         sentiment: diff > 0 ? "good" : "bad",
         label: `${Math.abs(diff).toFixed(1)}pp`,
+      };
+    },
+  },
+  {
+    name: "Doors · Growth & Retention",
+    key: "door_movement",
+    endpoint: "/api/kpi/door-movement",
+    icon: Building2,
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-100",
+    iconColor: "text-emerald-600",
+    sparkColor: "#059669",
+    sparkFill: "#a7f3d0",
+    dataTag: "live",
+    formatPrimary: (d) => `${(d as DoorMovementData).currentDoors} doors`,
+    formatSecondary: (d) => {
+      const data = d as DoorMovementData;
+      const parts: string[] = [];
+      parts.push(`${data.currentProperties} properties`);
+      if (data.month) {
+        const m = data.month;
+        const net = `${m.net >= 0 ? "+" : ""}${m.net}`;
+        parts.push(`+${m.gained} / −${m.lost} = ${net} this mo`);
+        if (m.churnPct != null) parts.push(`churn ${m.churnPct}%`);
+      } else {
+        parts.push(`collecting baseline${data.firstRosterAt ? ` since ${data.firstRosterAt}` : ""}`);
+      }
+      if (data.ttm?.churnPct != null) parts.push(`TTM churn ${data.ttm.churnPct}%`);
+      parts.push(`pipeline ${data.pipelineDoors} doors (${data.pipelineLeads} leads)`);
+      return parts.join(" · ");
+    },
+    getSparklineValue: (s) => (s.currentDoors as number) ?? 0,
+    getDelta: (current, prior) => {
+      const curr = (current as DoorMovementData).currentDoors;
+      const prev = (prior as { currentDoors?: number }).currentDoors;
+      if (prev == null) return null;
+      const diff = curr - prev;
+      if (diff === 0) return { direction: "flat", sentiment: "neutral", label: "No change" };
+      return {
+        direction: diff > 0 ? "up" : "down",
+        sentiment: diff > 0 ? "good" : "bad",
+        label: `${Math.abs(diff)} doors`,
       };
     },
   },
@@ -838,9 +898,10 @@ const KPI_CARDS: KpiCardConfig[] = [
 // Alven-style section model (KPI restyle)
 // ============================================
 
-type SectionKey = "money" | "collections" | "maintenance" | "leasing" | "vendors";
+type SectionKey = "growth" | "money" | "collections" | "maintenance" | "leasing" | "vendors";
 
 const SECTIONS: { key: SectionKey; title: string; tag: string }[] = [
+  { key: "growth", title: "Growth & Retention", tag: "doors" },
   { key: "money", title: "Financial Health", tag: "owners" },
   { key: "collections", title: "Delinquency & Tenants", tag: "collections" },
   { key: "maintenance", title: "Maintenance & Work Orders", tag: "vendors + techs" },
@@ -871,6 +932,7 @@ const CARD_META: Record<
   vacancy:               { section: "leasing",     accent: "#5b8def" },
   occupancy:             { section: "leasing",     accent: "#5fa07a" },
   days_to_lease:         { section: "leasing",     accent: "#e8734a", agentDriven: true },
+  door_movement:         { section: "growth",      accent: "#5fa07a" },
   net_doors:             { section: "leasing",     accent: "#7d8794" },
   guest_cards:           { section: "leasing",     accent: "#5b8def" },
   leasing_funnel:        { section: "leasing",     accent: "#4b9faa" },
