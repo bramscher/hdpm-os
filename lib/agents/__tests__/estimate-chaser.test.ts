@@ -38,6 +38,7 @@ function wo(overrides: Partial<WorkOrderLite> = {}): WorkOrderLite {
   return {
     id: 'wo-1',
     wo_number: '412',
+    property_id: 'prop-1',
     property_name: 'Brosterhous Commons',
     property_address: '123 Brosterhous Rd',
     unit_name: '4',
@@ -55,6 +56,7 @@ function candidate(overrides: Partial<ChaseCandidate> = {}): ChaseCandidate {
     workOrderId: 'wo-1',
     kind: VENDOR_CHASE_ACTION,
     woNumber: '412',
+    propertyId: 'prop-1',
     propertyName: 'Brosterhous Commons',
     propertyAddress: '123 Brosterhous Rd',
     unitName: '4',
@@ -200,6 +202,29 @@ describe('decideChase', () => {
       decideChase(candidate({ ageCalendarDays: 60 }), history({ lastChaseAt: fri }), MON)
     ).toEqual({ action: 'escalate', reason: 'aged_45d' });
   });
+
+  it('owner-approval keeps chasing on count instead of escalating (bid in hand, no vendor fallback)', () => {
+    const owner = candidate({ kind: OWNER_APPROVAL_ACTION });
+    expect(decideChase(owner, history({ chaseCount: 3 }), MON)).toEqual({ action: 'chase' });
+    expect(decideChase(owner, history({ chaseCount: 9 }), MON)).toEqual({ action: 'chase' });
+  });
+
+  it('owner-approval still escalates on extreme age', () => {
+    expect(
+      decideChase(candidate({ kind: OWNER_APPROVAL_ACTION, ageCalendarDays: 46 }), history({ chaseCount: 5 }), MON)
+    ).toEqual({ action: 'escalate', reason: 'aged_45d' });
+  });
+
+  it('un-assigned Estimate Requested WOs keep following instead of escalating on count', () => {
+    // No vendor => "chased 3x" is meaningless; it must keep surfacing to Jayme.
+    const unassigned = candidate({ vendorId: null });
+    expect(decideChase(unassigned, history({ chaseCount: 4 }), MON)).toEqual({ action: 'chase' });
+    // ...but a vendor IS assigned => count escalation still applies.
+    expect(decideChase(candidate({ vendorId: 'v-9' }), history({ chaseCount: 3 }), MON)).toEqual({
+      action: 'escalate',
+      reason: 'chased_3x',
+    });
+  });
 });
 
 // ── draft templates ──
@@ -214,6 +239,17 @@ describe('draft templates', () => {
       expect(d.html + d.text + d.subject).not.toMatch(/\$/);
       expect(d.html + d.text).not.toMatch(/amount|price|cost/i);
     }
+  });
+
+  it('owner draft greets the real property owner when resolved, else the placeholder', () => {
+    const named = buildOwnerApprovalDraft(
+      candidate({ kind: OWNER_APPROVAL_ACTION, ownerName: 'Jane Landlord' }),
+      1
+    );
+    expect(named.text).toContain('Hi Jane Landlord,');
+    expect(named.text).not.toContain('[owner name]');
+    // No owner name resolved → keep the fill-in placeholder (never the staff owner).
+    expect(owner.text).toContain('Hi [owner name],');
   });
 
   it('never leaks the internal AppFolio link into draft bodies', () => {
@@ -232,14 +268,36 @@ describe('draft templates', () => {
     expect(owner.text).toContain('[owner name]');
   });
 
-  it('references the WO and property in the subject', () => {
-    expect(vendor.subject).toBe('Bid follow-up — WO #412 — 123 Brosterhous Rd, Unit 4');
+  it('references the WO and property in the subject, numbering the request', () => {
+    expect(vendor.subject).toBe('Bid follow-up (1st request) — WO #412 — 123 Brosterhous Rd, Unit 4');
+    expect(vendorBlankTo.subject).toBe('Bid follow-up (2nd request) — WO #412 — 123 Brosterhous Rd, Unit 4');
     expect(owner.subject).toBe('Approval needed — WO #412 — 123 Brosterhous Rd, Unit 4');
   });
 
   it('acknowledges repeat follow-ups on round ≥ 2 only', () => {
     expect(vendorBlankTo.text).toContain('second follow-up');
     expect(vendor.text).not.toContain('checking in again');
+  });
+
+  it('escalates to a firm, hand-datable close on round 3 (with a backup-vendor warning)', () => {
+    const round3 = buildVendorChaseDraft(candidate(), 'bids@firkus.com', 3);
+    expect(round3.subject).toBe('Bid follow-up (3rd request) — WO #412 — 123 Brosterhous Rd, Unit 4');
+    expect(round3.text).toContain('[date]');
+    expect(round3.text).toContain('another vendor');
+    // rounds 1–2 keep the soft close, no deadline
+    expect(vendor.text).not.toContain('[date]');
+    expect(vendorBlankTo.text).not.toContain('[date]');
+  });
+
+  it('signs as the given sender, defaulting to the owner (Jayme)', () => {
+    expect(vendor.text).toContain('Jayme');
+    expect(vendor.text).not.toContain('Brody');
+    const brody = buildVendorChaseDraft(candidate(), 'bids@firkus.com', 1, 'Brody');
+    expect(brody.text).toContain('Brody');
+    expect(brody.html).toContain('Brody');
+    expect(brody.text).not.toMatch(/Thank you,\nJayme/);
+    const ownerBrody = buildOwnerApprovalDraft(candidate({ kind: OWNER_APPROVAL_ACTION }), 1, 'Brody');
+    expect(ownerBrody.text).toContain('Brody');
   });
 
   it('escapes HTML in the description', () => {
@@ -267,8 +325,8 @@ describe('buildVendorChaseSms', () => {
     }
   });
 
-  it('identifies Cheryl/HDPM, the WO, and the property', () => {
-    expect(round1).toContain('Cheryl');
+  it('identifies the owner/HDPM, the WO, and the property', () => {
+    expect(round1).toContain('Jayme');
     expect(round1).toContain('High Desert Property Mgmt');
     expect(round1).toContain('WO #412');
     expect(round1).toContain('123 Brosterhous Rd');

@@ -116,6 +116,59 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date } = 
     result.autoFilled++;
   }
 
+  // ── 1b. Auto-fill from kpi_snapshots (dashboard KPIs, e.g. door_movement) ──
+  // Supports nested source_refs like `door_movement.month.net`. A null value
+  // (e.g. churn before the baseline accrues) leaves the row blank that week.
+  const kpiNames = [
+    ...new Set(
+      metrics
+        .filter((m) => m.source === 'kpi_snapshot' && m.source_ref)
+        .map((m) => (m.source_ref as string).split('.')[0])
+    ),
+  ];
+  const kpiValues = await readLatestKpiSnapshots(supabase, kpiNames);
+
+  for (const m of metrics) {
+    if (m.source !== 'kpi_snapshot' || !m.source_ref) continue;
+    if (existing.get(m.id) === 'manual') {
+      result.skippedManualOverride++;
+      continue;
+    }
+    const dot = m.source_ref.indexOf('.');
+    const kpiName = m.source_ref.slice(0, dot);
+    const path = m.source_ref.slice(dot + 1);
+    const value = extractNested(kpiValues.get(kpiName), path);
+    if (value === null) {
+      result.missingValue++;
+      console.warn(`[scorecard] no kpi_snapshot value for ${m.name} (${m.source_ref})`);
+      continue;
+    }
+    const onTrack = isOnTrack(m.goal_op, m.goal_value, value);
+    if (!dryRun) {
+      const { error: upErr } = await supabase.from('scorecard_entry').upsert(
+        {
+          metric_id: m.id,
+          week_start: weekStart,
+          value,
+          on_track: onTrack,
+          source: 'auto',
+          entered_by: 'system:scorecard',
+        },
+        { onConflict: 'metric_id,week_start' }
+      );
+      if (upErr) {
+        console.error(`[scorecard] entry upsert failed (${m.name}):`, upErr.message);
+        continue;
+      }
+      await logAudit('scorecard_entry', `${m.id}:${weekStart}`, 'auto_filled', ACTOR, {
+        metric: m.name,
+        value,
+        on_track: onTrack,
+      });
+    }
+    result.autoFilled++;
+  }
+
   // ── 2. Manual metrics missing this week → owner nudge ─────────────────
   for (const m of metrics) {
     if (m.source !== 'manual' || existing.has(m.id) || !m.owner_person) continue;
@@ -186,4 +239,35 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date } = 
 
   console.log('[scorecard]', JSON.stringify(result));
   return result;
+}
+
+// ── kpi_snapshots helpers (dashboard KPIs → scorecard) ──────────────────
+
+/** Latest kpi_snapshots value per kpi_name. */
+async function readLatestKpiSnapshots(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  names: string[]
+): Promise<Map<string, Record<string, unknown>>> {
+  const out = new Map<string, Record<string, unknown>>();
+  if (names.length === 0) return out;
+  const { data } = await supabase
+    .from('kpi_snapshots')
+    .select('kpi_name, value, captured_at')
+    .in('kpi_name', names)
+    .order('captured_at', { ascending: false });
+  for (const row of (data ?? []) as { kpi_name: string; value: Record<string, unknown> }[]) {
+    if (!out.has(row.kpi_name)) out.set(row.kpi_name, row.value); // first = latest
+  }
+  return out;
+}
+
+/** Walk a dotted path (e.g. "month.net") to a finite number, else null. */
+function extractNested(value: Record<string, unknown> | undefined, path: string): number | null {
+  if (!value) return null;
+  let cur: unknown = value;
+  for (const seg of path.split('.')) {
+    if (cur == null || typeof cur !== 'object') return null;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return typeof cur === 'number' && Number.isFinite(cur) ? cur : null;
 }

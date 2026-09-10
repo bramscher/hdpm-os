@@ -139,6 +139,14 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
             Open in AppFolio ↗
           </a>
         )}
+        <Link
+          href={`/turn-estimator/estimates/new?from_wo=${wo.id}&draft=1`}
+          className="mo-btn"
+          style={{ textDecoration: 'none' }}
+          title="Draft a turn/HDMS estimate from this work order with the agent"
+        >
+          Draft estimate ✨
+        </Link>
         <Link href="/maintenance/board" className="badge">
           ← Back to board
         </Link>

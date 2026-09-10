@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FileText, BarChart3, Home, MessageCircle, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X } from "lucide-react";
+import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { springDefault } from "@/lib/motion";
 
@@ -43,6 +43,8 @@ const NAV_SECTIONS: NavSection[] = [
         matchExclude: "/maintenance/inspections/routes",
       },
       { label: "Route Builder", href: "/maintenance/inspections/routes", icon: Navigation, matchPrefix: "/maintenance/inspections/routes" },
+      { label: "Turns", href: "/turn-estimator/turns", icon: RefreshCw, matchPrefix: "/turn-estimator/turns" },
+      { label: "Price Book", href: "/turn-estimator/price-book", icon: BookOpen, matchPrefix: "/turn-estimator/price-book" },
     ],
   },
   {
@@ -89,13 +91,11 @@ export function currentSectionLabel(pathname: string): string {
 }
 
 interface SidebarContentProps {
-  onToggleChat?: () => void;
-  isChatOpen?: boolean;
   onNavigate?: () => void;
 }
 
 /** The nav content itself — rendered inside the desktop rail and the mobile drawer. */
-function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: SidebarContentProps) {
+function SidebarContent({ onNavigate }: SidebarContentProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin === true;
@@ -175,37 +175,6 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
             </div>
           </div>
         ))}
-
-        {/* AI Chat section */}
-        <div className="mt-6 pt-4 border-t border-sand-200">
-          <p className="px-3 mb-2 text-2xs font-semibold text-charcoal-500 uppercase tracking-widest">
-            AI Assistant
-          </p>
-          <button
-            className={cn(
-              "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors duration-150 w-full group text-left",
-              isChatOpen
-                ? "text-terra-600"
-                : "text-charcoal-500 hover:text-charcoal-900 hover:bg-charcoal-900/[0.04]"
-            )}
-            onClick={() => {
-              onToggleChat?.();
-              onNavigate?.();
-            }}
-          >
-            {isChatOpen && (
-              <span className="absolute inset-0 rounded-lg nav-glass-active" aria-hidden />
-            )}
-            <MessageCircle
-              className={cn(
-                "relative z-10 w-[18px] h-[18px] flex-shrink-0",
-                !isChatOpen && "text-charcoal-900"
-              )}
-            />
-            <span className="relative z-10 flex-1">Knowledge Chat</span>
-            <span className="relative z-10 w-2 h-2 rounded-full bg-green-400 opacity-75" />
-          </button>
-        </div>
       </nav>
 
       {/* User section at bottom */}
@@ -233,25 +202,20 @@ function SidebarContent({ onToggleChat, isChatOpen = false, onNavigate }: Sideba
   );
 }
 
-interface SidebarProps {
-  onToggleChat?: () => void;
-  isChatOpen?: boolean;
-}
-
 /** Desktop rail — hidden below md (MobileNav takes over there). */
-export function Sidebar({ onToggleChat, isChatOpen = false }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
   if (pathname === "/login") return null;
 
   return (
     <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[220px] sidebar-gradient z-50 flex-col">
-      <SidebarContent onToggleChat={onToggleChat} isChatOpen={isChatOpen} />
+      <SidebarContent />
     </aside>
   );
 }
 
 /** Mobile chrome: sticky glass top bar + slide-in nav drawer (below md). */
-export function MobileNav({ onToggleChat, isChatOpen = false }: SidebarProps) {
+export function MobileNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const reducedMotion = useReducedMotion();
@@ -320,11 +284,7 @@ export function MobileNav({ onToggleChat, isChatOpen = false }: SidebarProps) {
               >
                 <X className="w-4 h-4" />
               </button>
-              <SidebarContent
-                onToggleChat={onToggleChat}
-                isChatOpen={isChatOpen}
-                onNavigate={() => setOpen(false)}
-              />
+              <SidebarContent onNavigate={() => setOpen(false)} />
             </motion.div>
           </>
         )}

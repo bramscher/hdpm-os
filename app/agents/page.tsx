@@ -1,6 +1,9 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { auth } from '@/lib/auth';
 import { listAgentConfig, isGloballyKilled } from '@/lib/agents/config';
-import type { AgentConfigRow, AgentProposal, OutboxMessage } from '@/lib/agents/types';
+import type { AgentProposal, OutboxMessage } from '@/lib/agents/types';
+import AutonomyMatrix, { type StaffOption } from '@/components/agents/AutonomyMatrix';
+import { buildWorkload } from '@/lib/agents/workload';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +18,6 @@ export const metadata = {
  * outbox health, and the Sep 4 write-path tracker.
  */
 
-const LEVEL_LABELS = ['L0 observe', 'L1 draft', 'L2 act-on-tap', 'L3 act+notify', 'L4 silent'];
-
 interface MetricValue {
   [key: string]: unknown;
 }
@@ -24,7 +25,7 @@ interface MetricValue {
 async function loadData() {
   const supabase = getSupabaseAdmin();
 
-  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes, clarificationsRes] = await Promise.all([
+  const [config, killed, proposalsRes, outboxRes, snapshotRes, baselineRes, clarificationsRes, dezActivityRes, dezFlagsRes, staffRes] = await Promise.all([
     listAgentConfig(),
     isGloballyKilled(),
     supabase
@@ -55,6 +56,26 @@ async function loadData() {
       .eq('status', 'open')
       .order('created_at', { ascending: false })
       .limit(20),
+    // Missing table (migration not applied yet) → { data: null } → [] — no crash.
+    supabase
+      .from('dez_activity')
+      .select('id, created_at, kind, surface, scope, actor_person, summary')
+      .order('created_at', { ascending: false })
+      .limit(25),
+    // Dez quality flags — form answers Dez routed to Craig for review.
+    supabase
+      .from('dez_activity')
+      .select('id, created_at, actor_person, summary, detail')
+      .eq('detail->>needs_attention', 'true')
+      .order('created_at', { ascending: false })
+      .limit(15),
+    // Staff with a linked Slack account — the options for the recipients editor.
+    supabase
+      .from('staff')
+      .select('person, name, slack_user_id')
+      .eq('active', true)
+      .not('slack_user_id', 'is', null)
+      .order('person'),
   ]);
 
   const proposals = (proposalsRes.data ?? []) as AgentProposal[];
@@ -76,7 +97,21 @@ async function loadData() {
     latest,
     baseline: baselineRes.data?.[0] ?? null,
     clarifications: (clarificationsRes.data ?? []) as BrainClarification[],
+    dezActivity: (dezActivityRes.data ?? []) as DezActivityRow[],
+    dezFlags: (dezFlagsRes.data ?? []) as DezFlagRow[],
+    staffOptions: (staffRes.data ?? []).map((s) => ({
+      person: s.person as string,
+      label: (s.name as string) || (s.person as string),
+    })) as StaffOption[],
   };
+}
+
+interface DezFlagRow {
+  id: number;
+  created_at: string;
+  actor_person: string | null;
+  summary: string;
+  detail: { flag_reason?: string | null; flagged_title?: string | null } | null;
 }
 
 interface BrainClarification {
@@ -85,6 +120,16 @@ interface BrainClarification {
   context_ref: string | null;
   status: string;
   created_at: string;
+}
+
+interface DezActivityRow {
+  id: number;
+  created_at: string;
+  kind: string;
+  surface: string | null;
+  scope: string | null;
+  actor_person: string | null;
+  summary: string;
 }
 
 function proposalStats(proposals: AgentProposal[]) {
@@ -98,6 +143,7 @@ function proposalStats(proposals: AgentProposal[]) {
     acceptanceRate: decided > 0 ? Math.round((accepted / decided) * 100) : null,
   };
 }
+
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -127,6 +173,21 @@ const statusStyles: Record<string, string> = {
   skipped: 'bg-sand-200 text-charcoal-600',
 };
 
+const kindStyles: Record<string, string> = {
+  question: 'bg-blue-100 text-blue-800',
+  routine: 'bg-violet-100 text-violet-800',
+  subagent: 'bg-teal-100 text-teal-800',
+  verb: 'bg-amber-100 text-amber-800',
+};
+
+function KindPill({ kind }: { kind: string }) {
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${kindStyles[kind] ?? 'bg-sand-200 text-charcoal-600'}`}>
+      {kind}
+    </span>
+  );
+}
+
 function Pill({ status }: { status: string }) {
   return (
     <span
@@ -148,8 +209,15 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 export default async function AgentsPage() {
-  const { config, killed, proposals, outbox, latest, baseline, clarifications } = await loadData();
+  const { config, killed, proposals, outbox, latest, baseline, clarifications, dezActivity, dezFlags, staffOptions } = await loadData();
+  const session = await auth();
+  const isAdmin = session?.user?.isAdmin === true;
   const stats = proposalStats(proposals);
+
+  // Per-agent live workload for the autonomy matrix: the pool it watches
+  // (metrics_snapshot) + its own still-proposed backlog. Both from data
+  // already loaded above.
+  const workload = buildWorkload(config, latest, proposals);
 
   const retype = latest.get('appfolio_retype_touches')?.value;
   const actions = latest.get('staff_actions')?.value;
@@ -182,6 +250,87 @@ export default async function AgentsPage() {
         Supervision surface — the action surface is Slack. Autonomy changes are row updates in{' '}
         <code className="rounded bg-sand-100 px-1">agent_config</code>.
       </p>
+
+      {/* Talk to Dez — the one place the app explains how to use the agent */}
+      <div className="mb-8 rounded-xl border border-sand-200 bg-white p-5 shadow-card">
+        <div className="text-sm font-semibold text-charcoal-900">💬 Talk to Dez</div>
+        <p className="mt-1 text-sm text-charcoal-600">
+          Dez is HDPM&apos;s Slack colleague. <b>DM Dez</b> or <b>@mention it in a channel</b> to ask
+          anything HDPM — Oregon landlord-tenant law, our SOPs and forms, or a live KPI
+          (&ldquo;what&apos;s our occupancy?&rdquo;). Answers cite their sources.
+        </p>
+        <ul className="mt-2 space-y-1 text-sm text-charcoal-600">
+          <li>• Reads are free; every write is a human-triggered, logged verb — Dez never messages tenants, owners, or vendors.</li>
+          <li>• Financial KPIs (fees, delinquency $, economics) answer only for management.</li>
+          <li>• Everything Dez does streams to <code className="rounded bg-sand-100 px-1">#dez-activity</code> and the table below.</li>
+        </ul>
+      </div>
+
+      {/* Dez needs-attention queue — form answers Dez flagged and routed to Craig */}
+      {dezFlags.length > 0 ? (
+        <>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
+            🚩 Needs attention{' '}
+            <span className="font-normal normal-case text-charcoal-400">
+              (forms Dez flagged as possibly out-of-date — confirm the current version, then it can be used)
+            </span>
+          </h2>
+          <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 shadow-card">
+            <ul className="divide-y divide-amber-100">
+              {dezFlags.map((f) => (
+                <li key={f.id} className="px-4 py-3">
+                  <div className="text-sm text-charcoal-900">{f.detail?.flagged_title ?? f.summary}</div>
+                  <div className="mt-0.5 text-xs text-charcoal-500">
+                    {fmtDate(f.created_at)} · asked by {f.actor_person ?? '—'}
+                    {f.detail?.flag_reason ? ` · ${f.detail.flag_reason}` : ''}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : null}
+
+      {/* Dez activity — the "Dez now" view: every question answered + routine run */}
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
+        Dez activity{' '}
+        <span className="font-normal normal-case text-charcoal-400">
+          (last {dezActivity.length} — questions answered, routines run; live feed in #dez-activity)
+        </span>
+      </h2>
+      <div className="mb-8 overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
+        <table className="w-full text-sm">
+          <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
+            <tr>
+              <th className="px-3 py-2">When</th>
+              <th className="px-3 py-2">Kind</th>
+              <th className="px-3 py-2">Scope</th>
+              <th className="px-3 py-2">Who</th>
+              <th className="px-3 py-2">What</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-sand-100">
+            {dezActivity.map((a) => (
+              <tr key={a.id}>
+                <td className="whitespace-nowrap px-3 py-2 text-charcoal-500">{fmtDate(a.created_at)}</td>
+                <td className="px-3 py-2">
+                  <KindPill kind={a.kind} />
+                </td>
+                <td className="px-3 py-2 text-charcoal-600">{a.scope ?? '—'}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-charcoal-600">{a.actor_person ?? '—'}</td>
+                <td className="max-w-[22rem] truncate px-3 py-2 text-charcoal-600">{a.summary}</td>
+              </tr>
+            ))}
+            {dezActivity.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-charcoal-400">
+                  No Dez activity yet — DM Dez or @mention it in a channel.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
 
       {/* Sep 4 tracker */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
@@ -218,34 +367,7 @@ export default async function AgentsPage() {
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
         Autonomy matrix
       </h2>
-      <div className="mb-8 overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
-        <table className="w-full text-sm">
-          <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
-            <tr>
-              <th className="px-3 py-2">Agent</th>
-              <th className="px-3 py-2">Action</th>
-              <th className="px-3 py-2">Level</th>
-              <th className="px-3 py-2">Ceiling</th>
-              <th className="px-3 py-2">Max/day</th>
-              <th className="px-3 py-2">Owner</th>
-              <th className="px-3 py-2">Enabled</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-sand-100">
-            {config.map((row: AgentConfigRow) => (
-              <tr key={`${row.agent}:${row.action_type}`} className={row.agent === '*' ? 'bg-amber-50' : ''}>
-                <td className="px-3 py-2 font-medium">{row.agent === '*' ? '* (kill switch)' : row.agent}</td>
-                <td className="px-3 py-2">{row.action_type}</td>
-                <td className="px-3 py-2">{LEVEL_LABELS[row.autonomy_level] ?? row.autonomy_level}</td>
-                <td className="px-3 py-2 text-charcoal-500">{LEVEL_LABELS[row.ceiling_level] ?? row.ceiling_level}</td>
-                <td className="px-3 py-2">{row.max_per_day ?? '—'}</td>
-                <td className="px-3 py-2">{row.owner_role ?? '—'}</td>
-                <td className="px-3 py-2">{row.enabled ? '✓' : <span className="font-bold text-red-600">off</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <AutonomyMatrix initialConfig={config} isAdmin={isAdmin} workload={workload} staffOptions={staffOptions} />
 
       {/* Proposals */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">

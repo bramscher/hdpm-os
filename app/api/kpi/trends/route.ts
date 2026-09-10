@@ -57,6 +57,9 @@ export async function GET(request: NextRequest) {
       const { data, error } = await supabase
         .from('kpi_snapshots')
         .select('kpi_name, value, captured_at')
+        // door_roster is a large per-property roster used only as a baseline for
+        // door_movement — it's not a sparkline KPI, so keep it out of trends.
+        .neq('kpi_name', 'door_roster')
         .gte('captured_at', startDate.toISOString())
         .order('captured_at', { ascending: true })
         .range(from, from + PAGE_SIZE - 1);

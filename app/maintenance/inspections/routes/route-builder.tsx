@@ -126,6 +126,7 @@ export function RouteBuilder() {
   const [availableInspections, setAvailableInspections] = useState<PickableInspection[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pickSearch, setPickSearch] = useState("");
+  const [cityFilter, setCityFilter] = useState<string>("all");
   const [loadingInspections, setLoadingInspections] = useState(false);
 
   // Fetch available inspections for pick mode
@@ -137,14 +138,23 @@ export function RouteBuilder() {
       const data = await res.json();
       const inspections = (data.inspections || [])
         .filter((i: Record<string, string>) => ["imported", "validated", "queued"].includes(i.status))
-        .map((i: Record<string, unknown>) => ({
-          id: i.id as string,
-          property_name: (i.name as string) || (i.property_name as string) || "",
-          address: (i.address_1 as string) || "",
-          city: (i.city as string) || "",
-          due_date: (i.due_date as string) || null,
-          status: (i.status as string) || "",
-        }));
+        .map((i: Record<string, unknown>) => {
+          // Property fields (name/address/city) live on the joined
+          // inspection_properties row, not on the inspection itself.
+          const ipRaw = i.inspection_properties;
+          const ip = (Array.isArray(ipRaw) ? ipRaw[0] : ipRaw) as
+            | Record<string, unknown>
+            | undefined;
+          return {
+            id: i.id as string,
+            property_name:
+              (ip?.name as string) || (i.name as string) || (i.property_name as string) || "",
+            address: (ip?.address_1 as string) || (i.address_1 as string) || "",
+            city: (ip?.city as string) || (i.city as string) || "",
+            due_date: (i.due_date as string) || null,
+            status: (i.status as string) || "",
+          };
+        });
       setAvailableInspections(inspections);
     } catch (err) {
       console.error("Fetch inspections error:", err);
@@ -245,6 +255,7 @@ export function RouteBuilder() {
     setPickMode("auto");
     setSelectedIds(new Set());
     setPickSearch("");
+    setCityFilter("all");
   };
 
   // Pick mode helpers
@@ -257,7 +268,22 @@ export function RouteBuilder() {
     });
   };
 
+  // City chips — distinct cities present in the eligible pool, with counts,
+  // sorted by count desc then name. "do all the Madras / Prineville / …".
+  const cityCounts = availableInspections.reduce<Map<string, number>>((m, i) => {
+    const c = (i.city || "Unknown").trim() || "Unknown";
+    m.set(c, (m.get(c) ?? 0) + 1);
+    return m;
+  }, new Map());
+  const cityOptions = [...cityCounts.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+  );
+
   const filteredInspections = availableInspections.filter((i) => {
+    if (cityFilter !== "all") {
+      const c = (i.city || "Unknown").trim() || "Unknown";
+      if (c !== cityFilter) return false;
+    }
     if (!pickSearch) return true;
     const q = pickSearch.toLowerCase();
     return (
@@ -266,6 +292,25 @@ export function RouteBuilder() {
       i.city.toLowerCase().includes(q)
     );
   });
+
+  /** Add every currently-filtered inspection to the selection (respects city + search). */
+  const selectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const i of filteredInspections) next.add(i.id);
+      return next;
+    });
+  };
+  /** Remove every currently-filtered inspection from the selection. */
+  const clearAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const i of filteredInspections) next.delete(i.id);
+      return next;
+    });
+  };
+  const allFilteredSelected =
+    filteredInspections.length > 0 && filteredInspections.every((i) => selectedIds.has(i.id));
 
   // ────────────────────────────────────────────────
   // Render
@@ -619,6 +664,53 @@ export function RouteBuilder() {
                         className="w-full bg-white border border-charcoal-200 rounded-lg pl-8 pr-3 py-1.5 text-xs text-charcoal-700 focus:outline-none focus:ring-2 focus:ring-terra-400 focus:border-transparent"
                       />
                     </div>
+                    {/* City filter chips — "do all the Madras / Prineville / …" */}
+                    {cityOptions.length > 1 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        <button
+                          type="button"
+                          onClick={() => setCityFilter("all")}
+                          className={cn(
+                            "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                            cityFilter === "all"
+                              ? "bg-terra-500 text-white border-terra-500"
+                              : "bg-white text-charcoal-600 border-charcoal-200 hover:bg-charcoal-50"
+                          )}
+                        >
+                          All cities ({availableInspections.length})
+                        </button>
+                        {cityOptions.map(([city, count]) => (
+                          <button
+                            key={city}
+                            type="button"
+                            onClick={() => setCityFilter(city)}
+                            className={cn(
+                              "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                              cityFilter === city
+                                ? "bg-terra-500 text-white border-terra-500"
+                                : "bg-white text-charcoal-600 border-charcoal-200 hover:bg-charcoal-50"
+                            )}
+                          >
+                            {city} ({count})
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {/* Select-all for the current filter (city + search) */}
+                    {filteredInspections.length > 0 && (
+                      <div className="flex items-center justify-between mb-1.5 px-0.5">
+                        <button
+                          type="button"
+                          onClick={allFilteredSelected ? clearAllFiltered : selectAllFiltered}
+                          className="text-[11px] font-medium text-terra-600 hover:text-terra-700"
+                        >
+                          {allFilteredSelected ? "Clear" : "Select all"}
+                          {cityFilter === "all"
+                            ? ` ${filteredInspections.length} shown`
+                            : ` ${filteredInspections.length} in ${cityFilter}`}
+                        </button>
+                      </div>
+                    )}
                     {/* Scrollable list */}
                     <div className="border border-charcoal-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-charcoal-100">
                       {loadingInspections ? (
@@ -628,7 +720,7 @@ export function RouteBuilder() {
                         </div>
                       ) : filteredInspections.length === 0 ? (
                         <div className="p-4 text-center text-xs text-charcoal-400">
-                          {pickSearch ? "No properties match your search" : "No eligible inspections found"}
+                          {pickSearch || cityFilter !== "all" ? "No properties match this filter" : "No eligible inspections found"}
                         </div>
                       ) : (
                         filteredInspections.map((insp) => (

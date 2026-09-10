@@ -55,6 +55,7 @@ export type ChaseKind = typeof VENDOR_CHASE_ACTION | typeof OWNER_APPROVAL_ACTIO
 export interface WorkOrderLite {
   id: string;
   wo_number: string | null;
+  property_id: string | null;
   property_name: string;
   property_address: string | null;
   unit_name: string | null;
@@ -69,12 +70,15 @@ export interface ChaseCandidate {
   workOrderId: string;
   kind: ChaseKind;
   woNumber: string | null;
+  propertyId: string | null;
   propertyName: string | null;
   propertyAddress: string | null;
   unitName: string | null;
   description: string | null;
   vendorId: string | null;
   vendorName: string | null;
+  /** Property owner name (AppFolio), resolved only for owner-approval drafts. */
+  ownerName?: string | null;
   /** Internal-only — never rendered into draft bodies. */
   appfolioLink: string | null;
   /** Business days in status, from the TW11 exception. */
@@ -125,6 +129,7 @@ export function classifyPool(
       workOrderId: wo.id,
       kind,
       woNumber: wo.wo_number,
+      propertyId: wo.property_id,
       propertyName: wo.property_name || null,
       propertyAddress: wo.property_address,
       unitName: wo.unit_name,
@@ -165,8 +170,18 @@ export type ChaseDecision =
 
 /** Precedence: escalate > cooldown > chase. Pure. */
 export function decideChase(c: ChaseCandidate, h: ChaseHistory, now: Date): ChaseDecision {
-  const shouldEscalate =
-    h.chaseCount >= ESCALATE_CHASE_COUNT || c.ageCalendarDays > ESCALATE_AGE_CALENDAR_DAYS;
+  // Count-based escalation ("chased 3×, give up") only makes sense for a vendor
+  // chase that HAS a vendor — the remedy is switching vendors, which is Craig's
+  // call. Two cases keep following instead of escalating on count:
+  //   • owner-approval (bid in hand) — the decision is HDPM's to push, no
+  //     fallback vendor to switch to;
+  //   • an "Estimate Requested" WO with no vendor assigned — "chased 3×" is
+  //     meaningless (nobody was chased); it needs a vendor assigned, so it must
+  //     keep surfacing to Jayme, not dead-end in the Ops Brief.
+  // Both still escalate on extreme age (the age rule below), never on count.
+  const countEscalatable = c.kind !== OWNER_APPROVAL_ACTION && Boolean(c.vendorId);
+  const escalateOnCount = countEscalatable && h.chaseCount >= ESCALATE_CHASE_COUNT;
+  const shouldEscalate = escalateOnCount || c.ageCalendarDays > ESCALATE_AGE_CALENDAR_DAYS;
   if (shouldEscalate) {
     if (
       h.lastEscalateAt &&
@@ -176,7 +191,7 @@ export function decideChase(c: ChaseCandidate, h: ChaseHistory, now: Date): Chas
     }
     return {
       action: 'escalate',
-      reason: h.chaseCount >= ESCALATE_CHASE_COUNT ? 'chased_3x' : 'aged_45d',
+      reason: escalateOnCount ? 'chased_3x' : 'aged_45d',
     };
   }
   if (h.lastChaseAt && businessDaysBetween(h.lastChaseAt, now) < CHASE_COOLDOWN_BUSINESS_DAYS) {
@@ -208,6 +223,13 @@ function ordinal(n: number): string {
   return `${n}th`;
 }
 
+/** Numeric ordinal for the subject line: 1 → "1st", 2 → "2nd", 3 → "3rd". */
+function ordinalNum(n: number): string {
+  const suffix = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${suffix[(v - 20) % 10] ?? suffix[v] ?? suffix[0]}`;
+}
+
 /** "WO #123 — 456 Main St, Unit 4" (address preferred; falls back to property name). */
 function woRef(c: ChaseCandidate): string {
   const where = c.propertyAddress || c.propertyName || 'property';
@@ -225,14 +247,20 @@ function detailBlockHtml(c: ChaseCandidate): string {
   </table>`;
 }
 
-const SIGNATURE_TEXT = ['Thank you,', 'Cheryl', 'High Desert Property Management'].join('\n');
-const SIGNATURE_HTML = `<p style="margin:16px 0 0;">Thank you,<br/>Cheryl<br/>High Desert Property Management</p>`;
+// Signature is per-sender: a draft created in Brody's mailbox must sign as
+// Brody, not the default coordinator. Defaults to the production owner
+// (Jayme since the 2026-08-26 handoff; ESTIMATE_CHASER_OWNER overrides).
+const DEFAULT_SENDER = process.env.ESTIMATE_CHASER_OWNER?.trim() || 'Jayme';
+const signatureText = (name: string) =>
+  ['Thank you,', name, 'High Desert Property Management'].join('\n');
+const signatureHtml = (name: string) =>
+  `<p style="margin:16px 0 0;">Thank you,<br/>${escapeHtml(name)}<br/>High Desert Property Management</p>`;
 
-function wrapHtml(paragraphs: string[]): string {
+function wrapHtml(paragraphs: string[], senderName: string): string {
   return `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:640px;color:#111827;font-size:14px;line-height:1.5;">
   ${paragraphs.join('\n  ')}
-  ${SIGNATURE_HTML}
+  ${signatureHtml(senderName)}
 </div>`;
 }
 
@@ -250,22 +278,33 @@ export interface DraftContent {
 export function buildVendorChaseDraft(
   c: ChaseCandidate,
   vendorEmail: string | null,
-  chaseRound: number
+  chaseRound: number,
+  senderName: string = DEFAULT_SENDER
 ): DraftContent {
-  const subject = `Bid follow-up — ${woRef(c)}`;
+  const subject = `Bid follow-up (${ordinalNum(chaseRound)} request) — ${woRef(c)}`;
   const greeting = `Hi ${c.vendorName || 'there'},`;
   const opener =
     chaseRound >= 2
       ? `Just checking in again — this is our ${ordinal(chaseRound)} follow-up on the estimate we requested for the work order below (${c.ageBusinessDays} business days now).`
       : `Following up on the estimate we requested for the work order below — we haven't received your bid yet (${c.ageBusinessDays} business days).`;
-  const ask = `Could you send over your bid, or let us know if you're unable to take this job so we can plan accordingly?`;
+  // Round 3 is the last vendor-facing chase before auto-escalation to the Ops
+  // Brief (restart §4), so it carries a firmer close with a hand-filled date.
+  // NOTE for the reviewer: [date] must be filled in, and this line should be
+  // softened or removed if this is a single-vendor situation with no backup.
+  const ask =
+    chaseRound >= 3
+      ? `Please reply to this email with your bid, or give us a call. If we don't hear back by [date], we'll need to reach out to another vendor to keep this moving.`
+      : `Please reply to this email with your bid, or give us a call. If you're not able to take this one, just let us know so we can line up another vendor.`;
 
-  const html = wrapHtml([
-    `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
-    `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
-    detailBlockHtml(c),
-    `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
-  ]);
+  const html = wrapHtml(
+    [
+      `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
+      `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
+      detailBlockHtml(c),
+      `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
+    ],
+    senderName
+  );
 
   const text = [
     greeting,
@@ -277,7 +316,7 @@ export function buildVendorChaseDraft(
     '',
     ask,
     '',
-    SIGNATURE_TEXT,
+    signatureText(senderName),
   ].join('\n');
 
   return { subject, html, text, toRecipients: vendorEmail ? [vendorEmail] : [] };
@@ -287,21 +326,30 @@ export function buildVendorChaseDraft(
  * Owner approval request. To: always blank — Cheryl addresses it to the
  * property owner. Never states an amount (none is available, by design).
  */
-export function buildOwnerApprovalDraft(c: ChaseCandidate, chaseRound: number): DraftContent {
+export function buildOwnerApprovalDraft(
+  c: ChaseCandidate,
+  chaseRound: number,
+  senderName: string = DEFAULT_SENDER
+): DraftContent {
   const subject = `Approval needed — ${woRef(c)}`;
-  const greeting = `Hi [owner name],`;
+  // Real property-owner name (from AppFolio) when resolved; else the fill-in
+  // placeholder. Never the internal workflow owner (that column is staff).
+  const greeting = c.ownerName?.trim() ? `Hi ${c.ownerName.trim()},` : `Hi [owner name],`;
   const opener =
     chaseRound >= 2
       ? `Just checking in again on the repair approval below — it has been pending ${c.ageBusinessDays} business days and we'd love to get it moving.`
       : `We have an estimate in hand for the repair below and are waiting on your go-ahead (pending ${c.ageBusinessDays} business days).`;
   const ask = `Could you reply with your approval — or any questions — so we can get the work scheduled?`;
 
-  const html = wrapHtml([
-    `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
-    `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
-    detailBlockHtml(c),
-    `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
-  ]);
+  const html = wrapHtml(
+    [
+      `<p style="margin:0 0 12px;">${escapeHtml(greeting)}</p>`,
+      `<p style="margin:0 0 12px;">${escapeHtml(opener)}</p>`,
+      detailBlockHtml(c),
+      `<p style="margin:0 0 12px;">${escapeHtml(ask)}</p>`,
+    ],
+    senderName
+  );
 
   const text = [
     greeting,
@@ -313,7 +361,7 @@ export function buildOwnerApprovalDraft(c: ChaseCandidate, chaseRound: number): 
     '',
     ask,
     '',
-    SIGNATURE_TEXT,
+    signatureText(senderName),
   ].join('\n');
 
   return { subject, html, text, toRecipients: [] };
@@ -326,19 +374,24 @@ export function buildOwnerApprovalDraft(c: ChaseCandidate, chaseRound: number): 
 const SMS_DESC_MAX = 60;
 
 /**
- * The text Cheryl's tap sends. Same hard rules as the email templates: no
- * dollar amounts, no links. Kept under ~320 chars (two SMS segments).
+ * The text the owner's tap sends. Same hard rules as the email templates: no
+ * dollar amounts, no links. Kept under ~320 chars (two SMS segments). The
+ * vendor-facing sender name defaults to the production owner (Jayme).
  */
-export function buildVendorChaseSms(c: ChaseCandidate, chaseRound: number): string {
+export function buildVendorChaseSms(
+  c: ChaseCandidate,
+  chaseRound: number,
+  senderName: string = DEFAULT_SENDER
+): string {
   const where = c.propertyAddress || c.propertyName || 'the property';
   const unit = c.unitName ? ` #${c.unitName}` : '';
   const wo = c.woNumber ? `WO #${c.woNumber}` : 'the work order';
   const desc = (c.description ?? '').slice(0, SMS_DESC_MAX).trim();
 
   if (chaseRound >= 2) {
-    return `Hi ${c.vendorName || 'there'}, Cheryl at High Desert Property Mgmt again — still hoping to get your bid for ${wo} at ${where}${unit}. Can you let me know either way? Thanks!`;
+    return `Hi ${c.vendorName || 'there'}, ${senderName} at High Desert Property Mgmt again — still hoping to get your bid for ${wo} at ${where}${unit}. Can you let me know either way? Thanks!`;
   }
-  return `Hi ${c.vendorName || 'there'}, this is Cheryl at High Desert Property Mgmt. Following up on the bid for ${wo} at ${where}${unit}${desc ? ` (${desc})` : ''} — could you send it over, or let me know if you can't take it? Thanks!`;
+  return `Hi ${c.vendorName || 'there'}, this is ${senderName} at High Desert Property Mgmt. Following up on the bid for ${wo} at ${where}${unit}${desc ? ` (${desc})` : ''} — could you send it over, or let me know if you can't take it? Thanks!`;
 }
 
 // ── ec:* action ids (Slack interactivity namespace for the chaser) ──

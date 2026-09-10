@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED / aspirational (not built).** This is an exploration, not current state — no "soul/brain" surface described here ships today. The live company-memory layer is `lib/brain/*` + the `brain` corpus in Knowledge Chat. Kept as design reference; do not read as current. See `docs/README.md`.
+
 # HDPM Ops Soul & Brain — Revised Run (not a port)
 
 **Created 7/22/2026.** Reference specs in `konmashi-reference/` were authored by

@@ -38,9 +38,9 @@ function effMarkup(li: FormLineItem): string {
 }
 
 // ── Labor rate constants ──────────
-const STANDARD_RATE = 85;
+const STANDARD_RATE = 95;
 const AFTER_HOURS_MULTIPLIER = 1.5;
-const AFTER_HOURS_RATE = STANDARD_RATE * AFTER_HOURS_MULTIPLIER; // $127.50
+const AFTER_HOURS_RATE = STANDARD_RATE * AFTER_HOURS_MULTIPLIER; // $142.50
 
 // ── Flat fee jobs lookup (user will populate) ──────────
 const FLAT_FEE_JOBS: { key: string; label: string; amount: number; description: string }[] = [
@@ -1122,9 +1122,9 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
             </div>
           </div>
 
-          <div className="rounded-xl border border-sand-200 bg-white overflow-hidden">
+          <div className="rounded-xl border border-sand-200 bg-white overflow-x-auto">
             {/* Table header */}
-            <div className="grid grid-cols-[80px_1fr_60px_80px_48px_90px_36px] gap-2 px-3 py-2 bg-charcoal-50 border-b border-sand-200 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">
+            <div className="grid min-w-[560px] grid-cols-[80px_1fr_60px_80px_48px_90px_36px] gap-2 px-3 py-2 bg-charcoal-50 border-b border-sand-200 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider">
               <span>Type</span>
               <span>Description</span>
               <span title="Hours for labor · Qty for materials & appliances">Qty/Hrs</span>
@@ -1145,7 +1145,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
               return (
                 <div
                   key={li.id}
-                  className={`grid grid-cols-[80px_1fr_60px_80px_48px_90px_36px] gap-2 px-3 py-1.5 border-b border-charcoal-100 last:border-b-0 items-start ${
+                  className={`grid min-w-[560px] grid-cols-[80px_1fr_60px_80px_48px_90px_36px] gap-2 px-3 py-1.5 border-b border-charcoal-100 last:border-b-0 items-start ${
                     isUnpriced ? "bg-amber-50/30" : ""
                   }`}
                 >

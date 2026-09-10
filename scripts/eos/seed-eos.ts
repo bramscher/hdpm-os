@@ -93,21 +93,30 @@ const METRICS: Array<{
   unit: string;
   goal_op: 'gte' | 'lte';
   goal_value: number;
-  source: 'metrics_snapshot' | 'manual';
+  source: 'metrics_snapshot' | 'kpi_snapshot' | 'manual';
   source_ref?: string;
   sort: number;
 }> = [
-  { name: 'Open exceptions', owner: 'Cheryl', unit: 'count', goal_op: 'lte', goal_value: 150, source: 'metrics_snapshot', source_ref: 'open_exceptions.total', sort: 0 },
-  { name: 'Staff actions via agent surfaces (7d)', owner: 'Craig', unit: 'count', goal_op: 'gte', goal_value: 25, source: 'metrics_snapshot', source_ref: 'staff_actions.last7Days', sort: 1 },
+  // ── Growth & Retention (from the door_movement KPI snapshot) ──
+  // Goals are STARTER placeholders — set real targets with Craig before the first L10.
+  // net/churn stay blank until the door_movement baseline accrues (~1 daily-cron cycle);
+  // pipeline fills immediately. Switch churn source_ref to `door_movement.ttm.churnPct`
+  // once ~a year of roster history exists (more stable than month-to-date).
+  { name: 'Net doors added (MTD)', owner: 'Craig', unit: 'count', goal_op: 'gte', goal_value: 0, source: 'kpi_snapshot', source_ref: 'door_movement.month.net', sort: 0 },
+  { name: 'Owner churn % (MTD)', owner: 'Craig', unit: '%', goal_op: 'lte', goal_value: 2, source: 'kpi_snapshot', source_ref: 'door_movement.month.churnPct', sort: 1 },
+  { name: 'Pipeline doors (open leads)', owner: 'Craig', unit: 'count', goal_op: 'gte', goal_value: 25, source: 'kpi_snapshot', source_ref: 'door_movement.pipelineDoors', sort: 2 },
+
+  { name: 'Open exceptions', owner: 'Cheryl', unit: 'count', goal_op: 'lte', goal_value: 150, source: 'metrics_snapshot', source_ref: 'open_exceptions.total', sort: 3 },
+  { name: 'Staff actions via agent surfaces (7d)', owner: 'Craig', unit: 'count', goal_op: 'gte', goal_value: 25, source: 'metrics_snapshot', source_ref: 'staff_actions.last7Days', sort: 4 },
   // Q3 step-down goals set with Craig 2026-08-05 (from 44 actual); tighten quarterly.
-  { name: 'Stuck estimates (open)', owner: 'Cheryl', unit: 'count', goal_op: 'lte', goal_value: 35, source: 'metrics_snapshot', source_ref: 'estimate_approval_latency.openCount', sort: 2 },
-  { name: 'Estimate decision latency (median)', owner: 'Cheryl', unit: 'days', goal_op: 'lte', goal_value: 7, source: 'metrics_snapshot', source_ref: 'estimate_approval_latency.medianDaysToDecision', sort: 3 },
-  { name: 'Vendor accepted-unworked WOs', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'vendor_stuck_pools.acceptedUnworkedCount', sort: 4 },
-  { name: 'Open unit turns', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 45, source: 'metrics_snapshot', source_ref: 'turns.openTurns', sort: 5 },
-  { name: 'Median days vacant (turns)', owner: 'Brody', unit: 'days', goal_op: 'lte', goal_value: 25, source: 'metrics_snapshot', source_ref: 'turns.medianDaysVacant', sort: 6 },
+  { name: 'Stuck estimates (open)', owner: 'Cheryl', unit: 'count', goal_op: 'lte', goal_value: 35, source: 'metrics_snapshot', source_ref: 'estimate_approval_latency.openCount', sort: 5 },
+  { name: 'Estimate decision latency (median)', owner: 'Cheryl', unit: 'days', goal_op: 'lte', goal_value: 7, source: 'metrics_snapshot', source_ref: 'estimate_approval_latency.medianDaysToDecision', sort: 6 },
+  { name: 'Vendor accepted-unworked WOs', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'vendor_stuck_pools.acceptedUnworkedCount', sort: 7 },
+  { name: 'Open unit turns', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 45, source: 'metrics_snapshot', source_ref: 'turns.openTurns', sort: 8 },
+  { name: 'Median days vacant (turns)', owner: 'Brody', unit: 'days', goal_op: 'lte', goal_value: 25, source: 'metrics_snapshot', source_ref: 'turns.medianDaysVacant', sort: 9 },
   // Target band is 30–36 PER TECH (Craig 2026-08-05); scorecard tracks the floor.
-  { name: 'Billable hours — Brody', owner: 'Brody', unit: 'hours', goal_op: 'gte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'billable_hours.brodyHours', sort: 7 },
-  { name: 'Billable hours — Alberto', owner: 'Alberto', unit: 'hours', goal_op: 'gte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'billable_hours.albertoHours', sort: 8 },
+  { name: 'Billable hours — Brody', owner: 'Brody', unit: 'hours', goal_op: 'gte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'billable_hours.brodyHours', sort: 10 },
+  { name: 'Billable hours — Alberto', owner: 'Alberto', unit: 'hours', goal_op: 'gte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'billable_hours.albertoHours', sort: 11 },
 ];
 
 async function main() {

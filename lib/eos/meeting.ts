@@ -115,9 +115,6 @@ export interface PrepPacketInput {
   todoStats: { due: number; done: number };
   recentDecisions: { title: string; effectiveOn: string }[];
   memory: { answer: string; links: { title: string; url: string }[] } | null;
-  /** Top cracks (work nobody is touching); crackTotal is the full count. */
-  cracks?: { label: string; detail: string; action?: string | null; owner: string | null; ageDays: number }[];
-  crackTotal?: number;
 }
 
 function fmtNum(v: number | null): string {
@@ -162,15 +159,6 @@ export function buildPrepPacket(input: PrepPacketInput): string {
     `- Last week: ${input.todoStats.done}/${input.todoStats.due} done (${rate} — target ≥90%)`
   );
   lines.push('');
-  if (input.cracks && input.crackTotal !== undefined) {
-    lines.push(`### Cracks (${input.crackTotal} open)`);
-    if (input.cracks.length === 0) lines.push('_Nothing is falling through — clear board._');
-    for (const c of input.cracks) {
-      const fix = c.action ? ` — ${c.action}` : '';
-      lines.push(`- [${c.label}] ${c.detail}${fix} — ${c.owner ?? 'unowned'}, ${c.ageDays}d`);
-    }
-    lines.push('');
-  }
   if (input.recentDecisions.length > 0) {
     lines.push('### Recent decisions');
     for (const d of input.recentDecisions) lines.push(`- ${d.title} (${d.effectiveOn})`);

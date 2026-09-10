@@ -1,3 +1,5 @@
+> **STATUS: HISTORICAL / exploration (not built).** A concept demo built for the 7/22/2026 team meeting; there is no `/demo` route in the app. Kept as a point-in-time artifact — do not read as current state. See `docs/README.md`.
+
 # Demo Site Integration — Session Brief
 
 **Created 7/22/2026.** This folder holds the HDPM-OS concept demo: 9 self-contained

@@ -63,12 +63,6 @@ export const HELP_SOPS: HelpSop[] = [
     blurb: 'Invoices from WOs, CSVs, or PDFs — markup rules and bill reconciliation.',
   },
   {
-    prefix: '/maintenance/work-orders',
-    title: 'Invoice Generator',
-    notionUrl: 'https://app.notion.com/p/3a70262b514581cc9526e8d0cb8960f2',
-    blurb: 'Invoices from WOs, CSVs, or PDFs — markup rules and bill reconciliation.',
-  },
-  {
     prefix: '/comps',
     title: 'Rent Comps',
     notionUrl: 'https://app.notion.com/p/3a70262b514581a3a841d67e7addf74e',
@@ -94,9 +88,39 @@ export const HELP_SOPS: HelpSop[] = [
   },
   {
     prefix: '/agents',
-    title: 'Agent Team',
+    title: 'Agent Team & Dez',
     notionUrl: 'https://app.notion.com/p/3a70262b514581f89e85d9a908ae82d7',
-    blurb: 'Supervising the agents — autonomy matrix, proposals, kill switch.',
+    blurb: 'Supervise the agents (autonomy matrix, proposals, kill switch) and see how to talk to Dez in Slack.',
+  },
+  {
+    prefix: '/haven',
+    title: 'Haven — Leasing & Reception',
+    notionUrl: SOP_LIBRARY_URL,
+    blurb: 'The AI leasing pipeline, flags that need a human, tours, and reception/call metrics.',
+  },
+  {
+    prefix: '/company',
+    title: 'Company (EOS Layer)',
+    notionUrl: SOP_LIBRARY_URL,
+    blurb: 'The EOS operating layer — Rocks, weekly Scorecard, Issues (IDS), and the L10 meeting.',
+  },
+  {
+    prefix: '/partners/admin',
+    title: 'Referral Partners (Admin)',
+    notionUrl: SOP_LIBRARY_URL,
+    blurb: 'Owner-acquisition: referral partners, lead pipeline, fee policy, and W-9/agreement tracking.',
+  },
+  {
+    prefix: '/partners',
+    title: 'Referral Partner Portal',
+    notionUrl: SOP_LIBRARY_URL,
+    blurb: 'Refer a property owner and track your referrals; sign-in is a secure emailed link.',
+  },
+  {
+    prefix: '/properties',
+    title: 'Property Map',
+    notionUrl: SOP_LIBRARY_URL,
+    blurb: 'Managed properties on a map — active (green) and pending management-end (yellow) pins.',
   },
   {
     prefix: '/dashboard',

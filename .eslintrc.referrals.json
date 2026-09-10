@@ -1,0 +1,23 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module",
+    "ecmaFeatures": { "jsx": true }
+  },
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["**/lib/supabase", "@/lib/supabase"],
+            "importNames": ["getSupabaseAdmin"],
+            "message": "getSupabaseAdmin() is the service-role client and BYPASSES RLS — importing it in a referrer route defeats cross-tenant isolation. Referrer routes must obtain their DB client from lib/referrals/referrer-context.ts (the JWT-bound anon client). Admin routes live under app/partners/admin/** and are excluded from this rule. See docs/partners/00-referral-portal-plan.md §3."
+          }
+        ]
+      }
+    ]
+  }
+}

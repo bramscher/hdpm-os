@@ -91,6 +91,24 @@ const config: Config = {
           900: "#1d1d1f",
           950: "#161617",
         },
+        // hdpm-web brand palette — ONLY for the referrer-facing portal
+        // (app/partners/(referrer)/**) so external partners match
+        // highdesertpm.com. Staff/admin keeps the Desert (sand/charcoal/terra)
+        // tokens above. Pure-gray neutrals come from Tailwind's default `neutral-*`.
+        brand: {
+          green: "#2ECC52",
+          greenDark: "#22A840",
+          greenLight: "#4ADE6B",
+          ink: "#1a1a1a",
+          inkDark: "#0f0f0f",
+          inkLight: "#2a2a2a",
+        },
+      },
+      fontFamily: {
+        // Referrer-portal brand fonts (loaded via next/font in the referrer
+        // layout; variables scoped to that route group).
+        "brand-heading": ["var(--font-brand-heading)", "system-ui", "sans-serif"],
+        "brand-body": ["var(--font-brand-body)", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -16,6 +16,7 @@ import {
   Plus,
   TrendingUp,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
@@ -29,9 +30,11 @@ import { CsvUploader } from "./csv-uploader";
 import { WorkOrderTable } from "./work-order-table";
 import { InvoiceForm } from "./invoice-form";
 import { InvoiceList } from "./invoice-list";
+import { CreditForm } from "./credit-form";
 import { BillableReport } from "./billable-report";
 import { DailyReport } from "./daily-report";
 import { InhouseReport } from "./inhouse-report";
+import { HdmsReconReport } from "./hdms-recon-report";
 import { SelectionReport } from "./selection-report";
 import { ReconcileTab } from "./reconcile-tab";
 import { PaymentReconcileModal } from "./payment-reconcile-modal";
@@ -181,7 +184,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const isAdmin = session?.user?.isAdmin === true;
   const [view, setView] = useState<View>("main");
   const [activeTab, setActiveTab] = useState<Tab>("work-orders");
-  const [reportView, setReportView] = useState<"billable" | "daily" | "inhouse">("billable");
+  const [reportView, setReportView] = useState<"billable" | "daily" | "inhouse" | "hdms-recon">("billable");
   const [parsedRows, setParsedRows] = useState<WorkOrderRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<WorkOrderRow | null>(null);
   const [editInvoice, setEditInvoice] = useState<HdmsInvoice | null>(null);
@@ -192,6 +195,9 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const [reportInvoices, setReportInvoices] = useState<HdmsInvoice[] | null>(null);
   const [reconcileInvoices, setReconcileInvoices] = useState<HdmsInvoice[] | null>(null);
   const [paymentsReloadToken, setPaymentsReloadToken] = useState(0);
+  // Bumped when a payment is recorded, so the reconcile list clears its saved selection.
+  const [reconcileClearToken, setReconcileClearToken] = useState(0);
+  const [showCreditForm, setShowCreditForm] = useState(false);
 
   // Work orders state
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -556,6 +562,21 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
     setView("form");
   }
 
+  // Duplicate: create a draft copy (same number + next suffix) then open it in
+  // the editor so the user can adjust and save.
+  async function handleDuplicateInvoice(invoice: HdmsInvoice) {
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/duplicate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to duplicate invoice");
+      toast.success(`Created ${data.invoice.invoice_code} — edit and save when ready.`);
+      await fetchInvoices();
+      handleEditInvoice(data.invoice as HdmsInvoice);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not duplicate that invoice.");
+    }
+  }
+
   function handleInvoiceSaved() {
     fetchInvoices();
     setActiveTab("invoices");
@@ -889,6 +910,9 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-charcoal-100/80">
+                        <th className="sticky left-0 z-10 bg-white text-center px-2 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider whitespace-nowrap border-r border-charcoal-100/80">
+                          Actions
+                        </th>
                         <th className="text-left px-4 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider whitespace-nowrap w-[80px]">
                           WO #
                         </th>
@@ -938,8 +962,6 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                             Created <WoSortIcon field="created_at" />
                           </span>
                         </th>
-                        <th className="text-center px-2 py-2 text-[11px] font-semibold text-charcoal-400 uppercase tracking-wider w-[44px]">
-                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -966,8 +988,34 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                           return (
                             <tr
                               key={wo.id}
-                              className="border-b border-charcoal-50/80 hover:bg-charcoal-50 transition-colors"
+                              className="group border-b border-charcoal-50/80 hover:bg-charcoal-50 transition-colors"
                             >
+                              <td className="sticky left-0 bg-white group-hover:bg-charcoal-50 border-r border-charcoal-100/80 px-2 py-2.5 text-center transition-colors">
+                                <div className="inline-flex items-center gap-1">
+                                  <a
+                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}`}
+                                    title="Create Estimate"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-green-50/80 text-green-700 hover:bg-green-100 hover:text-green-900 transition-colors"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </a>
+                                  <a
+                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}&draft=1`}
+                                    title="Draft estimate with the agent"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-blue-50/80 text-blue-600 hover:bg-blue-100 hover:text-blue-800 transition-colors"
+                                  >
+                                    <Sparkles className="h-4 w-4" />
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCreateInvoiceFromWo(wo)}
+                                    title="Create Invoice"
+                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-terra-50/80 text-terra-600 hover:bg-terra-100 hover:text-terra-800 transition-colors"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
                               <td className="px-4 py-2.5 text-charcoal-600 font-mono text-[11px] whitespace-nowrap">
                                 {wo.wo_number || wo.appfolio_id.slice(0, 8)}
                               </td>
@@ -1004,16 +1052,6 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                               </td>
                               <td className="px-4 py-2.5 text-charcoal-500 text-[11px] hidden md:table-cell">
                                 {formatDate(wo.created_at)}
-                              </td>
-                              <td className="px-2 py-2.5 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleCreateInvoiceFromWo(wo)}
-                                  title="Create Invoice"
-                                  className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-terra-50/80 text-terra-600 hover:bg-terra-100 hover:text-terra-800 transition-colors"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
                               </td>
                             </tr>
                           );
@@ -1074,15 +1112,26 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           {/* ============================== */}
           {activeTab === "invoices" && (
             <>
-              <div className="bg-white rounded-xl border border-sand-200 shadow-card px-4 py-2.5 text-sm text-charcoal-600 mb-4">
-                These invoice PDFs are generated and stored here in HDPM-OS. They are
-                <strong> not</strong> pushed to AppFolio automatically — download each PDF and
-                upload it to the AppFolio work order yourself, then mark it attached.
+              <div className="flex items-start gap-3 mb-4">
+                <div className="flex-1 bg-white rounded-xl border border-sand-200 shadow-card px-4 py-2.5 text-sm text-charcoal-600">
+                  These invoice PDFs are generated and stored here in HDPM-OS. They are
+                  <strong> not</strong> pushed to AppFolio automatically — download each PDF and
+                  upload it to the AppFolio work order yourself, then mark it attached.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreditForm(true)}
+                  className="shrink-0 h-10 px-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium hover:bg-red-100 transition-colors"
+                  title="Create a credit memo to correct an over-billed or duplicate invoice"
+                >
+                  + New credit
+                </button>
               </div>
               <InvoiceList
                 invoices={invoices}
                 onRefresh={fetchInvoices}
                 onEdit={handleEditInvoice}
+                onDuplicate={handleDuplicateInvoice}
                 onRunReport={isAdmin ? setReportInvoices : undefined}
                 onReconcile={setReconcileInvoices}
                 isLoading={isLoadingInvoices}
@@ -1101,6 +1150,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                       { id: "billable", label: "Billable" },
                       { id: "daily", label: "Daily Labor & Markup" },
                       { id: "inhouse", label: "In-house vs Vendor" },
+                      { id: "hdms-recon", label: "Billing Recon" },
                     ] as const
                   ).map((v) => (
                     <button
@@ -1121,6 +1171,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 <DailyReport />
               ) : reportView === "inhouse" ? (
                 <InhouseReport />
+              ) : reportView === "hdms-recon" ? (
+                <HdmsReconReport />
               ) : (
                 <BillableReport />
               )}
@@ -1138,6 +1190,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
               onEdit={handleEditInvoice}
               onReconcile={setReconcileInvoices}
               reloadToken={paymentsReloadToken}
+              clearSelectionToken={reconcileClearToken}
             />
           )}
         </div>
@@ -1160,6 +1213,15 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
         />
       )}
 
+      {/* New credit memo (modal) */}
+      {showCreditForm && (
+        <CreditForm
+          invoices={invoices}
+          onClose={() => setShowCreditForm(false)}
+          onCreated={fetchInvoices}
+        />
+      )}
+
       {/* Selection markup report (modal over the Invoices tab — admin only) */}
       {isAdmin && reportInvoices && (
         <SelectionReport
@@ -1176,6 +1238,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           onRecorded={() => {
             fetchInvoices();
             setPaymentsReloadToken((t) => t + 1);
+            setReconcileClearToken((t) => t + 1);
           }}
         />
       )}

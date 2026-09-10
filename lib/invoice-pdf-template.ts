@@ -36,6 +36,7 @@ const BG_GRAY = '#f5f5f5';
 const GREEN = '#3d7a3d';
 const BLUE_LABEL = '#4a6fa5';
 const AMBER_LABEL = '#a5784a';
+const RED = '#b02a2a';
 
 // ============================================
 // Layout constants (US Letter: 612 x 792 pt)
@@ -61,12 +62,20 @@ const ADDRESS = '1515 SW Reindeer Ave, Redmond, OR 97756';
  * Generate an invoice PDF buffer using jsPDF.
  * Returns a Node.js Buffer suitable for uploading to Supabase Storage.
  */
-export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
+export function generateInvoicePdf(
+  invoice: HdmsInvoice,
+  opts: { originalCode?: string } = {}
+): Buffer {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'pt',
     format: 'letter',
   });
+
+  // A credit memo stores negative amounts; the PDF prints magnitudes (so the
+  // "> 0" print guards still fire) and marks the document + total as a credit.
+  const isCredit = invoice.doc_type === 'credit';
+  const mag = (n: number | null | undefined) => Math.abs(Number(n) || 0);
 
   let y = MARGIN;
 
@@ -99,10 +108,24 @@ export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
   doc.setTextColor(LABEL);
   doc.text(`${ADDRESS}   |   ${PHONE}   |   ${EMAIL}`, textX, y + 38);
 
+  // Credit memos get a prominent red banner (and, if linked, the corrected invoice).
+  if (isCredit) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(RED);
+    doc.text('CREDIT MEMO', MARGIN + CONTENT_W, y + 4, { align: 'right' });
+    if (opts.originalCode) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(MID);
+      doc.text(`against ${opts.originalCode}`, MARGIN + CONTENT_W, y + 18, { align: 'right' });
+    }
+  }
+
   y += logoH + 8;
 
-  // Header divider
-  doc.setDrawColor(GREEN);
+  // Header divider (red for a credit memo)
+  doc.setDrawColor(isCredit ? RED : GREEN);
   doc.setLineWidth(2);
   doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
   y += 25;
@@ -111,7 +134,7 @@ export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
   const infoBlockX = [MARGIN, MARGIN + 170, MARGIN + 340];
   let infoIdx = 0;
 
-  drawInfoBlock(doc, infoBlockX[infoIdx], y, 'INVOICE NUMBER', String(invoice.invoice_code));
+  drawInfoBlock(doc, infoBlockX[infoIdx], y, isCredit ? 'CREDIT NUMBER' : 'INVOICE NUMBER', String(invoice.invoice_code));
   infoIdx++;
 
   drawInfoBlock(doc, infoBlockX[infoIdx], y, 'DATE', formatDate(invoice.completed_date));
@@ -217,7 +240,7 @@ export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
     let materialsSubtotal = 0;
 
     for (const item of lineItems) {
-      const amount = Number(item.amount) || 0;
+      const amount = mag(item.amount);
       const type = item.type || 'other';
       // Appliances are billed as materials on the owner-facing invoice; only the
       // marked-up `amount` is ever printed — cost/markup_pct stay internal.
@@ -314,12 +337,12 @@ export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
     doc.line(MARGIN, y, MARGIN + CONTENT_W, y);
     y += 14;
 
-    if (Number(invoice.labor_amount) > 0) {
+    if (mag(invoice.labor_amount) > 0) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
       doc.setTextColor(DARK);
       doc.text('Labor', MARGIN, y);
-      doc.text(formatCurrency(Number(invoice.labor_amount)), MARGIN + CONTENT_W, y, { align: 'right' });
+      doc.text(formatCurrency(mag(invoice.labor_amount)), MARGIN + CONTENT_W, y, { align: 'right' });
       y += 8;
       doc.setDrawColor(LIGHT_BORDER);
       doc.setLineWidth(0.5);
@@ -327,12 +350,12 @@ export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
       y += 14;
     }
 
-    if (Number(invoice.materials_amount) > 0) {
+    if (mag(invoice.materials_amount) > 0) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
       doc.setTextColor(DARK);
       doc.text('Materials', MARGIN, y);
-      doc.text(formatCurrency(Number(invoice.materials_amount)), MARGIN + CONTENT_W, y, { align: 'right' });
+      doc.text(formatCurrency(mag(invoice.materials_amount)), MARGIN + CONTENT_W, y, { align: 'right' });
       y += 8;
       doc.setDrawColor(LIGHT_BORDER);
       doc.setLineWidth(0.5);
@@ -351,11 +374,13 @@ export function generateInvoicePdf(invoice: HdmsInvoice): Buffer {
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.setTextColor(BLACK);
-  doc.text('Total', MARGIN, y);
+  doc.setTextColor(isCredit ? RED : BLACK);
+  doc.text(isCredit ? 'Total Credit' : 'Total', MARGIN, y);
 
   doc.setFontSize(14);
-  doc.text(formatCurrency(Number(invoice.total_amount)), MARGIN + CONTENT_W, y, { align: 'right' });
+  // Credits print as a negative (e.g. -$200.00) so the offset reads unambiguously.
+  const totalText = (isCredit ? '-' : '') + formatCurrency(mag(invoice.total_amount));
+  doc.text(totalText, MARGIN + CONTENT_W, y, { align: 'right' });
 
   // ── Footer ──────────────────────────────────
   drawFooter(doc);

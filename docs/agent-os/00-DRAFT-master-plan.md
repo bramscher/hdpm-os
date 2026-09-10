@@ -1,5 +1,11 @@
 # HDPM-OS Agent Team — Master Plan (revised 2026-07-18)
 
+> **Superseded rollout (2026-08-20):** the architecture, autonomy ladder, ceilings,
+> roster, and Supabase spine below remain canonical and are inherited unchanged.
+> The **rollout** (Parts 4 and 6) is replaced by `10-restart-2026-08-20.md`.
+> This document is preserved in full as the reference architecture.
+
+
 > Status: Part 1 answered by Craig 2026-07-18 — see `01-questions-and-answers.md`
 > for the full answers, role corrections, and action items. This revision folds
 > those answers in. Next step: split into the numbered docs + session briefs

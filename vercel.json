@@ -25,6 +25,14 @@
       "schedule": "0 11 * * 0"
     },
     {
+      "path": "/api/sync/ors-watch",
+      "schedule": "0 12 1 * *"
+    },
+    {
+      "path": "/api/sync/ors-watch?sessionReview=1",
+      "schedule": "0 13 5 4,8 *"
+    },
+    {
       "path": "/api/sync/hud",
       "schedule": "0 10 1 1 *"
     },
@@ -77,14 +85,6 @@
       "schedule": "30 13 * * *"
     },
     {
-      "path": "/api/agents/cron/morning-card",
-      "schedule": "30 13 * * 1-5"
-    },
-    {
-      "path": "/api/agents/cron/morning-card?nudge=1",
-      "schedule": "0 20 * * 1-5"
-    },
-    {
       "path": "/api/agents/cron/estimate-chaser",
       "schedule": "45 13 * * 1-5"
     },
@@ -111,6 +111,10 @@
     {
       "path": "/api/eos/cron/meeting-prep",
       "schedule": "30 14 * * 1"
+    },
+    {
+      "path": "/api/agents/cron/operator-canary",
+      "schedule": "0 16 * * 1"
     }
   ]
 }

@@ -85,7 +85,9 @@ export interface MatchTarget {
 /**
  * Match one bill against the invoice set. Validated against live data
  * (2026-07-22 dry run: 204/225 bills auto-match, 201 to the cent):
- *   1. Reference is the invoice number — "000064" or "HDMS-INV-000064"
+ *   1. Reference is the invoice/credit number — "000064", "HDMS-INV-000064",
+ *      or "HDMS-CR-000064" (a credit memo's negative bill; credits share the
+ *      invoice number sequence, so the number resolves to exactly one document)
  *   2. Reference is a WO reference — "41548-1" (must be unique among invoices)
  *   3. Description starts with a WO reference — "42017-1 - Purchase new …"
  */
@@ -96,9 +98,10 @@ export function matchBill(
 ): { invoiceId: string; method: MatchMethod } | null {
   const ref = (bill.reference || '').trim();
 
-  // Invoice numbers are 4-digit-max sequence values; a 5+-digit reference is a
-  // WO number, not an invoice number.
-  const numMatch = ref.match(/^(?:HDMS-INV-)?0*(\d{1,4})$/i);
+  // Invoice/credit numbers are 4-digit-max sequence values; a 5+-digit reference
+  // is a WO number, not a document number. Accept the INV- or CR- prefix — both
+  // draw from one sequence, so the bare number maps to a single row.
+  const numMatch = ref.match(/^(?:HDMS-(?:INV|CR)-)?0*(\d{1,4})$/i);
   if (numMatch) {
     const inv = byNumber.get(parseInt(numMatch[1], 10));
     if (inv) return { invoiceId: inv.id, method: 'reference' };

@@ -170,7 +170,7 @@ function computeStats(values: number[]): { current: number; high: number; low: n
 
 function ChartSkeleton() {
   return (
-    <div className="glass glass-shine rounded-2xl p-6 animate-pulse">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6 animate-pulse">
       <div className="h-4 w-40 bg-charcoal-200 rounded mb-6" />
       <div className="flex gap-2 mb-4">
         {[1, 2, 3, 4].map((i) => (
@@ -184,7 +184,7 @@ function ChartSkeleton() {
 
 function EmptyChart({ name }: { name: string }) {
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <h4 className="text-sm font-semibold text-charcoal-700 mb-4">{name}</h4>
       <p className="text-center text-charcoal-400 text-sm py-16">
         No historical data yet. Snapshots accumulate daily via cron.
@@ -207,7 +207,7 @@ function DelinquencyChart({ data }: { data: TrendPoint[] }) {
   const stats = computeStats(rates);
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
           <DollarSign className="w-4 h-4 text-red-600" />
@@ -267,7 +267,7 @@ function VacancyChart({ data }: { data: TrendPoint[] }) {
   const stats = computeStats(rates);
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
           <Home className="w-4 h-4 text-amber-600" />
@@ -320,7 +320,7 @@ function WorkOrderChart({ data }: { data: TrendPoint[] }) {
   const stats = computeStats(avgDays);
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
           <Wrench className="w-4 h-4 text-blue-600" />
@@ -385,7 +385,7 @@ function NoticeChart({ data }: { data: TrendPoint[] }) {
   const stats = computeStats(volumes);
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
           <FileWarning className="w-4 h-4 text-purple-600" />
@@ -449,7 +449,7 @@ function InsuranceChart({ data }: { data: TrendPoint[] }) {
   const stats = computeStats(rates);
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
           <Shield className="w-4 h-4 text-green-600" />
@@ -518,7 +518,7 @@ function OwnerRetentionChart({ data }: { data: TrendPoint[] }) {
   const stats = computeStats(rates);
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
           <Users className="w-4 h-4 text-indigo-600" />
@@ -579,7 +579,7 @@ function MaintenanceCostChart({ data }: { data: TrendPoint[] }) {
   const stats = computeStats(rates);
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
           <PieChart className="w-4 h-4 text-orange-600" />
@@ -658,7 +658,7 @@ function DaysToLeaseChart({ data }: { data: TrendPoint[] }) {
   const lastPoint = chartData[chartData.length - 1];
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center">
           <Timer className="w-4 h-4 text-cyan-600" />
@@ -733,7 +733,7 @@ function LeaseRenewalChart({ data }: { data: TrendPoint[] }) {
   const stats = computeStats(rates);
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center">
           <Repeat className="w-4 h-4 text-teal-600" />
@@ -834,7 +834,7 @@ function NetDoorsChart({ data }: { data: TrendPoint[] }) {
   const projectionText = computeTargetDate(data);
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
           <Building2 className="w-4 h-4 text-emerald-600" />
@@ -963,7 +963,7 @@ function GuestCardChart({ data }: { data: TrendPoint[] }) {
   const bestSource = Object.entries(sourceTotals).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'N/A';
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6 lg:col-span-2">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6 lg:col-span-2">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center">
           <UserPlus className="w-4 h-4 text-sky-600" />
@@ -1125,7 +1125,7 @@ function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
   const contactDataSource = contact?.dataSource as string;
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6 lg:col-span-2">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6 lg:col-span-2">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-rose-100 rounded-lg flex items-center justify-center">
           <Filter className="w-4 h-4 text-rose-600" />
@@ -1226,7 +1226,7 @@ function ManagementFeesChart({ data }: { data: TrendPoint[] }) {
   const usable = data.filter((d) => d.value.estAnnualFeeRevenue != null);
   if (usable.length === 0) {
     return (
-      <div className="glass glass-shine rounded-2xl p-6">
+      <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
             <Receipt className="w-4 h-4 text-violet-600" />
@@ -1254,7 +1254,7 @@ function ManagementFeesChart({ data }: { data: TrendPoint[] }) {
   const latest = chartData[chartData.length - 1];
 
   return (
-    <div className="glass glass-shine rounded-2xl p-6">
+    <div className="bg-white rounded-2xl border border-sand-200 shadow-card p-6">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
           <Receipt className="w-4 h-4 text-violet-600" />
@@ -1324,7 +1324,7 @@ export default function TrendsPage() {
   }, [range, fetchTrends]);
 
   return (
-    <div className="px-8 py-8 max-w-6xl">
+    <div className="px-8 py-8 max-w-[1600px] mx-auto">
       {/* Header */}
       <div className="mb-8 animate-slide-up">
         <div className="flex items-center justify-between">

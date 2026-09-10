@@ -19,6 +19,8 @@ import {
   fetchLeaseExpirationsKpi,
   fetchWorkOrdersCompletedKpi,
   fetchMaintenanceEconomicsKpi,
+  fetchDoorRoster,
+  fetchDoorMovementKpi,
 } from '@/lib/appfolio-kpi';
 
 /**
@@ -59,6 +61,9 @@ async function runSnapshot() {
     { name: 'days_to_lease', fn: fetchDaysToLeaseKpi },
     { name: 'lease_renewal', fn: fetchLeaseRenewalKpi },
     { name: 'net_doors', fn: fetchNetDoorsKpi },
+    // door_roster feeds door_movement's baselines; write it first each run.
+    { name: 'door_roster', fn: fetchDoorRoster },
+    { name: 'door_movement', fn: fetchDoorMovementKpi },
     { name: 'guest_cards', fn: fetchGuestCardKpi },
     { name: 'leasing_funnel', fn: fetchLeasingFunnelKpi },
     { name: 'management_fees', fn: fetchManagementFeesKpi },

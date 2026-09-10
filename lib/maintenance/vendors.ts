@@ -45,6 +45,24 @@ export async function syncVendors(vendorMap: Map<string, string>): Promise<numbe
 // CRUD
 // ============================================
 
+/**
+ * AppFolio vendor ids flagged emergency (vendor.emergency_available). The Zoom
+ * sync uses this to prefix emergency vendors 'EV - ' instead of 'V - '.
+ */
+export async function listEmergencyVendorAppfolioIds(): Promise<Set<string>> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('vendor')
+    .select('appfolio_vendor_id')
+    .eq('emergency_available', true)
+    .not('appfolio_vendor_id', 'is', null);
+  if (error) {
+    console.error('[Vendors] Emergency list failed:', error.message);
+    return new Set();
+  }
+  return new Set((data ?? []).map((r) => r.appfolio_vendor_id as string));
+}
+
 export async function listVendors(activeOnly = false): Promise<Vendor[]> {
   const supabase = getSupabaseAdmin();
   let query = supabase.from('vendor').select('*').order('name');

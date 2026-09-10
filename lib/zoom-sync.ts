@@ -19,6 +19,7 @@ import {
   type AppFolioContact,
   type ZoomContactType,
 } from '@/lib/appfolio';
+import { listEmergencyVendorAppfolioIds } from '@/lib/maintenance/vendors';
 import {
   isZoomConfigured,
   listAllExternalContacts,
@@ -53,11 +54,172 @@ export function normalizePhone(raw: string | null | undefined): string | null {
   return null;
 }
 
+// Shared / office lines that must never become an external contact: one number
+// sits on many AppFolio records, so syncing it means Zoom duplicate-phone create
+// errors plus last-writer name churn on the single contact Zoom keeps. Excluded
+// here → treated as "no usable phone" everywhere, and the vanished-contact pass
+// then deactivates any stale map rows that used to carry the number.
+// +15415480383 = HDPM office line (was on TEST VENDOR / HDPM / HDMS).
+export const EXCLUDED_PHONES = new Set<string>(['+15415480383']);
+
+/** A normalized phone we're willing to push to Zoom (non-null, not a shared line). */
+export function isSyncablePhone(phone: string | null): phone is string {
+  return phone !== null && !EXCLUDED_PHONES.has(phone);
+}
+
 function descriptionFor(c: AppFolioContact): string {
   if (c.type === 'tenant') {
     return c.propertyAddress ? `Tenant — ${c.propertyAddress}` : 'Tenant';
   }
   return c.type === 'vendor' ? 'Vendor' : 'Owner';
+}
+
+// ============================================
+// Phone-collision resolution
+//
+// Zoom Phone allows only one external contact per phone number. When two+
+// desired contacts share a number, all but one would perpetually resolve to
+// the same existing Zoom contact via the phone index and take the UPDATE
+// branch forever — re-PATCHing it every run and burning the write cap on
+// churn instead of ever reaching the never-synced tail. Collapse each
+// phone's group down to a single primary before the write loop runs.
+// ============================================
+
+export interface DesiredContact {
+  contact: AppFolioContact;
+  phone: string;
+}
+
+export interface PhoneCollisionSkip extends DesiredContact {
+  /** Human-readable reason, naming which contact the phone resolved to. */
+  reason: string;
+}
+
+export interface PhonePrimariesResult {
+  primaries: DesiredContact[];
+  skipped: PhoneCollisionSkip[];
+}
+
+const CONTACT_TYPE_PRIORITY: Record<ZoomContactType, number> = {
+  vendor: 0,
+  owner: 1,
+  tenant: 2,
+};
+
+function compareAppfolioIds(a: string, b: string): number {
+  const na = Number(a);
+  const nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Groups `desired` by normalized phone and, for any phone shared by more
+ * than one contact, keeps exactly one primary: the incumbent already mapped
+ * to that phone's Zoom contact if one exists, otherwise a deterministic
+ * pick (type priority vendor > owner > tenant, then lowest appfolioId). All
+ * other contacts on that phone are returned in `skipped` with a reason —
+ * never silently dropped.
+ */
+export function resolvePhonePrimaries(
+  desired: DesiredContact[],
+  phoneIndex: Map<string, string>,
+  mapByKey: Map<string, ContactMapRow>
+): PhonePrimariesResult {
+  const byPhone = new Map<string, DesiredContact[]>();
+  for (const d of desired) {
+    const group = byPhone.get(d.phone);
+    if (group) group.push(d);
+    else byPhone.set(d.phone, [d]);
+  }
+
+  const primaries: DesiredContact[] = [];
+  const skipped: PhoneCollisionSkip[] = [];
+
+  for (const group of byPhone.values()) {
+    if (group.length === 1) {
+      primaries.push(group[0]);
+      continue;
+    }
+
+    const incumbentZoomId = phoneIndex.get(group[0].phone) || null;
+    let primary = incumbentZoomId
+      ? group.find((d) => {
+          const row = mapByKey.get(`${d.contact.type}:${d.contact.appfolioId}`);
+          return row?.zoom_external_contact_id === incumbentZoomId;
+        })
+      : undefined;
+
+    if (!primary) {
+      const sorted = [...group].sort((a, b) => {
+        const pa = CONTACT_TYPE_PRIORITY[a.contact.type];
+        const pb = CONTACT_TYPE_PRIORITY[b.contact.type];
+        if (pa !== pb) return pa - pb;
+        return compareAppfolioIds(a.contact.appfolioId, b.contact.appfolioId);
+      });
+      primary = sorted[0];
+    }
+
+    primaries.push(primary);
+    for (const d of group) {
+      if (d === primary) continue;
+      skipped.push({
+        ...d,
+        reason: `phone ${d.phone} already resolves to "${primary.contact.name}" (${primary.contact.type} ${primary.contact.appfolioId}); Zoom allows only one contact per number`,
+      });
+    }
+  }
+
+  return { primaries, skipped };
+}
+
+/**
+ * Orders desired contacts so never-synced contacts (no map row, or a row
+ * with last_synced_at null) go first, then by ascending last_synced_at —
+ * so the never-synced tail is reached even if the write cap is hit again
+ * mid-run.
+ */
+export function orderByLastSyncedAscending(
+  items: DesiredContact[],
+  mapByKey: Map<string, ContactMapRow>
+): DesiredContact[] {
+  const lastSyncedTime = (item: DesiredContact): number => {
+    const row = mapByKey.get(`${item.contact.type}:${item.contact.appfolioId}`);
+    const t = row?.last_synced_at ? new Date(row.last_synced_at).getTime() : NaN;
+    return Number.isFinite(t) ? t : -Infinity; // never-synced sorts first
+  };
+  return [...items].sort((a, b) => lastSyncedTime(a) - lastSyncedTime(b));
+}
+
+/**
+ * Build a lookup from our custom contact id (hdpm-<type>-<appfolioId>, set on
+ * create) to the Zoom external_contact_id, from a Zoom contact listing.
+ */
+export function buildCustomIdIndex(
+  zoomContacts: { external_contact_id: string; id?: string }[]
+): Map<string, string> {
+  const idIndex = new Map<string, string>();
+  for (const zc of zoomContacts) {
+    if (zc.id && !idIndex.has(zc.id)) idIndex.set(zc.id, zc.external_contact_id);
+  }
+  return idIndex;
+}
+
+/**
+ * Resolve which existing Zoom contact a desired contact maps to, if any.
+ * Priority: our recorded mapping → adopt by phone → adopt by our custom id.
+ * The custom-id fallback covers contacts that already exist in Zoom under
+ * hdpm-<type>-<appfolioId> but have no phone Zoom can index — without it they
+ * fail create forever with "ID already exists".
+ */
+export function resolveZoomId(
+  existingZoomId: string | null | undefined,
+  phone: string,
+  customId: string,
+  phoneIndex: Map<string, string>,
+  idIndex: Map<string, string>
+): string | null {
+  return existingZoomId || phoneIndex.get(phone) || idIndex.get(customId) || null;
 }
 
 // ============================================
@@ -196,6 +358,8 @@ export interface SyncPreview {
   wouldCreate: number;
   wouldUpdate: number;
   wouldSkip: number;
+  /** Contacts that share a phone with another desired contact and would be skipped (see resolvePhonePrimaries). */
+  wouldSkipCollisions: number;
   byType: Record<ZoomContactType, { source: number; withPhone: number }>;
   samplesWithoutPhone: string[];
 }
@@ -206,7 +370,8 @@ export async function previewZoomSync(opts: {
   const types = opts.types?.length ? opts.types : ALL_CONTACT_TYPES;
   const supabase = getSupabaseAdmin();
 
-  const source = await fetchAppFolioZoomContacts(types);
+  const emergencyVendorIds = await listEmergencyVendorAppfolioIds();
+  const source = await fetchAppFolioZoomContacts(types, { emergencyVendorIds });
   const byType = {
     vendor: { source: 0, withPhone: 0 },
     owner: { source: 0, withPhone: 0 },
@@ -218,7 +383,7 @@ export async function previewZoomSync(opts: {
   for (const c of source) {
     byType[c.type].source++;
     const phone = normalizePhone(c.phoneRaw);
-    if (phone) {
+    if (isSyncablePhone(phone)) {
       byType[c.type].withPhone++;
       desired.push({ contact: c, phone });
     } else if (samplesWithoutPhone.length < 10) {
@@ -232,6 +397,7 @@ export async function previewZoomSync(opts: {
   const mapByKey = new Map(mapRows.map((r) => [`${r.contact_type}:${r.appfolio_id}`, r]));
 
   let phoneIndex = new Map<string, string>();
+  let idIndex = new Map<string, string>();
   if (isZoomConfigured()) {
     try {
       const zoomContacts = await listAllExternalContacts();
@@ -241,17 +407,22 @@ export async function previewZoomSync(opts: {
           if (norm && !phoneIndex.has(norm)) phoneIndex.set(norm, zc.external_contact_id);
         }
       }
+      idIndex = buildCustomIdIndex(zoomContacts);
     } catch {
       phoneIndex = new Map();
+      idIndex = new Map();
     }
   }
+
+  const { primaries, skipped: collisions } = resolvePhonePrimaries(desired, phoneIndex, mapByKey);
 
   let wouldCreate = 0;
   let wouldUpdate = 0;
   let wouldSkip = 0;
-  for (const { contact, phone } of desired) {
+  for (const { contact, phone } of primaries) {
     const existing = mapByKey.get(`${contact.type}:${contact.appfolioId}`);
-    const zoomId = existing?.zoom_external_contact_id || phoneIndex.get(phone) || null;
+    const customId = `hdpm-${contact.type}-${contact.appfolioId}`;
+    const zoomId = resolveZoomId(existing?.zoom_external_contact_id, phone, customId, phoneIndex, idIndex);
     if (!zoomId) {
       wouldCreate++;
     } else if (
@@ -276,6 +447,7 @@ export async function previewZoomSync(opts: {
     wouldCreate,
     wouldUpdate,
     wouldSkip,
+    wouldSkipCollisions: collisions.length,
     byType,
     samplesWithoutPhone,
   };
@@ -332,14 +504,15 @@ export async function runZoomSync(opts: {
       throw new Error('Zoom credentials not configured (ZOOM_ACCOUNT_ID / ZOOM_CLIENT_ID / ZOOM_CLIENT_SECRET)');
     }
 
-    // 1. Source contacts from AppFolio.
-    const source = await fetchAppFolioZoomContacts(types);
+    // 1. Source contacts from AppFolio (emergency vendors → 'EV - ' prefix).
+    const emergencyVendorIds = await listEmergencyVendorAppfolioIds();
+    const source = await fetchAppFolioZoomContacts(types, { emergencyVendorIds });
     totalSource = source.length;
 
-    // 2. Normalize phones; keep only contacts with a usable number.
+    // 2. Normalize phones; keep only contacts with a usable, non-shared number.
     const desired = source
       .map((c) => ({ contact: c, phone: normalizePhone(c.phoneRaw) }))
-      .filter((d): d is { contact: AppFolioContact; phone: string } => d.phone !== null);
+      .filter((d): d is { contact: AppFolioContact; phone: string } => isSyncablePhone(d.phone));
     withPhone = desired.length;
     const desiredKeys = new Set(desired.map((d) => `${d.contact.type}:${d.contact.appfolioId}`));
 
@@ -351,8 +524,10 @@ export async function runZoomSync(opts: {
     const mapRows = (mapData as ContactMapRow[]) ?? [];
     const mapByKey = new Map(mapRows.map((r) => [`${r.contact_type}:${r.appfolio_id}`, r]));
 
-    // 4. Existing Zoom contacts → phone index for first-run reconciliation
-    //    (so we adopt rather than duplicate contacts already in Zoom).
+    // 4. Existing Zoom contacts → phone + custom-id indexes for reconciliation
+    //    (so we adopt rather than duplicate contacts already in Zoom). The
+    //    custom-id index catches contacts that exist under our hdpm-<...> id but
+    //    have no phone Zoom can match, which otherwise fail create forever.
     const zoomContacts = await listAllExternalContacts();
     const phoneIndex = new Map<string, string>();
     for (const zc of zoomContacts) {
@@ -361,16 +536,28 @@ export async function runZoomSync(opts: {
         if (norm && !phoneIndex.has(norm)) phoneIndex.set(norm, zc.external_contact_id);
       }
     }
+    const idIndex = buildCustomIdIndex(zoomContacts);
 
-    // 5. Create / update each desired contact.
+    // 5. Collapse phone collisions to one primary per number (see
+    //    resolvePhonePrimaries doc comment), then order never-synced /
+    //    oldest-synced contacts first so the tail is reached even if the
+    //    write cap is hit again this run.
+    const { primaries, skipped: collisions } = resolvePhonePrimaries(desired, phoneIndex, mapByKey);
+    counts.skipped += collisions.length;
+    if (collisions.length) {
+      console.warn(`[ZoomSync] Skipped ${collisions.length} contact(s) sharing a phone with an already-resolved contact.`);
+    }
+    const orderedPrimaries = orderByLastSyncedAscending(primaries, mapByKey);
+
+    // 6. Create / update each desired contact.
     let writes = 0;
-    for (const { contact, phone } of desired) {
+    for (const { contact, phone } of orderedPrimaries) {
       const key = `${contact.type}:${contact.appfolioId}`;
       const existing = mapByKey.get(key);
       const description = descriptionFor(contact);
       const customId = `hdpm-${contact.type}-${contact.appfolioId}`;
 
-      let zoomId = existing?.zoom_external_contact_id || phoneIndex.get(phone) || null;
+      let zoomId = resolveZoomId(existing?.zoom_external_contact_id, phone, customId, phoneIndex, idIndex);
       const changed =
         !existing ||
         existing.name !== contact.name ||
@@ -443,7 +630,7 @@ export async function runZoomSync(opts: {
       }
     }
 
-    // 6. Flag contacts that vanished from AppFolio as inactive (no Zoom delete).
+    // 7. Flag contacts that vanished from AppFolio as inactive (no Zoom delete).
     const toDeactivate = mapRows
       .filter((r) => r.active && !desiredKeys.has(`${r.contact_type}:${r.appfolio_id}`))
       .map((r) => r.id);
@@ -476,6 +663,10 @@ export async function runZoomSync(opts: {
           withoutPhone: totalSource - withPhone,
           writeCapHit,
           sampleErrors,
+          phoneCollisions: {
+            skippedCount: collisions.length,
+            samples: collisions.slice(0, 10).map((c) => `${c.contact.name}: ${c.reason}`),
+          },
         },
       })
       .eq('id', runId);
