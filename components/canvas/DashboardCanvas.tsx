@@ -29,6 +29,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
+import { canViewHabuDemo } from "@/lib/habu-demo-access";
 import { cn } from "@/lib/utils";
 
 function getGreeting() {
@@ -482,6 +483,9 @@ export function DashboardCanvas() {
 
         {showAdminSection && (
           <TileSection label="Admin">
+            {canViewHabuDemo(session?.user) && (
+              <Tile href="/admin/habu-demo" icon={Route} label="HABU Demo" tone="blue" title="Office jackets and subway routing map" />
+            )}
             <Tile
               href="/dashboard"
               icon={Activity}

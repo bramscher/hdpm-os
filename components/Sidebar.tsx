@@ -7,10 +7,12 @@ import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw } from "lucide-react";
+import { canViewHabuDemo } from "@/lib/habu-demo-access";
 import { cn } from "@/lib/utils";
 import { springDefault } from "@/lib/motion";
 
 interface NavItem {
+  habuOwnerOnly?: boolean;
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -67,6 +69,7 @@ const NAV_SECTIONS: NavSection[] = [
     adminOnly: true,
     items: [
       { label: "Company KPIs", href: "/dashboard", icon: Activity, matchPrefix: "/dashboard" },
+      { label: "HABU Demo", href: "/admin/habu-demo", icon: Navigation, matchPrefix: "/admin/habu-demo", habuOwnerOnly: true },
       { label: "Zoom Sync", href: "/admin/zoom-sync", icon: Phone, matchPrefix: "/admin/zoom-sync" },
     ],
   },
@@ -101,7 +104,9 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
   const isAdmin = session?.user?.isAdmin === true;
   const reducedMotion = useReducedMotion();
 
-  const sections = NAV_SECTIONS.filter((s) => !s.adminOnly || isAdmin);
+  const sections = NAV_SECTIONS.filter((s) => !s.adminOnly || isAdmin).map(s => ({
+    ...s, items: s.items.filter(item => !item.habuOwnerOnly || canViewHabuDemo(session?.user)),
+  }));
 
   const initials = session?.user?.name
     ? session.user.name
