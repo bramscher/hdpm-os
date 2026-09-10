@@ -484,7 +484,10 @@ export function DashboardCanvas() {
         {showAdminSection && (
           <TileSection label="Admin">
             {canViewHabuDemo(session?.user) && (
-              <Tile href="/admin/habu-demo" icon={Route} label="HABU Demo" tone="blue" title="Office jackets and subway routing map" />
+              <>
+                <Tile href="/admin/habu-paper" icon={FileText} label="Paper Workflows" tone="blue" title="Full workflow forms and personal process inbox" />
+                <Tile href="/admin/habu-demo" icon={Route} label="HABU Demo" tone="blue" title="Office jackets and subway routing map" />
+              </>
             )}
             <Tile
               href="/dashboard"
