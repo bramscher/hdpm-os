@@ -26,7 +26,7 @@ export type Shift = {
   breaks: Break[];
 };
 export type Leave = {
-  kind: "vacation" | "sick" | "loa_paid" | "loa_unpaid";
+  kind: "vacation" | "sick" | "holiday" | "loa_paid" | "loa_unpaid";
   minutes: number;
 };
 export type Day = {
@@ -88,6 +88,7 @@ export type Totals = {
   paidBreak: number;
   vacation: number;
   sick: number;
+  holiday: number;
   loa_paid: number;
   loa_unpaid: number;
   miles: number;
@@ -95,6 +96,7 @@ export type Totals = {
 export const LEAVE_LABELS: Record<Leave["kind"], string> = {
   vacation: "Vacation",
   sick: "Sick",
+  holiday: "Holiday",
   loa_paid: "LOA · paid",
   loa_unpaid: "LOA · unpaid",
 };
@@ -442,6 +444,7 @@ export function totals(days: Day[]): Totals {
     paidBreak: 0,
     vacation: 0,
     sick: 0,
+    holiday: 0,
     loa_paid: 0,
     loa_unpaid: 0,
     miles: 0,

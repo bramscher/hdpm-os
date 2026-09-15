@@ -79,7 +79,7 @@ Database tests use PGlite (local PostgreSQL in memory) with fictional staff. No 
 
 Lunch windows are draft schedule entries, confirmed by the employee at submission. Changing a daily lunch updates its unpaid duration. Paid rest breaks stay included in worked hours. For the starting 7:00 AM–4:30 PM schedule, a one-hour unpaid lunch leaves **8.5 paid hours**. The suggested paid rest allowance uses the [Oregon BOLI adult non-exempt baseline](https://www.oregon.gov/boli/workers/pages/meals-and-breaks.aspx); company lunch defaults are one hour. Employees must correct any interrupted/working lunch rather than deduct it. Custom break settings are available.
 
-Every calendar day can record work, including weekends. Emergency work and emergency phone management flags appear in daily details and payroll summary day counts; record actual time in work intervals and context in notes. Flags do not calculate premium pay. New leave entries offer Vacation and Sick. Put LOA in comments; historical LOA entries and their exports are retained.
+Every calendar day can record work, including weekends. Emergency work and emergency phone management flags appear in daily details and payroll summary day counts; record actual time in work intervals and context in notes. Flags do not calculate premium pay. New leave entries offer Vacation, Sick, and Holiday on any calendar day. Holiday hours appear separately in the Excel Summary and Daily detail tabs and are included in the sheet’s leave total. Selecting Holiday asks for hours and replaces scheduled work after confirmation; manually recorded work is preserved, allowing partial holiday leave plus actual work. Put LOA in comments; historical LOA entries and their exports are retained.
 
 ## Routine use
 

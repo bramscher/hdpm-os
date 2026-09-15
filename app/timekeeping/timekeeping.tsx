@@ -426,6 +426,7 @@ function TimekeepingView() {
                                 {hours(
                                   t.vacation +
                                     t.sick +
+                                    t.holiday +
                                     t.loa_paid +
                                     t.loa_unpaid,
                                 )}
@@ -1358,10 +1359,12 @@ function SheetEditor({
         </div>
         <div>
           <small>
-            {t.loa_paid || t.loa_unpaid ? "Leave" : "Vacation / sick"}
+            {t.loa_paid || t.loa_unpaid ? "Leave" : "Vacation / sick / holiday"}
           </small>
           <strong>
-            {duration(t.vacation + t.sick + t.loa_paid + t.loa_unpaid)}
+            {duration(
+              t.vacation + t.sick + t.holiday + t.loa_paid + t.loa_unpaid,
+            )}
           </strong>
         </div>
         <div>
@@ -2015,7 +2018,7 @@ function DayEditor({
               {Object.entries(LEAVE_LABELS)
                 .filter(
                   ([k]) =>
-                    ["vacation", "sick"].includes(k) &&
+                    ["vacation", "sick", "holiday"].includes(k) &&
                     !day.leave.some((l) => l.kind === k),
                 )
                 .map(([k, label]) => (

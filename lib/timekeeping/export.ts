@@ -37,6 +37,7 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
         "Paid break hours (included)": round(t.paidBreak / 60),
         "Vacation hours": round(t.vacation / 60),
         "Sick hours": round(t.sick / 60),
+        "Holiday hours": round(t.holiday / 60),
         ...(legacyLeave
           ? {
               "Paid LOA hours": round(t.loa_paid / 60),
@@ -62,6 +63,7 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
       "Worked hours": sum("Worked hours"),
       "Vacation hours": sum("Vacation hours"),
       "Sick hours": sum("Sick hours"),
+      "Holiday hours": sum("Holiday hours"),
       ...(legacyLeave
         ? {
             "Paid LOA hours": sum("Paid LOA hours"),
@@ -153,7 +155,7 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
           Item: "Leave categories",
           Value: (legacyLeave
             ? Object.values(LEAVE_LABELS)
-            : [LEAVE_LABELS.vacation, LEAVE_LABELS.sick]
+            : [LEAVE_LABELS.vacation, LEAVE_LABELS.sick, LEAVE_LABELS.holiday]
           ).join(", "),
         },
         {
