@@ -795,16 +795,16 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 
 ## Deployment
 
-Deployed on **Vercel**. Production ships via a **manual `vercel --prod`** from the CLI — merging to `main` does **not** auto-deploy. Push `main` first so the build source matches, then deploy:
+Deployed on **Vercel**. Pushing or merging to GitHub `main` automatically starts a production deployment through the GitHub integration (verified September 14, 2026). Wait for Vercel to report **Ready** before treating a push as live:
 
 ```bash
 npm run build    # Verify build passes locally
-git push         # Update origin/main (does NOT ship)
-vercel --prod    # Manual production deploy (the actual ship step)
+git push origin main  # Starts the production deployment
+vercel list hdpm-chatbot --environment production  # Check deployment status
 ```
 
 **Production URL:** `hdpmchat.highdesertpm.com` (Vercel alias `hdpm-chatbot.vercel.app`)
 
 **Branch strategy:**
-- `main` — production source; ships only via `vercel --prod`
+- `main` — production source; pushes trigger Vercel production builds
 - `feature/*` — feature branches, merged via `--no-ff`
