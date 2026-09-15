@@ -1681,7 +1681,20 @@ function DayEditor({
               .reduce((n, b) => n + breakMinutes(b), 0);
           return (
             <div className="tk-shift" key={s.id}>
-              <span className="tk-source">{s.source}</span>
+              <div className="tk-shift-heading">
+                <span className="tk-source">{s.source} work interval</span>
+                <button
+                  className="tk-remove"
+                  onClick={() =>
+                    onChange({
+                      ...day,
+                      shifts: day.shifts.filter((x) => x.id !== s.id),
+                    })
+                  }
+                >
+                  Remove shift
+                </button>
+              </div>
               <label>
                 Start
                 <TimeSelect
@@ -1756,7 +1769,7 @@ function DayEditor({
                 {s.breaks
                   .filter((b) => b.start && b.end)
                   .map((b) => (
-                    <div className="tk-inline" key={b.id}>
+                    <div className="tk-break-row" key={b.id}>
                       <strong>
                         {b.paid ? "Paid break" : "Unpaid lunch / break"}
                       </strong>
@@ -1851,17 +1864,6 @@ function DayEditor({
                   </button>
                 )}
               </div>
-              <button
-                className="tk-remove"
-                onClick={() =>
-                  onChange({
-                    ...day,
-                    shifts: day.shifts.filter((x) => x.id !== s.id),
-                  })
-                }
-              >
-                Remove shift
-              </button>
             </div>
           );
         })}
@@ -1921,7 +1923,6 @@ function DayEditor({
           </small>
         </fieldset>
         <div className="tk-leave">
-          <h3>Leave</h3>
           {day.leave.map((l) => (
             <div className="tk-inline" key={l.kind}>
               <label>
@@ -2021,7 +2022,7 @@ function DayEditor({
             leave of absence.
           </small>
         </div>
-        <div className="tk-form-grid">
+        <div className="tk-form-grid tk-day-notes">
           <label>
             Business miles
             <input
