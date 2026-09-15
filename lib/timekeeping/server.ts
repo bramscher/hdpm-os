@@ -441,6 +441,10 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
   if (op === "refresh") {
     if (sheet.employee_id !== ctx.employee.id)
       throw new TimeError("Only your own schedule can be applied.", 403);
+    if (!ctx.employee.schedule)
+      throw new TimeError(
+        "Save your usual week in My defaults before applying it to your timesheet.",
+      );
     const fresh = buildDays(ctx.employee, sheet.period_start, sheet.period_end);
     days = sheet.days.map((d, i) =>
       !d.emergency &&

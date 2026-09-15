@@ -229,6 +229,31 @@ describe("timekeeping server identity and signatures", () => {
     expect(days[0].shifts).toEqual([]);
     expect(days[1].shifts).toHaveLength(1);
   });
+  it("requires saved defaults and respects real enrollment dates on refresh", async () => {
+    const s = sheet();
+    mock.results.push(s, [s]);
+    await expect(
+      command(
+        { ...ctx, employee: { ...employee, schedule: null } },
+        { op: "refresh", sheetId: s.id, version: 1 },
+      ),
+    ).rejects.toThrow("My defaults");
+    expect(mock.rpc).not.toHaveBeenCalled();
+    mock.results.push(s, [s]);
+    await command(
+      { ...ctx, employee: { ...employee, starts_on: "2026-01-15" } },
+      { op: "refresh", sheetId: s.id, version: 1 },
+    );
+    const days = mock.rpc.mock.calls[0][1].p_request.days;
+    expect(
+      days
+        .slice(0, 14)
+        .every(
+          (d: { off: boolean; shifts: unknown[] }) => d.off && !d.shifts.length,
+        ),
+    ).toBe(true);
+    expect(days[14].shifts).toHaveLength(1);
+  });
   it("rejects stale saves before writing", async () => {
     const s = sheet();
     mock.results.push({ ...s, version: 2 }, [s]);

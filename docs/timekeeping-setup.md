@@ -33,7 +33,7 @@ Jennifer Bertran (`Jen`), Jayme, Bryce Bramscher and Bianca Nyseth are excluded 
 
 Open **Company → Timekeeping → Employee preview**, or `/timekeeping/preview` while signed in as an admin. The preview uses the same employee screen components with fictional Taylor Example data. Only **My time** and **My defaults** appear within Timekeeping.
 
-- **First visit**: choose usual workdays, hours and breaks, save, then apply defaults to the sheet.
+- **First visit**: Taylor participates from the start of the current period so you can try a full sheet. Choose usual workdays, hours and breaks, save, then apply defaults to the sheet. A confirmation message reports the days updated; applying before saving defaults shows an instruction. Real employee enrollment dates remain unchanged.
 - Open a weekend day, add work, flag **Emergency work** or **Emergency phone management**, and save notes. Use daily lunch start/end to try a shorter or later lunch.
 - **Completed period**: review work, vacation, mileage and notes, then practice **Sign & submit to manager**.
 - **Reset preview** starts over. All changes remain in memory in that tab; refresh discards them. No payroll data, real signature, employee enrollment or notifications are created. This demonstrates the employee UI, not a live Microsoft reauthentication or manager approval test.

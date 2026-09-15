@@ -36,7 +36,8 @@ export function createEmployeePreview(
     pay_basis: "hourly",
     manager_id: "preview-craig",
     enabled: true,
-    starts_on: scenario === "first-visit" ? today : period.start,
+    // A full-period fictional participant makes applying defaults visible on every scheduled day.
+    starts_on: period.start,
     ends_on: null,
     schedule:
       scenario === "first-visit"
@@ -261,6 +262,10 @@ export function createEmployeePreview(
       }));
       sheet.note = body.note;
     } else if (body.op === "refresh") {
+      if (!employee.schedule)
+        throw new Error(
+          "Save your usual week in My defaults before applying it to your timesheet.",
+        );
       const fresh = buildDays(employee, sheet.period_start, sheet.period_end);
       sheet.days = sheet.days.map((d, i) =>
         !d.emergency &&

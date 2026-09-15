@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEmployeePreview } from "../preview";
 import type { TimekeepingBoot } from "../client";
-import { totals, type Sheet, type Employee, type Clock } from "../model";
+import {
+  DEFAULT_SCHEDULE,
+  totals,
+  type Sheet,
+  type Employee,
+  type Clock,
+} from "../model";
 afterEach(() => vi.unstubAllGlobals());
 describe("isolated employee preview", () => {
   it("lets an employee configure defaults without making any network requests", async () => {
@@ -18,11 +24,10 @@ describe("isolated employee preview", () => {
     expect(first.canReview).toBe(false);
     expect(first.employees).toEqual([]);
     expect(first.employee.schedule).toBeNull();
-    expect(
-      first
-        .sheet!.days.filter((d) => d.date < "2026-09-21")
-        .every((d) => d.off),
-    ).toBe(true);
+    expect(first.employee.starts_on).toBe("2026-09-16");
+    await expect(
+      request("", { op: "refresh", sheetId: first.sheet!.id, version: 1 }),
+    ).rejects.toThrow("My defaults");
     const employee = await request<Employee>("", {
       op: "schedule",
       version: 1,
@@ -44,9 +49,52 @@ describe("isolated employee preview", () => {
       sheet.days.find((d) => d.date === "2026-09-21")?.shifts,
     ).toHaveLength(1);
     expect(
-      sheet.days.filter((d) => d.date < "2026-09-21").every((d) => d.off),
-    ).toBe(true);
+      sheet.days.find((d) => d.date === "2026-09-16")?.shifts,
+    ).toHaveLength(1);
+    expect(sheet.days.find((d) => d.date === "2026-09-19")?.off).toBe(true);
+    expect(sheet.days.filter((d) => d.shifts.length)).toHaveLength(11);
     expect(fetch).not.toHaveBeenCalled();
+  });
+  it("fills the full first-visit period on its last day and preserves exceptions when reapplied", async () => {
+    const request = createEmployeePreview(
+      "first-visit",
+      () => new Date("2026-09-15T20:00:00Z"),
+    );
+    const boot = await request<TimekeepingBoot>();
+    await request("", {
+      op: "schedule",
+      version: 1,
+      schedule: DEFAULT_SCHEDULE,
+    });
+    const first = await request<Sheet>("", {
+      op: "refresh",
+      sheetId: boot.sheet!.id,
+      version: 1,
+    });
+    expect(first.days.filter((d) => d.shifts.length)).toHaveLength(11);
+    expect(totals(first.days).scheduled).toBe(11 * 510);
+    first.days[0].note = "Keep this exception";
+    const saved = await request<Sheet>("", {
+      op: "save",
+      sheetId: first.id,
+      version: first.version,
+      days: first.days,
+      note: "",
+    });
+    await request("", {
+      op: "schedule",
+      version: 2,
+      schedule: { ...DEFAULT_SCHEDULE, start: "07:15" },
+    });
+    const refreshed = await request<Sheet>("", {
+      op: "refresh",
+      sheetId: saved.id,
+      version: saved.version,
+    });
+    expect(refreshed.days[0]).toEqual(saved.days[0]);
+    expect(refreshed.days[1].shifts[0].start).not.toBe(
+      saved.days[1].shifts[0].start,
+    );
   });
   it("saves exceptions, simulates signature, advances periods, and resets in a new instance", async () => {
     const request = createEmployeePreview(

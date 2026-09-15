@@ -278,6 +278,7 @@ function TimekeepingView() {
                       initial={data.sheet}
                       actorId={data.employee.id}
                       actorEmail={data.employee.email}
+                      onNotice={setReceipt}
                       onSigned={(signed) =>
                         setReceipt(
                           `Signed and submitted ${labelPeriod(signed)} as ${signed.employee_signed_by} on ${new Date(signed.employee_signed_at!).toLocaleString("en-US", { timeZone: "America/Los_Angeles", timeZoneName: "short" })}. Your manager will review it.`,
@@ -316,6 +317,7 @@ function TimekeepingView() {
                   initial={selected}
                   actorId={data.employee.id}
                   actorEmail={data.employee.email}
+                  onNotice={setReceipt}
                   onSigned={(signed) =>
                     setReceipt(
                       `Signed and submitted ${labelPeriod(signed)} as ${signed.employee_signed_by} on ${new Date(signed.employee_signed_at!).toLocaleString("en-US", { timeZone: "America/Los_Angeles", timeZoneName: "short" })}. Your manager will review it.`,
@@ -1071,6 +1073,7 @@ function SheetEditor({
   actorId,
   actorEmail,
   onSigned,
+  onNotice,
   isAdmin,
   clockOpen,
   onComplete,
@@ -1080,6 +1083,7 @@ function SheetEditor({
   actorId: string;
   actorEmail: string;
   onSigned: (sheet: Sheet) => void;
+  onNotice: (message: string) => void;
   isAdmin: boolean;
   clockOpen: boolean;
   onComplete: () => Promise<void>;
@@ -1195,8 +1199,10 @@ function SheetEditor({
   async function act(op: string) {
     setBusy(true);
     setError("");
+    onNotice("");
     try {
       await save();
+      const before = draftRef.current;
       const result = await api<Sheet>("", {
         op,
         sheetId: initial.id,
@@ -1205,6 +1211,16 @@ function SheetEditor({
         attested: op === "submit" && confirmed,
       });
       if (op === "submit") onSigned(result);
+      if (op === "refresh") {
+        const changed = result.days.filter(
+          (day, i) => JSON.stringify(day) !== JSON.stringify(before.days[i]),
+        ).length;
+        onNotice(
+          changed
+            ? `Defaults applied to ${changed} ${changed === 1 ? "day" : "days"}. Your manual entries, leave, notes and clocked time were kept.`
+            : "No days needed updating. Existing entries and employee start/end dates were respected; untouched days already match your saved defaults.",
+        );
+      }
       await onComplete();
     } catch (e) {
       setError(errorText(e));
@@ -1235,18 +1251,8 @@ function SheetEditor({
         </div>
         <div className="tk-toolbar">
           {editable && own && (
-            <button
-              disabled={busy}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "Apply your saved defaults to untouched days in this period? Manual exceptions, leave, notes and clocked time are kept.",
-                  )
-                )
-                  void act("refresh");
-              }}
-            >
-              Apply defaults to untouched days
+            <button disabled={busy} onClick={() => void act("refresh")}>
+              {busy ? "Please wait…" : "Apply defaults to untouched days"}
             </button>
           )}
           {editable && (
