@@ -9,7 +9,7 @@ Entry point: **Company → Timekeeping** (`/timekeeping`). Source branch: `featu
 3. Ensure `CRON_SECRET` is configured. `/api/timekeeping/cron` checks its bearer token. The daily Vercel schedule is `10 8 * * *` UTC; on-open generation also covers missed runs. Tables absent → setup message; no local mock fallback in the app.
 4. Complete the fictional/account pilot below, then apply the same migration to production before deploying this branch's application changes. Main auto-deploys on Vercel, so coordinate that merge with database setup.
 
-The build has not applied a migration to production. The temporary local test harness is outside the repository and is not part of the deployed app.
+Craig applied the database migration on September 15, 2026. The six empty tables, employee signature columns and guarded command function were verified before merging to main. Staff still need enrollment. The temporary local test harness is outside the repository and is not part of the deployed app.
 
 ## Enroll and configure
 

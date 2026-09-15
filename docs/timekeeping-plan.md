@@ -1,6 +1,6 @@
 # Timekeeping: agreed scope and implementation
 
-September 15, 2026 · Built on `feature/timekeeping`. See [setup and pilot guide](timekeeping-setup.md) for rollout. Database migration and production deployment are separate from this build.
+September 15, 2026 · Built on `feature/timekeeping`. Craig applied the database migration; its tables, signature columns and command guard were verified. See [setup and pilot guide](timekeeping-setup.md) for enrollment and testing. Application deployment follows the merge to main.
 
 ## Confirmed requirements
 
