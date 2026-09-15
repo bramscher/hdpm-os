@@ -463,6 +463,7 @@ Creates maintenance invoices from three input sources:
 - Auto-save with 2-second debounce
 - Internal notes pre-populated with full work order reference data
 - Status tracking: Draft → Generated → Attached (Void to cancel); "paid" is separate — an invoice is paid once it's linked to a payment in the Reconcile tab
+- **Invoice reporting periods** — the invoice list, Billable report, and Daily Labor & Markup report share a **Period preset** selector for the three most recent payroll periods (1–15 / 16–month end) and Monday–Sunday weeks, using Pacific calendar dates. Custom date ranges remain available.
 - **Markup report** — select invoices on the Invoices tab → "Report from selection" for an internal cost/markup/charged breakdown (materials vs appliances), with CSV export and print
 
 ### Payment Reconciliation (Reconcile tab)

@@ -1,5 +1,7 @@
 "use client";
 
+import { ReportPeriodPresets } from "./report-period-presets";
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, RefreshCw, Download, CalendarDays, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -95,39 +97,6 @@ function todayInput(offsetDays = 0): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
-/**
- * The `count` most recent semi-monthly payroll periods (1–15 / 16–EOM),
- * newest first, starting with the one containing today.
- */
-function payPeriods(count: number): Array<{ label: string; from: string; to: string }> {
-  const out: Array<{ label: string; from: string; to: string }> = [];
-  const now = new Date();
-  let y = now.getFullYear();
-  let m = now.getMonth(); // 0-based
-  let half: 0 | 1 = now.getDate() <= 15 ? 0 : 1;
-  const iso = (yy: number, mm: number, dd: number) =>
-    `${yy}-${String(mm + 1).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
-  for (let i = 0; i < count; i++) {
-    const lastDay = new Date(y, m + 1, 0).getDate();
-    const monthName = new Date(y, m, 1).toLocaleDateString("en-US", { month: "short" });
-    out.push(
-      half === 0
-        ? { label: `${monthName} 1–15`, from: iso(y, m, 1), to: iso(y, m, 15) }
-        : { label: `${monthName} 16–${lastDay}`, from: iso(y, m, 16), to: iso(y, m, lastDay) }
-    );
-    if (half === 1) half = 0;
-    else {
-      half = 1;
-      m -= 1;
-      if (m < 0) {
-        m = 11;
-        y -= 1;
-      }
-    }
-  }
-  return out;
 }
 
 type TechFilter = "all" | (typeof TECHNICIANS)[number] | "Unassigned";
@@ -305,30 +274,14 @@ export function DailyReport() {
               </button>
             ))}
           </div>
-          {/* Payroll-period presets: 1–15 / 16–EOM, three most recent */}
-          <div className="flex items-center gap-1">
-            {payPeriods(3).map((p) => {
-              const active = from === p.from && to === p.to;
-              return (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => {
-                    setFrom(p.from);
-                    setTo(p.to);
-                  }}
-                  title={`Payroll period ${p.from} – ${p.to}`}
-                  className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition-colors ${
-                    active
-                      ? "bg-charcoal-800 text-white"
-                      : "bg-charcoal-100/60 text-charcoal-500 hover:bg-charcoal-200/60"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
+          <ReportPeriodPresets
+            from={from}
+            to={to}
+            onChange={(start, end) => {
+              setFrom(start);
+              setTo(end);
+            }}
+          />
           <div className="flex items-center gap-1.5 text-xs text-charcoal-500">
             <CalendarDays className="h-3.5 w-3.5 text-charcoal-400" />
             <input

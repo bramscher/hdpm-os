@@ -1,5 +1,7 @@
 "use client";
 
+import { ReportPeriodPresets } from "./report-period-presets";
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Download,
@@ -684,6 +686,14 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <ReportPeriodPresets
+                from={dateFrom}
+                to={dateTo}
+                onChange={(start, end) => {
+                  setDateFrom(start);
+                  setDateTo(end);
+                }}
+              />
               <span className="text-[10px] font-medium text-charcoal-400 uppercase">From:</span>
               <input
                 type="date"

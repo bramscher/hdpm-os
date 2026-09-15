@@ -1,5 +1,7 @@
 "use client";
 
+import { ReportPeriodPresets } from "./report-period-presets";
+
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Loader2, RefreshCw, TrendingUp, Download } from "lucide-react";
 
@@ -360,6 +362,16 @@ export function BillableReport() {
           </div>
           <span className="text-[11px] text-charcoal-400">{rangeLabel}</span>
         </div>
+
+        <ReportPeriodPresets
+          from={period === "custom" ? customStart : ""}
+          to={period === "custom" ? customEnd : ""}
+          onChange={(start, end) => {
+            setCustomStart(start);
+            setCustomEnd(end);
+            setPeriod("custom");
+          }}
+        />
 
         {/* Custom date range inputs */}
         {period === "custom" && (
