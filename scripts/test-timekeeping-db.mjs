@@ -21,6 +21,16 @@ try {
   );
   await db.exec(migration);
   await db.exec(migration);
+  const autoMigration = await readFile(
+    new URL(
+      "../supabase/migrations/20260915_timekeeping_auto_enroll.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  await db.exec(autoMigration);
+  await db.exec(autoMigration);
+
   passed++;
   await db.exec(
     `INSERT INTO timekeeping_employee(staff_person,name,email,starts_on) SELECT person,name,email,'2026-01-01' FROM staff;`,
@@ -278,6 +288,64 @@ try {
   await db.exec("RESET ROLE; SET ROLE authenticated");
   await reject(
     () => db.query("SELECT * FROM timekeeping_export"),
+    /permission denied/,
+  );
+  await db.exec("RESET ROLE");
+
+  const enroll = async (actor, reviewer) =>
+    (
+      await db.query("SELECT timekeeping_auto_enroll($1,$2) AS result", [
+        actor,
+        reviewer,
+      ])
+    ).rows[0].result;
+  let enrolled = await enroll(other.email, manager.staff_person);
+  check(
+    enrolled.enabled &&
+      enrolled.manager_id === manager.id &&
+      enrolled.version === 2,
+    "first visit auto-enrolls with configured reviewer",
+  );
+  check(
+    (await enroll(other.email, manager.staff_person)).version === 2,
+    "repeated visits leave enrollment unchanged",
+  );
+  const enrollmentEvents = (
+    await db.query(
+      "SELECT * FROM timekeeping_event WHERE employee_id=$1 AND action='auto_enroll'",
+      [other.id],
+    )
+  ).rows;
+  check(
+    enrollmentEvents.length === 1 && enrollmentEvents[0].actor === other.email,
+    "one atomic enrollment event with employee actor",
+  );
+  check(
+    !(await enroll(manager.email, manager.staff_person)).enabled,
+    "default manager does not enroll as own reviewer",
+  );
+  await reject(
+    () => enroll("unknown@example.test", manager.staff_person),
+    /FORBIDDEN/,
+  );
+  enrolled = await call(admin.email, {
+    op: "employee",
+    employeeId: other.id,
+    version: enrolled.version,
+    payrollId: "",
+    payBasis: "hourly",
+    enabled: false,
+    managerId: manager.id,
+    startsOn: enrolled.starts_on,
+    endsOn: enrolled.starts_on,
+  });
+  check(
+    !(await enroll(other.email, manager.staff_person)).enabled,
+    "ended enrollment is never reactivated on login",
+  );
+  await db.exec("SET ROLE anon");
+  await reject(
+    () => enroll(other.email, manager.staff_person),
     /permission denied/,
   );
   await db.exec("RESET ROLE");

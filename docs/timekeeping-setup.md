@@ -13,7 +13,15 @@ Craig applied the database migration on September 15, 2026. The six empty tables
 
 Roster exclusions are configured using `TIMEKEEPING_EXCLUDED_STAFF` (exact `staff.person` keys). Excluded profiles are omitted from setup and cannot enter time; retained historical sheets/exports remain available to administrators. This does not deactivate their company-wide staff accounts.
 
-## Enroll and configure
+## Automatic first-visit setup
+
+Apply [20260915_timekeeping_auto_enroll.sql](../supabase/migrations/20260915_timekeeping_auto_enroll.sql) after the base migration. Production uses `TIMEKEEPING_DEFAULT_MANAGER=Craig`.
+
+Eligible active company accounts enroll automatically on their first Timekeeping visit, with Craig as reviewer and participation starting that day. Employees choose their usual workdays, start/end and breaks in **My defaults**. New employees start as Hourly; an admin can select Salary. First-visit setup never overwrites an already configured or ended enrollment. Craig needs another assigned reviewer for his own time; no self-approval is allowed.
+
+Jennifer Bertran (`Jen`), Jayme, Bryce Bramscher and Bianca Nyseth are excluded as non-employees through the timekeeping-only configuration. Company involvement/access is separate. Before the additive SQL is applied, the existing manual setup screen remains available.
+
+## Admin setup and overrides
 
 - Sign in as a staff member whose current directory `access_role` is `admin`.
 - Open **People & defaults**. Active staff-directory accounts appear as **Not enrolled** until you configure them.

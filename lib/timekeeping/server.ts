@@ -83,7 +83,7 @@ export async function context(): Promise<Context> {
       { onConflict: "staff_person", ignoreDuplicates: true },
     ),
   );
-  const employee = checked(
+  let employee = checked(
     await db
       .from("timekeeping_employee")
       .select("*")
@@ -95,6 +95,25 @@ export async function context(): Promise<Context> {
       "Your staff email changed. Ask an administrator to reconcile your timekeeping account.",
       403,
     );
+  const defaultManager = process.env.TIMEKEEPING_DEFAULT_MANAGER?.trim();
+  if (
+    defaultManager &&
+    participatesInTimekeeping(defaultManager) &&
+    !employee.enabled &&
+    employee.version === 1 &&
+    employee.staff_person !== defaultManager
+  ) {
+    const enrollment = await db.rpc("timekeeping_auto_enroll", {
+      p_actor: email,
+      p_manager_staff: defaultManager,
+    });
+    // Rolling deployment: manual setup stays available until the additive migration is applied.
+    if (
+      enrollment.error?.code !== "PGRST202" &&
+      enrollment.error?.code !== "42883"
+    )
+      employee = checked(enrollment) as Employee;
+  }
   return { email, isAdmin: person.access_role === "admin", employee };
 }
 async function directory() {

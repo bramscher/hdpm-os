@@ -86,6 +86,58 @@ beforeEach(() => {
   mock.rpc.mockResolvedValue({ data: { ok: true }, error: null });
 });
 describe("timekeeping server identity and signatures", () => {
+  it("automatically enrolls a first-time profile using the configured manager and real session actor", async () => {
+    vi.stubEnv("TIMEKEEPING_DEFAULT_MANAGER", "Craig");
+    const first = { ...employee, enabled: false, manager_id: null };
+    mock.auth.mockResolvedValue({ user: { email: employee.email } });
+    mock.results.push(
+      [
+        {
+          person: "Employee",
+          name: "Example",
+          email: employee.email,
+          access_role: "staff",
+        },
+      ],
+      null,
+      first,
+    );
+    mock.rpc.mockResolvedValue({
+      data: { ...first, enabled: true, manager_id: "craig-id", version: 2 },
+      error: null,
+    });
+    expect((await context()).employee).toMatchObject({
+      enabled: true,
+      manager_id: "craig-id",
+    });
+    expect(mock.rpc).toHaveBeenCalledWith("timekeeping_auto_enroll", {
+      p_actor: employee.email,
+      p_manager_staff: "Craig",
+    });
+  });
+  it("retains manual setup while the additive migration is pending", async () => {
+    vi.stubEnv("TIMEKEEPING_DEFAULT_MANAGER", "Craig");
+    const first = { ...employee, enabled: false, manager_id: null };
+    mock.auth.mockResolvedValue({ user: { email: employee.email } });
+    mock.results.push(
+      [
+        {
+          person: "Employee",
+          name: "Example",
+          email: employee.email,
+          access_role: "staff",
+        },
+      ],
+      null,
+      first,
+    );
+    mock.rpc.mockResolvedValue({
+      data: null,
+      error: { code: "PGRST202", message: "Function not found" },
+    });
+    expect((await context()).employee.enabled).toBe(false);
+  });
+
   it("excludes only configured staff keys from timekeeping", async () => {
     vi.stubEnv("TIMEKEEPING_EXCLUDED_STAFF", " Jen, Jayme, Bryce, Bianca ");
     const { participatesInTimekeeping } = await import("../roster");
