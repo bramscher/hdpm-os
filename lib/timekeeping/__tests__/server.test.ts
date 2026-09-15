@@ -1,10 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { blankDay, dates, type Employee, type Sheet } from "../model";
+import {
+  blankDay,
+  dates,
+  totals,
+  localTime,
+  wallTime,
+  DEFAULT_SCHEDULE,
+  type Employee,
+  type Sheet,
+} from "../model";
 
 const mock = vi.hoisted(() => ({
   auth: vi.fn(),
   from: vi.fn(),
   rpc: vi.fn(),
+  upsert: vi.fn(),
   results: [] as unknown[],
 }));
 vi.mock("@/lib/auth", () => ({ auth: mock.auth }));
@@ -68,7 +78,7 @@ beforeEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
   mock.results = [];
-  mock.from.mockImplementation(() => {
+  mock.from.mockImplementation((table: string) => {
     const chain: Record<string, unknown> = {};
     for (const method of [
       "select",
@@ -83,6 +93,10 @@ beforeEach(() => {
       "range",
     ])
       chain[method] = () => chain;
+    chain.upsert = (data: unknown) => {
+      mock.upsert(table, data);
+      return chain;
+    };
     chain.then = (resolve: (value: unknown) => void) =>
       Promise.resolve({ data: mock.results.shift(), error: null }).then(
         resolve,
@@ -228,6 +242,8 @@ describe("timekeeping server identity and signatures", () => {
   it("keeps explicit no-work exceptions when refreshing defaults", async () => {
     const s = sheet();
     s.days[0].exception = true;
+    s.days[1].exception = true;
+    s.days[1].off = false; // A cleared, unfinished day can be filled; explicit days off stay protected.
     mock.results.push(s, [s]);
     await command(ctx, { op: "refresh", sheetId: s.id, version: 1 });
     const days = mock.rpc.mock.calls[0][1].p_request.days;
@@ -235,16 +251,17 @@ describe("timekeeping server identity and signatures", () => {
     expect(days[0].shifts).toEqual([]);
     expect(days[1].shifts).toHaveLength(1);
   });
-  it("requires saved defaults and respects real enrollment dates on refresh", async () => {
+  it("uses company defaults when none are saved and respects real enrollment dates", async () => {
     const s = sheet();
     mock.results.push(s, [s]);
-    await expect(
-      command(
-        { ...ctx, employee: { ...employee, schedule: null } },
-        { op: "refresh", sheetId: s.id, version: 1 },
-      ),
-    ).rejects.toThrow("My defaults");
-    expect(mock.rpc).not.toHaveBeenCalled();
+    await command(
+      { ...ctx, employee: { ...employee, schedule: null } },
+      { op: "refresh", sheetId: s.id, version: 1 },
+    );
+    const initialDays = mock.rpc.mock.calls[0][1].p_request.days;
+    expect(totals(initialDays).scheduled).toBe(11 * 510);
+    expect(localTime(initialDays[0].shifts[0].start)).toBe("07:00");
+    mock.rpc.mockClear();
     mock.results.push(s, [s]);
     await command(
       { ...ctx, employee: { ...employee, starts_on: "2026-01-15" } },
@@ -259,6 +276,160 @@ describe("timekeeping server identity and signatures", () => {
         ),
     ).toBe(true);
     expect(days[14].shifts).toHaveLength(1);
+  });
+  it.each([
+    ["2026-09-16", "2026-09-30", 11],
+    ["2026-10-01", "2026-10-15", 11],
+  ])(
+    "automatically fills the new period beginning %s with personal defaults",
+    async (start, end, workdays) => {
+      mock.results.push([], null, null);
+      await ensureSheets(
+        {
+          ...employee,
+          starts_on: start,
+          schedule: { ...DEFAULT_SCHEDULE, start: "08:00", end: "17:00" },
+        },
+        start,
+      );
+      const inserted = mock.upsert.mock.calls.find(
+        ([table]) => table === "timekeeping_sheet",
+      )![1];
+      expect(inserted).toMatchObject({ period_start: start, period_end: end });
+      expect(
+        inserted.days.filter((d: { shifts: unknown[] }) => d.shifts.length),
+      ).toHaveLength(workdays);
+      expect(totals(inserted.days).scheduled).toBe(workdays * 480);
+      expect(localTime(inserted.days[0].shifts[0].start)).toBe("08:00");
+      mock.upsert.mockClear();
+      mock.results.push([{ period_start: start }]);
+      await ensureSheets({ ...employee, starts_on: start }, start);
+      expect(mock.upsert).not.toHaveBeenCalled();
+    },
+  );
+  it("automatically fills a new period from company defaults before personal setup", async () => {
+    mock.results.push([], null, null);
+    await ensureSheets(
+      { ...employee, starts_on: "2026-09-16", schedule: null },
+      "2026-09-16",
+    );
+    const inserted = mock.upsert.mock.calls.find(
+      ([table]) => table === "timekeeping_sheet",
+    )![1];
+    expect(totals(inserted.days).scheduled).toBe(11 * 510);
+    expect(localTime(inserted.days[0].shifts[0].end)).toBe("16:30");
+    expect(
+      inserted.days[0].shifts[0].breaks.find((b: { paid: boolean }) => !b.paid),
+    ).toMatchObject({
+      start: wallTime("2026-09-16", "12:00"),
+      end: wallTime("2026-09-16", "13:00"),
+    });
+  });
+  it("lets reviewer-only Craig edit an employee's defaults under his own identity", async () => {
+    const craig = {
+      ...employee,
+      id: "craig",
+      staff_person: "Craig",
+      email: "craig@highdesertpm.com",
+      schedule: null,
+    };
+    mock.results.push(employee);
+    await command(
+      { email: craig.email, isAdmin: true, employee: craig },
+      {
+        op: "schedule",
+        employeeId: employee.id,
+        version: 1,
+        schedule: DEFAULT_SCHEDULE,
+        p_actor: "spoof@example.test",
+      },
+    );
+    expect(mock.rpc).toHaveBeenCalledWith("timekeeping_admin_schedule", {
+      p_actor: craig.email,
+      p_employee_id: employee.id,
+      p_version: 1,
+      p_schedule: DEFAULT_SCHEDULE,
+    });
+  });
+  it("rejects staff edits to someone else's defaults before any write", async () => {
+    await expect(
+      command(ctx, {
+        op: "schedule",
+        employeeId: "other",
+        version: 1,
+        schedule: DEFAULT_SCHEDULE,
+      }),
+    ).rejects.toThrow("administrator");
+    expect(mock.from).not.toHaveBeenCalled();
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
+  it("reports a pending admin schedule migration without falling back to unaudited writes", async () => {
+    mock.results.push({ ...employee, id: "other" });
+    mock.rpc.mockResolvedValue({ error: { code: "PGRST202" }, data: null });
+    await expect(
+      command(
+        { ...ctx, isAdmin: true },
+        {
+          op: "schedule",
+          employeeId: "other",
+          version: 1,
+          schedule: DEFAULT_SCHEDULE,
+        },
+      ),
+    ).rejects.toThrow("SQL update");
+    expect(mock.upsert).not.toHaveBeenCalled();
+  });
+  it("lets Craig apply the target employee's schedule with an audit reason and preserves exceptions", async () => {
+    const craig = {
+      ...employee,
+      id: "craig",
+      staff_person: "Craig",
+      email: "craig@highdesertpm.com",
+      schedule: null,
+    };
+    const penny = {
+      ...employee,
+      schedule: { ...DEFAULT_SCHEDULE, start: "09:00", end: "17:00" },
+    };
+    const s = sheet();
+    s.days[0].exception = true;
+    s.days[1].note = "Keep notes";
+    s.days[4].shifts = [
+      {
+        id: "clocked",
+        source: "clocked",
+        start: wallTime("2026-01-05", "10:00"),
+        end: wallTime("2026-01-05", "11:00"),
+        breaks: [],
+      },
+    ];
+    s.days[4].off = false;
+    mock.results.push(s, [], penny);
+    await command(
+      { email: craig.email, isAdmin: true, employee: craig },
+      { op: "refresh", sheetId: s.id, version: 1 },
+    );
+    const args = mock.rpc.mock.calls[0][1];
+    expect(args.p_actor).toBe(craig.email);
+    expect(args.p_request.reason).toBe(
+      "Applied employee schedule defaults to untouched days",
+    );
+    expect(args.p_request.days[0]).toEqual(s.days[0]);
+    expect(args.p_request.days[1]).toEqual(s.days[1]);
+    expect(args.p_request.days[4]).toEqual(s.days[4]);
+    expect(localTime(args.p_request.days[5].shifts[0].start)).toBe("09:00");
+  });
+  it("does not let a non-admin reviewer apply another employee's defaults", async () => {
+    const manager = { ...employee, id: "manager" };
+    const s = sheet();
+    mock.results.push(s, []);
+    await expect(
+      command(
+        { email: manager.email, isAdmin: false, employee: manager },
+        { op: "refresh", sheetId: s.id, version: 1 },
+      ),
+    ).rejects.toThrow("administrator");
+    expect(mock.rpc).not.toHaveBeenCalled();
   });
   it("prevents personal time tracking and sheet generation for reviewer-only Craig", async () => {
     const craig = {

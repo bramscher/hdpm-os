@@ -2,6 +2,7 @@ import {
   EMPLOYEE_ATTESTATION,
   addDays,
   buildDays,
+  canApplyScheduleDefaults,
   confirmDays,
   currentSheet,
   localDate,
@@ -268,15 +269,7 @@ export function createEmployeePreview(
         );
       const fresh = buildDays(employee, sheet.period_start, sheet.period_end);
       sheet.days = sheet.days.map((d, i) =>
-        !d.emergency &&
-        !d.emergencyPhone &&
-        !d.exception &&
-        !d.note &&
-        !d.miles &&
-        !d.leave.length &&
-        d.shifts.every((s) => s.source === "scheduled")
-          ? fresh[i]
-          : d,
+        canApplyScheduleDefaults(d) ? fresh[i] : d,
       );
     } else if (body.op === "submit") {
       if (body.attested !== true)

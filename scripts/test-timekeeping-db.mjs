@@ -29,6 +29,16 @@ try {
     "utf8",
   );
   await db.exec(autoMigration);
+  const adminScheduleMigration = await readFile(
+    new URL(
+      "../supabase/migrations/20260915_timekeeping_admin_schedule.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  await db.exec(adminScheduleMigration);
+  await db.exec(adminScheduleMigration);
+
   await db.exec(autoMigration);
 
   passed++;
@@ -346,6 +356,91 @@ try {
   await db.exec("SET ROLE anon");
   await reject(
     () => enroll(other.email, manager.staff_person),
+    /permission denied/,
+  );
+  await db.exec("RESET ROLE");
+  const setSchedule = async (actor, employeeId, version, schedule) =>
+    (
+      await db.query(
+        "SELECT timekeeping_admin_schedule($1,$2::uuid,$3,$4::jsonb) AS result",
+        [actor, employeeId, version, JSON.stringify(schedule)],
+      )
+    ).rows[0].result;
+  const scheduleTarget = (
+    await db.query("SELECT * FROM timekeeping_employee WHERE id=$1", [
+      employee.id,
+    ])
+  ).rows[0];
+  const schedule = {
+    weekdays: [1, 2, 3, 4, 5],
+    start: "07:00",
+    end: "16:30",
+    lunch: { start: "12:00", end: "13:00" },
+    unpaidBreak: 60,
+    paidBreak: 20,
+  };
+  const payrollBefore = (
+    await db.query(
+      "SELECT id,version,days,state FROM timekeeping_sheet ORDER BY id",
+    )
+  ).rows;
+  await reject(
+    () =>
+      setSchedule(manager.email, employee.id, scheduleTarget.version, schedule),
+    /FORBIDDEN/,
+  );
+  await reject(
+    () =>
+      setSchedule(
+        employee.email,
+        employee.id,
+        scheduleTarget.version,
+        schedule,
+      ),
+    /FORBIDDEN/,
+  );
+  const updatedSchedule = await setSchedule(
+    admin.email,
+    employee.id,
+    scheduleTarget.version,
+    schedule,
+  );
+  check(
+    updatedSchedule.version === scheduleTarget.version + 1 &&
+      updatedSchedule.schedule.start === "07:00",
+    "admin updates employee schedule atomically",
+  );
+  const scheduleEvent = (
+    await db.query(
+      "SELECT actor,before_data,after_data FROM timekeeping_event WHERE employee_id=$1 AND action='admin_schedule'",
+      [employee.id],
+    )
+  ).rows;
+  check(
+    scheduleEvent.length === 1 &&
+      scheduleEvent[0].actor === admin.email &&
+      scheduleEvent[0].after_data.version === updatedSchedule.version,
+    "admin schedule audit records actual administrator and versions",
+  );
+  await reject(
+    () =>
+      setSchedule(admin.email, employee.id, scheduleTarget.version, schedule),
+    /CONFLICT/,
+  );
+  check(
+    JSON.stringify(
+      (
+        await db.query(
+          "SELECT id,version,days,state FROM timekeeping_sheet ORDER BY id",
+        )
+      ).rows,
+    ) === JSON.stringify(payrollBefore),
+    "schedule update does not rewrite any timesheet or approval",
+  );
+  await db.exec("SET ROLE anon");
+  await reject(
+    () =>
+      setSchedule(admin.email, employee.id, updatedSchedule.version, schedule),
     /permission denied/,
   );
   await db.exec("RESET ROLE");

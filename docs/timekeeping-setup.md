@@ -21,19 +21,27 @@ Eligible active company accounts enroll automatically on their first Timekeeping
 
 Jennifer Bertran (`Jen`), Jayme, Bryce Bramscher and Bianca Nyseth are excluded as non-employees through the timekeeping-only configuration. Company involvement/access is separate. Before the additive SQL is applied, the existing manual setup screen remains available.
 
+## Administrator schedule editing
+
+Apply [20260915_timekeeping_admin_schedule.sql](../supabase/migrations/20260915_timekeeping_admin_schedule.sql) once in Supabase SQL Editor to enable admin edits to employee schedule defaults. The private function requires a live admin identity, checks the employee version and records before/after changes under the admin's identity. It does not change existing timesheets. Craig applied this migration on September 15, 2026; its identity guard was verified after installation.
+
+In **People & defaults**, expand an employee to edit their usual week and choose **Save employee defaults**. Future pay periods fill automatically. To refresh an existing draft or returned sheet, open it in **Review** and use **Apply defaults to untouched days**. Explicit days off and recorded work remain protected; empty unfinished days can be filled even if they were previously cleared.
+
 ## Admin setup and overrides
 
 - Sign in as a staff member whose current directory `access_role` is `admin`.
 - Open **People & defaults**. Active staff-directory accounts appear as **Not enrolled** until you configure them.
 - Set payroll ID, Hourly or Salary, first participating day and a distinct approving manager. Enroll only intended pilot participants. Managers do not need their own payroll enrollment to review assigned staff.
 - Each employee opens **My defaults**, selects weekdays and their usual hours, and reviews break defaults. New settings start at **7:00 AM–4:30 PM**, with **12:00–1:00 PM unpaid lunch** and **two separate 10-minute paid rest breaks**. Each employee can stagger their lunch window; saved schedules are preserved. Lunch start/end calculate the unpaid minutes. Default time choices use 15-minute steps and AM/PM; daily exceptions also allow exact minutes. Save, then use **Apply defaults to untouched days** on the initial sheet.
-- Changes to defaults affect newly generated sheets. Refreshing a draft preserves existing exceptions, notes, miles, leave and recorded clock time.
+- Every newly generated pay period automatically fills from the employee’s saved schedule, or the company 7:00 AM–4:30 PM / noon–1:00 PM lunch defaults if no personal schedule has been saved. Employees and admins can use **Apply defaults to untouched days** on draft/returned sheets. An admin applies the selected employee’s schedule, with the action recorded under the admin’s identity. Refreshing a draft preserves existing exceptions, notes, miles, leave and recorded clock time. The first/last participating dates still limit which days are filled.
 
 ## Staff rollout
 
 Share `https://hdpmchat.highdesertpm.com/timekeeping` with staff and ask them to sign in with their company Microsoft account. Eligible employees enroll on their first visit with Craig as reviewer. Cheryl is configured as Salary; new employees default to Hourly.
 
 Craig opens directly to **Review** and is omitted from employee setup and payroll employee lists.
+
+On September 15, 2026, Craig authorized all seven current employees to participate from **September 1** for retroactive entry. Existing recorded time and exceptions were preserved when applying each schedule to the first period. Later new hires still use their actual first participating date.
 
 Employees save **My defaults**, apply them to untouched days, and record actual work, breaks, leave, mileage and notes. These are live timesheets. Employees sign and submit at period-end for manager review.
 

@@ -269,11 +269,13 @@ function TimekeepingView() {
                     />
                     {!data.employee.schedule && (
                       <div className="tk-notice">
-                        Set your usual days and hours in{" "}
+                        New periods use company defaults until you save your
+                        usual days and hours in{" "}
                         <button onClick={() => navigate("settings")}>
                           My defaults
-                        </button>{" "}
-                        to prefill your sheet.
+                        </button>
+                        . Use Apply defaults to fill untouched days on an
+                        existing sheet.
                       </div>
                     )}
                     {data.sheet ? (
@@ -545,7 +547,12 @@ function TimekeepingView() {
                         key={`${e.id}:${e.version}`}
                         employee={e}
                         employees={data.employees}
-                        onSaved={load}
+                        onSaved={async () => {
+                          await load();
+                          setReceipt(
+                            `${e.name}'s settings saved. New periods use their saved defaults; use Apply defaults on their current sheet to update untouched days.`,
+                          );
+                        }}
                       />
                     ))}
                 </section>
@@ -715,9 +722,11 @@ function ClockPanel({
 function ScheduleEditor({
   employee,
   onSaved,
+  admin = false,
 }: {
   employee: Employee;
   onSaved: () => Promise<unknown>;
+  admin?: boolean;
 }) {
   const api = useContext(ApiContext);
   const [s, setS] = useState<Schedule>(
@@ -751,10 +760,11 @@ function ScheduleEditor({
   }
   return (
     <section className="tk-panel">
-      <h2>Your usual week</h2>
+      <h2>{admin ? `${employee.name} — usual week` : "Your usual week"}</h2>
       <p>
-        These are draft defaults. You confirm them when submitting; exceptions
-        and clock punches replace them.
+        Every new pay period fills automatically from your saved defaults. You
+        confirm the draft time when submitting; exceptions and clock punches
+        replace it.
       </p>
       <form
         onSubmit={async (e) => {
@@ -764,12 +774,15 @@ function ScheduleEditor({
           try {
             await api("", {
               op: "schedule",
+              ...(admin ? { employeeId: employee.id } : {}),
               version: employee.version,
               schedule: validateSchedule(s),
             });
             await onSaved();
             setMessage(
-              "Defaults saved. Open My time and apply them to untouched days.",
+              admin
+                ? "Employee defaults saved for every new pay period. Open their current sheet to apply them to untouched days."
+                : "Defaults saved for every new pay period. To update this period, open My time and apply them to untouched days.",
             );
           } catch (err) {
             setMessage(errorText(err));
@@ -937,7 +950,7 @@ function ScheduleEditor({
           before the start means an overnight schedule.
         </p>
         <button className="tk-primary" disabled={busy}>
-          Save my defaults
+          {admin ? "Save employee defaults" : "Save my defaults"}
         </button>
         <p role="status">{message}</p>
       </form>
@@ -1076,6 +1089,7 @@ function EmployeeEditor({
           </p>
         )}
       </form>
+      <ScheduleEditor employee={e} admin onSaved={onSaved} />
     </details>
   );
 }
@@ -1229,7 +1243,7 @@ function SheetEditor({
         ).length;
         onNotice(
           changed
-            ? `Defaults applied to ${changed} ${changed === 1 ? "day" : "days"}. Your manual entries, leave, notes and clocked time were kept.`
+            ? `Defaults applied to ${changed} ${changed === 1 ? "day" : "days"}. Manual entries, leave, notes and clocked time were kept.`
             : "No days needed updating. Existing entries and employee start/end dates were respected; untouched days already match your saved defaults.",
         );
       }
@@ -1262,7 +1276,7 @@ function SheetEditor({
           </p>
         </div>
         <div className="tk-toolbar">
-          {editable && own && (
+          {editable && (own || isAdmin) && (
             <button disabled={busy} onClick={() => void act("refresh")}>
               {busy ? "Please wait…" : "Apply defaults to untouched days"}
             </button>

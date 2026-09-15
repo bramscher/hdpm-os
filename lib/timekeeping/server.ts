@@ -5,7 +5,9 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { isCompanyEmail } from "@/lib/require-role";
 import {
   addDays,
+  DEFAULT_SCHEDULE,
   buildDays,
+  canApplyScheduleDefaults,
   canReadSheet,
   confirmDays,
   currentSheet,
@@ -206,7 +208,11 @@ export async function ensureSheets(
             employee_name: employee.name,
             payroll_id: employee.payroll_id,
             pay_basis: employee.pay_basis,
-            days: buildDays(employee, p.start, p.end),
+            days: buildDays(
+              { ...employee, schedule: employee.schedule ?? DEFAULT_SCHEDULE },
+              p.start,
+              p.end,
+            ),
           },
           { onConflict: "employee_id,period_start", ignoreDuplicates: true },
         ),
@@ -349,7 +355,9 @@ const version = (value: unknown): number => {
 export async function command(ctx: Context, body: Record<string, unknown>) {
   const op = body.op;
   if (
-    (op === "schedule" || op === "clock") &&
+    (op === "clock" ||
+      (op === "schedule" &&
+        (!body.employeeId || body.employeeId === ctx.employee.id))) &&
     !recordsEmployeeTime(ctx.employee.staff_person)
   )
     throw new TimeError(
@@ -357,13 +365,48 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
       403,
     );
   if (op === "schedule") {
+    const employeeId = body.employeeId
+      ? String(body.employeeId)
+      : ctx.employee.id;
+    const own = employeeId === ctx.employee.id;
+    if (!own && !ctx.isAdmin)
+      throw new TimeError(
+        "Only an administrator can change another employee's defaults.",
+        403,
+      );
     const schedule = validateSchedule(body.schedule);
-    return apply(ctx, {
-      op,
-      employeeId: ctx.employee.id,
-      version: version(body.version),
-      schedule,
+    if (own)
+      return apply(ctx, {
+        op,
+        employeeId,
+        version: version(body.version),
+        schedule,
+      });
+    const target = checked(
+      await getSupabaseAdmin()
+        .from("timekeeping_employee")
+        .select("*")
+        .eq("id", employeeId)
+        .single(),
+    ) as Employee;
+    if (
+      !target ||
+      !recordsEmployeeTime(target.staff_person) ||
+      !participatesInTimekeeping(target.staff_person)
+    )
+      throw new TimeError("Choose an employee who records time.", 403);
+    const result = await getSupabaseAdmin().rpc("timekeeping_admin_schedule", {
+      p_actor: ctx.email,
+      p_employee_id: target.id,
+      p_version: version(body.version),
+      p_schedule: schedule,
     });
+    if (result.error?.code === "PGRST202" || result.error?.code === "42883")
+      throw new TimeError(
+        "Admin default editing needs the timekeeping_admin_schedule SQL update. Your existing defaults have not changed.",
+        503,
+      );
+    return checked(result);
   }
   if (op === "employee") {
     if (!ctx.isAdmin) throw new TimeError("Admin access required.", 403);
@@ -440,7 +483,7 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
       409,
     );
   let days = sheet.days;
-  const reason = noteText(body.reason ?? "");
+  let reason = noteText(body.reason ?? "");
   if (op === "save") {
     days = validateDays(body.days, sheet.period_start, sheet.period_end);
     // Any altered scheduled/clocked entry becomes a manual exception. Clients
@@ -463,23 +506,39 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
     validateDays(days, sheet.period_start, sheet.period_end);
   }
   if (op === "refresh") {
-    if (sheet.employee_id !== ctx.employee.id)
-      throw new TimeError("Only your own schedule can be applied.", 403);
-    if (!ctx.employee.schedule)
+    const own = sheet.employee_id === ctx.employee.id;
+    if (!own && !ctx.isAdmin)
       throw new TimeError(
-        "Save your usual week in My defaults before applying it to your timesheet.",
+        "Only the employee or an administrator can apply defaults.",
+        403,
       );
-    const fresh = buildDays(ctx.employee, sheet.period_start, sheet.period_end);
+    const employee = own
+      ? ctx.employee
+      : (checked(
+          await getSupabaseAdmin()
+            .from("timekeeping_employee")
+            .select("*")
+            .eq("id", sheet.employee_id)
+            .single(),
+        ) as Employee);
+    if (
+      !employee ||
+      !recordsEmployeeTime(employee.staff_person) ||
+      !participatesInTimekeeping(employee.staff_person)
+    )
+      throw new TimeError(
+        "This account does not participate in employee time tracking.",
+        403,
+      );
+    if (!own && !reason.trim())
+      reason = "Applied employee schedule defaults to untouched days";
+    const fresh = buildDays(
+      { ...employee, schedule: employee.schedule ?? DEFAULT_SCHEDULE },
+      sheet.period_start,
+      sheet.period_end,
+    );
     days = sheet.days.map((d, i) =>
-      !d.emergency &&
-      !d.emergencyPhone &&
-      !d.exception &&
-      !d.note &&
-      !d.miles &&
-      !d.leave.length &&
-      d.shifts.every((s) => s.source === "scheduled")
-        ? fresh[i]
-        : d,
+      canApplyScheduleDefaults(d) ? fresh[i] : d,
     );
     validateDays(days, sheet.period_start, sheet.period_end);
   }

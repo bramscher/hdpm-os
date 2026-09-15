@@ -238,6 +238,18 @@ export function validateSchedule(value: unknown): Schedule {
     paidBreak: s.paidBreak,
   };
 }
+/** Empty unfinished days can be filled even after an earlier edit; explicit days off stay protected. */
+export function canApplyScheduleDefaults(day: Day): boolean {
+  return (
+    !day.emergency &&
+    !day.emergencyPhone &&
+    !day.note &&
+    !day.miles &&
+    !day.leave.length &&
+    day.shifts.every((shift) => shift.source === "scheduled") &&
+    (!day.exception || (!day.off && day.shifts.length === 0))
+  );
+}
 export function blankDay(date: string): Day {
   return { date, off: false, shifts: [], leave: [], miles: 0, note: "" };
 }
