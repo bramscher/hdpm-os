@@ -239,6 +239,89 @@ describe("timekeeping server identity and signatures", () => {
     expect(args.p_request).not.toHaveProperty("employee_signed_by");
     expect(args.p_request).not.toHaveProperty("employee_signed_at");
   });
+  it("saves, submits and permits manager review of a planned final-day departure", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-15T17:00:00Z")); // 9 AM Pacific
+    try {
+      const s = sheet();
+      const last = s.days.at(-1)!;
+      last.off = false;
+      last.shifts = [
+        {
+          id: "planned",
+          source: "scheduled",
+          start: wallTime(last.date, "07:00"),
+          end: wallTime(last.date, "16:30"),
+          breaks: [],
+        },
+      ];
+      mock.results.push(s, [s]);
+      await command(ctx, {
+        op: "save",
+        sheetId: s.id,
+        version: 1,
+        days: s.days,
+      });
+      expect(
+        mock.rpc.mock.calls.at(-1)![1].p_request.days.at(-1).shifts[0].end,
+      ).toBe(wallTime(last.date, "16:30"));
+      mock.results.push(s, [s], null, {
+        employee_id: employee.id,
+        shift: null,
+        version: 1,
+      });
+      await command(ctx, {
+        op: "submit",
+        sheetId: s.id,
+        version: 1,
+        attested: true,
+      });
+      const submission = mock.rpc.mock.calls.at(-1)![1];
+      expect(submission.p_actor).toBe(employee.email);
+      expect(submission.p_request).toMatchObject({
+        op: "submit",
+        attested: true,
+      });
+      expect(submission.p_request.days.at(-1).shifts[0]).toMatchObject({
+        source: "manual",
+        end: wallTime(last.date, "16:30"),
+      });
+      const signed = {
+        ...s,
+        state: "submitted",
+        days: submission.p_request.days,
+        employee_signed_at: new Date().toISOString(),
+      };
+      const manager = {
+        ...employee,
+        id: "manager",
+        email: "manager@highdesertpm.com",
+      };
+      mock.results.push(signed, []);
+      await command(
+        { employee: manager, email: manager.email, isAdmin: false },
+        { op: "approve", sheetId: s.id, version: 1 },
+      );
+      expect(mock.rpc.mock.calls.at(-1)![1]).toMatchObject({
+        p_actor: manager.email,
+        p_request: { op: "approve" },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("still requires an active clock to stop before final-day signing", async () => {
+    const s = sheet();
+    mock.results.push(s, [s], null, {
+      employee_id: employee.id,
+      shift: { id: "running" },
+      version: 1,
+    });
+    await expect(
+      command(ctx, { op: "submit", sheetId: s.id, version: 1, attested: true }),
+    ).rejects.toThrow("Clock out before submitting");
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
   it("keeps explicit no-work exceptions when refreshing defaults", async () => {
     const s = sheet();
     s.days[0].exception = true;

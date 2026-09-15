@@ -1429,6 +1429,14 @@ function SheetEditor({
               Signing as {actorEmail} through your Microsoft company sign-in.
               The approval date and time are recorded when you submit.
             </small>
+            {initial.period_end === localDate() && (
+              <small>
+                Today is the final day of this pay period. You can sign now
+                using your planned end time. This finalizes your entries for
+                manager review. If your actual time changes, ask your manager to
+                return the sheet for correction and sign it again.
+              </small>
+            )}
             {initial.period_end > localDate() && (
               <small>
                 Submission opens on {displayDate(initial.period_end)}. You can

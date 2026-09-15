@@ -83,7 +83,7 @@ Every calendar day can record work, including weekends. Emergency work and emerg
 
 ## Routine use
 
-Employees review their one active sheet and sign at period-end once their final shift finishes. Unfinished prior sheets stay active until submitted. Managers use **Review**; admins use **Payroll & history** to select a period, review details and download saved Excel packages.
+Employees review their one active sheet and can sign on the final calendar day of the pay period using their planned departure time, even before that time arrives (Pacific time). Saved defaults or manually entered hours are accepted; a running clock must be stopped before submission. The employee signature locks the sheet for manager review, and manager approval is still required for payroll export. If actual hours change, return or reopen the sheet for correction and a new employee signature. Unfinished prior sheets stay active until submitted. Managers use **Review**; admins use **Payroll & history** to select a period, review details and download saved Excel packages.
 
 The Excel package contains hours and miles for payroll to process. Download it, save it and email it manually. Use the latest version for any correction and retain the previously sent package for comparison.
 

@@ -194,7 +194,63 @@ describe("daily entries and submission", () => {
         true,
         new Date("2026-09-01T15:00:00Z"),
       ),
-    ).toThrow("finished");
+    ).toThrow("final day");
+  });
+  it.each([
+    "2026-09-15",
+    "2026-09-30",
+    "2027-02-28",
+    "2028-02-29",
+    "2026-12-31",
+  ])("accepts planned final-day hours on %s before departure", (date) => {
+    const period = periodFor(date);
+    const days = buildDays(
+      {
+        ...employee,
+        schedule: { ...employee.schedule!, weekdays: [0, 1, 2, 3, 4, 5, 6] },
+      },
+      period.start,
+      period.end,
+    );
+    const morning = new Date(wallTime(date, "09:00"));
+    for (const draft of [days, confirmDays(days)]) {
+      expect(() =>
+        validateDays(draft, period.start, period.end, false, morning),
+      ).not.toThrow();
+      expect(() =>
+        validateDays(draft, period.start, period.end, true, morning),
+      ).not.toThrow();
+    }
+    const clocked = structuredClone(days);
+    clocked.at(-1)!.shifts[0].source = "clocked";
+    expect(() =>
+      validateDays(clocked, period.start, period.end, true, morning),
+    ).toThrow("clocked work cannot end in the future");
+  });
+  it("uses Pacific final-day boundaries and rejects early submission even with no work", () => {
+    const days = buildDays(employee, "2026-09-01", "2026-09-15");
+    const beforeMidnight = new Date("2026-09-15T06:59:59Z");
+    expect(() =>
+      validateDays(days, "2026-09-01", "2026-09-15", true, beforeMidnight),
+    ).toThrow("final day");
+    expect(() =>
+      validateDays(
+        days.map((d) => ({ ...d, off: true, shifts: [] })),
+        "2026-09-01",
+        "2026-09-15",
+        true,
+        beforeMidnight,
+      ),
+    ).toThrow("final day");
+    expect(() =>
+      validateDays(
+        days,
+        "2026-09-01",
+        "2026-09-15",
+        true,
+        new Date("2026-09-15T07:00:00Z"),
+      ),
+    ).not.toThrow();
   });
   it("rejects overlap, missing ends and breaks outside a shift", () => {
     const d = confirmDays(buildDays(employee, "2026-09-01", "2026-09-01"))[0];

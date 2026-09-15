@@ -484,7 +484,13 @@ export function validateDays(
     throw new Error("The sheet must include every day of the pay period");
   const days = input as Day[],
     expected = dates(start, end),
-    ids = new Set<string>();
+    ids = new Set<string>(),
+    today = localDate(now),
+    finalDay = end === today && periodFor(end).end === end;
+  if (submitting && end > today)
+    throw new Error(
+      "Sign and submit on the final day of the pay period or later",
+    );
   let previousEnd = -Infinity;
   for (let i = 0; i < days.length; i++) {
     const d = days[i];
@@ -602,11 +608,16 @@ export function validateDays(
       );
     if (submitting && !d.off && !d.shifts.length && !d.leave.length)
       throw new Error(`${d.date}: enter time or confirm no work`);
+    // Final-day signatures may include a planned departure; clock punches
+    // still cannot claim future work (checked above).
     if (
       submitting &&
-      d.shifts.some((s) => s.end && Date.parse(s.end) > now.getTime())
+      d.shifts.some((s) => s.end && Date.parse(s.end) > now.getTime()) &&
+      !(finalDay && d.date === end)
     )
-      throw new Error(`${d.date}: confirm time after the shift has finished`);
+      throw new Error(
+        `${d.date}: planned end times can only be finalized on the final day of the pay period`,
+      );
   }
   return days.map((d) => ({ ...d, shifts: [...d.shifts] }));
 }
