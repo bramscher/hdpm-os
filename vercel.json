@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/timekeeping/cron",
+      "schedule": "10 8 * * *"
+    },
+    {
       "path": "/api/sync/work-orders?days=1",
       "schedule": "*/15 * * * *"
     },

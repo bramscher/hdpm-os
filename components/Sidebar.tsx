@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw } from "lucide-react";
+import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw, Clock3 } from "lucide-react";
 import { canViewHabuDemo } from "@/lib/habu-demo-access";
 import { cn } from "@/lib/utils";
 import { springDefault } from "@/lib/motion";
@@ -61,6 +61,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Company",
     items: [
       { label: "Company", href: "/company/scorecard", icon: Target, matchPrefix: "/company" },
+      { label: "Timekeeping", href: "/timekeeping", icon: Clock3, matchPrefix: "/timekeeping" },
       { label: "Agents", href: "/agents", icon: Bot, matchPrefix: "/agents" },
     ],
   },

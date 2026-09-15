@@ -258,6 +258,14 @@ The management loop: scorecard → issues → weekly meeting → decisions → t
 
 ---
 
+## Company — Timekeeping
+
+**Path:** `/timekeeping` under Company · **Status:** implemented on `feature/timekeeping`; database setup and deployment required. [Setup and pilot guide](docs/timekeeping-setup.md) · [Scope and workflow](docs/timekeeping-plan.md).
+
+Employee sheets cover the 1st–15th and 16th–month-end, with personal schedule defaults, live clock/breaks, manual exceptions, leave, miles and notes. Hourly and salary employees both enter time. Employees digitally sign using their Microsoft company session; the app records their identity, server timestamp and signed version. A separate assigned manager approves before admins export a saved Excel payroll package. Admins retain all historical detail and export versions; employees see one active sheet.
+
+---
+
 ## Company Brain
 
 **Docs:** `docs/hdpm-os/04-gbrain-company-brain.md` · **Tables:** `brain_chunk`, `brain_node`, `brain_ingest_log` (pgvector)

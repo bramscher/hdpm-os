@@ -9,6 +9,7 @@
     "lint": "next lint",
     "lint:referrals": "eslint --no-eslintrc --config .eslintrc.referrals.json --ext .ts,.tsx --ignore-pattern \"**/partners/admin/**\" --no-error-on-unmatched-pattern app/partners app/api/partners",
     "test": "vitest run",
+    "test:timekeeping:db": "node scripts/test-timekeeping-db.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -42,6 +43,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^20.17.11",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^18.3.17",
