@@ -14,7 +14,13 @@ vi.mock("@/lib/supabase", () => ({
 vi.mock("@/lib/require-role", () => ({
   isCompanyEmail: (email?: string) => email?.endsWith("@highdesertpm.com"),
 }));
-import { authorizedSheet, command, context, exportRows } from "../server";
+import {
+  authorizedSheet,
+  command,
+  context,
+  exportRows,
+  ensureSheets,
+} from "../server";
 import { POST } from "@/app/api/timekeeping/route";
 
 const employee: Employee = {
@@ -253,6 +259,63 @@ describe("timekeeping server identity and signatures", () => {
         ),
     ).toBe(true);
     expect(days[14].shifts).toHaveLength(1);
+  });
+  it("prevents personal time tracking and sheet generation for reviewer-only Craig", async () => {
+    const craig = {
+      ...employee,
+      id: "craig",
+      staff_person: "Craig",
+      email: "craig@highdesertpm.com",
+    };
+    const reviewer = { email: craig.email, isAdmin: true, employee: craig };
+    await ensureSheets(craig);
+    await expect(
+      command(reviewer, {
+        op: "schedule",
+        version: 1,
+        schedule: employee.schedule,
+      }),
+    ).rejects.toThrow("administration only");
+    await expect(
+      command(reviewer, { op: "clock", action: "in", clockVersion: 1 }),
+    ).rejects.toThrow("administration only");
+    expect(mock.from).not.toHaveBeenCalled();
+    mock.results.push([craig, employee]);
+    await expect(
+      command(reviewer, {
+        op: "employee",
+        employeeId: craig.id,
+        enabled: true,
+        payBasis: "hourly",
+      }),
+    ).rejects.toThrow("does not participate");
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
+  it("allows reviewer-only Craig to approve an assigned employee's sheet", async () => {
+    const craig = {
+      ...employee,
+      id: "craig",
+      staff_person: "Craig",
+      email: "craig@highdesertpm.com",
+      enabled: false,
+    };
+    const s = {
+      ...sheet(),
+      state: "submitted" as const,
+      review_manager_id: craig.id,
+    };
+    mock.results.push(s, []);
+    await command(
+      { email: craig.email, isAdmin: true, employee: craig },
+      { op: "approve", sheetId: s.id, version: 1 },
+    );
+    expect(mock.rpc).toHaveBeenCalledWith(
+      "timekeeping_apply",
+      expect.objectContaining({
+        p_actor: craig.email,
+        p_request: expect.objectContaining({ op: "approve", sheetId: s.id }),
+      }),
+    );
   });
   it("rejects stale saves before writing", async () => {
     const s = sheet();

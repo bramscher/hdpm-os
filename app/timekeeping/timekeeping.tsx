@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { recordsEmployeeTime } from "@/lib/timekeeping/eligibility";
 import TimeSelect from "./time-select";
 import {
   displayTime,
@@ -117,7 +117,14 @@ function TimekeepingView() {
     return d;
   }
   useEffect(() => {
-    load().catch((e) => setError(errorText(e)));
+    load()
+      .then(async (boot) => {
+        if (!recordsEmployeeTime(boot.employee.staff_person)) {
+          setView("review");
+          setSheets(await api<Sheet[]>("?view=review"));
+        }
+      })
+      .catch((e) => setError(errorText(e)));
   }, []);
   async function perform(action: () => Promise<void>) {
     setBusy(true);
@@ -166,12 +173,6 @@ function TimekeepingView() {
           <CalendarDays size={17} /> 1–15 & 16–month end · Pacific time
         </span>
       </header>
-      {data?.isAdmin && (
-        <div className="tk-preview-entry">
-          <Link href="/timekeeping/preview">Employee preview →</Link>
-          <small>Try the employee screens with fictional data.</small>
-        </div>
-      )}
       {receipt && (
         <div className="tk-notice" role="status">
           {receipt}
@@ -201,13 +202,15 @@ function TimekeepingView() {
       ) : (
         <>
           <nav className="tk-nav" aria-label="Timekeeping views">
-            <button
-              disabled={busy}
-              aria-current={view === "mine" ? "page" : undefined}
-              onClick={() => navigate("mine")}
-            >
-              <Clock3 size={17} /> My time
-            </button>
+            {recordsEmployeeTime(data.employee.staff_person) && (
+              <button
+                disabled={busy}
+                aria-current={view === "mine" ? "page" : undefined}
+                onClick={() => navigate("mine")}
+              >
+                <Clock3 size={17} /> My time
+              </button>
+            )}
             {(data.canReview || data.isAdmin) && (
               <button
                 disabled={busy}
@@ -235,69 +238,70 @@ function TimekeepingView() {
               {data.isAdmin ? "People & defaults" : "My defaults"}
             </button>
           </nav>
-          {view === "mine" && (
-            <>
-              {!data.employee.enabled ? (
-                <div className="tk-panel">
-                  <h2>Your timekeeping account is ready for setup.</h2>
-                  <p>
-                    An administrator needs to enroll you and assign a reviewer.
-                    You can choose your usual hours in My defaults.
-                  </p>
-                  {data.isAdmin && (
-                    <button
-                      className="tk-primary"
-                      onClick={() => navigate("settings")}
-                    >
-                      Set up employees
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <ClockPanel
-                    clock={data.clock}
-                    disabled={dirty}
-                    onChange={async (body) => {
-                      await api("", body);
-                      await load();
-                    }}
-                  />
-                  {!data.employee.schedule && (
-                    <div className="tk-notice">
-                      Set your usual days and hours in{" "}
-                      <button onClick={() => navigate("settings")}>
-                        My defaults
-                      </button>{" "}
-                      to prefill your sheet.
-                    </div>
-                  )}
-                  {data.sheet ? (
-                    <SheetEditor
-                      key={`${data.sheet.id}:${data.sheet.version}`}
-                      initial={data.sheet}
-                      actorId={data.employee.id}
-                      actorEmail={data.employee.email}
-                      onNotice={setReceipt}
-                      onSigned={(signed) =>
-                        setReceipt(
-                          `Signed and submitted ${labelPeriod(signed)} as ${signed.employee_signed_by} on ${new Date(signed.employee_signed_at!).toLocaleString("en-US", { timeZone: "America/Los_Angeles", timeZoneName: "short" })}. Your manager will review it.`,
-                        )
-                      }
-                      isAdmin={false}
-                      clockOpen={!!data.clock.shift}
-                      onDirty={setDirty}
-                      onComplete={async () => {
+          {view === "mine" &&
+            recordsEmployeeTime(data.employee.staff_person) && (
+              <>
+                {!data.employee.enabled ? (
+                  <div className="tk-panel">
+                    <h2>Your timekeeping account is ready for setup.</h2>
+                    <p>
+                      An administrator needs to enroll you and assign a
+                      reviewer. You can choose your usual hours in My defaults.
+                    </p>
+                    {data.isAdmin && (
+                      <button
+                        className="tk-primary"
+                        onClick={() => navigate("settings")}
+                      >
+                        Set up employees
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <ClockPanel
+                      clock={data.clock}
+                      disabled={dirty}
+                      onChange={async (body) => {
+                        await api("", body);
                         await load();
                       }}
                     />
-                  ) : (
-                    <p>Your first sheet opens on your enrollment date.</p>
-                  )}
-                </>
-              )}
-            </>
-          )}
+                    {!data.employee.schedule && (
+                      <div className="tk-notice">
+                        Set your usual days and hours in{" "}
+                        <button onClick={() => navigate("settings")}>
+                          My defaults
+                        </button>{" "}
+                        to prefill your sheet.
+                      </div>
+                    )}
+                    {data.sheet ? (
+                      <SheetEditor
+                        key={`${data.sheet.id}:${data.sheet.version}`}
+                        initial={data.sheet}
+                        actorId={data.employee.id}
+                        actorEmail={data.employee.email}
+                        onNotice={setReceipt}
+                        onSigned={(signed) =>
+                          setReceipt(
+                            `Signed and submitted ${labelPeriod(signed)} as ${signed.employee_signed_by} on ${new Date(signed.employee_signed_at!).toLocaleString("en-US", { timeZone: "America/Los_Angeles", timeZoneName: "short" })}. Your manager will review it.`,
+                          )
+                        }
+                        isAdmin={false}
+                        clockOpen={!!data.clock.shift}
+                        onDirty={setDirty}
+                        onComplete={async () => {
+                          await load();
+                        }}
+                      />
+                    ) : (
+                      <p>Your first sheet opens on your enrollment date.</p>
+                    )}
+                  </>
+                )}
+              </>
+            )}
           {(view === "review" || view === "payroll") &&
             (selected ? (
               <>
@@ -373,11 +377,15 @@ function TimekeepingView() {
                             onChange={(e) => setPerson(e.target.value)}
                           >
                             <option value="">All employees</option>
-                            {data.employees.map((e) => (
-                              <option key={e.id} value={e.id}>
-                                {e.name}
-                              </option>
-                            ))}
+                            {data.employees
+                              .filter((e) =>
+                                recordsEmployeeTime(e.staff_person),
+                              )
+                              .map((e) => (
+                                <option key={e.id} value={e.id}>
+                                  {e.name}
+                                </option>
+                              ))}
                           </select>
                         </label>
                       )}
@@ -514,7 +522,9 @@ function TimekeepingView() {
             ))}
           {view === "settings" && (
             <>
-              <ScheduleEditor employee={data.employee} onSaved={load} />
+              {recordsEmployeeTime(data.employee.staff_person) && (
+                <ScheduleEditor employee={data.employee} onSaved={load} />
+              )}
               {data.isAdmin && (
                 <section className="tk-panel">
                   <div className="tk-section-heading">
@@ -528,14 +538,16 @@ function TimekeepingView() {
                       </p>
                     </div>
                   </div>
-                  {data.employees.map((e) => (
-                    <EmployeeEditor
-                      key={`${e.id}:${e.version}`}
-                      employee={e}
-                      employees={data.employees}
-                      onSaved={load}
-                    />
-                  ))}
+                  {data.employees
+                    .filter((e) => recordsEmployeeTime(e.staff_person))
+                    .map((e) => (
+                      <EmployeeEditor
+                        key={`${e.id}:${e.version}`}
+                        employee={e}
+                        employees={data.employees}
+                        onSaved={load}
+                      />
+                    ))}
                 </section>
               )}
             </>

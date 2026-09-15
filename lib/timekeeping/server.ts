@@ -1,3 +1,4 @@
+import { recordsEmployeeTime } from "./eligibility";
 import { participatesInTimekeeping } from "./roster";
 import { auth } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -98,6 +99,7 @@ export async function context(): Promise<Context> {
   const defaultManager = process.env.TIMEKEEPING_DEFAULT_MANAGER?.trim();
   if (
     defaultManager &&
+    recordsEmployeeTime(employee.staff_person) &&
     participatesInTimekeeping(defaultManager) &&
     !employee.enabled &&
     employee.version === 1 &&
@@ -158,7 +160,11 @@ export async function ensureSheets(
   employee: Employee,
   through = localDate(),
 ): Promise<void> {
-  if (!participatesInTimekeeping(employee.staff_person)) return;
+  if (
+    !participatesInTimekeeping(employee.staff_person) ||
+    !recordsEmployeeTime(employee.staff_person)
+  )
+    return;
   if (!employee.enabled && !employee.ends_on) return;
   const end =
     employee.ends_on && employee.ends_on < through ? employee.ends_on : through;
@@ -283,13 +289,18 @@ export async function bootstrap(ctx: Context) {
       e.manager_id === ctx.employee.id,
   );
   for (const e of managed) await ensureSheets(e);
-  const own = currentSheet(await ownSheets(ctx.employee.id), localDate());
+  const tracksTime = recordsEmployeeTime(ctx.employee.staff_person);
+  const own = tracksTime
+    ? currentSheet(await ownSheets(ctx.employee.id), localDate())
+    : null;
   return {
     employee: ctx.employee,
     isAdmin: ctx.isAdmin,
     canReview,
     sheet: own ?? null,
-    clock: await getClock(ctx.employee.id),
+    clock: tracksTime
+      ? await getClock(ctx.employee.id)
+      : { employee_id: ctx.employee.id, version: 1, shift: null },
     today: localDate(),
     employees: ctx.isAdmin ? all : [],
   };
@@ -337,6 +348,14 @@ const version = (value: unknown): number => {
 
 export async function command(ctx: Context, body: Record<string, unknown>) {
   const op = body.op;
+  if (
+    (op === "schedule" || op === "clock") &&
+    !recordsEmployeeTime(ctx.employee.staff_person)
+  )
+    throw new TimeError(
+      "Your account is for approvals and payroll administration only.",
+      403,
+    );
   if (op === "schedule") {
     const schedule = validateSchedule(body.schedule);
     return apply(ctx, {
@@ -356,6 +375,11 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
       !["hourly", "salary"].includes(String(body.payBasis))
     )
       throw new TimeError("Choose an employee and Hourly or Salary.");
+    if (!recordsEmployeeTime(employee.staff_person))
+      throw new TimeError(
+        "This reviewer does not participate in employee time tracking.",
+        403,
+      );
     const manager = all.find((e) => e.id === body.managerId);
     if (body.enabled && (!manager || manager.id === employee.id))
       throw new TimeError("Choose another employee as the reviewer.");

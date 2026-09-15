@@ -17,7 +17,7 @@ Roster exclusions are configured using `TIMEKEEPING_EXCLUDED_STAFF` (exact `staf
 
 Apply [20260915_timekeeping_auto_enroll.sql](../supabase/migrations/20260915_timekeeping_auto_enroll.sql) after the base migration. Production uses `TIMEKEEPING_DEFAULT_MANAGER=Craig`.
 
-Eligible active company accounts enroll automatically on their first Timekeeping visit, with Craig as reviewer and participation starting that day. Employees choose their usual workdays, start/end and breaks in **My defaults**. New employees start as Hourly. Cheryl Waterman is the sole configured Salary employee, with Craig as reviewer; all employees still record time. An admin can change pay basis when needed. First-visit setup never overwrites an already configured or ended enrollment. Craig needs another assigned reviewer for his own time; no self-approval is allowed.
+Eligible active company accounts enroll automatically on their first Timekeeping visit, with Craig as reviewer and participation starting that day. Employees choose their usual workdays, start/end and breaks in **My defaults**. New employees start as Hourly. Cheryl Waterman is the sole configured Salary employee, with Craig as reviewer; all employees still record time. An admin can change pay basis when needed. First-visit setup never overwrites an already configured or ended enrollment. Craig is a reviewer and payroll administrator only: no personal time entry, schedule, payroll enrollment or generated timesheets. He remains available as the approving manager; no self-approval is allowed.
 
 Jennifer Bertran (`Jen`), Jayme, Bryce Bramscher and Bianca Nyseth are excluded as non-employees through the timekeeping-only configuration. Company involvement/access is separate. Before the additive SQL is applied, the existing manual setup screen remains available.
 
@@ -29,25 +29,15 @@ Jennifer Bertran (`Jen`), Jayme, Bryce Bramscher and Bianca Nyseth are excluded 
 - Each employee opens **My defaults**, selects weekdays and their usual hours, and reviews break defaults. New settings start at **7:00 AM–4:30 PM**, with **12:00–1:00 PM unpaid lunch** and **two separate 10-minute paid rest breaks**. Each employee can stagger their lunch window; saved schedules are preserved. Lunch start/end calculate the unpaid minutes. Default time choices use 15-minute steps and AM/PM; daily exceptions also allow exact minutes. Save, then use **Apply defaults to untouched days** on the initial sheet.
 - Changes to defaults affect newly generated sheets. Refreshing a draft preserves existing exceptions, notes, miles, leave and recorded clock time.
 
-## Preview the employee screens as an admin
+## Staff rollout
 
-Open **Company → Timekeeping → Employee preview**, or `/timekeeping/preview` while signed in as an admin. Brody Bramscher is also an invited preview tester using his own active Microsoft company account; his staff role and real Timekeeping enrollment are unchanged by preview access. Send him the direct preview link. The preview uses the same employee screen components with fictional Taylor Example data. Only **My time** and **My defaults** appear within Timekeeping.
+Share `https://hdpmchat.highdesertpm.com/timekeeping` with staff and ask them to sign in with their company Microsoft account. Eligible employees enroll on their first visit with Craig as reviewer. Cheryl is configured as Salary; new employees default to Hourly.
 
-- **First visit**: Taylor participates from the start of the current period so you can try a full sheet. Choose usual workdays, hours and breaks, save, then apply defaults to the sheet. A confirmation message reports the days updated; applying before saving defaults shows an instruction. Real employee enrollment dates remain unchanged.
-- Open a weekend day, add work, flag **Emergency work** or **Emergency phone management**, and save notes. Use daily lunch start/end to try a shorter or later lunch.
-- **Completed period**: review work, vacation, mileage and notes, then practice **Sign & submit to manager**.
-- **Reset preview** starts over. All changes remain in memory in that tab; refresh discards them. No payroll data, real signature, employee enrollment or notifications are created. This demonstrates the employee UI, not a live Microsoft reauthentication or manager approval test.
+Craig opens directly to **Review** and is omitted from employee setup and payroll employee lists.
 
-## Brody’s preview test
+Employees save **My defaults**, apply them to untouched days, and record actual work, breaks, leave, mileage and notes. These are live timesheets. Employees sign and submit at period-end for manager review.
 
-Share `https://hdpmchat.highdesertpm.com/timekeeping/preview` with Brody. Ask him to sign in with his company Microsoft account, then:
-
-1. In **First visit**, save his usual hours/lunch, apply defaults, and check a full period fills.
-2. Change one day’s lunch, add weekend work, emergency phone management, miles and a note; check the saved totals.
-3. In **Completed period**, review and practice signing/submitting to the manager.
-4. Report unclear wording, broken controls and surprising totals, with the steps he took.
-
-The preview is fictional and resets on refresh. It never enrolls Brody, creates real payroll entries or sends an approval. Real manager review remains a separate pilot step.
+The fictional employee preview was retired for staff rollout. Its menu link and pilot access were removed; existing `/timekeeping/preview` bookmarks redirect to `/timekeeping`. Fictional fixtures remain in automated tests only.
 
 ## First workflow to pass around
 
