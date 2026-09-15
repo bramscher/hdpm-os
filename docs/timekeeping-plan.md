@@ -7,7 +7,7 @@ September 15, 2026 · Built on `feature/timekeeping`. Craig applied the database
 - **Company → Timekeeping**, for each employee.
 - **Twice monthly:** 1st–15th and 16th–last day. These exact dates supersede the earlier “every two weeks” answer.
 - Personal scheduled weekdays and default start/end times autofill each sheet. Staff enter exceptions or use live clock in/out and paid/unpaid break controls.
-- Work intervals, breaks, miles, vacation, sick, paid/unpaid LOA, explicit no-work days, daily notes and pay-period notes.
+- Work intervals, breaks, miles, vacation, sick, emergency work/phone flags, explicit no-work days, daily notes and pay-period notes.
 - Admin-selected **Hourly / Salary** employee preset. Everyone records time. The payroll report identifies salary staff clearly.
 - **Employee digital sign-off using their existing Microsoft company sign-in → assigned manager approval → Excel report.** The employee sign-off stores name, account email, database timestamp, certification wording and signed version. No client-supplied signer or timestamp is trusted.
 - Employees see one active sheet. Admins see all retained employee detail, periods and saved report versions, including former staff. Assigned reviewers see their team's sheets.
@@ -15,7 +15,7 @@ September 15, 2026 · Built on `feature/timekeeping`. Craig applied the database
 ## Workflow
 
 1. Admin enrolls each staff-directory account, sets participation dates, payroll ID, pay basis and a separate approving manager.
-2. Employee saves their usual weekdays, start/end and explicit break defaults. Initial blank sheets can apply these defaults using the refresh button; future sheets autofill automatically.
+2. Employee saves their usual weekdays, start/end and lunch window. Starting defaults: 7:00 AM–4:30 PM, noon–1:00 PM unpaid lunch, and two 10-minute paid rest breaks. Employees can stagger lunch times and edit actual daily times; LOA goes in comments. Initial blank sheets can apply these defaults using the refresh button; future sheets autofill automatically.
 3. Staff review daily exceptions, leave, business miles and notes. Scheduled time remains separately labeled until confirmed. Paid breaks remain included in worked time; unpaid breaks are deducted.
 4. At period-end, after all shifts have finished, employee checks the certification and clicks **Sign & submit to manager**. Server validation checks the complete day set, elapsed intervals and open clock.
 5. Assigned manager reviews detail and either approves or returns with a reason. Nobody approves their own sheet, including an admin.

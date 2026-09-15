@@ -581,3 +581,112 @@
     gap: 12px;
   }
 }
+
+.tk-preview-entry {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.tk-preview-entry a {
+  color: #285942;
+  font-weight: 650;
+  text-decoration: underline;
+}
+.tk-preview-entry small {
+  color: #64756e;
+}
+.tk-preview-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 20px 28px;
+  background: #eaf2ed;
+  color: #234d3a;
+  border-bottom: 2px solid #94b7a1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+}
+.tk-preview-banner p {
+  font-size: 13px;
+  margin: 7px 0 0;
+  max-width: 600px;
+}
+.tk-preview-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.tk-preview-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.tk-preview-controls select,
+.tk-preview-controls button {
+  border: 1px solid #94b7a1;
+  border-radius: 6px;
+  background: white;
+  padding: 8px 10px;
+  color: #234d3a;
+  font: inherit;
+}
+.tk-preview-controls a {
+  font-weight: 600;
+  text-decoration: underline;
+}
+@media (max-width: 680px) {
+  .tk-preview-entry {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .tk-preview-banner {
+    padding: 16px;
+  }
+}
+.tk-time-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tk-time-control .tk-exact-toggle {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #526c60;
+  text-decoration: underline;
+  font-size: 11px;
+  justify-content: flex-start;
+}
+.tk-emergency-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  border: 1px solid #d4dfd8;
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 16px;
+}
+.tk-emergency-flags legend {
+  font-size: 13px;
+  font-weight: 650;
+  padding: 0 6px;
+}
+.tk-emergency-flags small {
+  width: 100%;
+  color: #64756e;
+}
+
+.tk-lunch-entries {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.tk-lunch-entries .tk-inline {
+  flex-wrap: wrap;
+  align-items: end;
+}

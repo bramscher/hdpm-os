@@ -1,3 +1,4 @@
+import { displayTime } from "./presentation";
 import * as XLSX from "xlsx";
 import {
   breakMinutes,
@@ -20,6 +21,9 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
   const summary: Record<string, string | number>[] = [],
     daily: Record<string, string | number>[] = [],
     intervals: Record<string, string | number>[] = [];
+  const legacyLeave = snapshot.sheets.some((s) =>
+    s.days.some((d) => d.leave.some((l) => l.kind.startsWith("loa_"))),
+  );
   for (const sheet of snapshot.sheets) {
     const employeeRows = sheet.days.map((day) => {
       const t = totals([day]);
@@ -33,11 +37,17 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
         "Paid break hours (included)": round(t.paidBreak / 60),
         "Vacation hours": round(t.vacation / 60),
         "Sick hours": round(t.sick / 60),
-        "Paid LOA hours": round(t.loa_paid / 60),
-        "Unpaid LOA hours": round(t.loa_unpaid / 60),
+        ...(legacyLeave
+          ? {
+              "Paid LOA hours": round(t.loa_paid / 60),
+              "Unpaid LOA hours": round(t.loa_unpaid / 60),
+            }
+          : {}),
         Miles: t.miles,
         "No work": day.off ? "Yes" : "",
         Notes: day.note,
+        "Emergency work": day.emergency ? "Yes" : "",
+        "Emergency phone management": day.emergencyPhone ? "Yes" : "",
       };
     });
     daily.push(...employeeRows);
@@ -52,9 +62,17 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
       "Worked hours": sum("Worked hours"),
       "Vacation hours": sum("Vacation hours"),
       "Sick hours": sum("Sick hours"),
-      "Paid LOA hours": sum("Paid LOA hours"),
-      "Unpaid LOA hours": sum("Unpaid LOA hours"),
+      ...(legacyLeave
+        ? {
+            "Paid LOA hours": sum("Paid LOA hours"),
+            "Unpaid LOA hours": sum("Unpaid LOA hours"),
+          }
+        : {}),
       Miles: sum("Miles"),
+      "Emergency work days": sheet.days.filter((d) => d.emergency).length,
+      "Emergency phone management days": sheet.days.filter(
+        (d) => d.emergencyPhone,
+      ).length,
       Status: sheet.state,
       "Employee signed by": sheet.employee_signed_by || "",
       "Employee signed name": sheet.employee_signed_name || "",
@@ -77,8 +95,8 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
           Employee: sheet.employee_name,
           Date: day.date,
           "Record type": "Shift",
-          "Start (Pacific)": localTime(shift.start),
-          "End (Pacific)": shift.end ? localTime(shift.end) : "",
+          "Start (Pacific)": displayTime(localTime(shift.start)),
+          "End (Pacific)": shift.end ? displayTime(localTime(shift.end)) : "",
           "Start timestamp": shift.start,
           "End timestamp": shift.end || "",
           Source: shift.source,
@@ -88,6 +106,8 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
             Employee: sheet.employee_name,
             Date: day.date,
             "Record type": b.paid ? "Paid break (included)" : "Unpaid break",
+            "Start (Pacific)": b.start ? displayTime(localTime(b.start)) : "",
+            "End (Pacific)": b.end ? displayTime(localTime(b.end)) : "",
             "Start timestamp": b.start || "",
             "End timestamp": b.end || "",
             Minutes: round(breakMinutes(b)),
@@ -131,7 +151,10 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
         },
         {
           Item: "Leave categories",
-          Value: Object.values(LEAVE_LABELS).join(", "),
+          Value: (legacyLeave
+            ? Object.values(LEAVE_LABELS)
+            : [LEAVE_LABELS.vacation, LEAVE_LABELS.sick]
+          ).join(", "),
         },
         {
           Item: "Corrections",

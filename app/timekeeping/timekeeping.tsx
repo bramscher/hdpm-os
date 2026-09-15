@@ -1,6 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import TimeSelect from "./time-select";
+import {
+  displayTime,
+  displayDate,
+  displayPeriod,
+} from "@/lib/timekeeping/presentation";
+import { oregonScheduleBreaks } from "@/lib/timekeeping/break-defaults";
+import type {
+  TimekeepingApi,
+  TimekeepingBoot as Boot,
+} from "@/lib/timekeeping/client";
 import {
   Clock3,
   Download,
@@ -14,6 +26,7 @@ import {
 } from "lucide-react";
 import {
   EMPLOYEE_ATTESTATION,
+  DEFAULT_SCHEDULE,
   addDays,
   blankDay,
   breakMinutes,
@@ -35,15 +48,6 @@ import {
   type Sheet,
 } from "@/lib/timekeeping/model";
 
-type Boot = {
-  employee: Employee;
-  isAdmin: boolean;
-  canReview: boolean;
-  sheet: Sheet | null;
-  clock: Clock;
-  today: string;
-  employees: Employee[];
-};
 type ExportRow = {
   id: string;
   period_start: string;
@@ -60,7 +64,10 @@ type EventRow = {
   before_data: unknown;
   after_data: unknown;
 };
-async function api<T>(path = "", body?: Record<string, unknown>): Promise<T> {
+async function liveApi<T>(
+  path = "",
+  body?: Record<string, unknown>,
+): Promise<T> {
   const response = await fetch(`/api/timekeeping${path}`, {
     method: body ? "POST" : "GET",
     headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -75,9 +82,22 @@ async function api<T>(path = "", body?: Record<string, unknown>): Promise<T> {
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : "Something went wrong.";
 const labelPeriod = (s: { period_start: string; period_end: string }) =>
-  `${s.period_start} – ${s.period_end}`;
+  displayPeriod(s.period_start, s.period_end);
 
-export default function Timekeeping() {
+const ApiContext = createContext<TimekeepingApi>(liveApi);
+export default function Timekeeping({
+  request = liveApi,
+}: {
+  request?: TimekeepingApi;
+}) {
+  return (
+    <ApiContext.Provider value={request}>
+      <TimekeepingView />
+    </ApiContext.Provider>
+  );
+}
+function TimekeepingView() {
+  const api = useContext(ApiContext);
   const [data, setData] = useState<Boot | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -146,6 +166,12 @@ export default function Timekeeping() {
           <CalendarDays size={17} /> 1–15 & 16–month end · Pacific time
         </span>
       </header>
+      {data?.isAdmin && (
+        <div className="tk-preview-entry">
+          <Link href="/timekeeping/preview">Employee preview →</Link>
+          <small>Try the employee screens with fictional data.</small>
+        </div>
+      )}
       {receipt && (
         <div className="tk-notice" role="status">
           {receipt}
@@ -461,9 +487,11 @@ export default function Timekeeping() {
                           <div className="tk-export-row" key={e.id}>
                             <div>
                               <strong>
-                                {e.period_start} –{" "}
-                                {periodFor(e.period_start).end} · Version{" "}
-                                {e.version}
+                                {displayPeriod(
+                                  e.period_start,
+                                  periodFor(e.period_start).end,
+                                )}{" "}
+                                · Version {e.version}
                               </strong>
                               <small>
                                 {new Date(e.created_at).toLocaleString()} ·{" "}
@@ -566,7 +594,7 @@ function ClockPanel({
           </strong>
           <p>
             {clock.shift
-              ? `Started ${localDate(new Date(clock.shift.start))} at ${localTime(clock.shift.start)}`
+              ? `Started ${localDate(new Date(clock.shift.start))} at ${displayTime(localTime(clock.shift.start))}`
               : "Use the clock, or enter an exception in your sheet below."}
           </p>
         </div>
@@ -634,12 +662,24 @@ function ClockPanel({
           }}
         >
           <label>
-            Actual end date/time (Pacific)
+            Actual end date (Pacific)
             <input
               required
-              type="datetime-local"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
+              type="date"
+              value={end.split("T")[0] || ""}
+              onChange={(e) =>
+                setEnd(`${e.target.value}T${end.split("T")[1] || "12:00"}`)
+              }
+            />
+          </label>
+          <label>
+            Actual end time (Pacific)
+            <TimeSelect
+              allowExact
+              value={end.split("T")[1] || ""}
+              onChange={(value) =>
+                setEnd(`${end.split("T")[0] || localDate()}T${value}`)
+              }
             />
           </label>
           <label>
@@ -665,17 +705,36 @@ function ScheduleEditor({
   employee: Employee;
   onSaved: () => Promise<unknown>;
 }) {
+  const api = useContext(ApiContext);
   const [s, setS] = useState<Schedule>(
-      employee.schedule || {
-        weekdays: [1, 2, 3, 4, 5],
-        start: "08:00",
-        end: "17:00",
-        unpaidBreak: 0,
-        paidBreak: 0,
-      },
+      employee.schedule || structuredClone(DEFAULT_SCHEDULE),
     ),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
+  function setHours(field: "start" | "end", value: string) {
+    const next = { ...s, [field]: value };
+    if (next.breakRule === "oregon_adult" && next.start !== next.end)
+      Object.assign(
+        next,
+        oregonScheduleBreaks(
+          next.start,
+          next.end,
+          next.lunch ? next.unpaidBreak : undefined,
+        ),
+      );
+    setS(next);
+  }
+  function setLunch(field: "start" | "end", value: string) {
+    const lunch = { ...s.lunch!, [field]: value };
+    const toMinutes = (time: string) =>
+      Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+    const unpaidBreak =
+      (toMinutes(lunch.end) - toMinutes(lunch.start) + 1440) % 1440;
+    const next = { ...s, lunch, unpaidBreak };
+    if (s.breakRule === "oregon_adult" && s.start !== s.end)
+      Object.assign(next, oregonScheduleBreaks(s.start, s.end, unpaidBreak));
+    setS(next);
+  }
   return (
     <section className="tk-panel">
       <h2>Your usual week</h2>
@@ -728,22 +787,36 @@ function ScheduleEditor({
         <div className="tk-form-grid">
           <label>
             Usual start
-            <input
-              required
-              type="time"
+            <TimeSelect
               value={s.start}
-              onChange={(e) => setS({ ...s, start: e.target.value })}
+              onChange={(value) => setHours("start", value)}
             />
           </label>
           <label>
             Usual end
-            <input
-              required
-              type="time"
+            <TimeSelect
               value={s.end}
-              onChange={(e) => setS({ ...s, end: e.target.value })}
+              onChange={(value) => setHours("end", value)}
             />
           </label>
+          {s.lunch && (
+            <>
+              <label>
+                Usual lunch start
+                <TimeSelect
+                  value={s.lunch.start}
+                  onChange={(value) => setLunch("start", value)}
+                />
+              </label>
+              <label>
+                Usual lunch end
+                <TimeSelect
+                  value={s.lunch.end}
+                  onChange={(value) => setLunch("end", value)}
+                />
+              </label>
+            </>
+          )}
           <label>
             Unpaid break minutes
             <input
@@ -752,8 +825,13 @@ function ScheduleEditor({
               type="number"
               required
               value={s.unpaidBreak}
+              readOnly={!!s.lunch}
               onChange={(e) =>
-                setS({ ...s, unpaidBreak: Number(e.target.value) })
+                setS({
+                  ...s,
+                  unpaidBreak: Number(e.target.value),
+                  breakRule: "custom",
+                })
               }
             />
           </label>
@@ -766,15 +844,83 @@ function ScheduleEditor({
               required
               value={s.paidBreak}
               onChange={(e) =>
-                setS({ ...s, paidBreak: Number(e.target.value) })
+                setS({
+                  ...s,
+                  paidBreak: Number(e.target.value),
+                  breakRule: "custom",
+                })
               }
             />
           </label>
         </div>
+        <label className="tk-checkbox">
+          <input
+            type="checkbox"
+            checked={!!s.lunch}
+            onChange={(e) => {
+              const next = {
+                ...s,
+                lunch: e.target.checked
+                  ? { start: "12:00", end: "13:00" }
+                  : undefined,
+              };
+              if (next.lunch) next.unpaidBreak = 60;
+              if (next.breakRule === "oregon_adult" && next.start !== next.end)
+                Object.assign(
+                  next,
+                  oregonScheduleBreaks(
+                    next.start,
+                    next.end,
+                    next.lunch ? next.unpaidBreak : undefined,
+                  ),
+                );
+              setS(next);
+            }}
+          />
+          Set lunch start and end times
+        </label>
+        <label className="tk-checkbox">
+          <input
+            type="checkbox"
+            checked={s.breakRule === "oregon_adult"}
+            onChange={(e) => {
+              if (e.target.checked) {
+                try {
+                  setS({
+                    ...s,
+                    ...oregonScheduleBreaks(
+                      s.start,
+                      s.end,
+                      s.lunch ? s.unpaidBreak : undefined,
+                    ),
+                    breakRule: "oregon_adult",
+                  });
+                } catch (err) {
+                  setMessage(errorText(err));
+                }
+              } else setS({ ...s, breakRule: "custom" });
+            }}
+          />
+          Suggest paid rest breaks for my usual hours (Oregon adult baseline)
+        </label>
         <p className="tk-help">
-          Break defaults start at zero until you choose them. Paid breaks are
-          included in working time. An end before the start represents an
-          overnight schedule.
+          Our starting schedule includes a one-hour unpaid lunch and two
+          separate 10-minute paid rest breaks. Choose your own usual lunch
+          window for staggered coverage, then adjust each day's entries to the
+          breaks actually taken. Lunch minutes are calculated from its start and
+          end. Suggested paid rest totals adjust to your hours. Paid breaks
+          remain in worked time. Record any interrupted or working meal as paid
+          time; do not deduct it. These draft allowances must match breaks
+          actually taken.{" "}
+          <a
+            href="https://www.oregon.gov/boli/workers/pages/meals-and-breaks.aspx"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Oregon BOLI guidance
+          </a>
+          . Adult, non-exempt baseline; exceptions need manager review. An end
+          before the start means an overnight schedule.
         </p>
         <button className="tk-primary" disabled={busy}>
           Save my defaults
@@ -794,6 +940,7 @@ function EmployeeEditor({
   employees: Employee[];
   onSaved: () => Promise<unknown>;
 }) {
+  const api = useContext(ApiContext);
   const [form, setForm] = useState({
       enabled: e.enabled,
       payrollId: e.payroll_id,
@@ -938,6 +1085,7 @@ function SheetEditor({
   onComplete: () => Promise<void>;
   onDirty: (value: boolean) => void;
 }) {
+  const api = useContext(ApiContext);
   const [draft, setDraft] = useState(initial),
     draftRef = useRef(initial),
     versionRef = useRef(initial.version),
@@ -1177,7 +1325,9 @@ function SheetEditor({
           <strong>{duration(t.scheduled)}</strong>
         </div>
         <div>
-          <small>Vacation / sick / LOA</small>
+          <small>
+            {t.loa_paid || t.loa_unpaid ? "Leave" : "Vacation / sick"}
+          </small>
           <strong>
             {duration(t.vacation + t.sick + t.loa_paid + t.loa_unpaid)}
           </strong>
@@ -1189,8 +1339,9 @@ function SheetEditor({
       </div>
       <p className="tk-help">
         Defaults are draft time until you confirm them. Use an exception for
-        leave, days off or different hours. All times are Pacific; 24:00 means
-        midnight at the end of the day.
+        leave, days off or different hours. Weekend days can include work too.
+        All times are Pacific; 12:00 AM (next day) means midnight at the end of
+        the day. Record actual breaks taken; use notes for leave of absence.
       </p>
       {isAdmin && !own && editable && (
         <label className="tk-correction">
@@ -1248,7 +1399,8 @@ function SheetEditor({
             </small>
             {initial.period_end > localDate() && (
               <small>
-                Submission opens on {initial.period_end}. You can save time now.
+                Submission opens on {displayDate(initial.period_end)}. You can
+                save time now.
               </small>
             )}
           </>
@@ -1379,6 +1531,38 @@ function DayEditor({
       setError(errorText(e));
     }
   };
+  function changeBreak(
+    shiftId: string,
+    breakId: string,
+    field: "start" | "end",
+    value: string,
+  ) {
+    try {
+      const timestamp =
+        value === "24:00"
+          ? wallTime(addDays(day.date, 1), "00:00")
+          : wallTime(day.date, value);
+      onChange({
+        ...day,
+        shifts: day.shifts.map((s) =>
+          s.id === shiftId
+            ? {
+                ...s,
+                source: "manual",
+                breaks: s.breaks.map((b) =>
+                  b.id === breakId
+                    ? { ...b, [field]: timestamp, minutes: 0 }
+                    : b,
+                ),
+              }
+            : s,
+        ),
+      });
+      setError("");
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
   return (
     <details className={`tk-day ${day.off ? "off" : ""}`}>
       <summary>
@@ -1398,7 +1582,7 @@ function DayEditor({
               ? day.shifts
                   .map(
                     (s) =>
-                      `${localTime(s.start)}–${s.end && localDate(new Date(s.end)) !== day.date ? "24:00" : s.end ? localTime(s.end) : "open"}`,
+                      `${displayTime(localTime(s.start))}–${s.end && localDate(new Date(s.end)) !== day.date ? "12:00 AM (next day)" : s.end ? displayTime(localTime(s.end)) : "open"}`,
                   )
                   .join(", ")
               : day.leave.length
@@ -1416,7 +1600,10 @@ function DayEditor({
           {duration(t.worked + t.scheduled)}
           {day.miles > 0 && <small>{day.miles} miles</small>}
         </span>
-        <span className="tk-day-edit">View day</span>
+        <span className="tk-day-edit">
+          {day.emergency && <small>Emergency work</small>}
+          {day.emergencyPhone && <small>Emergency phone</small>}View day
+        </span>
       </summary>
       <div className="tk-day-body">
         {error && (
@@ -1465,13 +1652,13 @@ function DayEditor({
               <span className="tk-source">{s.source}</span>
               <label>
                 Start
-                <input
-                  type="time"
+                <TimeSelect
+                  allowExact
                   value={start}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     updateShift(
                       s.id,
-                      e.target.value,
+                      value,
                       end,
                       Math.round(unpaid),
                       Math.round(paid),
@@ -1481,24 +1668,20 @@ function DayEditor({
               </label>
               <label>
                 End
-                <input
-                  aria-label={`End time ${day.date}`}
-                  type="text"
-                  inputMode="numeric"
-                  pattern="([01][0-9]|2[0-3]):[0-5][0-9]|24:00"
-                  defaultValue={end}
-                  key={end}
-                  placeholder="17:00"
-                  onBlur={(e) => {
-                    if (e.target.value !== end)
-                      updateShift(
-                        s.id,
-                        start,
-                        e.target.value,
-                        Math.round(unpaid),
-                        Math.round(paid),
-                      );
-                  }}
+                <TimeSelect
+                  label={`End time ${day.date}`}
+                  allowExact
+                  endOfDay
+                  value={end}
+                  onChange={(value) =>
+                    updateShift(
+                      s.id,
+                      start,
+                      value,
+                      Math.round(unpaid),
+                      Math.round(paid),
+                    )
+                  }
                 />
               </label>
               <label>
@@ -1507,6 +1690,7 @@ function DayEditor({
                   type="number"
                   min="0"
                   value={Math.round(unpaid)}
+                  readOnly={s.breaks.some((b) => !b.paid && !!b.start)}
                   onChange={(e) =>
                     updateShift(
                       s.id,
@@ -1524,6 +1708,7 @@ function DayEditor({
                   type="number"
                   min="0"
                   value={Math.round(paid)}
+                  readOnly={s.breaks.some((b) => b.paid && !!b.start)}
                   onChange={(e) =>
                     updateShift(
                       s.id,
@@ -1535,6 +1720,105 @@ function DayEditor({
                   }
                 />
               </label>
+              <div className="tk-lunch-entries">
+                {s.breaks
+                  .filter((b) => b.start && b.end)
+                  .map((b) => (
+                    <div className="tk-inline" key={b.id}>
+                      <strong>
+                        {b.paid ? "Paid break" : "Unpaid lunch / break"}
+                      </strong>
+                      <label>
+                        Break start
+                        <TimeSelect
+                          label={`Break start ${day.date} ${b.id}`}
+                          allowExact
+                          value={localTime(b.start!)}
+                          onChange={(value) =>
+                            changeBreak(s.id, b.id, "start", value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        Break end
+                        <TimeSelect
+                          label={`Break end ${day.date} ${b.id}`}
+                          allowExact
+                          endOfDay
+                          value={
+                            localDate(new Date(b.end!)) !== day.date
+                              ? "24:00"
+                              : localTime(b.end!)
+                          }
+                          onChange={(value) =>
+                            changeBreak(s.id, b.id, "end", value)
+                          }
+                        />
+                      </label>
+                      <span>{Math.round(breakMinutes(b))} minutes</span>
+                      <button
+                        onClick={() =>
+                          onChange({
+                            ...day,
+                            shifts: day.shifts.map((x) =>
+                              x.id === s.id
+                                ? {
+                                    ...x,
+                                    source: "manual",
+                                    breaks: x.breaks.filter(
+                                      (y) => y.id !== b.id,
+                                    ),
+                                  }
+                                : x,
+                            ),
+                          })
+                        }
+                      >
+                        Remove break
+                      </button>
+                    </div>
+                  ))}
+                {!s.breaks.some((b) => !b.paid && b.start) && (
+                  <button
+                    onClick={() => {
+                      const span =
+                        (Date.parse(s.end!) - Date.parse(s.start)) / 60000;
+                      const minutes = Math.min(
+                        Math.round(unpaid) || 60,
+                        Math.floor(span),
+                      );
+                      const from =
+                        Date.parse(s.start) +
+                        Math.floor((span - minutes) / 2) * 60000;
+                      onChange({
+                        ...day,
+                        shifts: day.shifts.map((x) =>
+                          x.id === s.id
+                            ? {
+                                ...x,
+                                source: "manual",
+                                breaks: [
+                                  ...x.breaks.filter((b) => b.paid),
+                                  {
+                                    id: crypto.randomUUID(),
+                                    paid: false,
+                                    minutes: 0,
+                                    start: new Date(from).toISOString(),
+                                    end: new Date(
+                                      from + minutes * 60000,
+                                    ).toISOString(),
+                                  },
+                                ],
+                              }
+                            : x,
+                        ),
+                      });
+                    }}
+                  >
+                    Set lunch start / end
+                  </button>
+                )}
+              </div>
               <button
                 className="tk-remove"
                 onClick={() =>
@@ -1554,8 +1838,8 @@ function DayEditor({
             try {
               const start = day.shifts.length
                 ? localTime(day.shifts[day.shifts.length - 1].end!)
-                : "08:00";
-              const end = start < "17:00" ? "17:00" : "23:00";
+                : "07:00";
+              const end = start < "16:30" ? "16:30" : "23:00";
               onChange({
                 ...day,
                 off: false,
@@ -1577,6 +1861,33 @@ function DayEditor({
         >
           <Plus size={14} /> Add work interval
         </button>
+        <fieldset className="tk-emergency-flags">
+          <legend>Emergency activity</legend>
+          <label className="tk-checkbox">
+            <input
+              type="checkbox"
+              checked={day.emergency === true}
+              onChange={(e) =>
+                onChange({ ...day, emergency: e.target.checked })
+              }
+            />
+            Emergency work
+          </label>
+          <label className="tk-checkbox">
+            <input
+              type="checkbox"
+              checked={day.emergencyPhone === true}
+              onChange={(e) =>
+                onChange({ ...day, emergencyPhone: e.target.checked })
+              }
+            />
+            Emergency phone management
+          </label>
+          <small>
+            Flag the day and include any time worked in the intervals above. Add
+            details in daily notes.
+          </small>
+        </fieldset>
         <div className="tk-leave">
           <h3>Leave</h3>
           {day.leave.map((l) => (
@@ -1661,7 +1972,11 @@ function DayEditor({
             >
               <option value="">Choose a category…</option>
               {Object.entries(LEAVE_LABELS)
-                .filter(([k]) => !day.leave.some((l) => l.kind === k))
+                .filter(
+                  ([k]) =>
+                    ["vacation", "sick"].includes(k) &&
+                    !day.leave.some((l) => l.kind === k),
+                )
                 .map(([k, label]) => (
                   <option key={k} value={k}>
                     {label}
@@ -1670,8 +1985,8 @@ function DayEditor({
             </select>
           </label>
           <small>
-            Choose the applicable paid/unpaid LOA category with your manager.
-            Adjust hours for partial days.
+            Adjust hours for partial days. Use daily or pay-period notes for
+            leave of absence.
           </small>
         </div>
         <div className="tk-form-grid">
@@ -1694,7 +2009,7 @@ function DayEditor({
               maxLength={2000}
               value={day.note}
               onChange={(e) => onChange({ ...day, note: e.target.value })}
-              placeholder="Trip purpose, time exception or other payroll detail."
+              placeholder="Emergency details, phone management, leave of absence, or other time notes."
             />
           </label>
         </div>

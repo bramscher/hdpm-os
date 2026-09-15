@@ -1,7 +1,10 @@
+import { oregonScheduleBreaks } from "./break-defaults";
 export const EMPLOYEE_ATTESTATION =
   "I certify that this timesheet accurately records my work, breaks, leave and business miles. I approve and sign it using my Microsoft company account.";
 export const ZONE = "America/Los_Angeles";
 export type Schedule = {
+  breakRule?: "oregon_adult" | "custom";
+  lunch?: { start: string; end: string };
   weekdays: number[];
   start: string;
   end: string;
@@ -30,6 +33,8 @@ export type Day = {
   date: string;
   off: boolean;
   exception?: boolean;
+  emergency?: boolean;
+  emergencyPhone?: boolean;
   shifts: Shift[];
   leave: Leave[];
   miles: number;
@@ -154,6 +159,38 @@ export function wallTime(date: string, time: string): string {
     );
   return matches[0];
 }
+/** Resolve a saved lunch relative to its shift, including overnight schedules. */
+export function scheduledLunch(date: string, schedule: Schedule) {
+  if (!schedule.lunch) return null;
+  const shiftStart = wallTime(date, schedule.start);
+  const shiftEnd = wallTime(
+    schedule.end > schedule.start ? date : addDays(date, 1),
+    schedule.end,
+  );
+  const lunchDate =
+    schedule.lunch.start < schedule.start ? addDays(date, 1) : date;
+  const start = wallTime(lunchDate, schedule.lunch.start);
+  const end = wallTime(
+    schedule.lunch.end > schedule.lunch.start
+      ? lunchDate
+      : addDays(lunchDate, 1),
+    schedule.lunch.end,
+  );
+  if (start < shiftStart || end > shiftEnd || end <= start)
+    throw new Error(
+      "Lunch start and end must fit within your usual work hours",
+    );
+  return { start, end, minutes: (Date.parse(end) - Date.parse(start)) / 60000 };
+}
+export const DEFAULT_SCHEDULE: Schedule = {
+  weekdays: [1, 2, 3, 4, 5],
+  start: "07:00",
+  end: "16:30",
+  lunch: { start: "12:00", end: "13:00" },
+  unpaidBreak: 60,
+  paidBreak: 20,
+  breakRule: "oregon_adult",
+};
 export function validateSchedule(value: unknown): Schedule {
   const s = value as Schedule;
   if (
@@ -174,7 +211,26 @@ export function validateSchedule(value: unknown): Schedule {
     (Date.parse(end) - Date.parse(start)) / 60000 < s.unpaidBreak + s.paidBreak
   )
     throw new Error("Breaks must fit within the shift");
+  if (s.breakRule && !["oregon_adult", "custom"].includes(s.breakRule))
+    throw new Error("Choose a valid break default rule");
+  const lunch = scheduledLunch("2026-09-15", s);
+  if (lunch && lunch.minutes !== s.unpaidBreak)
+    throw new Error(
+      "Unpaid lunch minutes must match the lunch start and end times",
+    );
+  if (s.breakRule === "oregon_adult") {
+    const suggested = oregonScheduleBreaks(s.start, s.end, lunch?.minutes);
+    if (
+      s.unpaidBreak !== suggested.unpaidBreak ||
+      s.paidBreak !== suggested.paidBreak
+    )
+      throw new Error(
+        "Refresh the Oregon break defaults or choose custom minutes",
+      );
+  }
   return {
+    ...(s.breakRule ? { breakRule: s.breakRule } : {}),
+    ...(s.lunch ? { lunch: { start: s.lunch.start, end: s.lunch.end } } : {}),
     weekdays: [...s.weekdays],
     start: s.start,
     end: s.end,
@@ -242,7 +298,13 @@ export function buildDays(
 ): Day[] {
   const days = dates(start, end).map(blankDay),
     schedule = employee.schedule;
-  if (!schedule) return days;
+  if (!schedule)
+    return days.map((day) => ({
+      ...day,
+      off:
+        day.date < employee.starts_on ||
+        (!!employee.ends_on && day.date > employee.ends_on),
+    }));
   // Include carry-in from a scheduled overnight shift on the preceding day.
   for (const date of dates(addDays(start, -1), end)) {
     if (
@@ -263,31 +325,81 @@ export function buildDays(
         ),
         breaks: [],
       };
-      // Put explicitly chosen break defaults in the middle of the scheduled shift.
-      let breakAt =
-        Date.parse(shift.start) +
-        (Date.parse(shift.end!) -
-          Date.parse(shift.start) -
-          (schedule.unpaidBreak + schedule.paidBreak) * 60000) /
-          2;
-      for (const [paid, minutes] of [
-        [false, schedule.unpaidBreak],
-        [true, schedule.paidBreak],
-      ] as const) {
-        if (minutes) {
-          shift.breaks.push({
-            id: `default:${paid}`,
-            start: new Date(breakAt).toISOString(),
-            end: new Date(breakAt + minutes * 60000).toISOString(),
-            minutes: 0,
-            paid,
-          });
-          breakAt += minutes * 60000;
-        }
+      // Place draft allowances only to allocate their minutes across midnight.
+      // Remove these nominal times below; they are not actual break punches.
+      const span = (Date.parse(shift.end!) - Date.parse(shift.start)) / 60000;
+      const paidCount =
+        schedule.breakRule === "oregon_adult"
+          ? schedule.paidBreak / 10
+          : schedule.paidBreak
+            ? 1
+            : 0;
+      const lunch = scheduledLunch(date, schedule);
+      const mealCount = lunch
+        ? 0
+        : schedule.breakRule === "oregon_adult"
+          ? schedule.unpaidBreak / 30
+          : schedule.unpaidBreak
+            ? 1
+            : 0;
+      const allowances: { paid: boolean; minutes: number; center: number }[] =
+        [];
+      for (let i = 0; i < paidCount; i++)
+        allowances.push({
+          paid: true,
+          minutes: schedule.paidBreak / paidCount,
+          center: (span * (i + 0.5)) / paidCount,
+        });
+      for (let i = 0; i < mealCount; i++)
+        allowances.push({
+          paid: false,
+          minutes: schedule.unpaidBreak / mealCount,
+          center: (span * (i + 1)) / (mealCount + 1),
+        });
+      allowances.sort((a, b) => a.center - b.center);
+      let after = 0;
+      for (let i = 0; i < allowances.length; i++) {
+        const allowance = allowances[i],
+          remaining = allowances.slice(i).reduce((n, b) => n + b.minutes, 0);
+        const from = Math.max(
+          after,
+          Math.min(allowance.center - allowance.minutes / 2, span - remaining),
+        );
+        shift.breaks.push({
+          id: `default:${i}`,
+          paid: allowance.paid,
+          minutes: 0,
+          start: new Date(Date.parse(shift.start) + from * 60000).toISOString(),
+          end: new Date(
+            Date.parse(shift.start) + (from + allowance.minutes) * 60000,
+          ).toISOString(),
+        });
+        after = from + allowance.minutes;
       }
+      if (lunch)
+        shift.breaks.push({
+          id: "default:lunch",
+          paid: false,
+          minutes: 0,
+          start: lunch.start,
+          end: lunch.end,
+        });
       for (const part of splitShift(shift)) {
         const day = days.find((d) => d.date === part.date);
-        if (day) day.shifts.push(part.shift);
+        if (day)
+          day.shifts.push({
+            ...part.shift,
+            breaks: part.shift.breaks.map((b) =>
+              b.id === "default:lunch"
+                ? b
+                : {
+                    ...b,
+                    minutes: breakMinutes(b),
+                    start: null,
+                    end: null,
+                  },
+            ),
+          });
       }
     } catch {
       /* DST ambiguity needs an explicit entry, never a guessed actual time. */
@@ -368,6 +480,9 @@ export function validateDays(
       !d ||
       d.date !== expected[i] ||
       typeof d.off !== "boolean" ||
+      (d.emergency !== undefined && typeof d.emergency !== "boolean") ||
+      (d.emergencyPhone !== undefined &&
+        typeof d.emergencyPhone !== "boolean") ||
       typeof d.note !== "string" ||
       d.note.length > 2000 ||
       typeof d.miles !== "number" ||
@@ -425,7 +540,7 @@ export function validateDays(
         a < previousEnd
       )
         throw new Error(
-          `${d.date}: enter nonoverlapping start/end times within this day (use 00:00 next day for midnight)`,
+          `${d.date}: enter nonoverlapping start/end times within this day (use 12:00 AM next day for midnight)`,
         );
       previousEnd = b;
       if (s.source === "clocked" && b > now.getTime())
@@ -540,21 +655,37 @@ export function editDayShift(
                 : wallTime(day.date, end),
             source: "manual" as const,
             breaks: [
-              {
-                id: `${id}:unpaid`,
-                start: null,
-                end: null,
-                minutes: unpaid,
-                paid: false,
-              },
-              {
-                id: `${id}:paid`,
-                start: null,
-                end: null,
-                minutes: paid,
-                paid: true,
-              },
-            ],
+              ...(Math.round(
+                s.breaks
+                  .filter((b) => !b.paid)
+                  .reduce((n, b) => n + breakMinutes(b), 0),
+              ) === unpaid
+                ? s.breaks.filter((b) => !b.paid)
+                : [
+                    {
+                      id: `${id}:unpaid`,
+                      start: null,
+                      end: null,
+                      minutes: unpaid,
+                      paid: false,
+                    },
+                  ]),
+              ...(Math.round(
+                s.breaks
+                  .filter((b) => b.paid)
+                  .reduce((n, b) => n + breakMinutes(b), 0),
+              ) === paid
+                ? s.breaks.filter((b) => b.paid)
+                : [
+                    {
+                      id: `${id}:paid`,
+                      start: null,
+                      end: null,
+                      minutes: paid,
+                      paid: true,
+                    },
+                  ]),
+            ].sort((a, b) => (a.start || "z").localeCompare(b.start || "z")),
           }
         : s,
     ),

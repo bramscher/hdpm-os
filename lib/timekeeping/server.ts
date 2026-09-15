@@ -443,6 +443,8 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
       throw new TimeError("Only your own schedule can be applied.", 403);
     const fresh = buildDays(ctx.employee, sheet.period_start, sheet.period_end);
     days = sheet.days.map((d, i) =>
+      !d.emergency &&
+      !d.emergencyPhone &&
       !d.exception &&
       !d.note &&
       !d.miles &&
