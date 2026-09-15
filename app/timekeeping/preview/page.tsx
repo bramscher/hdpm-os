@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/require-role";
+import { canUseEmployeePreview } from "@/lib/timekeeping/preview-access";
 import EmployeePreview from "./preview";
 import "../timekeeping.css";
 export const dynamic = "force-dynamic";
@@ -8,7 +8,6 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 export default async function Page() {
-  const guard = await requireRole("admin");
-  if (!guard.ok) notFound();
+  if (!(await canUseEmployeePreview())) notFound();
   return <EmployeePreview />;
 }

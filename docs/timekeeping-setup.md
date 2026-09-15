@@ -31,12 +31,23 @@ Jennifer Bertran (`Jen`), Jayme, Bryce Bramscher and Bianca Nyseth are excluded 
 
 ## Preview the employee screens as an admin
 
-Open **Company → Timekeeping → Employee preview**, or `/timekeeping/preview` while signed in as an admin. The preview uses the same employee screen components with fictional Taylor Example data. Only **My time** and **My defaults** appear within Timekeeping.
+Open **Company → Timekeeping → Employee preview**, or `/timekeeping/preview` while signed in as an admin. Brody Bramscher is also an invited preview tester using his own active Microsoft company account; his staff role and real Timekeeping enrollment are unchanged by preview access. Send him the direct preview link. The preview uses the same employee screen components with fictional Taylor Example data. Only **My time** and **My defaults** appear within Timekeeping.
 
 - **First visit**: Taylor participates from the start of the current period so you can try a full sheet. Choose usual workdays, hours and breaks, save, then apply defaults to the sheet. A confirmation message reports the days updated; applying before saving defaults shows an instruction. Real employee enrollment dates remain unchanged.
 - Open a weekend day, add work, flag **Emergency work** or **Emergency phone management**, and save notes. Use daily lunch start/end to try a shorter or later lunch.
 - **Completed period**: review work, vacation, mileage and notes, then practice **Sign & submit to manager**.
 - **Reset preview** starts over. All changes remain in memory in that tab; refresh discards them. No payroll data, real signature, employee enrollment or notifications are created. This demonstrates the employee UI, not a live Microsoft reauthentication or manager approval test.
+
+## Brody’s preview test
+
+Share `https://hdpmchat.highdesertpm.com/timekeeping/preview` with Brody. Ask him to sign in with his company Microsoft account, then:
+
+1. In **First visit**, save his usual hours/lunch, apply defaults, and check a full period fills.
+2. Change one day’s lunch, add weekend work, emergency phone management, miles and a note; check the saved totals.
+3. In **Completed period**, review and practice signing/submitting to the manager.
+4. Report unclear wording, broken controls and surprising totals, with the steps he took.
+
+The preview is fictional and resets on refresh. It never enrolls Brody, creates real payroll entries or sends an approval. Real manager review remains a separate pilot step.
 
 ## First workflow to pass around
 
