@@ -701,6 +701,7 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | Variable | Service | Purpose |
 |----------|---------|---------|
 | `CRON_SECRET` | Vercel | Authenticates cron job requests |
+| `TIMEKEEPING_EXCLUDED_STAFF` | Timekeeping | Comma-separated exact `staff.person` keys omitted from timekeeping setup and enrollment; other company access and retained history are unaffected |
 | `RENTOMETER_API_KEY` | Rentometer | Rental comp market data |
 | `RENTCAST_API_KEY` | RentCast | Alternative rental data source |
 | `HUD_API_TOKEN` | HUD.gov | Fair Market Rent annual data |

@@ -59,6 +59,7 @@ const sheet = (): Sheet => ({
   approved_by: null,
 });
 beforeEach(() => {
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
   mock.results = [];
   mock.from.mockImplementation(() => {
@@ -85,6 +86,25 @@ beforeEach(() => {
   mock.rpc.mockResolvedValue({ data: { ok: true }, error: null });
 });
 describe("timekeeping server identity and signatures", () => {
+  it("excludes only configured staff keys from timekeeping", async () => {
+    vi.stubEnv("TIMEKEEPING_EXCLUDED_STAFF", " Jen, Jayme, Bryce, Bianca ");
+    const { participatesInTimekeeping } = await import("../roster");
+    expect(participatesInTimekeeping("Jen")).toBe(false);
+    expect(participatesInTimekeeping("jayme")).toBe(false);
+    expect(participatesInTimekeeping("Jenna")).toBe(true);
+    mock.auth.mockResolvedValue({ user: { email: "jen@highdesertpm.com" } });
+    mock.results.push([
+      {
+        person: "Jen",
+        name: "Jennifer Bertran",
+        email: "jen@highdesertpm.com",
+        access_role: "staff",
+      },
+    ]);
+    await expect(context()).rejects.toMatchObject({ status: 403 });
+    expect(mock.from).toHaveBeenCalledTimes(1);
+  });
+
   it("requires a company Microsoft session", async () => {
     mock.auth.mockResolvedValue(null);
     await expect(context()).rejects.toMatchObject({ status: 401 });

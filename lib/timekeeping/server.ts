@@ -1,3 +1,4 @@
+import { participatesInTimekeeping } from "./roster";
 import { auth } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { isCompanyEmail } from "@/lib/require-role";
@@ -70,17 +71,17 @@ export async function context(): Promise<Context> {
       403,
     );
   const person = staff[0];
+  if (!participatesInTimekeeping(person.person))
+    throw new TimeError("Your account is not on the timekeeping roster.", 403);
   checked(
-    await db
-      .from("timekeeping_employee")
-      .upsert(
-        {
-          staff_person: person.person,
-          email,
-          name: person.name || person.person,
-        },
-        { onConflict: "staff_person", ignoreDuplicates: true },
-      ),
+    await db.from("timekeeping_employee").upsert(
+      {
+        staff_person: person.person,
+        email,
+        name: person.name || person.person,
+      },
+      { onConflict: "staff_person", ignoreDuplicates: true },
+    ),
   );
   const employee = checked(
     await db
@@ -106,15 +107,16 @@ async function directory() {
         .eq("active", true)
         .not("email", "is", null),
     ) ?? [];
-  const emails = staff.map((s) => s.email.toLowerCase());
+  const roster = staff.filter((s) => participatesInTimekeeping(s.person));
+  const emails = roster.map((s) => s.email.toLowerCase());
   if (new Set(emails).size !== emails.length)
     throw new TimeError(
       "Resolve duplicate staff email addresses before enrolling employees.",
     );
-  if (staff.length)
+  if (roster.length)
     checked(
       await db.from("timekeeping_employee").upsert(
-        staff.map((s) => ({
+        roster.map((s) => ({
           staff_person: s.person,
           name: s.name || s.person,
           email: s.email.toLowerCase(),
@@ -124,17 +126,20 @@ async function directory() {
     );
 }
 export async function employees(): Promise<Employee[]> {
-  return checked(
-    await getSupabaseAdmin()
-      .from("timekeeping_employee")
-      .select("*")
-      .order("name"),
-  ) as Employee[];
+  return (
+    checked(
+      await getSupabaseAdmin()
+        .from("timekeeping_employee")
+        .select("*")
+        .order("name"),
+    ) as Employee[]
+  ).filter((employee) => participatesInTimekeeping(employee.staff_person));
 }
 export async function ensureSheets(
   employee: Employee,
   through = localDate(),
 ): Promise<void> {
+  if (!participatesInTimekeeping(employee.staff_person)) return;
   if (!employee.enabled && !employee.ends_on) return;
   const end =
     employee.ends_on && employee.ends_on < through ? employee.ends_on : through;
@@ -167,21 +172,19 @@ export async function ensureSheets(
           ),
       );
       checked(
-        await db
-          .from("timekeeping_sheet")
-          .upsert(
-            {
-              employee_id: employee.id,
-              period_start: p.start,
-              period_end: p.end,
-              review_manager_id: employee.manager_id,
-              employee_name: employee.name,
-              payroll_id: employee.payroll_id,
-              pay_basis: employee.pay_basis,
-              days: buildDays(employee, p.start, p.end),
-            },
-            { onConflict: "employee_id,period_start", ignoreDuplicates: true },
-          ),
+        await db.from("timekeeping_sheet").upsert(
+          {
+            employee_id: employee.id,
+            period_start: p.start,
+            period_end: p.end,
+            review_manager_id: employee.manager_id,
+            employee_name: employee.name,
+            payroll_id: employee.payroll_id,
+            pay_basis: employee.pay_basis,
+            days: buildDays(employee, p.start, p.end),
+          },
+          { onConflict: "employee_id,period_start", ignoreDuplicates: true },
+        ),
       );
     }
     start = addDays(p.end, 1);

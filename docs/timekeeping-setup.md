@@ -11,6 +11,8 @@ Entry point: **Company → Timekeeping** (`/timekeeping`). Source branch: `featu
 
 Craig applied the database migration on September 15, 2026. The six empty tables, employee signature columns and guarded command function were verified before merging to main. Staff still need enrollment. The temporary local test harness is outside the repository and is not part of the deployed app.
 
+Roster exclusions are configured using `TIMEKEEPING_EXCLUDED_STAFF` (exact `staff.person` keys). Excluded profiles are omitted from setup and cannot enter time; retained historical sheets/exports remain available to administrators. This does not deactivate their company-wide staff accounts.
+
 ## Enroll and configure
 
 - Sign in as a staff member whose current directory `access_role` is `admin`.
