@@ -2,6 +2,8 @@
 
 Owner-only route: /admin/habu-paper/workflows. Linked from the form library and earlier paper demo.
 
+Next review: [first fictional vacancy test and team pilot plan](habu-vacancy-pilot.md).
+
 This review uses fictional properties and temporary React state. It does not assign work to real staff, send messages, write AppFolio records, or retain edits after reload. Role preview and assignment/date controls are review tools available to Craig, not production permission rules.
 
 ## Confirmed operating rules
