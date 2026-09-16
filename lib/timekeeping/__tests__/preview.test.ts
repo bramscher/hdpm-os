@@ -128,6 +128,10 @@ describe("isolated employee preview", () => {
     expect((await request<TimekeepingBoot>()).sheet?.period_start).toBe(
       "2026-09-16",
     );
+    const history = await request<Sheet[]>("?view=my-history");
+    expect(history).toHaveLength(1);
+    expect(history[0].id).toBe(signed.id);
+    expect(history[0].state).toBe("submitted");
     const reset = await createEmployeePreview(
       "completed-period",
       () => new Date("2026-09-21T16:00:00Z"),

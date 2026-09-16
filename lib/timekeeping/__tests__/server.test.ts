@@ -15,6 +15,7 @@ const mock = vi.hoisted(() => ({
   from: vi.fn(),
   rpc: vi.fn(),
   upsert: vi.fn(),
+  filter: vi.fn(),
   results: [] as unknown[],
 }));
 vi.mock("@/lib/auth", () => ({ auth: mock.auth }));
@@ -30,6 +31,8 @@ import {
   context,
   exportRows,
   ensureSheets,
+  submittedSheets,
+  history,
 } from "../server";
 import { POST } from "@/app/api/timekeeping/route";
 
@@ -91,8 +94,15 @@ beforeEach(() => {
       "maybeSingle",
       "limit",
       "range",
+      "in",
     ])
       chain[method] = () => chain;
+    for (const method of ["eq", "in"]) {
+      chain[method] = (column: string, value: unknown) => {
+        mock.filter(table, method, column, value);
+        return chain;
+      };
+    }
     chain.upsert = (data: unknown) => {
       mock.upsert(table, data);
       return chain;
@@ -211,6 +221,50 @@ describe("timekeeping server identity and signatures", () => {
       status: 403,
     });
     await expect(exportRows(ctx, "old-export")).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+  it("scopes submitted history to the session employee, including for administrators", async () => {
+    for (const isAdmin of [false, true]) {
+      mock.results.push([]);
+      expect(await submittedSheets({ ...ctx, isAdmin })).toEqual([]);
+      expect(mock.filter).toHaveBeenCalledWith(
+        "timekeeping_sheet",
+        "eq",
+        "employee_id",
+        employee.id,
+      );
+      expect(mock.filter).toHaveBeenCalledWith(
+        "timekeeping_sheet",
+        "in",
+        "state",
+        ["submitted", "approved", "returned"],
+      );
+      mock.filter.mockClear();
+    }
+  });
+  it("allows own historical approval details but rejects historical edits and other employees' history", async () => {
+    const historic = { ...sheet(), state: "approved" as const };
+    mock.results.push(
+      historic,
+      [historic],
+      [{ action: "approve", actor: "manager@example.test" }],
+    );
+    expect(await history(ctx, historic.id)).toEqual([
+      { action: "approve", actor: "manager@example.test" },
+    ]);
+    mock.results.push(historic, [historic]);
+    await expect(
+      command(ctx, {
+        op: "save",
+        sheetId: historic.id,
+        version: 1,
+        days: historic.days,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mock.rpc).not.toHaveBeenCalled();
+    mock.results.push({ ...historic, employee_id: "another-employee" }, []);
+    await expect(history(ctx, historic.id)).rejects.toMatchObject({
       status: 403,
     });
   });

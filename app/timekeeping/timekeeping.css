@@ -536,6 +536,16 @@
   color: #52675b;
   font-size: 12px;
 }
+.tk-personal-history-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.tk-personal-history-controls label {
+  min-width: 0;
+  max-width: 100%;
+}
 .tk-app table {
   border-collapse: collapse;
   width: 100%;

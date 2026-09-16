@@ -656,7 +656,8 @@ export function canReadSheet(
   return (
     isAdmin ||
     (sheet.employee_id !== actorId && sheet.review_manager_id === actorId) ||
-    (sheet.employee_id === actorId && sheet.id === currentId)
+    (sheet.employee_id === actorId &&
+      (sheet.id === currentId || sheet.state !== "draft"))
   );
 }
 export function editDayShift(

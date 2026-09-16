@@ -29,6 +29,7 @@ import {
   ChevronRight,
   Plus,
   Coffee,
+  History,
 } from "lucide-react";
 import {
   EMPLOYEE_ATTESTATION,
@@ -109,9 +110,9 @@ function TimekeepingView() {
     [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false);
   const [receipt, setReceipt] = useState("");
-  const [view, setView] = useState<"mine" | "review" | "payroll" | "settings">(
-    "mine",
-  );
+  const [view, setView] = useState<
+    "mine" | "my-history" | "review" | "payroll" | "settings"
+  >("mine");
   const [sheets, setSheets] = useState<Sheet[]>([]),
     [selected, setSelected] = useState<Sheet | null>(null),
     [exports, setExports] = useState<ExportRow[]>([]);
@@ -216,13 +217,22 @@ function TimekeepingView() {
         <>
           <nav className="tk-nav" aria-label="Timekeeping views">
             {recordsEmployeeTime(data.employee.staff_person) && (
-              <button
-                disabled={busy}
-                aria-current={view === "mine" ? "page" : undefined}
-                onClick={() => navigate("mine")}
-              >
-                <Clock3 size={17} /> My time
-              </button>
+              <>
+                <button
+                  disabled={busy}
+                  aria-current={view === "mine" ? "page" : undefined}
+                  onClick={() => navigate("mine")}
+                >
+                  <Clock3 size={17} /> My time
+                </button>
+                <button
+                  disabled={busy}
+                  aria-current={view === "my-history" ? "page" : undefined}
+                  onClick={() => navigate("my-history")}
+                >
+                  <History size={17} /> My history
+                </button>
+              </>
             )}
             {(data.canReview || data.isAdmin) && (
               <button
@@ -251,6 +261,13 @@ function TimekeepingView() {
               {data.isAdmin ? "People & defaults" : "My defaults"}
             </button>
           </nav>
+          {view === "my-history" &&
+            recordsEmployeeTime(data.employee.staff_person) && (
+              <PersonalHistory
+                employee={data.employee}
+                onCorrect={() => navigate("mine")}
+              />
+            )}
           {view === "mine" &&
             recordsEmployeeTime(data.employee.staff_person) && (
               <>
@@ -646,6 +663,124 @@ function TimekeepingView() {
         </>
       )}
     </main>
+  );
+}
+
+function PersonalHistory({
+  employee,
+  onCorrect,
+}: {
+  employee: Employee;
+  onCorrect: () => Promise<void>;
+}) {
+  const api = useContext(ApiContext);
+  const [sheets, setSheets] = useState<Sheet[] | null>(null);
+  const [period, setPeriod] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function refresh() {
+    setBusy(true);
+    setError("");
+    try {
+      setSheets(await api<Sheet[]>("?view=my-history"));
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  useEffect(() => {
+    void refresh();
+  }, []);
+  const selected =
+    sheets?.find((s) => s.period_start === period) || sheets?.[0];
+  const statusLabel = (sheet: Sheet) =>
+    sheet.state === "approved"
+      ? "Approved"
+      : sheet.state === "returned"
+        ? "Returned for correction"
+        : "Awaiting approval";
+  return (
+    <>
+      <section className="tk-panel">
+        <div className="tk-section-heading">
+          <div>
+            <h2>My submitted timecards</h2>
+            <p>
+              View your past submissions, approval status, and recorded hours by
+              pay period.
+            </p>
+          </div>
+          <button disabled={busy} onClick={() => void refresh()}>
+            {busy ? "Refreshing…" : "Refresh status"}
+          </button>
+        </div>
+        {error && (
+          <p className="tk-alert" role="alert">
+            {error}
+          </p>
+        )}
+        {!sheets && !error && (
+          <p role="status">Loading your submitted timecards…</p>
+        )}
+        {sheets?.length === 0 && (
+          <p>
+            No submitted timecards yet. After you sign and submit a timecard, it
+            will appear here.
+          </p>
+        )}
+        {selected && (
+          <>
+            <div className="tk-personal-history-controls">
+              <label>
+                Pay period
+                <select
+                  disabled={busy}
+                  value={selected.period_start}
+                  onChange={(e) => setPeriod(e.target.value)}
+                >
+                  {sheets!.map((sheet) => (
+                    <option key={sheet.id} value={sheet.period_start}>
+                      {labelPeriod(sheet)} · {statusLabel(sheet)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className={`tk-badge ${selected.state}`} role="status">
+                {statusLabel(selected)}
+              </span>
+            </div>
+            <p>
+              {selected.state === "approved"
+                ? "Your manager has approved this timecard. Your signature and approval details are shown below."
+                : selected.state === "returned"
+                  ? "This timecard needs correction and a new signature. Read the reviewer’s note below, then return to My time to make changes."
+                  : "Your timecard is submitted and waiting for your manager’s approval."}
+            </p>
+            {selected.state === "returned" && (
+              <button onClick={() => void onCorrect()}>
+                Go to My time to correct
+              </button>
+            )}
+          </>
+        )}
+      </section>
+      {selected && (
+        <SheetEditor
+          key={`${selected.id}:${selected.version}`}
+          initial={selected}
+          actorId={employee.id}
+          actorEmail={employee.email}
+          isAdmin={false}
+          clockOpen={false}
+          readOnly
+          onSigned={() => {}}
+          onNotice={() => {}}
+          onDirty={() => {}}
+          onComplete={refresh}
+        />
+      )}
+    </>
   );
 }
 
@@ -1188,6 +1323,7 @@ function SheetEditor({
   clockOpen,
   onComplete,
   onDirty,
+  readOnly = false,
 }: {
   initial: Sheet;
   actorId: string;
@@ -1198,6 +1334,7 @@ function SheetEditor({
   clockOpen: boolean;
   onComplete: () => Promise<void>;
   onDirty: (value: boolean) => void;
+  readOnly?: boolean;
 }) {
   const api = useContext(ApiContext);
   const [draft, setDraft] = useState(initial),
@@ -1214,6 +1351,7 @@ function SheetEditor({
     [events, setEvents] = useState<EventRow[] | null>(null);
   const own = initial.employee_id === actorId,
     editable =
+      !readOnly &&
       (own || isAdmin) &&
       ["draft", "returned"].includes(initial.state) &&
       !clockOpen;
@@ -1356,7 +1494,7 @@ function SheetEditor({
           <p>
             <span className="tk-basis">{initial.pay_basis}</span>{" "}
             <span className={`tk-badge ${initial.state}`}>{initial.state}</span>{" "}
-            <span role="status">{status}</span>
+            <span role="status">{readOnly ? "Read-only" : status}</span>
           </p>
         </div>
         <div className="tk-toolbar">
@@ -1531,7 +1669,8 @@ function SheetEditor({
             )}
           </>
         )}
-        {initial.state === "submitted" &&
+        {!readOnly &&
+          initial.state === "submitted" &&
           initial.review_manager_id === actorId &&
           !own && (
             <>
@@ -1560,24 +1699,26 @@ function SheetEditor({
               </div>
             </>
           )}
-        {isAdmin && ["submitted", "approved"].includes(initial.state) && (
-          <>
-            <label>
-              Reopen reason
-              <input
-                value={reason}
-                maxLength={2000}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </label>
-            <button
-              disabled={busy || !reason.trim()}
-              onClick={() => act("reopen")}
-            >
-              Reopen for correction
-            </button>
-          </>
-        )}
+        {!readOnly &&
+          isAdmin &&
+          ["submitted", "approved"].includes(initial.state) && (
+            <>
+              <label>
+                Reopen reason
+                <input
+                  value={reason}
+                  maxLength={2000}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </label>
+              <button
+                disabled={busy || !reason.trim()}
+                onClick={() => act("reopen")}
+              >
+                Reopen for correction
+              </button>
+            </>
+          )}
         {isAdmin && !own && editable && (
           <p>
             After corrections are saved, the employee must sign this sheet again

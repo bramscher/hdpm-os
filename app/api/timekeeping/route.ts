@@ -6,6 +6,7 @@ import {
   exportRows,
   history,
   listSheets,
+  submittedSheets,
   TimeError,
 } from "@/lib/timekeeping/server";
 import { failure } from "@/lib/timekeeping/http";
@@ -18,11 +19,13 @@ export async function GET(request: Request) {
     const data =
       view === "review"
         ? await listSheets(ctx, url.searchParams.get("period") || undefined)
-        : view === "history"
-          ? await history(ctx, url.searchParams.get("id") || "")
-          : view === "exports"
-            ? await exportRows(ctx)
-            : await bootstrap(ctx);
+        : view === "my-history"
+          ? await submittedSheets(ctx)
+          : view === "history"
+            ? await history(ctx, url.searchParams.get("id") || "")
+            : view === "exports"
+              ? await exportRows(ctx)
+              : await bootstrap(ctx);
     return NextResponse.json(data, {
       headers: { "Cache-Control": "private, no-store" },
     });

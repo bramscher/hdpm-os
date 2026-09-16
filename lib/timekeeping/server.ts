@@ -251,6 +251,7 @@ export async function getClock(employeeId: string): Promise<Clock> {
 export async function authorizedSheet(
   ctx: Context,
   id: string,
+  forWrite = false,
 ): Promise<Sheet> {
   const s = checked(
     await getSupabaseAdmin()
@@ -260,7 +261,14 @@ export async function authorizedSheet(
       .maybeSingle(),
   ) as Sheet | null;
   const current = currentSheet(await ownSheets(ctx.employee.id), localDate());
-  if (!s || !canReadSheet(s, ctx.employee.id, ctx.isAdmin, current?.id))
+  if (
+    !s ||
+    !canReadSheet(s, ctx.employee.id, ctx.isAdmin, current?.id) ||
+    (forWrite &&
+      !ctx.isAdmin &&
+      s.employee_id === ctx.employee.id &&
+      s.id !== current?.id)
+  )
     throw new TimeError("Timesheet not available to this account.", 403);
   return s;
 }
@@ -327,6 +335,24 @@ export async function listSheets(ctx: Context, period?: string) {
         .neq("employee_id", ctx.employee.id);
     if (period) query = query.eq("period_start", period);
     const page = checked(await query.range(offset, offset + 499)) as Sheet[];
+    rows.push(...page);
+    if (page.length < 500) return rows;
+  }
+}
+/** Personal submitted history is always scoped to the signed-in employee. */
+export async function submittedSheets(ctx: Context): Promise<Sheet[]> {
+  const rows: Sheet[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = checked(
+      await getSupabaseAdmin()
+        .from("timekeeping_sheet")
+        .select("*")
+        .eq("employee_id", ctx.employee.id)
+        .in("state", ["submitted", "approved", "returned"])
+        .order("period_start", { ascending: false })
+        .order("id")
+        .range(offset, offset + 499),
+    ) as Sheet[];
     rows.push(...page);
     if (page.length < 500) return rows;
   }
@@ -476,7 +502,7 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
     )
   )
     throw new TimeError("Unknown action.");
-  const sheet = await authorizedSheet(ctx, String(body.sheetId));
+  const sheet = await authorizedSheet(ctx, String(body.sheetId), true);
   if (sheet.version !== version(body.version))
     throw new TimeError(
       "Another change was saved. Reload before continuing.",

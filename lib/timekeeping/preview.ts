@@ -125,6 +125,10 @@ export function createEmployeePreview(
     if (!body) {
       if (!path) return boot();
       const params = new URLSearchParams(path.replace(/^\?/, ""));
+      if (params.get("view") === "my-history")
+        return sheets
+          .filter((s) => s.state !== "draft")
+          .sort((a, b) => b.period_start.localeCompare(a.period_start));
       if (params.get("view") === "history")
         return events.filter((e) => e.sheet_id === params.get("id"));
       throw new Error("This preview contains only the employee screens.");

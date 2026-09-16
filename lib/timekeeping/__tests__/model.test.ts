@@ -319,7 +319,7 @@ describe("daily entries and submission", () => {
   });
 });
 describe("access and payroll", () => {
-  it("shows the oldest unfinished sheet, then current period; never history to the employee", () => {
+  it("keeps active work separate while allowing employees to read their submitted history", () => {
     const old = sheet(),
       current = sheet({
         id: "new",
@@ -331,6 +331,11 @@ describe("access and payroll", () => {
       currentSheet([current, { ...old, state: "submitted" }], "2026-09-17")?.id,
     ).toBe("new");
     expect(canReadSheet(old, "employee", false, "new")).toBe(false);
+    for (const state of ["submitted", "approved", "returned"] as const) {
+      const historic = { ...old, state };
+      expect(canReadSheet(historic, "employee", false, "new")).toBe(true);
+      expect(canReadSheet(historic, "other", false, "new")).toBe(false);
+    }
     expect(canReadSheet(old, "manager", false, "new")).toBe(true);
     expect(canReadSheet(old, "other", false, "new")).toBe(false);
     expect(canReadSheet(old, "admin", true, "new")).toBe(true);
