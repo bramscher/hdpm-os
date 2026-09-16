@@ -24,6 +24,7 @@ export type Shift = {
   end: string | null;
   source: "scheduled" | "manual" | "clocked";
   breaks: Break[];
+  emergencyAfterHours?: boolean;
 };
 export type Leave = {
   kind: "vacation" | "sick" | "holiday" | "loa_paid" | "loa_unpaid";
@@ -53,6 +54,7 @@ export type Employee = {
   ends_on: string | null;
   schedule: Schedule | null;
   version: number;
+  overtime_status?: "non_exempt" | "exempt" | "unconfirmed";
 };
 export type Sheet = {
   id: string;
@@ -545,6 +547,8 @@ export function validateDays(
         s.id.length > 150 ||
         ids.has(s.id) ||
         !["manual", "scheduled", "clocked"].includes(s.source) ||
+        (s.emergencyAfterHours !== undefined &&
+          typeof s.emergencyAfterHours !== "boolean") ||
         !Array.isArray(s.breaks) ||
         s.breaks.length > 20
       )

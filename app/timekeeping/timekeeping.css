@@ -379,6 +379,9 @@
   justify-content: space-between;
   gap: 12px;
 }
+.tk-emergency-interval {
+  grid-column: 1 / -1;
+}
 .tk-day-body label {
   gap: 4px;
   min-width: 0;

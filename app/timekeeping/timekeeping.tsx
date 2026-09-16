@@ -8,6 +8,7 @@ import {
   nextReviewSheet,
 } from "@/lib/timekeeping/review-periods";
 import TimeSelect from "./time-select";
+import PayrollReview from "./payroll-review";
 import {
   displayTime,
   displayDate,
@@ -119,6 +120,7 @@ function TimekeepingView() {
     [exports, setExports] = useState<ExportRow[]>([]);
   const [period, setPeriod] = useState(""),
     [person, setPerson] = useState("");
+  const [payrollReady, setPayrollReady] = useState("");
   async function load() {
     const d = await api<Boot>();
     setData(d);
@@ -168,6 +170,8 @@ function TimekeepingView() {
   const activeIndex = periods.indexOf(activePeriod);
   const periodEnd = periodFor(activePeriod).end;
   const periodSheets = sheets.filter((s) => s.period_start === activePeriod);
+  const payrollCheckKey =
+    activePeriod + periodSheets.map((s) => `${s.id}:${s.version}`).join(",");
   const filtered = periodSheets
     .filter((s) => !person || s.employee_id === person)
     .sort((a, b) => a.employee_name.localeCompare(b.employee_name));
@@ -584,6 +588,18 @@ function TimekeepingView() {
                     </p>
                   )}
                   {view === "payroll" && (
+                    <PayrollReview
+                      key={payrollCheckKey}
+                      request={api}
+                      period={activePeriod}
+                      employees={data.employees}
+                      onSaved={load}
+                      onReady={(ready) =>
+                        setPayrollReady(ready ? payrollCheckKey : "")
+                      }
+                    />
+                  )}
+                  {view === "payroll" && (
                     <div className="tk-export-action">
                       <p>
                         {counts.approved} of {periodSheets.length} timesheets
@@ -597,6 +613,7 @@ function TimekeepingView() {
                         disabled={
                           busy ||
                           !periodSheets.length ||
+                          payrollReady !== payrollCheckKey ||
                           counts.approved !== periodSheets.length
                         }
                         onClick={() =>
@@ -1974,6 +1991,42 @@ function DayEditor({
                   Remove shift
                 </button>
               </div>
+              <label className="tk-emergency-interval">
+                After-hours emergency premium
+                <select
+                  value={
+                    s.emergencyAfterHours === undefined &&
+                    (day.emergency || day.emergencyPhone)
+                      ? ""
+                      : s.emergencyAfterHours
+                        ? "yes"
+                        : "no"
+                  }
+                  onChange={(e) =>
+                    onChange({
+                      ...day,
+                      shifts: day.shifts.map((shift) =>
+                        shift.id === s.id
+                          ? {
+                              ...shift,
+                              emergencyAfterHours: e.target.value === "yes",
+                            }
+                          : shift,
+                      ),
+                    })
+                  }
+                >
+                  <option value="" disabled>
+                    Confirm whether this interval qualifies…
+                  </option>
+                  <option value="no">Regular work interval</option>
+                  <option value="yes">After-hours emergency work · 1.5×</option>
+                </select>
+                <small>
+                  Include active emergency phone work. Enter emergency work as a
+                  separate interval from your regular shift.
+                </small>
+              </label>
               <label>
                 Start
                 <TimeSelect

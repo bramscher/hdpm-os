@@ -1,5 +1,10 @@
 import { recordsEmployeeTime } from "./eligibility";
 import { participatesInTimekeeping } from "./roster";
+import {
+  payrollHours,
+  type OvertimeContext,
+  type PayrollSource,
+} from "./overtime";
 import { auth } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { isCompanyEmail } from "@/lib/require-role";
@@ -367,6 +372,27 @@ export async function history(ctx: Context, id: string) {
       .order("created_at", { ascending: false }),
   );
 }
+
+export async function payrollReview(ctx: Context, period: string) {
+  if (!ctx.isAdmin) throw new TimeError("Admin access required.", 403);
+  if (!validDate(period) || periodFor(period).start !== period)
+    throw new TimeError("Choose a pay period.");
+  const overtime = checked(
+    await getSupabaseAdmin().rpc("timekeeping_payroll_context", {
+      p_period: period,
+    }),
+  ) as OvertimeContext;
+  const source: PayrollSource = {
+    periodStart: period,
+    periodEnd: periodFor(period).end,
+    sheets: await listSheets(ctx, period),
+    overtime,
+  };
+  return {
+    overtime,
+    reports: source.sheets.map((sheet) => payrollHours(source, sheet)),
+  };
+}
 const noteText = (value: unknown, max = 2000): string => {
   if (typeof value !== "string" || value.length > max)
     throw new TimeError(`Notes must be under ${max} characters.`);
@@ -488,11 +514,59 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
       endsOn: body.endsOn || "",
     });
   }
+  if (op === "payrollSetup") {
+    if (!ctx.isAdmin) throw new TimeError("Admin access required.", 403);
+    const setting = String(body.setting);
+    if (!["eligibility", "opening"].includes(setting))
+      throw new TimeError("Choose a payroll setting.");
+    const reason = noteText(body.reason, 2000).trim();
+    if (!reason)
+      throw new TimeError(
+        "Enter the source or reason for this payroll setting.",
+      );
+    const requestedVersion = Number(body.version);
+    if (
+      !Number.isInteger(requestedVersion) ||
+      requestedVersion < (setting === "opening" ? 0 : 1)
+    )
+      throw new TimeError("Reload payroll setup before saving.");
+    if (
+      setting === "eligibility" &&
+      !["non_exempt", "exempt"].includes(String(body.overtimeStatus))
+    )
+      throw new TimeError("Choose overtime eligibility.");
+    if (
+      setting === "opening" &&
+      (!validDate(String(body.period)) ||
+        typeof body.workedMinutes !== "number" ||
+        !Number.isFinite(body.workedMinutes) ||
+        body.workedMinutes < 0)
+    )
+      throw new TimeError("Check the period and opening worked hours.");
+    return checked(
+      await getSupabaseAdmin().rpc("timekeeping_payroll_setup", {
+        p_actor: ctx.email,
+        p_request: {
+          setting,
+          employeeId: String(body.employeeId),
+          version: requestedVersion,
+          reason,
+          overtimeStatus: body.overtimeStatus,
+          period: body.period,
+          workedMinutes: body.workedMinutes,
+        },
+      }),
+    );
+  }
   if (op === "export") {
     if (!ctx.isAdmin) throw new TimeError("Admin access required.", 403);
     if (!validDate(String(body.period)))
       throw new TimeError("Choose a pay period.");
     for (const e of await employees()) await ensureSheets(e);
+    const review = await payrollReview(ctx, String(body.period));
+    const incomplete = review.reports.find((r) => r.issues.length);
+    if (incomplete)
+      throw new TimeError(`${incomplete.name}: ${incomplete.issues[0]}`);
     return apply(ctx, { op, period: body.period });
   }
   if (op === "clock") return clockCommand(ctx, body);

@@ -33,6 +33,7 @@ import {
   ensureSheets,
   submittedSheets,
   history,
+  payrollReview,
 } from "../server";
 import { POST } from "@/app/api/timekeeping/route";
 
@@ -114,6 +115,50 @@ beforeEach(() => {
     return chain;
   });
   mock.rpc.mockResolvedValue({ data: { ok: true }, error: null });
+});
+
+describe("payroll setup permissions", () => {
+  it("keeps payroll calculations and eligibility changes admin-only", async () => {
+    await expect(payrollReview(ctx, "2026-09-01")).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(
+      command(ctx, { op: "payrollSetup", setting: "eligibility" }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
+  it("requires a reason and uses the authenticated admin identity", async () => {
+    const body = {
+      op: "payrollSetup",
+      setting: "opening",
+      employeeId: "employee",
+      version: 0,
+      period: "2026-09-01",
+      workedMinutes: 480,
+      reason: "Prior approved payroll",
+      actor: "spoof@example.test",
+    };
+    await expect(
+      command({ ...ctx, isAdmin: true }, { ...body, reason: "" }),
+    ).rejects.toThrow("source or reason");
+    mock.rpc.mockResolvedValueOnce({
+      data: { worked_minutes: 480 },
+      error: null,
+    });
+    await command({ ...ctx, isAdmin: true }, body);
+    expect(mock.rpc).toHaveBeenCalledWith("timekeeping_payroll_setup", {
+      p_actor: ctx.email,
+      p_request: {
+        setting: "opening",
+        employeeId: "employee",
+        version: 0,
+        reason: "Prior approved payroll",
+        overtimeStatus: undefined,
+        period: "2026-09-01",
+        workedMinutes: 480,
+      },
+    });
+  });
 });
 describe("timekeeping server identity and signatures", () => {
   it("automatically enrolls a first-time profile using the configured manager and real session actor", async () => {
