@@ -5,6 +5,7 @@ import { recordsEmployeeTime } from "@/lib/timekeeping/eligibility";
 import {
   reviewPeriods,
   selectedReviewPeriod,
+  nextReviewSheet,
 } from "@/lib/timekeeping/review-periods";
 import TimeSelect from "./time-select";
 import {
@@ -362,6 +363,36 @@ function TimekeepingView() {
                   isAdmin={data.isAdmin}
                   clockOpen={false}
                   onDirty={setDirty}
+                  onApproveNext={async (approved) => {
+                    setPeriod(approved.period_start);
+                    try {
+                      const rows = await api<Sheet[]>("?view=review");
+                      const next = nextReviewSheet(
+                        rows,
+                        approved,
+                        data.employee.id,
+                        person,
+                      );
+                      setSheets(rows);
+                      setSelected(next);
+                      setReceipt(
+                        next
+                          ? `${approved.employee_name} approved. Reviewing ${next.employee_name} next.`
+                          : `${approved.employee_name} approved. No more timecards awaiting your approval in this pay period${person ? " for the selected employee" : ""}.`,
+                      );
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    } catch {
+                      setSheets((rows) =>
+                        rows.map((sheet) =>
+                          sheet.id === approved.id ? approved : sheet,
+                        ),
+                      );
+                      setSelected(approved);
+                      setReceipt(
+                        `${approved.employee_name} approved, but the next timecard could not be loaded. Return to the list to refresh and continue reviewing.`,
+                      );
+                    }
+                  }}
                   onComplete={async () => {
                     const rows = await api<Sheet[]>("?view=review");
                     setSheets(rows);
@@ -1324,6 +1355,7 @@ function SheetEditor({
   onComplete,
   onDirty,
   readOnly = false,
+  onApproveNext,
 }: {
   initial: Sheet;
   actorId: string;
@@ -1335,6 +1367,7 @@ function SheetEditor({
   onComplete: () => Promise<void>;
   onDirty: (value: boolean) => void;
   readOnly?: boolean;
+  onApproveNext?: (approved: Sheet) => Promise<void>;
 }) {
   const api = useContext(ApiContext);
   const [draft, setDraft] = useState(initial),
@@ -1444,7 +1477,7 @@ function SheetEditor({
       document.removeEventListener("click", linkGuard, true);
     };
   }, []);
-  async function act(op: string) {
+  async function act(op: string, advance = false) {
     setBusy(true);
     setError("");
     onNotice("");
@@ -1469,7 +1502,9 @@ function SheetEditor({
             : "No days needed updating. Existing entries and employee start/end dates were respected; untouched days already match your saved defaults.",
         );
       }
-      await onComplete();
+      if (op === "approve" && advance && onApproveNext)
+        await onApproveNext(result);
+      else await onComplete();
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -1691,11 +1726,20 @@ function SheetEditor({
                 </button>
                 <button
                   disabled={busy}
-                  className="tk-primary"
+                  className={onApproveNext ? undefined : "tk-primary"}
                   onClick={() => act("approve")}
                 >
                   Approve timesheet
                 </button>
+                {onApproveNext && (
+                  <button
+                    disabled={busy}
+                    className="tk-primary"
+                    onClick={() => act("approve", true)}
+                  >
+                    Approve &amp; next <ChevronRight size={16} />
+                  </button>
+                )}
               </div>
             </>
           )}

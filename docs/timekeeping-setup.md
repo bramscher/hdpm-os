@@ -87,6 +87,8 @@ Employees review their one active sheet and can sign on the final calendar day o
 
 Employees open **My history** to choose a submitted pay period and see **Awaiting approval**, **Approved**, or **Returned for correction**. Hours, leave, mileage, notes, signatures and approval history are read-only there. **Refresh status** loads the latest review result; returned sheets link back to **My time** for correction and a new signature. Each employee can access only their own personal history.
 
+When reviewing a submitted timecard, **Approve & next** approves it and opens the next timecard awaiting your approval in the same pay period and employee filter, in employee-name order. After the last eligible card, it returns to the list with a completion message. **Approve timesheet** approves and keeps the current card open. Failed approvals stay on the current card; the next card is loaded only after approval succeeds.
+
 The Excel package contains hours and miles for payroll to process. Download it, save it and email it manually. Use the latest version for any correction and retain the previously sent package for comparison.
 
 **Review** and **Payroll & history** show one pay period at a time. Choose a period from the date selector or use the previous/next buttons. The initial view opens the oldest unfinished ended period, then the current period when prior payroll is approved. Status counts cover everyone in the selected period; the employee filter narrows the table. Opening a sheet and returning keeps that period selected. Saved Excel packages and new exports use the selected period, and the export button becomes available once its sheets are approved.
