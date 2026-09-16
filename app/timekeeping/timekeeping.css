@@ -481,6 +481,61 @@
 .tk-table-wrap {
   overflow: auto;
 }
+.tk-period-browser {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 24px 26px;
+  margin: 20px 0;
+  border: 1px solid #ccdcd0;
+  border-radius: 14px;
+  background: #f1f6f2;
+}
+.tk-period-browser > div:first-child {
+  min-width: 0;
+}
+.tk-period-browser .tk-eyebrow {
+  margin: 0 0 10px;
+}
+.tk-period-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tk-period-picker select {
+  font-weight: 650;
+  width: 320px;
+  min-height: 44px;
+}
+.tk-period-picker button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+}
+.tk-period-browser .tk-period-context {
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+.tk-period-status {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+.tk-period-status > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tk-period-status strong {
+  font-size: 24px;
+  font-weight: 650;
+}
+.tk-period-status span {
+  color: #52675b;
+  font-size: 12px;
+}
 .tk-app table {
   border-collapse: collapse;
   width: 100%;
@@ -564,6 +619,20 @@
   }
   .tk-section-heading {
     flex-direction: column;
+  }
+  .tk-period-browser {
+    padding: 18px 14px;
+    gap: 20px;
+  }
+  .tk-period-browser > div {
+    width: 100%;
+  }
+  .tk-period-picker select {
+    width: 100%;
+    flex: 1;
+  }
+  .tk-period-status {
+    gap: 12px;
   }
   .tk-panel,
   .tk-sheet {

@@ -87,4 +87,6 @@ Employees review their one active sheet and can sign on the final calendar day o
 
 The Excel package contains hours and miles for payroll to process. Download it, save it and email it manually. Use the latest version for any correction and retain the previously sent package for comparison.
 
+**Review** and **Payroll & history** show one pay period at a time. Choose a period from the date selector or use the previous/next buttons. The initial view opens the oldest unfinished ended period, then the current period when prior payroll is approved. Status counts cover everyone in the selected period; the employee filter narrows the table. Opening a sheet and returning keeps that period selected. Saved Excel packages and new exports use the selected period, and the export button becomes available once its sheets are approved.
+
 Before deactivating a departing employee, finish their time entries, signature and manager approval. Set their last participating day and end enrollment; admins retain historical access. A reopened former-employee record cannot be finalized with an administrator pretending to be the employee.

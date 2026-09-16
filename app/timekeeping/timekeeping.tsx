@@ -2,6 +2,10 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { recordsEmployeeTime } from "@/lib/timekeeping/eligibility";
+import {
+  reviewPeriods,
+  selectedReviewPeriod,
+} from "@/lib/timekeeping/review-periods";
 import TimeSelect from "./time-select";
 import {
   displayTime,
@@ -21,6 +25,8 @@ import {
   CheckCircle2,
   Settings2,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   Coffee,
 } from "lucide-react";
@@ -154,12 +160,19 @@ function TimekeepingView() {
       if (next === "mine" || next === "settings") await load();
     });
   }
-  const periods = [...new Set(sheets.map((s) => s.period_start))];
-  const activePeriod = period || periods[0] || periodFor(localDate()).start;
-  const filtered = sheets.filter(
-    (s) =>
-      (view !== "payroll" || s.period_start === activePeriod) &&
-      (!person || s.employee_id === person),
+  const periods = reviewPeriods(sheets);
+  const today = data?.today || localDate();
+  const activePeriod = selectedReviewPeriod(sheets, period, today);
+  const activeIndex = periods.indexOf(activePeriod);
+  const periodEnd = periodFor(activePeriod).end;
+  const periodSheets = sheets.filter((s) => s.period_start === activePeriod);
+  const filtered = periodSheets
+    .filter((s) => !person || s.employee_id === person)
+    .sort((a, b) => a.employee_name.localeCompare(b.employee_name));
+  const periodExports = exports.filter((e) => e.period_start === activePeriod);
+  const counts = periodSheets.reduce(
+    (counts, sheet) => ({ ...counts, [sheet.state]: counts[sheet.state] + 1 }),
+    { draft: 0, returned: 0, submitted: 0, approved: 0 },
   );
   return (
     <main className="tk-app">
@@ -341,36 +354,98 @@ function TimekeepingView() {
               </>
             ) : (
               <>
+                <section
+                  className="tk-period-browser"
+                  aria-label="Pay period selection"
+                >
+                  <div>
+                    <p className="tk-eyebrow">PAY PERIOD</p>
+                    <div className="tk-period-picker">
+                      <button
+                        aria-label="Previous pay period"
+                        disabled={
+                          busy ||
+                          activeIndex < 0 ||
+                          activeIndex >= periods.length - 1
+                        }
+                        onClick={() => setPeriod(periods[activeIndex + 1])}
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+                      <select
+                        aria-label="Pay period"
+                        value={activePeriod}
+                        disabled={busy || !periods.length}
+                        onChange={(e) => setPeriod(e.target.value)}
+                      >
+                        {!periods.length && (
+                          <option value={activePeriod}>
+                            {displayPeriod(activePeriod, periodEnd)}
+                          </option>
+                        )}
+                        {periods.map((p) => (
+                          <option key={p} value={p}>
+                            {displayPeriod(p, periodFor(p).end)}
+                            {p === periodFor(today).start ? " · Current" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        aria-label="Next pay period"
+                        disabled={busy || activeIndex <= 0}
+                        onClick={() => setPeriod(periods[activeIndex - 1])}
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
+                    <p className="tk-period-context">
+                      {periodSheets.length} timesheet
+                      {periodSheets.length === 1 ? "" : "s"} in this period
+                      {activePeriod <= today && periodEnd >= today
+                        ? " · Current period"
+                        : periodEnd < today
+                          ? " · Period ended"
+                          : " · Upcoming period"}
+                    </p>
+                  </div>
+                  <div
+                    className="tk-period-status"
+                    aria-label="Period status counts"
+                    aria-live="polite"
+                  >
+                    <div>
+                      <strong>{counts.draft}</strong>
+                      <span>Draft</span>
+                    </div>
+                    <div>
+                      <strong>{counts.returned}</strong>
+                      <span>Returned</span>
+                    </div>
+                    <div>
+                      <strong>{counts.submitted}</strong>
+                      <span>Ready to review</span>
+                    </div>
+                    <div>
+                      <strong>{counts.approved}</strong>
+                      <span>Approved</span>
+                    </div>
+                  </div>
+                </section>
                 <section className="tk-panel">
                   <div className="tk-section-heading">
                     <div>
                       <h2>
                         {view === "review"
                           ? "Timesheets to review"
-                          : "Payroll periods"}
+                          : "Payroll summary"}
                       </h2>
                       <p>
                         {view === "review"
                           ? "Open the detail before approving. Returned sheets go back to the employee."
-                          : "All employees, all retained periods. Final exports include approved sheets only."}
+                          : "Timesheets and Excel packages for the selected pay period."}
                       </p>
                     </div>
                     <div className="tk-toolbar">
-                      {view === "payroll" && (
-                        <label>
-                          Pay period
-                          <select
-                            value={activePeriod}
-                            onChange={(e) => setPeriod(e.target.value)}
-                          >
-                            {periods.map((p) => (
-                              <option key={p} value={p}>
-                                {p} – {periodFor(p).end}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
                       {data.isAdmin && (
                         <label>
                           Employee
@@ -397,7 +472,7 @@ function TimekeepingView() {
                     <table>
                       <thead>
                         <tr>
-                          <th>Employee / period</th>
+                          <th>Employee</th>
                           <th>Pay basis</th>
                           <th>Work / scheduled</th>
                           <th>Leave</th>
@@ -413,7 +488,6 @@ function TimekeepingView() {
                             <tr key={s.id}>
                               <td>
                                 <strong>{s.employee_name}</strong>
-                                <small>{labelPeriod(s)}</small>
                               </td>
                               <td>
                                 <span className="tk-basis">{s.pay_basis}</span>
@@ -439,7 +513,12 @@ function TimekeepingView() {
                                 </span>
                               </td>
                               <td>
-                                <button onClick={() => setSelected(s)}>
+                                <button
+                                  onClick={() => {
+                                    setPeriod(activePeriod);
+                                    setSelected(s);
+                                  }}
+                                >
                                   Open detail →
                                 </button>
                               </td>
@@ -451,22 +530,26 @@ function TimekeepingView() {
                   </div>
                   {!filtered.length && (
                     <p className="tk-empty">
-                      No timesheets to show. Enroll employees to generate their
-                      periods.
+                      {person
+                        ? "No timesheet for this employee in the selected pay period. Choose another employee or period."
+                        : "No timesheets in this pay period yet."}
                     </p>
                   )}
                   {view === "payroll" && (
                     <div className="tk-export-action">
                       <p>
-                        Hourly and salary staff both require manager approval.
-                        The report records hours and miles; payroll calculates
-                        pay.
+                        {counts.approved} of {periodSheets.length} timesheets
+                        approved for {displayPeriod(activePeriod, periodEnd)}.
+                        {counts.approved < periodSheets.length
+                          ? " All employees must sign and receive manager approval before export."
+                          : " The Excel summary includes all employees in this period."}
                       </p>
                       <button
                         className="tk-primary"
                         disabled={
                           busy ||
-                          !sheets.some((s) => s.period_start === activePeriod)
+                          !periodSheets.length ||
+                          counts.approved !== periodSheets.length
                         }
                         onClick={() =>
                           perform(async () => {
@@ -493,31 +576,31 @@ function TimekeepingView() {
                       Every version stays available. Use the latest version when
                       a correction has been made.
                     </p>
-                    {exports.length ? (
-                      exports
-                        .filter((e) => !period || e.period_start === period)
-                        .map((e) => (
-                          <div className="tk-export-row" key={e.id}>
-                            <div>
-                              <strong>
-                                {displayPeriod(
-                                  e.period_start,
-                                  periodFor(e.period_start).end,
-                                )}{" "}
-                                · Version {e.version}
-                              </strong>
-                              <small>
-                                {new Date(e.created_at).toLocaleString()} ·{" "}
-                                {e.created_by}
-                              </small>
-                            </div>
-                            <a href={`/api/timekeeping/export?id=${e.id}`}>
-                              <Download size={16} /> Excel
-                            </a>
+                    {periodExports.length ? (
+                      periodExports.map((e) => (
+                        <div className="tk-export-row" key={e.id}>
+                          <div>
+                            <strong>
+                              {displayPeriod(
+                                e.period_start,
+                                periodFor(e.period_start).end,
+                              )}{" "}
+                              · Version {e.version}
+                            </strong>
+                            <small>
+                              {new Date(e.created_at).toLocaleString()} ·{" "}
+                              {e.created_by}
+                            </small>
                           </div>
-                        ))
+                          <a href={`/api/timekeeping/export?id=${e.id}`}>
+                            <Download size={16} /> Excel
+                          </a>
+                        </div>
+                      ))
                     ) : (
-                      <p>No payroll packages created yet.</p>
+                      <p>
+                        No payroll packages created for this pay period yet.
+                      </p>
                     )}
                   </section>
                 )}
