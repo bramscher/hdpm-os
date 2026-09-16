@@ -138,7 +138,7 @@ describe("Oregon weekly overtime and company emergency premium", () => {
   it("keeps missing or unapproved prior time visible, accepts explicitly confirmed zero", () => {
     const s = source([day("2026-09-16", 480)], "2026-09-16", "2026-09-30");
     expect(
-      calculate(s).issues.some((x) => x.includes("Missing approved")),
+      calculate(s).issues.some((x) => x.includes("Prior payroll hours needed")),
     ).toBe(true);
     s.overtime!.openings = [
       {
@@ -163,12 +163,59 @@ describe("Oregon weekly overtime and company emergency premium", () => {
   });
   it("requires specific interval classification for legacy emergency-day flags", () => {
     const d = day("2026-09-07", 480);
-    d.emergencyPhone = true;
+    d.emergency = true;
     delete d.shifts[0].emergencyAfterHours;
     const s = source([d]);
     expect(calculate(s).issues[0]).toContain("identify after-hours");
     d.shifts[0].emergencyAfterHours = false;
     expect(calculate(s).issues).toEqual([]);
+  });
+  it("treats phone carrying as a stipend record, not emergency work or an export error", () => {
+    const d = day("2026-09-07", 480);
+    d.emergencyPhone = true;
+    delete d.shifts[0].emergencyAfterHours;
+    const s = source([d]);
+    expect(calculate(s).issues).toEqual([]);
+    expect(calculate(s).summary.emergencyAdditional).toBe(0);
+    const wb = XLSX.read(
+      payrollWorkbook({
+        ...s,
+        version: 1,
+        createdBy: "admin@example.test",
+        generatedAt: "2026-09-16T12:00:00Z",
+      }),
+      { type: "array" },
+    );
+    const row = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+      wb.Sheets.Summary,
+    )[0];
+    expect(row["Phone carrying days (stipend)"]).toBe(1);
+    expect(row["Regular worked hours (1x)"]).toBe(8);
+    expect(row["Total hours at 1.5x (included)"]).toBe(0);
+    d.shifts[0].emergencyAfterHours = true;
+    expect(calculate(s).summary.emergencyAdditional).toBe(480);
+  });
+  it("rebuilds a clearly marked review copy without turning missing prior payroll into zero overtime", () => {
+    const s = source([day("2026-09-16", 480)], "2026-09-16", "2026-09-30");
+    const snapshot = {
+      ...s,
+      version: 0,
+      createdBy: "admin@example.test",
+      generatedAt: "2026-09-16T12:00:00Z",
+    };
+    expect(() => payrollWorkbook(snapshot)).toThrow(
+      "Prior payroll hours needed",
+    );
+    const wb = XLSX.read(payrollWorkbook(snapshot, { review: true }), {
+      type: "array",
+    });
+    const row = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+      wb.Sheets.Summary,
+    )[0];
+    expect(row["Report status"]).toBe("REVIEW COPY - NOT FOR PAYROLL");
+    expect(row["Worked hours"]).toBe(8);
+    expect(row["Weekly overtime hours (1.5x)"]).toBe("Pending payroll inputs");
+    expect(row["Review notes"]).toContain("Prior payroll hours needed");
   });
   it("uses elapsed minutes through daylight-saving time changes", () => {
     const d = day("2026-11-01", 0);

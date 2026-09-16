@@ -606,8 +606,15 @@ function TimekeepingView() {
                         approved for {displayPeriod(activePeriod, periodEnd)}.
                         {counts.approved < periodSheets.length
                           ? " All employees must sign and receive manager approval before export."
-                          : " The Excel summary includes all employees in this period."}
+                          : " The Excel summary includes all employees in this period."}{" "}
+                        Rebuilding uses current timecards and the current
+                        calculation rules, and saves a new version.
                       </p>
+                      <a
+                        href={`/api/timekeeping/export?review=1&period=${activePeriod}`}
+                      >
+                        <Download size={17} /> Download review Excel
+                      </a>
                       <button
                         className="tk-primary"
                         disabled={
@@ -623,13 +630,19 @@ function TimekeepingView() {
                               period: activePeriod,
                             });
                             setExports(await api<ExportRow[]>("?view=exports"));
+                            setReceipt(
+                              `Excel payroll version ${row.version} created from current timecards. Previous versions remain available.`,
+                            );
                             window.location.assign(
                               `/api/timekeeping/export?id=${row.id}`,
                             );
                           })
                         }
                       >
-                        <Download size={17} /> Create Excel payroll summary
+                        <Download size={17} />{" "}
+                        {periodExports.length
+                          ? "Rebuild Excel · new version"
+                          : "Create Excel payroll summary"}
                       </button>
                     </div>
                   )}
@@ -638,8 +651,10 @@ function TimekeepingView() {
                   <section className="tk-panel">
                     <h2>Saved payroll packages</h2>
                     <p>
-                      Every version stays available. Use the latest version when
-                      a correction has been made.
+                      Downloads below use each saved version’s timecard data.
+                      Use Rebuild Excel above after correcting timecards or
+                      updating payroll rules. Every previous version stays
+                      available.
                     </p>
                     {periodExports.length ? (
                       periodExports.map((e) => (
@@ -658,7 +673,7 @@ function TimekeepingView() {
                             </small>
                           </div>
                           <a href={`/api/timekeeping/export?id=${e.id}`}>
-                            <Download size={16} /> Excel
+                            <Download size={16} /> Download saved v{e.version}
                           </a>
                         </div>
                       ))
@@ -1930,7 +1945,8 @@ function DayEditor({
         </span>
         <span className="tk-day-edit">
           {day.emergency && <small>Emergency work</small>}
-          {day.emergencyPhone && <small>Emergency phone</small>}View day
+          {day.emergencyPhone && <small>Phone carrying · stipend</small>}View
+          day
         </span>
       </summary>
       <div className="tk-day-body">
@@ -1995,8 +2011,7 @@ function DayEditor({
                 After-hours emergency premium
                 <select
                   value={
-                    s.emergencyAfterHours === undefined &&
-                    (day.emergency || day.emergencyPhone)
+                    s.emergencyAfterHours === undefined && day.emergency
                       ? ""
                       : s.emergencyAfterHours
                         ? "yes"
@@ -2247,11 +2262,13 @@ function DayEditor({
                 onChange({ ...day, emergencyPhone: e.target.checked })
               }
             />
-            Emergency phone management
+            Carrying emergency house phone · stipend
           </label>
           <small>
-            Flag the day and include any time worked in the intervals above. Add
-            details in daily notes.
+            Phone carrying records stipend eligibility and does not add worked
+            hours or overtime. Record actual emergency-call work in the
+            intervals above and mark qualifying after-hours intervals for the
+            1.5× premium.
           </small>
         </fieldset>
         <div className="tk-leave">

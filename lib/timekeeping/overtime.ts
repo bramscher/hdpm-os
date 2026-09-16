@@ -37,6 +37,7 @@ export type PayrollWeek = PayMinutes & {
   totalWorked: number;
   continues: boolean;
   openingNote: string;
+  openingMissing: boolean;
   issues: string[];
 };
 export const weekStart = (date: string) =>
@@ -80,6 +81,7 @@ export function payrollHours(source: PayrollSource, sheet: Sheet) {
       totalWorked: 0,
       continues: addDays(start, 6) > source.periodEnd,
       openingNote: "",
+      openingMissing: false,
       issues: [],
     };
     if (start < source.periodStart) {
@@ -100,9 +102,7 @@ export function payrollHours(source: PayrollSource, sheet: Sheet) {
                 s.days.some((d) => d.date === date),
             ) || [];
           if (previous.length !== 1 || previous[0].state !== "approved") {
-            week.issues.push(
-              `Missing approved hours for ${date}; confirm opening hours in Payroll setup.`,
-            );
+            week.openingMissing = true;
             continue;
           }
           const day = previous[0].days.find((d) => d.date === date)!;
@@ -112,6 +112,10 @@ export function payrollHours(source: PayrollSource, sheet: Sheet) {
           week.priorWorked += t.worked;
         }
       }
+      if (week.openingMissing)
+        week.issues.push(
+          `Prior payroll hours needed for ${start} through ${addDays(source.periodStart, -1)} to complete the weekly overtime calculation. These hours will not be paid again.`,
+        );
     }
     let worked = week.priorWorked;
     for (const day of sheet.days
@@ -123,7 +127,7 @@ export function payrollHours(source: PayrollSource, sheet: Sheet) {
         weekStart: start,
       };
       if (
-        (day.emergency || day.emergencyPhone) &&
+        day.emergency &&
         day.shifts.some((s) => s.emergencyAfterHours === undefined)
       )
         week.issues.push(

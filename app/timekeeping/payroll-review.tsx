@@ -66,6 +66,11 @@ export default function PayrollReview({
         Holiday, sick and vacation hours do not count toward 40. Premium hours
         below are included in worked time, not added hours.
       </p>
+      <p>
+        Carrying the emergency phone is a separate stipend record. Only actual
+        after-hours emergency work entered as an eligible interval receives the
+        emergency premium.
+      </p>
       {busy && <p role="status">Checking payroll hours…</p>}
       {error && (
         <p role="alert" className="tk-alert">
@@ -157,9 +162,7 @@ function PayrollEmployee({
   save: (body: Record<string, unknown>) => Promise<void>;
 }) {
   const opening = context.openings.find((o) => o.employee_id === employee.id);
-  const missing = report.weeks[0]?.issues.some((issue) =>
-    issue.startsWith("Missing approved"),
-  );
+  const missing = report.weeks[0]?.openingMissing;
   const [status, setStatus] = useState(
     employee.overtime_status || "non_exempt",
   );

@@ -19,7 +19,10 @@ export type PayrollSnapshot = {
   overtime?: OvertimeContext;
 };
 const round = (n: number) => Math.round(n * 10000) / 10000;
-export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
+export function payrollWorkbook(
+  snapshot: PayrollSnapshot,
+  { review = false }: { review?: boolean } = {},
+): Uint8Array {
   const summary: Record<string, string | number>[] = [],
     daily: Record<string, string | number>[] = [],
     intervals: Record<string, string | number>[] = [],
@@ -29,13 +32,22 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
   );
   for (const sheet of snapshot.sheets) {
     const pay = snapshot.overtime ? payrollHours(snapshot, sheet) : null;
-    if (pay?.issues.length)
+    if (pay?.issues.length && !review)
       throw new Error(`${sheet.employee_name}: ${pay.issues.join(" ")}`);
+    const unresolved = !!pay?.issues.length;
     const payColumns = (p: NonNullable<typeof pay>["summary"]) => ({
-      "Regular worked hours (1x)": round(p.regular / 60),
-      "Weekly overtime hours (1.5x)": round(p.weeklyOvertime / 60),
-      "Additional emergency hours (1.5x)": round(p.emergencyAdditional / 60),
-      "Total hours at 1.5x (included)": round(p.premium / 60),
+      "Regular worked hours (1x)": unresolved
+        ? "Pending payroll inputs"
+        : round(p.regular / 60),
+      "Weekly overtime hours (1.5x)": unresolved
+        ? "Pending payroll inputs"
+        : round(p.weeklyOvertime / 60),
+      "Additional emergency hours (1.5x)": unresolved
+        ? "Pending payroll inputs"
+        : round(p.emergencyAdditional / 60),
+      "Total hours at 1.5x (included)": unresolved
+        ? "Pending payroll inputs"
+        : round(p.premium / 60),
     });
     for (const week of pay?.weeks || [])
       weekly.push({
@@ -45,18 +57,33 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
           pay!.status === "exempt" ? "CONFIRMED EXEMPT" : "NON-EXEMPT",
         "Week start (Sunday)": week.start,
         "Week end (Saturday)": week.end,
-        "Prior-period worked hours (not payable again)": round(
-          week.priorWorked / 60,
-        ),
+        "Prior-period worked hours (not payable again)": week.openingMissing
+          ? "Prior payroll hours needed"
+          : round(week.priorWorked / 60),
         "This-period worked hours": round(week.worked / 60),
-        "Week worked hours through period end": round(week.totalWorked / 60),
+        "Phone carrying days in this period (stipend)": sheet.days.filter(
+          (d) => d.emergencyPhone && d.date >= week.start && d.date <= week.end,
+        ).length,
+        "Week worked hours through period end": week.openingMissing
+          ? "Pending payroll inputs"
+          : round(week.totalWorked / 60),
         ...payColumns(week),
         "Emergency hours (included)": round(week.emergency / 60),
-        "Emergency / weekly OT overlap (included)": round(week.overlap / 60),
+        "Emergency / weekly OT overlap (included)": unresolved
+          ? "Pending payroll inputs"
+          : round(week.overlap / 60),
+        ...(review
+          ? {
+              "Report status": "REVIEW COPY - NOT FOR PAYROLL",
+              "Review notes": week.issues.join(" "),
+            }
+          : {}),
         "Week status": week.continues
           ? "Continues next pay period"
           : "Complete through Saturday",
-        "Opening hours source": week.openingNote || "Approved timecards",
+        "Opening hours source": week.openingMissing
+          ? "Awaiting prior payroll record"
+          : week.openingNote || "Approved timecards",
       });
     const employeeRows = sheet.days.map((day) => {
       const t = totals([day]);
@@ -66,6 +93,12 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
         "Pay basis": sheet.pay_basis === "salary" ? "SALARY" : "HOURLY",
         Date: day.date,
         "Worked hours": round(t.worked / 60),
+        ...(review
+          ? {
+              "Report status": "REVIEW COPY - NOT FOR PAYROLL",
+              "Unconfirmed scheduled hours": round(t.scheduled / 60),
+            }
+          : {}),
         ...(pay
           ? {
               "Workweek starts": pay.days.find((d) => d.date === day.date)!
@@ -88,7 +121,7 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
         "No work": day.off ? "Yes" : "",
         Notes: day.note,
         "Emergency work": day.emergency ? "Yes" : "",
-        "Emergency phone management": day.emergencyPhone ? "Yes" : "",
+        "Phone carrying (stipend)": day.emergencyPhone ? "Yes" : "",
       };
     });
     daily.push(...employeeRows);
@@ -101,6 +134,16 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
       "Period start": snapshot.periodStart,
       "Period end": snapshot.periodEnd,
       "Worked hours": sum("Worked hours"),
+      ...(review
+        ? {
+            "Report status": "REVIEW COPY - NOT FOR PAYROLL",
+            "Review notes":
+              pay?.issues.join(" ") ||
+              (sheet.state === "approved"
+                ? "Hours reconciled"
+                : "Timecard is not approved"),
+          }
+        : {}),
       ...(pay
         ? {
             "Overtime eligibility":
@@ -119,7 +162,7 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
         : {}),
       Miles: sum("Miles"),
       "Emergency work days": sheet.days.filter((d) => d.emergency).length,
-      "Emergency phone management days": sheet.days.filter(
+      "Phone carrying days (stipend)": sheet.days.filter(
         (d) => d.emergencyPhone,
       ).length,
       Status: sheet.state,
@@ -173,7 +216,7 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
   }
   const wb = XLSX.utils.book_new();
   wb.Props = {
-    Title: `HDPM Payroll ${snapshot.periodStart} to ${snapshot.periodEnd}`,
+    Title: `HDPM Payroll ${review ? "REVIEW COPY " : ""}${snapshot.periodStart} to ${snapshot.periodEnd}`,
     Author: snapshot.createdBy,
     CreatedDate: new Date(snapshot.generatedAt),
   };
@@ -190,6 +233,16 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
           Value: `${snapshot.periodStart} through ${snapshot.periodEnd}`,
         },
         { Item: "Version", Value: String(snapshot.version) },
+        {
+          Item: "Report mode",
+          Value: review
+            ? "REVIEW COPY - NOT FOR PAYROLL. Regenerated from current timecards. Resolve pending inputs and approvals, then create a new saved payroll version."
+            : "Saved payroll snapshot. Rebuild Excel from current timecards to create a new version after corrections.",
+        },
+        {
+          Item: "Calculation revision",
+          Value: "2026-09-16.2 - phone carrying is stipend-only",
+        },
         { Item: "Generated at", Value: snapshot.generatedAt },
         {
           Item: "Time precision",
@@ -241,6 +294,11 @@ export function payrollWorkbook(snapshot: PayrollSnapshot): Uint8Array {
               },
             ]
           : []),
+        {
+          Item: "Phone stipend",
+          Value:
+            "Phone carrying days are recorded separately for the stipend. They add no worked hours or emergency overtime. Only recorded eligible after-hours work intervals receive the emergency premium. Payroll must include on-call stipend payments in the regular-rate calculation unless a specific exclusion applies, and allocate them to the applicable workweek. Source: https://www.dol.gov/sites/dolgov/files/WHD/legacy/files/2008_09_22_06_FLSA.pdf",
+        },
         {
           Item: "Paid breaks",
           Value:

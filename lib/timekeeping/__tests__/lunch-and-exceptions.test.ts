@@ -157,7 +157,7 @@ describe("lunch windows and daily exceptions", () => {
     expect(rows.find((r) => r.Date === day.date)).toMatchObject({
       "Worked hours": 1,
       "Emergency work": "Yes",
-      "Emergency phone management": "Yes",
+      "Phone carrying (stipend)": "Yes",
     });
     const summary = XLSX.utils.sheet_to_json<Record<string, unknown>>(
       wb.Sheets.Summary,

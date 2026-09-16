@@ -373,7 +373,10 @@ export async function history(ctx: Context, id: string) {
   );
 }
 
-export async function payrollReview(ctx: Context, period: string) {
+export async function payrollSource(
+  ctx: Context,
+  period: string,
+): Promise<PayrollSource> {
   if (!ctx.isAdmin) throw new TimeError("Admin access required.", 403);
   if (!validDate(period) || periodFor(period).start !== period)
     throw new TimeError("Choose a pay period.");
@@ -388,8 +391,12 @@ export async function payrollReview(ctx: Context, period: string) {
     sheets: await listSheets(ctx, period),
     overtime,
   };
+  return source;
+}
+export async function payrollReview(ctx: Context, period: string) {
+  const source = await payrollSource(ctx, period);
   return {
-    overtime,
+    overtime: source.overtime!,
     reports: source.sheets.map((sheet) => payrollHours(source, sheet)),
   };
 }

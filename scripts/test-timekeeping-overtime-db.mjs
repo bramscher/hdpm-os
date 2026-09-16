@@ -19,6 +19,8 @@ try {
     "20260915_timekeeping.sql",
     "20260916_timekeeping_overtime.sql",
     "20260916_timekeeping_overtime.sql",
+    "20260916_timekeeping_phone_stipend.sql",
+    "20260916_timekeeping_phone_stipend.sql",
   ])
     await db.exec(
       await readFile(
@@ -152,6 +154,23 @@ try {
     [JSON.stringify(emergencyDay), employee.id],
   );
   await reject(exportPayroll, /Identify after-hours emergency intervals/);
+  emergencyDay[0].emergency = false;
+  emergencyDay[0].emergencyPhone = true;
+  await db.query(
+    "UPDATE timekeeping_sheet SET days=$1::jsonb WHERE employee_id=$2 AND period_start='2026-01-01'",
+    [JSON.stringify(emergencyDay), employee.id],
+  );
+  const phoneOnly = await exportPayroll();
+  check(
+    phoneOnly.snapshot.sheets[0].days[0].emergencyPhone,
+    "phone carrying exports without emergency interval classification",
+  );
+  const regenerated = await exportPayroll();
+  check(
+    regenerated.version === phoneOnly.version + 1 &&
+      regenerated.id !== phoneOnly.id,
+    "reprocessing creates a distinct saved export version",
+  );
   emergencyDay[0].shifts[0].emergencyAfterHours = true;
   await db.query(
     "UPDATE timekeeping_sheet SET days=$1::jsonb WHERE employee_id=$2 AND period_start='2026-01-01'",
