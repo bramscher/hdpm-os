@@ -13,6 +13,7 @@ import type { AgentChannel, OutboxMessage } from './types';
 import { MAX_SEND_ATTEMPTS } from './types';
 import { getAdapter, type SendOutcome } from './channels';
 import { isGloballyKilled } from './config';
+import { isDepartedStaff } from '@/lib/staff-lifecycle';
 
 export interface NewOutboxMessage {
   proposal_id?: string | null;
@@ -121,7 +122,9 @@ export async function dispatchOutbox(options: {
     summary.processed++;
     let outcome: SendOutcome;
     try {
-      outcome = await getAdapter(row.channel).send(row);
+      outcome = isDepartedStaff(row.recipient_person) || isDepartedStaff(row.recipient_address)
+        ? { status: 'skipped', error: 'Recipient is no longer active staff' }
+        : await getAdapter(row.channel).send(row);
     } catch (err) {
       outcome = { status: 'failed', error: err instanceof Error ? err.message : String(err) };
     }

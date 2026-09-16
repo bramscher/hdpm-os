@@ -9,6 +9,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { PEOPLE } from './types';
+import { isDepartedStaff } from '@/lib/staff-lifecycle';
 
 export interface DigestRecipient {
   person: string;
@@ -17,7 +18,7 @@ export interface DigestRecipient {
   updated_at: string;
 }
 
-/** Full roster for the admin panel (always includes all 7 people). */
+/** Current roster for the admin panel; retired recipients stay historical. */
 export async function listDigestRecipients(): Promise<DigestRecipient[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
@@ -36,7 +37,7 @@ export async function listDigestRecipients(): Promise<DigestRecipient[]> {
       rows.push({ person, email: null, enabled: false, updated_at: '' });
     }
   }
-  return rows;
+  return rows.filter((r) => !isDepartedStaff(r.person) && !isDepartedStaff(r.email));
 }
 
 /** Upsert one person's email / opt-in flag. */
@@ -45,6 +46,9 @@ export async function saveDigestRecipient(
   email: string | null,
   enabled: boolean
 ): Promise<DigestRecipient> {
+  if (isDepartedStaff(person) || isDepartedStaff(email)) {
+    throw new Error('This staff member is no longer active. Assign work to Craig.');
+  }
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('maint_digest_recipient')
@@ -84,5 +88,7 @@ export async function getActiveRecipients(): Promise<Record<string, string>> {
       delete map[r.person];
     }
   }
-  return map;
+  return Object.fromEntries(Object.entries(map).filter(([person, email]) =>
+    !isDepartedStaff(person) && !isDepartedStaff(email)
+  ));
 }

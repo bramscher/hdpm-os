@@ -22,6 +22,7 @@ async function main() {
       .from('staff')
       .update({ slack_user_id: slackId })
       .eq('email', email)
+      .eq('active', true)
       .is('slack_user_id', null)
       .select('email, slack_user_id');
     if (error) console.error(email, 'FAILED:', error.message);

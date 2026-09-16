@@ -19,7 +19,7 @@ Apply [20260915_timekeeping_auto_enroll.sql](../supabase/migrations/20260915_tim
 
 Eligible active company accounts enroll automatically on their first Timekeeping visit, with Craig as reviewer and participation starting that day. Employees choose their usual workdays, start/end and breaks in **My defaults**. New employees start as Hourly. Cheryl Waterman is the sole configured Salary employee, with Craig as reviewer; all employees still record time. An admin can change pay basis when needed. First-visit setup never overwrites an already configured or ended enrollment. Craig is a reviewer and payroll administrator only: no personal time entry, schedule, payroll enrollment or generated timesheets. He remains available as the approving manager; no self-approval is allowed.
 
-Jennifer Bertran (`Jen`), Jayme, Bryce Bramscher and Bianca Nyseth are excluded as non-employees through the timekeeping-only configuration. Company involvement/access is separate. Before the additive SQL is applied, the existing manual setup screen remains available.
+Jennifer Bertran (`Jen`), Jayme, Bryce Bramscher and Bianca Nyseth are excluded from timekeeping. On September 15, 2026, Craig confirmed that Jen, Jayme and Bianca had left the company: their directory profiles were deactivated, their app access blocked, and active responsibilities transferred to Craig. Historical records remain intact. Bryce's company access is unchanged. Before the additive SQL is applied, the existing manual setup screen remains available.
 
 ## Administrator schedule editing
 

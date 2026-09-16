@@ -43,7 +43,7 @@ const SEATS: Record<
   },
   'Property Manager': {
     roles: ['PM portfolio', 'Owner & tenant relations', 'Leasing & renewals'],
-    person: 'Jen',
+    person: 'Craig',
     reportsTo: 'Sr. Property Manager & Maintenance',
     sort: 4,
   },
@@ -114,8 +114,8 @@ const METRICS: Array<{
   { name: 'Vendor accepted-unworked WOs', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'vendor_stuck_pools.acceptedUnworkedCount', sort: 7 },
   { name: 'Open unit turns', owner: 'Brody', unit: 'count', goal_op: 'lte', goal_value: 45, source: 'metrics_snapshot', source_ref: 'turns.openTurns', sort: 8 },
   { name: 'Median days vacant (turns)', owner: 'Brody', unit: 'days', goal_op: 'lte', goal_value: 25, source: 'metrics_snapshot', source_ref: 'turns.medianDaysVacant', sort: 9 },
-  // Target band is 30–36 PER TECH (Craig 2026-08-05); scorecard tracks the floor.
-  { name: 'Billable hours — Brody', owner: 'Brody', unit: 'hours', goal_op: 'gte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'billable_hours.brodyHours', sort: 10 },
+  // Brody: 5 hours/week (Craig 2026-09-15). Alberto retains the 30-hour floor.
+  { name: 'Billable hours — Brody', owner: 'Brody', unit: 'hours', goal_op: 'gte', goal_value: 5, source: 'metrics_snapshot', source_ref: 'billable_hours.brodyHours', sort: 10 },
   { name: 'Billable hours — Alberto', owner: 'Alberto', unit: 'hours', goal_op: 'gte', goal_value: 30, source: 'metrics_snapshot', source_ref: 'billable_hours.albertoHours', sort: 11 },
 ];
 

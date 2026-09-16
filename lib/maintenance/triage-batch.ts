@@ -35,7 +35,7 @@ const RUNWAY_BUSINESS_DAYS: Record<AiTriage['priority']['recommended'], number> 
 export interface DerivedProposal {
   proposed_priority_class: AiTriage['priority']['recommended'];
   proposed_next_action_date: string;
-  proposed_owner_name: 'Cheryl' | 'Jen';
+  proposed_owner_name: 'Cheryl';
   proposed_stage: Stage | null;
 }
 

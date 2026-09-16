@@ -30,11 +30,10 @@ export type AutonomyLevel = 0 | 1 | 2 | 3 | 4;
 export const MAX_SEND_ATTEMPTS = 3;
 
 /**
- * All real staff — the maintenance PEOPLE const plus the rest of the team
- * (roster corrected 2026-07-18; PEOPLE itself types maintenance owner routing
- * and stays untouched).
+ * Current staff options — maintenance owners plus the rest of the team.
+ * Departed staff remain in historical database records, not new assignments.
  */
-export const STAFF_PEOPLE = [...PEOPLE, 'Matt', 'Ashley', 'Bianca', 'Kennedy'] as const;
+export const STAFF_PEOPLE = [...PEOPLE, 'Matt', 'Ashley', 'Kennedy'] as const;
 export type StaffPerson = (typeof STAFF_PEOPLE)[number];
 
 export interface AgentProposal {

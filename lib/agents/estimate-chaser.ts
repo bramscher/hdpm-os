@@ -24,6 +24,7 @@
 
 import type { TripwireException } from '@/lib/maintenance/types';
 import { businessDaysBetween } from '@/lib/maintenance/business-days';
+import { getEstimateChaserOwner } from './pilot';
 
 export const ESTIMATE_CHASER_AGENT = 'estimate_chaser';
 export const VENDOR_CHASE_ACTION = 'vendor_chase';
@@ -177,7 +178,7 @@ export function decideChase(c: ChaseCandidate, h: ChaseHistory, now: Date): Chas
   //     fallback vendor to switch to;
   //   • an "Estimate Requested" WO with no vendor assigned — "chased 3×" is
   //     meaningless (nobody was chased); it needs a vendor assigned, so it must
-  //     keep surfacing to Jayme, not dead-end in the Ops Brief.
+  //     keep surfacing to Craig, not dead-end in the Ops Brief.
   // Both still escalate on extreme age (the age rule below), never on count.
   const countEscalatable = c.kind !== OWNER_APPROVAL_ACTION && Boolean(c.vendorId);
   const escalateOnCount = countEscalatable && h.chaseCount >= ESCALATE_CHASE_COUNT;
@@ -249,8 +250,8 @@ function detailBlockHtml(c: ChaseCandidate): string {
 
 // Signature is per-sender: a draft created in Brody's mailbox must sign as
 // Brody, not the default coordinator. Defaults to the production owner
-// (Jayme since the 2026-08-26 handoff; ESTIMATE_CHASER_OWNER overrides).
-const DEFAULT_SENDER = process.env.ESTIMATE_CHASER_OWNER?.trim() || 'Jayme';
+// (Craig since the 2026-09-15 handoff; ESTIMATE_CHASER_OWNER overrides).
+const DEFAULT_SENDER = getEstimateChaserOwner();
 const signatureText = (name: string) =>
   ['Thank you,', name, 'High Desert Property Management'].join('\n');
 const signatureHtml = (name: string) =>
@@ -376,7 +377,7 @@ const SMS_DESC_MAX = 60;
 /**
  * The text the owner's tap sends. Same hard rules as the email templates: no
  * dollar amounts, no links. Kept under ~320 chars (two SMS segments). The
- * vendor-facing sender name defaults to the production owner (Jayme).
+ * vendor-facing sender name defaults to the production owner (Craig).
  */
 export function buildVendorChaseSms(
   c: ChaseCandidate,

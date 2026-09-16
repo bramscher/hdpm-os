@@ -17,6 +17,7 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { getRoleForEmail } from "@/lib/roles";
+import { isDepartedStaff } from "@/lib/staff-lifecycle";
 
 export const AUTH_SECRET = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
 
@@ -47,10 +48,10 @@ export const authConfig = {
   ],
   callbacks: {
     async signIn({ user }) {
-      // Only allow users from highdesertpm.com domain
+      // Only allow company accounts that have not departed.
       const email = user.email?.toLowerCase();
-      if (!email?.endsWith("@highdesertpm.com")) {
-        console.log(`Sign-in blocked for non-company email: ${email}`);
+      if (!email?.endsWith("@highdesertpm.com") || isDepartedStaff(email)) {
+        console.log(`Sign-in blocked for ineligible account: ${email}`);
         return false;
       }
       return true;
@@ -72,6 +73,8 @@ export const authConfig = {
       return session;
     },
     async jwt({ token, account }) {
+      // Revoke existing sessions as well as preventing new sign-ins.
+      if (isDepartedStaff(token.email)) return null;
       if (account) {
         token.accessToken = account.access_token;
       }

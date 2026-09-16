@@ -12,6 +12,7 @@
 
 import { getToken } from "next-auth/jwt";
 import { NextResponse, type NextRequest } from "next/server";
+import { isDepartedStaff } from "@/lib/staff-lifecycle";
 
 const AUTH_SECRET = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
 
@@ -80,7 +81,7 @@ export default async function proxy(req: NextRequest) {
     secureCookie: process.env.NODE_ENV === "production",
   });
 
-  if (!token) {
+  if (!token || isDepartedStaff(token.email)) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }

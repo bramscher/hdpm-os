@@ -507,7 +507,7 @@ export async function runEstimateChaser(opts: {
   }
 
   // Delivery cohort: pilot recipients (restart §7 pilot) when configured, else
-  // the default production owner (Jayme; ESTIMATE_CHASER_OWNER). The tapper is
+  // the default production owner (Craig; ESTIMATE_CHASER_OWNER). The tapper is
   // resolved separately in slack/interact, so attribution stays correct.
   const pilot = getPilotConfig();
   const recipientNames = pilot.recipients.length > 0 ? pilot.recipients : [getEstimateChaserOwner()];

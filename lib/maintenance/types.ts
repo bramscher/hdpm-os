@@ -54,10 +54,9 @@ export const PEOPLE = [
   'Alberto',
   'Bryce',
   'Penny',
-  'Jen',
   'Craig',
 ] as const;
-export type Person = (typeof PEOPLE)[number];
+export type Person = (typeof PEOPLE)[number] | 'Jen'; // Retained historical owners.
 
 export const EVENT_TYPES = [
   'created',

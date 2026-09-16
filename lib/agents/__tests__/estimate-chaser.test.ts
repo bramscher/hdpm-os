@@ -216,7 +216,7 @@ describe('decideChase', () => {
   });
 
   it('un-assigned Estimate Requested WOs keep following instead of escalating on count', () => {
-    // No vendor => "chased 3x" is meaningless; it must keep surfacing to Jayme.
+    // No vendor => "chased 3x" is meaningless; it must keep surfacing to Craig.
     const unassigned = candidate({ vendorId: null });
     expect(decideChase(unassigned, history({ chaseCount: 4 }), MON)).toEqual({ action: 'chase' });
     // ...but a vendor IS assigned => count escalation still applies.
@@ -289,13 +289,13 @@ describe('draft templates', () => {
     expect(vendorBlankTo.text).not.toContain('[date]');
   });
 
-  it('signs as the given sender, defaulting to the owner (Jayme)', () => {
-    expect(vendor.text).toContain('Jayme');
+  it('signs as the given sender, defaulting to the owner (Craig)', () => {
+    expect(vendor.text).toContain('Craig');
     expect(vendor.text).not.toContain('Brody');
     const brody = buildVendorChaseDraft(candidate(), 'bids@firkus.com', 1, 'Brody');
     expect(brody.text).toContain('Brody');
     expect(brody.html).toContain('Brody');
-    expect(brody.text).not.toMatch(/Thank you,\nJayme/);
+    expect(brody.text).not.toMatch(/Thank you,\nCraig/);
     const ownerBrody = buildOwnerApprovalDraft(candidate({ kind: OWNER_APPROVAL_ACTION }), 1, 'Brody');
     expect(ownerBrody.text).toContain('Brody');
   });
@@ -326,7 +326,7 @@ describe('buildVendorChaseSms', () => {
   });
 
   it('identifies the owner/HDPM, the WO, and the property', () => {
-    expect(round1).toContain('Jayme');
+    expect(round1).toContain('Craig');
     expect(round1).toContain('High Desert Property Mgmt');
     expect(round1).toContain('WO #412');
     expect(round1).toContain('123 Brosterhous Rd');
