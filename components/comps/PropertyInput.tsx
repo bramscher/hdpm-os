@@ -8,6 +8,7 @@ import {
   ALL_TOWNS,
   ALL_PROPERTY_TYPES,
   ALL_AMENITIES,
+  detectCompTown,
   type Town,
   type PropertyType,
   type Amenity,
@@ -183,15 +184,7 @@ export function PropertyInput({ onSubmit, loading }: PropertyInputProps) {
   }
 
   function selectUnit(property: AppFolioResult, unit: AppFolioUnit) {
-    const cityLower = property.city.toLowerCase();
-    const townMap: Record<string, Town> = {
-      bend: "Bend",
-      redmond: "Redmond",
-      sisters: "Sisters",
-      prineville: "Prineville",
-      culver: "Culver",
-    };
-    const detectedTown = townMap[cityLower] || "Bend";
+    const detectedTown = detectCompTown(property.city) || "Bend";
 
     const ptMap = (pt: string): PropertyType => {
       const t = pt.toLowerCase();

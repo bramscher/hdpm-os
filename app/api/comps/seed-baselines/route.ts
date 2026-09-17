@@ -64,6 +64,10 @@ async function seedBaselines(request: NextRequest) {
       { area_name: 'Culver', county: 'Jefferson', bedrooms: 4, fmr_rent: 1798, data_year: 2025, source: 'hud_fmr' },
     ];
 
+    // La Pine shares the county-wide HUD FMR with the other Deschutes towns.
+    baselines.push(...baselines.filter((b) => b.area_name === 'Bend').map((b) => ({
+      ...b, area_name: 'La Pine',
+    })));
     const count = await bulkUpsertBaselines(baselines);
 
     return NextResponse.json({

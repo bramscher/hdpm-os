@@ -20,6 +20,7 @@ const ZILLOW_SLUGS: Record<Town, string> = {
   Sisters: 'sisters-or',
   Prineville: 'prineville-or',
   Culver: 'culver-or',
+  'La Pine': 'la-pine-or',
 };
 
 /**

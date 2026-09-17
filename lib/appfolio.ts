@@ -15,6 +15,7 @@
  */
 
 import type { CreateCompInput, Town, PropertyType } from '@/types/comps';
+import { detectCompTown } from '@/types/comps';
 
 // ============================================
 // Config
@@ -134,17 +135,8 @@ interface V0Vendor {
 // Town detection from city
 // ============================================
 
-const TOWN_MAP: Record<string, Town> = {
-  bend: 'Bend',
-  redmond: 'Redmond',
-  sisters: 'Sisters',
-  prineville: 'Prineville',
-  culver: 'Culver',
-};
-
 function detectTown(city: string): Town | null {
-  const normalized = (city || '').trim().toLowerCase();
-  return TOWN_MAP[normalized] || null;
+  return detectCompTown(city || '');
 }
 
 // ============================================

@@ -7,6 +7,8 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { saveRentAnalysis } from '@/lib/rent-analyses';
 import type { SubjectProperty, CompetingListing } from '@/types/comps';
 
+export const maxDuration = 120;
+
 /** Generate a URL-safe short ID (8 chars) */
 function generateShortId(): string {
   return randomBytes(6).toString('base64url').substring(0, 8);

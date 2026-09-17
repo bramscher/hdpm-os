@@ -8,6 +8,7 @@
 
 import { getComps, getBaselines } from './comps';
 import { getValueEstimate, getRentEstimate } from './rentcast';
+import { refreshRentCastComps } from './rentcast-comps';
 import type {
   SubjectProperty,
   RentAnalysis,
@@ -298,9 +299,22 @@ export async function generateRentAnalysis(
     ],
   };
 
+  // Refresh actual market listings before reading the database. Existing comps
+  // remain usable if the external provider is temporarily unavailable.
+  let refreshWarning: string | undefined;
+  const loadComps = async () => {
+    try {
+      await refreshRentCastComps(subject.town, userEmail);
+    } catch (error) {
+      console.warn('[Rent analysis] Rental listing refresh failed:', error);
+      refreshWarning = 'Current rental listings could not be refreshed; this analysis uses previously saved comps.';
+    }
+    return getComps(filter, 500);
+  };
+
   // 2. Fetch comps, baselines, and RentCast estimates in parallel
   const [allComps, baselines, rentCastRent, rentCastValue] = await Promise.all([
-    getComps(filter, 500),
+    loadComps(),
     getBaselines(),
     getRentEstimate(subject.address, {
       bedrooms: subject.bedrooms,
@@ -373,6 +387,10 @@ export async function generateRentAnalysis(
     rentCastRent,
     rentCastValue
   );
+  if (refreshWarning) notes.push(refreshWarning);
+  if (comparableComps.some((comp) => comp.data_source === 'rentcast')) {
+    notes.push('RentCast database comps reflect advertised asking rents as of the listed comp date, not verified signed leases.');
+  }
 
   return {
     subject,

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { scrapeZillowListings, getZillowSearchUrl } from '@/lib/zillow';
-import type { Town } from '@/types/comps';
-
-const VALID_TOWNS: Town[] = ['Bend', 'Redmond', 'Sisters', 'Prineville', 'Culver'];
+import { ALL_TOWNS, detectCompTown } from '@/types/comps';
 
 /**
  * GET /api/comps/zillow?town=Bend&bedrooms=3
@@ -18,13 +16,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const town = request.nextUrl.searchParams.get('town') as Town | null;
+    const town = detectCompTown(request.nextUrl.searchParams.get('town') ?? '');
     const bedroomsStr = request.nextUrl.searchParams.get('bedrooms');
     const bedrooms = bedroomsStr ? parseInt(bedroomsStr, 10) : undefined;
 
-    if (!town || !VALID_TOWNS.includes(town)) {
+    if (!town) {
       return NextResponse.json(
-        { error: 'Valid town required (Bend, Redmond, Sisters, Prineville, Culver)' },
+        { error: `Valid town required (${ALL_TOWNS.join(', ')})` },
         { status: 400 }
       );
     }
@@ -39,7 +37,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[API] Zillow search error:', error);
-    const town = (new URL(request.url)).searchParams.get('town') as Town || 'Bend';
+    const town = detectCompTown((new URL(request.url)).searchParams.get('town') ?? '') || 'Bend';
     return NextResponse.json({
       listings: [],
       zillow_url: getZillowSearchUrl(town),

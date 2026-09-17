@@ -10,6 +10,7 @@
  */
 
 import type { Town, PropertyType } from '@/types/comps';
+import { detectCompTown } from '@/types/comps';
 import { getPropertyRecords, type RentCastPropertyRecord } from './rentcast';
 
 // ============================================
@@ -54,18 +55,6 @@ export interface PropertyDetails {
 // ============================================
 // Town Detection
 // ============================================
-
-const TOWN_MAP: Record<string, Town> = {
-  bend: 'Bend',
-  redmond: 'Redmond',
-  sisters: 'Sisters',
-  prineville: 'Prineville',
-  culver: 'Culver',
-};
-
-function detectTown(city: string): Town | null {
-  return TOWN_MAP[city.toLowerCase().trim()] || null;
-}
 
 // ============================================
 // Google Geocoding
@@ -170,7 +159,7 @@ export async function lookupAddress(
   const state = extractShortComponent(geo, 'administrative_area_level_1');
   const zip = extractComponent(geo, 'postal_code');
   const county = extractComponent(geo, 'administrative_area_level_2').replace(' County', '');
-  const town = detectTown(city);
+  const town = detectCompTown(city);
 
   const result: AddressLookupResult = {
     formatted_address: geo.formatted_address,

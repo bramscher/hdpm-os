@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS rental_comps (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
 
   -- Location
-  town TEXT NOT NULL CHECK (town IN ('Bend', 'Redmond', 'Sisters', 'Prineville', 'Culver')),
+  town TEXT NOT NULL CHECK (town IN ('Bend', 'Redmond', 'Sisters', 'Prineville', 'Culver', 'La Pine')),
   address TEXT,
   zip_code TEXT,
 
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS rental_comps (
   rent_per_sqft NUMERIC(8,4),
 
   -- Source tracking
-  data_source TEXT NOT NULL DEFAULT 'manual' CHECK (data_source IN ('appfolio', 'rentometer', 'hud_fmr', 'manual')),
+  data_source TEXT NOT NULL DEFAULT 'manual' CHECK (data_source IN ('appfolio', 'rentometer', 'rentcast', 'hud_fmr', 'manual')),
   comp_date DATE NOT NULL DEFAULT CURRENT_DATE,
   external_id TEXT,
 
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS market_baselines (
 
 -- Step 2b: Add unique partial index on external_id (for upsert on sync)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_rental_comps_external_id
-  ON rental_comps(external_id) WHERE external_id IS NOT NULL;
+  ON rental_comps(external_id);
 
 -- Step 3: Create indexes for rental_comps
 CREATE INDEX IF NOT EXISTS idx_rental_comps_town ON rental_comps(town);

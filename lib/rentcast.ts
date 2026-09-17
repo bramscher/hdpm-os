@@ -60,6 +60,7 @@ async function fetchRentCast<T>(
 
   try {
     const res = await fetch(url, {
+      signal: AbortSignal.timeout(20000),
       headers: {
         'X-Api-Key': apiKey,
         Accept: 'application/json',
@@ -337,6 +338,8 @@ export async function getMarketStats(
 // ============================================
 
 export interface RentCastListing {
+  id?: string;
+  lastSeenDate?: string;
   formattedAddress: string;
   city: string;
   state: string;
@@ -366,6 +369,8 @@ export interface ListingSearchParams {
 }
 
 interface RentCastListingResponse {
+  id?: string;
+  lastSeenDate?: string;
   formattedAddress?: string;
   city?: string;
   state?: string;
@@ -382,6 +387,8 @@ interface RentCastListingResponse {
 
 function mapListingResponse(raw: RentCastListingResponse): RentCastListing {
   return {
+    id: raw.id,
+    lastSeenDate: raw.lastSeenDate,
     formattedAddress: raw.formattedAddress || '',
     city: raw.city || '',
     state: raw.state || '',
@@ -427,7 +434,8 @@ export async function getSaleListings(
  * Search active rental listings (long-term).
  */
 export async function getRentalListings(
-  params: ListingSearchParams
+  params: ListingSearchParams,
+  requireSuccess = false
 ): Promise<RentCastListing[]> {
   const data = await fetchRentCast<RentCastListingResponse[]>('/listings/rental/long-term', {
     address: params.address,
@@ -443,8 +451,12 @@ export async function getRentalListings(
     limit: params.limit ?? 50,
   });
 
-  if (!data || !Array.isArray(data)) return [];
+  if (!data || !Array.isArray(data)) {
+    if (requireSuccess) throw new Error('Rental listings are unavailable from RentCast.');
+    return [];
+  }
 
   console.log(`[RentCast] Found ${data.length} rental listings`);
-  return data.map(mapListingResponse);
+  // An unknown bedroom count must not become a studio in the comps database.
+  return data.filter((row) => !requireSuccess || row.bedrooms != null).map(mapListingResponse);
 }

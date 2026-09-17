@@ -27,6 +27,7 @@ const TOWN_COLORS: Record<string, string> = {
   Sisters: "#34d399",
   Prineville: "#6ee7b7",
   Culver: "#a7f3d0",
+  "La Pine": "#0f766e",
 };
 
 function formatDollar(value: number) {

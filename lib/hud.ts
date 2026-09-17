@@ -5,7 +5,7 @@
  * API docs: https://www.huduser.gov/portal/dataset/fmr-api.html
  *
  * County mapping:
- *   Deschutes County → Bend, Redmond, Sisters
+ *   Deschutes County → Bend, Redmond, Sisters, La Pine
  *   Crook County → Prineville
  *   Jefferson County → Culver
  *
@@ -34,7 +34,7 @@ const DESCHUTES_COUNTY_FIPS = '4101700099999';
 
 // Area names to assign based on county
 const COUNTY_AREAS: Record<string, string[]> = {
-  Deschutes: ['Bend', 'Redmond', 'Sisters'],
+  Deschutes: ['Bend', 'Redmond', 'Sisters', 'La Pine'],
   Crook: ['Prineville'],
   Jefferson: ['Culver'],
 };

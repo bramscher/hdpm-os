@@ -3,7 +3,7 @@
 // ============================================
 
 /** Supported Central Oregon towns */
-export type Town = 'Bend' | 'Redmond' | 'Sisters' | 'Prineville' | 'Culver';
+export type Town = 'Bend' | 'Redmond' | 'Sisters' | 'Prineville' | 'Culver' | 'La Pine';
 
 /** Property type classifications */
 export type PropertyType = 'SFR' | 'Apartment' | 'Townhouse' | 'Duplex' | 'Condo' | 'Manufactured' | 'Other';
@@ -25,7 +25,13 @@ export type Amenity =
   | 'new_flooring';
 
 /** All towns available for filtering */
-export const ALL_TOWNS: Town[] = ['Bend', 'Redmond', 'Sisters', 'Prineville', 'Culver'];
+export const ALL_TOWNS: Town[] = ['Bend', 'Redmond', 'Sisters', 'Prineville', 'Culver', 'La Pine'];
+
+/** Shared city normalization for address lookup, AppFolio, and manual entry. */
+export function detectCompTown(city: string): Town | null {
+  const normalized = city.trim().toLowerCase().replace(/\s+/g, '');
+  return ALL_TOWNS.find((town) => town.toLowerCase().replace(/\s+/g, '') === normalized) ?? null;
+}
 
 /** All property types available */
 export const ALL_PROPERTY_TYPES: PropertyType[] = [
