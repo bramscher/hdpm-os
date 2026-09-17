@@ -21,7 +21,7 @@ const REFRESH_EARLY_MS = 120_000;
 export const ZOOM_OAUTH_CALLBACK_PATH = '/api/agents/zoom-oauth/callback';
 
 function baseUrl(): string {
-  return process.env.NEXTAUTH_URL || 'https://hdpmchat.highdesertpm.com';
+  return process.env.NEXTAUTH_URL?.trim() || 'https://hdpmchat.highdesertpm.com';
 }
 
 export function zoomOauthRedirectUri(): string {

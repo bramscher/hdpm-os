@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const { email } = await exchangeCodeAndStore(code);
     return html(
       200,
-      `✅ Zoom connected for <strong>${escapeHtml(email)}</strong>. Texts can now send from this account's line. You can close this tab.`
+      `✅ Zoom connected for <strong>${escapeHtml(email)}</strong>. Your authorization is saved. This does not change whether chaser texts are in preview mode. You can close this tab.`
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

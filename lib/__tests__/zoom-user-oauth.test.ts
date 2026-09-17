@@ -36,6 +36,11 @@ describe('oauth state', () => {
 });
 
 describe('authorize url', () => {
+  it('trims configuration whitespace from the callback URL', () => {
+    vi.stubEnv('NEXTAUTH_URL', 'https://hdpmchat.highdesertpm.com\n');
+    expect(zoomOauthRedirectUri()).toBe('https://hdpmchat.highdesertpm.com/api/agents/zoom-oauth/callback');
+  });
+
   it('is null without the user app env', () => {
     vi.stubEnv('ZOOM_USER_CLIENT_ID', '');
     vi.stubEnv('ZOOM_USER_CLIENT_SECRET', '');

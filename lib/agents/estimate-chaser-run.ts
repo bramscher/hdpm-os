@@ -22,6 +22,7 @@ import { daysBetween } from '@/lib/maintenance/business-days';
 import { getDashboardConfig } from '@/lib/dashboard-config';
 import { fetchAppFolioVendorContacts, fetchAppFolioPropertyOwnerMap } from '@/lib/appfolio';
 import { normalizePhone } from '@/lib/zoom-sync';
+import { smsSenderEmail } from '@/lib/zoom-phone';
 import { getAgentConfig, effectiveLevel, isGloballyKilled, isWithinQuietHours, getNotifyRecipients } from './config';
 import { createProposal } from './proposals';
 import { enqueueOutbox, dispatchOutbox } from './outbox';
@@ -43,6 +44,9 @@ import {
   buildVendorChaseSms,
   buildSmsQueueCard,
   buildEscalationSlack,
+  vendorContactIssue,
+  buildChaseContactCard,
+  type ChaseContactIssue,
   type ChaseCandidate,
   type ChaseHistory,
   type EscalationItem,
@@ -75,6 +79,8 @@ export interface EstimateChaserRunResult {
   disabled: string[];
   /** WO refs drafted with a blank To: line for Cheryl to fill. */
   missingVendorEmail: string[];
+  /** Internal setup tasks; no draft/proposal is created or counted as a chase. */
+  contactIssues: { workOrderId: string; woNumber: string | null; vendorName: string | null; reason: ChaseContactIssue['reason'] }[];
   drafts: { sent: number; failed: number; skipped: number };
   escalations: number;
   escalationSlack?: SendOutcome;
@@ -88,6 +94,7 @@ interface HistoryRow {
   action_type: string;
   status: string;
   created_at: string;
+  payload: Record<string, unknown>;
 }
 
 const CHASE_ACTIONS = [VENDOR_CHASE_ACTION, VENDOR_CHASE_SMS_ACTION, OWNER_APPROVAL_ACTION];
@@ -95,7 +102,10 @@ const VENDOR_ACTIONS = [VENDOR_CHASE_ACTION, VENDOR_CHASE_SMS_ACTION];
 
 function historyFor(rows: HistoryRow[], woId: string, kind: string): ChaseHistory {
   const mine = rows.filter((r) => r.subject_id === woId);
-  const chases = mine.filter((r) => CHASE_ACTIONS.includes(r.action_type));
+  const chases = mine.filter((r) => CHASE_ACTIONS.includes(r.action_type) && !(
+    VENDOR_ACTIONS.includes(r.action_type) &&
+    (r.payload?.vendor_id === null || r.payload?.vendor_email_missing === true)
+  ));
   const lastChase = chases.map((r) => r.created_at).sort().at(-1);
   const lastEscalate = mine
     .filter((r) => r.action_type === ESCALATE_ACTION)
@@ -151,7 +161,7 @@ export async function rebuildSmsQueueCard(
     return item;
   });
 
-  return buildSmsQueueCard(items, chaseDate);
+  return buildSmsQueueCard(items, chaseDate, smsSenderEmail(), getPilotConfig().shadow || process.env.AGENT_ZOOM_SMS_DRYRUN === '1');
 }
 
 export async function runEstimateChaser(opts: {
@@ -182,6 +192,7 @@ export async function runEstimateChaser(opts: {
     skippedCap: { vendor_chase: 0, vendor_chase_sms: 0, owner_approval: 0 },
     disabled: [],
     missingVendorEmail: [],
+    contactIssues: [],
     drafts: { sent: 0, failed: 0, skipped: 0 },
     escalations: 0,
     backfilled: 0,
@@ -301,7 +312,7 @@ export async function runEstimateChaser(opts: {
     // Direct query, not listProposals — its 100-row default limit truncates.
     const { data, error } = await supabase
       .from('agent_proposal')
-      .select('id, subject_id, action_type, status, created_at')
+      .select('id, subject_id, action_type, status, created_at, payload')
       .eq('agent', ESTIMATE_CHASER_AGENT)
       .in('subject_id', woIds);
     if (error) throw new Error(`Chase history read failed: ${error.message}`);
@@ -330,6 +341,7 @@ export async function runEstimateChaser(opts: {
   // contact lookup below.
   const toChase: { candidate: ChaseCandidate; history: ChaseHistory }[] = [];
   const toEscalate: EscalationItem[] = [];
+  const contactIssues: ChaseContactIssue[] = [];
   for (const candidate of candidates) {
     // Owner-approval draft only when the WO is genuinely owner-gated.
     if (candidate.kind === OWNER_APPROVAL_ACTION && !ownerGatedWoIds.has(candidate.workOrderId)) {
@@ -338,6 +350,12 @@ export async function runEstimateChaser(opts: {
     }
     const kindEnabled =
       candidate.kind === VENDOR_CHASE_ACTION ? vendorEnabled || smsEnabled : ownerEnabled;
+    // An unassigned WO needs an assignment, not a recipient-less bid chase.
+    // Check before cooldown/escalation so old empty drafts cannot hide the task.
+    if (candidate.kind === VENDOR_CHASE_ACTION && !candidate.vendorId) {
+      if (kindEnabled) contactIssues.push({ candidate, reason: 'assign_vendor' });
+      continue;
+    }
     const history = historyFor(historyRows, candidate.workOrderId, candidate.kind);
     const decision = decideChase(candidate, history, now);
     if (decision.action === 'escalate') {
@@ -437,9 +455,15 @@ export async function runEstimateChaser(opts: {
     }
     const phone = candidate.vendorId ? (vendorPhoneById.get(candidate.vendorId) ?? null) : null;
     const email = candidate.vendorId ? (vendorEmailById.get(candidate.vendorId) ?? null) : null;
+    const contactIssue = vendorContactIssue(candidate, email, phone, smsEnabled);
+    if (contactIssue) {
+      contactIssues.push(contactIssue);
+      result.missingVendorEmail.push(candidate.woNumber ?? candidate.workOrderId);
+      continue;
+    }
     if (smsEnabled && phone) {
       planned.push({ candidate, history, action: VENDOR_CHASE_SMS_ACTION, vendorEmail: email, vendorPhone: phone });
-    } else if (vendorEnabled) {
+    } else if (vendorEnabled && email) {
       planned.push({ candidate, history, action: VENDOR_CHASE_ACTION, vendorEmail: email, vendorPhone: phone });
     } else {
       result.skippedNoChannel++;
@@ -480,7 +504,7 @@ export async function runEstimateChaser(opts: {
     const email = c.vendorId ? (vendorEmailById.get(c.vendorId) ?? null) : null;
     const history = historyFor(historyRows, c.workOrderId, VENDOR_CHASE_ACTION);
     if (seedChannel === 'email') {
-      // A draft needs no phone (and a missing vendor email → blank To: line).
+      if (!email) continue; // Pilot drafts also require a real recipient.
       seededChases.push({ candidate: c, history, action: VENDOR_CHASE_ACTION, vendorEmail: email, vendorPhone: phone });
     } else {
       if (!phone) continue; // SMS card needs a phone to (shadow-)text.
@@ -497,6 +521,9 @@ export async function runEstimateChaser(opts: {
 
   const seededSms = seededChases.filter((s) => s.action === VENDOR_CHASE_SMS_ACTION).length;
   const seededEmail = seededChases.length - seededSms;
+  result.contactIssues = contactIssues.map(({ candidate: c, reason }) => ({
+    workOrderId: c.workOrderId, woNumber: c.woNumber, vendorName: c.vendorName, reason,
+  }));
 
   if (dryRun) {
     result.vendorDrafts = capped.filter((p) => p.action === VENDOR_CHASE_ACTION).length + seededEmail;
@@ -518,6 +545,33 @@ export async function runEstimateChaser(opts: {
   // default; Craig + Brody during the pilot). Each person gets their own draft
   // to review and send from their own Outlook.
   const mailboxRecipients = recipients.filter((s) => s.email);
+
+  // A compact internal queue replaces blank-To vendor drafts. Re-running on
+  // the same day does not create another card, and these tasks never create
+  // chase proposals or increase the follow-up round.
+  if (contactIssues.length > 0) {
+    const reviewers = await getNotifyRecipients(
+      ESTIMATE_CHASER_AGENT, VENDOR_CHASE_ACTION, recipients.map((s) => s.person)
+    );
+    for (let offset = 0; offset < contactIssues.length; offset += 20) {
+      const batch = Math.floor(offset / 20);
+      const subject = `Chaser contact details — ${chaseDate} (${batch + 1})`;
+      const card = buildChaseContactCard(contactIssues.slice(offset, offset + 20), chaseDate);
+      for (const reviewer of reviewers) {
+        const { data: existing, error } = await supabase.from('agent_outbox')
+          .select('id').eq('channel', 'slack').eq('subject', subject)
+          .eq('recipient_address', reviewer.slack_user_id!).limit(1);
+        if (error) throw new Error(`Contact queue lookup failed: ${error.message}`);
+        if (existing?.length) continue;
+        await enqueueOutbox({
+          channel: 'slack', recipient_person: reviewer.person,
+          recipient_address: reviewer.slack_user_id!, subject, body: card.text,
+          payload: { blocks: card.blocks, chase_date: chaseDate },
+        });
+      }
+    }
+    await dispatchOutbox({ channel: 'slack', now });
+  }
 
   const emailChases = [
     ...seededChases.filter((s) => s.action !== VENDOR_CHASE_SMS_ACTION),
@@ -687,11 +741,11 @@ export async function runEstimateChaser(opts: {
     // shared proposals are double-tap guarded so a second tapper is a no-op.
     const cardRecipients = await getNotifyRecipients(
       ESTIMATE_CHASER_AGENT,
-      'vendor_chase',
+      VENDOR_CHASE_SMS_ACTION,
       recipients.map((s) => s.person)
     );
     if (cardRecipients.length > 0) {
-      const card = buildSmsQueueCard(smsItems, chaseDate);
+      const card = buildSmsQueueCard(smsItems, chaseDate, smsSenderEmail(), pilot.shadow || process.env.AGENT_ZOOM_SMS_DRYRUN === '1');
       const cardRowIds: string[] = [];
       for (const person of cardRecipients) {
         const cardRow = await enqueueOutbox({

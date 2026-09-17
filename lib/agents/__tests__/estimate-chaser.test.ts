@@ -10,6 +10,8 @@ import {
   buildVendorChaseSms,
   buildSmsQueueCard,
   buildEscalationSlack,
+  vendorContactIssue,
+  buildChaseContactCard,
   encodeEcActionId,
   parseEcActionId,
   type ChaseCandidate,
@@ -398,6 +400,47 @@ describe('buildSmsQueueCard', () => {
 
   it('shows the resolution on decided items', () => {
     expect(s).toContain('Text sent by Cheryl 7:02 AM');
+  });
+
+  it('identifies the configured sender instead of implying the reviewer owns the line', () => {
+    const card = buildSmsQueueCard(items, '2026-09-16', 'cheryl@highdesertpm.com');
+    expect(JSON.stringify(card.blocks)).toContain('Zoom line for cheryl@highdesertpm.com');
+    expect(JSON.stringify(card.blocks)).not.toContain('your Zoom line');
+  });
+
+  it('labels preview taps as reviews rather than real sends', () => {
+    const card = buildSmsQueueCard(items, '2026-09-16', 'cheryl@highdesertpm.com', true);
+    const content = JSON.stringify(card.blocks);
+    expect(content).toContain('Preview mode');
+    expect(content).toContain('Mark reviewed');
+    expect(content).not.toContain('Send this text?');
+    expect(content).not.toContain('Each tap sends');
+  });
+});
+
+describe('chaser contact readiness', () => {
+  it('requires a vendor assignment even if an unrelated contact is supplied', () => {
+    expect(vendorContactIssue(candidate({ vendorId: null }), 'a@example.com', '+15415550100', true)?.reason).toBe('assign_vendor');
+  });
+
+  it('accepts either addressed email or an enabled text destination', () => {
+    expect(vendorContactIssue(candidate(), 'a@example.com', null, true)).toBeNull();
+    expect(vendorContactIssue(candidate(), null, '+15415550100', true)).toBeNull();
+    expect(vendorContactIssue(candidate(), null, '+15415550100', false)?.reason).toBe('missing_contact');
+    expect(vendorContactIssue(candidate(), ' ', null, true)?.reason).toBe('missing_contact');
+  });
+
+  it('provides an internal assignment task and work-order link with no send button', () => {
+    const card = buildChaseContactCard([
+      { candidate: candidate({ vendorId: null }), reason: 'assign_vendor' },
+      { candidate: candidate(), reason: 'missing_contact' },
+    ], '2026-09-16');
+    const content = JSON.stringify(card.blocks);
+    expect(content).toContain('Assign a vendor');
+    expect(content).toContain('Firkus Roofing');
+    expect(content).toContain('https://hdpm.appfolio.com/wo/412');
+    expect(content).not.toContain('sendsms');
+    expect(card.text).toContain('2 need contact details');
   });
 });
 

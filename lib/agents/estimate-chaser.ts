@@ -272,6 +272,48 @@ export interface DraftContent {
   toRecipients: string[];
 }
 
+/** Internal work needed before a vendor-facing chase can be prepared. */
+export interface ChaseContactIssue {
+  candidate: ChaseCandidate;
+  reason: 'assign_vendor' | 'missing_contact';
+}
+
+export function vendorContactIssue(
+  c: ChaseCandidate,
+  email: string | null,
+  phone: string | null,
+  smsEnabled: boolean
+): ChaseContactIssue | null {
+  if (!c.vendorId) return { candidate: c, reason: 'assign_vendor' };
+  if (!email?.trim() && !(smsEnabled && phone?.trim())) {
+    return { candidate: c, reason: 'missing_contact' };
+  }
+  return null;
+}
+
+/** Internal-only: these are setup tasks, never external drafts or chase attempts. */
+export function buildChaseContactCard(
+  issues: ChaseContactIssue[],
+  dateStr: string
+): { text: string; blocks: unknown[] } {
+  const escape = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  const text = `Work order chasers — ${issues.length} need contact details (${dateStr})`;
+  return {
+    text,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: `*${text}*` } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: 'Resolve these in AppFolio so the next run can prepare an addressed email or a text for your review.' }] },
+      ...issues.map(({ candidate: c, reason }) => ({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${escape(woRef(c))}*\n${reason === 'assign_vendor' ? 'Assign a vendor — no vendor is recorded on this work order.' : `Add contact details for ${escape(c.vendorName || 'the assigned vendor')} — no usable email or enabled text destination is available.`}${c.appfolioLink ? `\n<${c.appfolioLink}|Open work order>` : ''}`,
+        },
+      })),
+    ],
+  };
+}
+
 /**
  * Vendor bid chase. To: the vendor when their email is known, else blank for
  * Cheryl to fill. Round ≥ 2 acknowledges the earlier follow-up.
@@ -446,7 +488,9 @@ export function smsQueueItemFromCandidate(
 
 export function buildSmsQueueCard(
   items: SmsQueueItem[],
-  dateStr: string
+  dateStr: string,
+  senderEmail?: string,
+  previewOnly = false
 ): { text: string; blocks: unknown[] } {
   const pending = items.filter((i) => i.status === 'proposed').length;
   const text = `📱 Text chase queue — ${dateStr} (${pending} of ${items.length} to send)`;
@@ -458,7 +502,9 @@ export function buildSmsQueueCard(
       elements: [
         {
           type: 'mrkdwn',
-          text: 'Each tap sends the text below from your Zoom line — replies land in your Zoom app. Nothing sends without your tap.',
+          text: previewOnly
+            ? 'Preview mode — review the recipient and message below. Mark reviewed records your review; it does not send a text.'
+            : `Each tap sends the text below from ${senderEmail ? `the Zoom line for ${senderEmail}` : 'the configured Zoom line'} — replies land in that line’s Zoom inbox. Nothing sends without your tap.`,
         },
       ],
     },
@@ -486,16 +532,16 @@ export function buildSmsQueueCard(
           {
             type: 'button',
             action_id: encodeEcActionId('sendsms', item.proposalId),
-            text: { type: 'plain_text', text: '📱 Send text' },
+            text: { type: 'plain_text', text: previewOnly ? 'Mark reviewed' : '📱 Send text' },
             style: 'primary',
             value: item.proposalId,
             confirm: {
-              title: { type: 'plain_text', text: 'Send this text?' },
+              title: { type: 'plain_text', text: previewOnly ? 'Mark reviewed?' : 'Send this text?' },
               text: {
                 type: 'mrkdwn',
-                text: `To *${item.vendorName ?? 'vendor'}* at ${item.vendorPhone}`,
+                text: `${previewOnly ? 'Preview only — no text will be sent.\n' : ''}To *${item.vendorName ?? 'vendor'}* at ${item.vendorPhone}`,
               },
-              confirm: { type: 'plain_text', text: 'Send' },
+              confirm: { type: 'plain_text', text: previewOnly ? 'Mark reviewed' : 'Send' },
               deny: { type: 'plain_text', text: 'Cancel' },
             },
           },
