@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCompanySession } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { resolvePriceBookItem } from '@/lib/turn-estimator/price-book';
+import type { AvailabilityProfile } from '@/lib/maintenance-workspace/planning';
 import { priceLine } from '@/lib/turn-estimator/pricing';
 export async function GET(){
  const guard=await requireCompanySession();if(!guard.ok)return guard.response;
@@ -15,9 +16,33 @@ export async function GET(){
    all('maintenance_job'),all('maintenance_task'),all('maintenance_visit'),all('maintenance_work_record'),
    office?all('maintenance_billing_allocation'):[],office?all('hdms_invoices','id,invoice_code,status,maintenance_job_id,total_amount'):[],
    all('staff','person,name,active'),office?all('maintenance_target'):[]]);
+  let availability: AvailabilityProfile[] = [], availabilityError = '';
+  if (office) {
+   try {
+    const [employees, sheets] = await Promise.all([
+     all('timekeeping_employee','id,staff_person,enabled,starts_on,ends_on,schedule'),
+     all('timekeeping_sheet','id,employee_id,days'),
+    ]);
+    // Return only operational availability; never return leave categories, payroll, notes or actual shifts.
+    availability = employees.map(employee => {
+     const schedule = employee.schedule as AvailabilityProfile['schedule'];
+     return {
+      person: String(employee.staff_person), enabled: !!employee.enabled,
+      starts_on: String(employee.starts_on), ends_on: employee.ends_on as string|null,
+      schedule: schedule ? {weekdays:schedule.weekdays,start:schedule.start,end:schedule.end,paidBreak:schedule.paidBreak,unpaidBreak:schedule.unpaidBreak} : null,
+      exceptions: sheets.filter(sheet=>sheet.employee_id===employee.id).flatMap(sheet=>{
+       const days=sheet.days as {date:string;off:boolean;leave:{minutes:number}[]}[];
+       return days.filter(day=>day.off||day.leave?.length).map(day=>({
+        date:day.date,off:!!day.off,unavailableMinutes:(day.leave||[]).reduce((sum,leave)=>sum+Number(leave.minutes),0),
+       }));
+      }),
+     };
+    });
+   } catch { availabilityError = 'Workweek availability could not load. Booked visits are still shown; free capacity is unknown.'; }
+  }
   const visibleVisits=office?visits:visits.filter(v=>(v.technicians as string[]).includes(actor.person)&&v.status!=='cancelled');
   const allowed=new Set(visibleVisits.map(v=>v.job_id));
-  return NextResponse.json({office,person:actor.person,jobs:office?jobs:jobs.filter(j=>allowed.has(j.id)).map(({approval_note,...j})=>j),tasks:office?tasks:tasks.filter(t=>allowed.has(t.job_id)).map(t=>({id:t.id,job_id:t.job_id,description:t.description,quantity:t.quantity,approved:t.approved})),visits:visibleVisits,records:office?records:records.filter(r=>r.technician===actor.person),allocations,invoices:invoices.filter(i=>i.maintenance_job_id),staff:staff.filter(s=>s.active&&(office||s.person===actor.person)).map(s=>({person:s.person,name:s.name})),targets});
+  return NextResponse.json({availability,availabilityError,office,person:actor.person,jobs:office?jobs:jobs.filter(j=>allowed.has(j.id)).map(({approval_note,...j})=>j),tasks:office?tasks:tasks.filter(t=>allowed.has(t.job_id)).map(t=>({id:t.id,job_id:t.job_id,description:t.description,quantity:t.quantity,approved:t.approved})),visits:visibleVisits,records:office?records:records.filter(r=>r.technician===actor.person),allocations,invoices:invoices.filter(i=>i.maintenance_job_id),staff:staff.filter(s=>s.active&&(office||s.person===actor.person)).map(s=>({person:s.person,name:s.name})),targets});
  }catch(e){return failure(e);}
 }
 export async function POST(req:NextRequest){

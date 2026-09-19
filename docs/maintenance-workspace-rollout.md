@@ -45,3 +45,17 @@ The proposal in `invoice-manager-plan.md` remains the broader roadmap. This docu
 The Estimates queue combines saved drafts and issued estimates, grouped as Drafts, Awaiting approval, Approved, In billing, and Closed. Partial task drafts remain under Approved with an explicit undrafted-task count. The review page provides scope, estimate PDF, recorded approval/decline, job setup, and authorized full-scope invoice conversion. Existing approval and conversion role boundaries are retained; manager create/issue access now matches the existing manager builder and approval workflow. Work-order actions reopen existing active estimates instead of silently starting another draft. Suggested scope is explicitly requested and reviewed before issue; it does not approve work or send messages.
 
 Validation for this cleanup: 919 tests across 90 files passed, including new queue-stage and estimate-to-job handoff checks. The production build passed. No additional database migration is required.
+
+## Availability and revenue planning
+
+Price Book is linked directly from the maintenance header, Estimates queue, estimate builder, review screen and calendar. The builder opens it in a separate tab to preserve edits. Templates reference price-book items; issued estimates and imported approved tasks retain their price snapshots.
+
+Work orders now have Schedule actions. Approved estimates can schedule directly, importing their approved scope through the existing guarded handoff. Draft or unapproved scope may reserve a work-order visit, but the booking itself grants no approval and contributes no forecast revenue until approved pricing is attached.
+
+The Schedule view shows booked crew hours, unbooked capacity for today onward, upcoming planned revenue and planned service value. It defaults to Alberto, Brody, and other assigned technicians, with an option for all staff. Capacity reads existing Timekeeping workweeks and subtracts all break minutes and recorded off/leave time; it does not write payroll records. The API returns only schedule availability and generic unavailable minutes, not leave categories, payroll information, notes or actual shifts. Missing workweeks are shown as unknown. Over-capacity plans are highlighted; time overlaps are still rejected by the existing visit RPC.
+
+Forecasts allocate remaining approved job charges once across all upcoming planned visits, in proportion to planned crew minutes. Multi-technician visits split their share. A filtered date range only displays its allocated portion. Materials and coordination stay in revenue but are excluded from service value. Reported-complete or already-reserved tasks, cancelled/completed visits and overdue visits do not contribute to upcoming revenue. An unpriced booking is explicitly marked. These allocations are forecasts, not earned revenue, cash flow or invoice entries.
+
+Availability covers local HDPM plans only. AppFolio-only appointments and travel must be allowed for separately. Current workweek defaults are used, so historical capacity is not an immutable payroll snapshot. No new database migration is needed.
+
+Validation: 930 tests across 91 files passed, including revenue conservation across multiple visits/technicians, filtered forecast dates, completed/reserved scope exclusion, unpriced work, leave, overnight capacity and overbooking.

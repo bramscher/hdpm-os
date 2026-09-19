@@ -38,6 +38,8 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
         <button className={`${button} bg-green-700 text-white`} onClick={onChooseWorkOrder}><Wrench className="h-4 w-4"/>Create from work order</button>
         <Link className={button} href="/turn-estimator/estimates/new?template=1"><FileText className="h-4 w-4"/>Start from template / price book</Link>
       </div>}
+      <div className="mt-3 flex flex-wrap gap-4 text-sm"><Link className="text-green-800 underline" href="/turn-estimator/price-book">Open price book</Link><Link className="text-green-800 underline" href="/maintenance/workspace?view=schedule">Availability & planned revenue</Link></div>
+      <p className="mt-2 text-xs text-charcoal-500">The price book supplies item prices; templates assemble those items into reusable scope. Issued estimates keep their saved prices.</p>
     </div>
     <div className="flex flex-wrap gap-2" aria-label="Estimate status filters">
       {stages.map(([value, label]) => <button key={value} aria-pressed={stage === value} onClick={() => setStage(value)} className={`${button} ${stage === value ? 'bg-charcoal-900 text-white' : 'bg-white text-charcoal-600'}`}>{label}<span className="text-xs opacity-70">{rows.filter(r => value === 'all' || r.stage === value).length}</span></button>)}
@@ -51,7 +53,7 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
           <p className="mt-1 text-sm text-charcoal-500">{row.workOrder ? `WO ${row.workOrder} · ` : ''}{new Date(row.updatedAt).toLocaleDateString()}{row.stage === 'closed' ? ` · ${row.status.replaceAll('_', ' ')}` : ''}</p>
           {row.taskCount > 0 && <p className="mt-1 text-xs text-charcoal-500">{row.undraftedTasks} of {row.taskCount} tasks not yet drafted</p>}
         </div>
-        <div className="flex items-center gap-4"><span className="font-semibold text-charcoal-800">{row.total === null ? 'Draft pricing' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format(row.total)}</span><Link className={button} href={row.href}>{row.stage === 'draft' ? 'Continue estimate' : 'Review estimate'}</Link></div>
+        <div className="flex flex-wrap items-center gap-4"><span className="font-semibold text-charcoal-800">{row.total === null ? 'Draft pricing' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format(row.total)}</span>{row.stage==='approved'&&row.workOrderId&&<Link className={`${button} bg-green-700 text-white`} href={`/maintenance/workspace?estimate=${row.id}&schedule=1`}>Schedule</Link>}<Link className={button} href={row.href}>{row.stage === 'draft' ? 'Continue estimate' : 'Review estimate'}</Link></div>
       </article>)}
     </div>}
   </section>;

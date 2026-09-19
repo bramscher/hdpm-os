@@ -18,6 +18,7 @@ export default async function PriceBookPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
+      <a href="/maintenance/invoices?tab=estimates" className="mb-5 inline-block text-sm text-green-800 underline">← Estimates</a>
       <h1 className="text-display text-charcoal-900">Price Book</h1>
       <p className="mb-6 mt-1 text-sm text-charcoal-500">
         Effective-dated pricing for turn estimates. Repricing creates a new effective row — it never

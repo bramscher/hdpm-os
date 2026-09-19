@@ -1,3 +1,4 @@
+import type { AvailabilityProfile } from './planning';
 export interface Job { id:string; work_order_id:string; property_name:string; property_address:string; unit_name:string|null; title:string; status:string; progress_billing:boolean; approval_note:string }
 export interface Task { id:string; job_id:string; description:string; item_code:string|null; pricing_method:string; amount:number; service_value:number; quantity:number; approved:boolean }
 export interface Visit { id:string; job_id:string; technicians:string[]; work_date:string; start_minute:number; planned_minutes:number; status:string; note:string; version:number; source:string }
@@ -5,7 +6,7 @@ export interface WorkRecord { id:string; task_id:string; visit_id:string|null; t
 export interface Allocation { task_id:string; invoice_id:string; amount:number; service_value:number; benchmark:number }
 export interface WorkspaceInvoice { id:string; invoice_code:string; status:string; maintenance_job_id:string; total_amount:number }
 export interface Target { technician:string; effective_from:string; benchmark:number; min_hours:number; max_hours:number }
-export interface Workspace { office:boolean; person:string; jobs:Job[]; tasks:Task[]; visits:Visit[]; records:WorkRecord[]; allocations:Allocation[]; invoices:WorkspaceInvoice[]; staff:{person:string; name:string}[]; targets:Target[] }
+export interface Workspace { availability?:AvailabilityProfile[]; availabilityError?:string; office:boolean; person:string; jobs:Job[]; tasks:Task[]; visits:Visit[]; records:WorkRecord[]; allocations:Allocation[]; invoices:WorkspaceInvoice[]; staff:{person:string; name:string}[]; targets:Target[] }
 export const pacificDay=(date=new Date())=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(date);
 export function shiftDay(day:string,n:number){const d=new Date(`${day}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
 export function calendarDays(day:string,mode:'day'|'week'|'month'){

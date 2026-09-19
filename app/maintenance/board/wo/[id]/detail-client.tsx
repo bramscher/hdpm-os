@@ -147,6 +147,7 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
         >
           Create estimate
         </Link>
+        <Link className="mo-btn" href={`/maintenance/workspace?work_order=${wo.id}&schedule=1`}>Schedule visit</Link>
         <Link href="/maintenance/board" className="badge">
           ← Back to board
         </Link>
