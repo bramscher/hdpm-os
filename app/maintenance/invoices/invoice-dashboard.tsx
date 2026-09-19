@@ -635,7 +635,10 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-charcoal-500">Scope → approval → completed work → billing</p><div className="flex flex-wrap gap-4"><a href="/turn-estimator/price-book" className="font-medium text-green-800 underline">Price book</a><a href="/maintenance/workspace?view=schedule" className="font-medium text-green-800 underline">Availability & planned revenue →</a></div></div>
       {/* Page Header */}
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-charcoal-900 tracking-tight">Maintenance</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-charcoal-900 tracking-tight">Work &amp; Billing</h1>
+          <p className="mt-1 text-sm text-charcoal-500">Work orders, estimates, and invoices in one place.</p>
+        </div>
 
         <div className="flex items-center gap-2">
           <Button

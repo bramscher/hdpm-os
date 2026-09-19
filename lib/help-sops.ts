@@ -58,9 +58,9 @@ export const HELP_SOPS: HelpSop[] = [
   },
   {
     prefix: '/maintenance/invoices',
-    title: 'Invoice Generator',
+    title: 'Work & Billing',
     notionUrl: 'https://app.notion.com/p/3a70262b514581cc9526e8d0cb8960f2',
-    blurb: 'Invoices from WOs, CSVs, or PDFs — markup rules and bill reconciliation.',
+    blurb: 'Invoice creation, markup rules, and reconciliation for Work & Billing.',
   },
   {
     prefix: '/comps',

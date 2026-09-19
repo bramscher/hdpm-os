@@ -6,7 +6,7 @@ The production migration `20260919_maintenance_workspace.sql` was applied throug
 
 ## Start here
 
-- Maintenance flow: `/maintenance/invoices` — Work Orders → Estimates → Invoices → Reports → Reconcile.
+- Work & Billing: `/maintenance/invoices` — Work Orders → Estimates → Invoices → Reports → Reconcile.
 - Daily work and scheduling: `/maintenance/workspace`.
 - Technician: `/maintenance/field`.
 - Estimate queue: `/maintenance/invoices?tab=estimates`; templates and price-book scope start at `/turn-estimator/estimates/new`.
@@ -59,3 +59,9 @@ Forecasts allocate remaining approved job charges once across all upcoming plann
 Availability covers local HDPM plans only. AppFolio-only appointments and travel must be allowed for separately. Current workweek defaults are used, so historical capacity is not an immutable payroll snapshot. No new database migration is needed.
 
 Validation: 930 tests across 91 files passed, including revenue conservation across multiple visits/technicians, filtered forecast dates, completed/reserved scope exclusion, unpriced work, leave, overnight capacity and overbooking.
+
+## Work & Billing navigation
+
+The former Invoices section is named **Work & Billing** in the sidebar, mobile header, dashboard tile, page heading, and browser title. Work Orders, Estimates, Invoices, Reports, and Reconcile remain separate tabs. Estimate creation/review and the work workspace retain the same section highlight. Existing `/maintenance/invoices` links remain valid.
+
+The Estimates tab was built on `feature/invoice-manager` but was absent from `main` when only the paper-workflow role change was promoted. The estimates queue requires the saved-draft, template, and maintenance-workspace implementation from this branch, including the already-applied `20260919_maintenance_workspace.sql` migration. Publish the connected release with the navigation rename so the tab, queue API, estimate review, and job/billing handoff are available together.

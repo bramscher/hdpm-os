@@ -424,9 +424,9 @@ export function DashboardCanvas() {
           <Tile
             href="/maintenance/invoices"
             icon={FileText}
-            label="Invoices"
+            label="Work & Billing"
             tone="terra"
-            title="Generate invoices from work orders, CSVs, or scanned PDFs"
+            title="Manage work orders, estimates, approvals, invoices, and reconciliation"
           />
           <Tile
             href="/comps"

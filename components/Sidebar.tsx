@@ -16,7 +16,7 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  matchPrefix?: string;
+  matchPrefix?: string | string[];
   matchExclude?: string;
   matchExact?: boolean;
 }
@@ -36,7 +36,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Maintenance",
     items: [
       { label: "MaintOS", href: "/maintenance/board", icon: Wrench, matchPrefix: "/maintenance/board" },
-      { label: "Invoices", href: "/maintenance/invoices", icon: FileText, matchPrefix: "/maintenance/invoices" },
+      { label: "Work & Billing", href: "/maintenance/invoices", icon: FileText, matchPrefix: ["/maintenance/invoices", "/turn-estimator/estimates", "/maintenance/workspace"] },
       {
         label: "Inspections",
         href: "/maintenance/inspections",
@@ -79,7 +79,8 @@ const NAV_SECTIONS: NavSection[] = [
 
 function isItemActive(item: NavItem, pathname: string): boolean {
   if (item.matchExact) return pathname === item.href;
-  const prefixMatch = pathname.startsWith(item.matchPrefix ?? item.href);
+  const prefixes = item.matchPrefix ?? item.href;
+  const prefixMatch = (Array.isArray(prefixes) ? prefixes : [prefixes]).some(prefix => pathname.startsWith(prefix));
   const excluded = item.matchExclude ? pathname.startsWith(item.matchExclude) : false;
   return prefixMatch && !excluded;
 }
