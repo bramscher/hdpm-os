@@ -1,20 +1,33 @@
 # HABU paper workflow demo
 
-The second demo is at `/admin/habu-paper`, under **Admin → Paper Workflows**. It preserves the full paper form while showing each person's assigned sections in **My work**. The original subway demo remains at `/admin/habu-demo`; `feature/habu-demo` preserves that original implementation.
+The second demo is at `/admin/habu-paper`, under **Admin → Paper Workflows**. It preserves the full paper form while showing each role's assigned sections in **My work**. The original subway demo remains at `/admin/habu-demo`; `feature/habu-demo` preserves that original implementation.
 
 ## Access and data
 
-The page and navigation require Craig's `craig@highdesertpm.com` account with admin access, using the same server-side guard as the original demo. The original PDF links reuse the guarded PDF endpoints. The **Preview as** selector changes a fictional participant inside the demo; it does not change the authenticated account or grant staff access.
+The page and navigation require Craig's `craig@highdesertpm.com` account with admin access, using the same server-side guard as the original demo. The original PDF links reuse the guarded PDF endpoints. The **Preview as role** selector changes the role being reviewed inside the demo; it does not change the authenticated account or grant staff access.
 
-All cases and participants are fictional. State lives only in the open page and resets on refresh. No messages, AppFolio writes, uploads, or durable records are created. Completion actions use the device clock and show Pacific time. This is a demonstration of proposed workflow rules, not a production workflow engine or audit log.
+All cases are fictional; assignments use roles rather than named staff. State lives only in the open page and resets on refresh. No messages, AppFolio writes, uploads, or durable records are created. Completion actions use the device clock and show Pacific time. This is a demonstration of proposed workflow rules, not a production workflow engine or audit log.
+
+## Assignment roles
+
+Both paper workflows and the vacancy routing review use the same role definitions:
+
+| Role | Responsibilities |
+| --- | --- |
+| Front Desk | Notice intake, advertising, returned keys, tenant setup, move-in details, and after-move-in filing; workflow coordination |
+| Property Manager | Owner and listing decisions, inspections, readiness verification, agreements, and move-in letters |
+| Maintenance | Turn work orders |
+| Accounting | Tenant closeout, deposit handoff, and online payments |
+
+Selectors, inboxes, handoffs, completion stamps, notes, and history display roles. The charge-notification task addresses Accounting. Original source PDFs remain reference copies. A production audit log must still identify the authenticated person performing each action.
 
 ## Five-minute walkthrough
 
-1. The demo starts as Sam, with the Owner section highlighted on gold sheet **VT-104**. Review the values, then choose **Hand off to Jordan**. The handoff stamps Sam and the time.
-2. Choose **Preview Jordan's inbox** in the receipt. Advertising is now Ready. Open it to return to the same full sheet, with Advertising highlighted. Completed work has left Sam's Ready list.
-3. Complete a checkbox to record a person and time. Use **N/A** with a reason where appropriate. **Undo** works before releasing the assignment, and keeps the correction in History. Required fields and unfinished checks prevent handoff.
-4. Preview Alex and open **Waiting** to see the pending keys for VT-104 and their follow-up date. **People** lets Alex, the workflow owner, change a named assignment. That change is reflected in the recipient's inbox.
-5. Preview Taylor. Open the turn-work assignment for **VT-105**. Its back contains two sample work orders. Both must be completed before handing off verification to Sam. Accounting remains independently on hold.
+1. The demo starts as Property Manager, with the Owner section highlighted on gold sheet **VT-104**. Review the values, then choose **Hand off to Front Desk**. The handoff stamps Property Manager and the time.
+2. Choose **Preview Front Desk’s inbox** in the receipt. Advertising is now Ready. Open it to return to the same full sheet, with Advertising highlighted. Completed work has left Property Manager’s Ready list.
+3. Complete a checkbox to record a role and time. Use **N/A** with a reason where appropriate. **Undo** works before releasing the assignment, and keeps the correction in History. Required fields and unfinished checks prevent handoff.
+4. Preview Front Desk and open **Waiting** to see the pending keys for VT-104 and their follow-up date. **Roles** lets Front Desk, the workflow owner, change the role assigned to a step. That change is reflected in the recipient's inbox.
+5. Preview Maintenance. Open the turn-work assignment for **VT-105**. Its back contains two sample work orders. Both must be completed before handing off verification to Property Manager. Accounting remains independently on hold.
 6. Open **All sheets → NT-202** to see the full New Tenant Set-up Form. It has separate setup, move-in, and after-move-in areas. Move-in releases parallel payment and filing assignments.
 7. **Back → Folder contents** also lists the related paperwork in approximate process order. **Route** explains the dependencies, **History** shows demo actions, and **Print sheet** includes the front and back.
 

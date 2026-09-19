@@ -1,11 +1,10 @@
-export const PEOPLE = {
-  alex: { name: 'Alex', role: 'Office' },
-  sam: { name: 'Sam', role: 'Property manager' },
-  jordan: { name: 'Jordan', role: 'Marketing' },
-  morgan: { name: 'Morgan', role: 'Accounting' },
-  taylor: { name: 'Taylor', role: 'Maintenance' },
+export const ROLES = {
+  'front-desk': 'Front Desk',
+  'property-manager': 'Property Manager',
+  maintenance: 'Maintenance',
+  accounting: 'Accounting',
 } as const;
-export type Person = keyof typeof PEOPLE;
+export type Role = keyof typeof ROLES;
 export type FormKind = 'vacancy' | 'setup';
 /** Packet inventory from the user's office-wall photographs; proposed stage labels. */
 export const PAPERWORK: Record<FormKind, { title: string; stage: string }[]> = {
@@ -29,7 +28,7 @@ export const PAPERWORK: Record<FormKind, { title: string; stage: string }[]> = {
 };
 export type Row = { id: string; label: string; type: 'task' | 'text' | 'money' | 'number' | 'date' | 'choice'; assignment?: string; options?: string[]; required?: boolean };
 export type Section = { id: string; label: string; column: 'left' | 'right' | 'back'; rows: Row[] };
-export type Assignment = { id: string; label: string; section: string; owner: Person; needs: string[] };
+export type Assignment = { id: string; label: string; section: string; owner: Role; needs: string[] };
 export type Template = { title: string; color: string; revision: string; header: Row[]; sections: Section[]; assignments: Assignment[] };
 const task = (id: string, label: string, assignment: string): Row => ({ id, label, assignment, type: 'task' });
 const field = (id: string, label: string, type: Row['type'] = 'text', assignment?: string, required = false, options?: string[]): Row => ({ id, label, type, assignment, required, options });
@@ -86,7 +85,7 @@ export const TEMPLATES: Record<FormKind, Template> = {
         task('pm-box', 'Pull All Keys / PM Inspection Box', 'keys'), field('new-movein', 'New Tenant Move-In Date', 'date', 'keys'),
       ] },
       { id: 'closeout', label: 'CLOSE OUT TENANTS', column: 'right', rows: [
-        field('early-fee', 'Early Termination Fee', 'money', 'closeout'), task('penny-charge', 'Email to Penny Charge (if applicable)', 'closeout'),
+        field('early-fee', 'Early Termination Fee', 'money', 'closeout'), task('accounting-charge', 'Email Accounting about charges (if applicable)', 'closeout'),
         field('holdover-amount', 'Hold Over Rent Due', 'money', 'closeout'), field('credits', 'Credits Due to Tenant', 'money', 'closeout'),
         task('af-forwarding', 'AppFolio — Enter Fwd Address', 'closeout'), task('balances', 'Check Outstanding Balances', 'closeout'),
         task('final-accounting', 'Create Final Accounting', 'closeout'), task('transfer', 'Transfer Funds', 'closeout'),
@@ -98,14 +97,14 @@ export const TEMPLATES: Record<FormKind, Template> = {
       ] },
     ],
     assignments: [
-      { id: 'notice', label: 'Prepare and submit notice', section: 'tenant', owner: 'alex', needs: [] },
-      { id: 'owner', label: 'Confirm owner and listing details', section: 'owner', owner: 'sam', needs: ['notice'] },
-      { id: 'advertising', label: 'Update advertising', section: 'advertising', owner: 'jordan', needs: ['owner'] },
-      { id: 'keys', label: 'Receive and receipt returned keys', section: 'vacancy', owner: 'alex', needs: ['notice'] },
-      { id: 'inspection', label: 'Inspect the unit', section: 'turn', owner: 'sam', needs: ['keys'] },
-      { id: 'turn-work', label: 'Complete turn work orders', section: 'turn', owner: 'taylor', needs: ['inspection'] },
-      { id: 'verify', label: 'Verify unit readiness', section: 'turn', owner: 'sam', needs: ['turn-work'] },
-      { id: 'closeout', label: 'Complete tenant accounting', section: 'closeout', owner: 'morgan', needs: ['keys'] },
+      { id: 'notice', label: 'Prepare and submit notice', section: 'tenant', owner: 'front-desk', needs: [] },
+      { id: 'owner', label: 'Confirm owner and listing details', section: 'owner', owner: 'property-manager', needs: ['notice'] },
+      { id: 'advertising', label: 'Update advertising', section: 'advertising', owner: 'front-desk', needs: ['owner'] },
+      { id: 'keys', label: 'Receive and receipt returned keys', section: 'vacancy', owner: 'front-desk', needs: ['notice'] },
+      { id: 'inspection', label: 'Inspect the unit', section: 'turn', owner: 'property-manager', needs: ['keys'] },
+      { id: 'turn-work', label: 'Complete turn work orders', section: 'turn', owner: 'maintenance', needs: ['inspection'] },
+      { id: 'verify', label: 'Verify unit readiness', section: 'turn', owner: 'property-manager', needs: ['turn-work'] },
+      { id: 'closeout', label: 'Complete tenant accounting', section: 'closeout', owner: 'accounting', needs: ['keys'] },
     ],
   },
   setup: {
@@ -141,20 +140,20 @@ export const TEMPLATES: Record<FormKind, Template> = {
       ] },
     ],
     assignments: [
-      { id: 'intake', label: 'Prepare tenant set-up', section: 'setup', owner: 'alex', needs: [] },
-      { id: 'funds', label: 'Confirm deposit handoff', section: 'setup', owner: 'morgan', needs: ['intake'] },
-      { id: 'lease', label: 'Prepare agreement and move-in letters', section: 'setup', owner: 'sam', needs: ['funds'] },
-      { id: 'movein', label: 'Complete move-in details', section: 'movein', owner: 'alex', needs: ['lease'] },
-      { id: 'payments', label: 'Enable online payments', section: 'after', owner: 'morgan', needs: ['movein'] },
-      { id: 'filing', label: 'Finish after-move-in records', section: 'after', owner: 'alex', needs: ['movein'] },
+      { id: 'intake', label: 'Prepare tenant set-up', section: 'setup', owner: 'front-desk', needs: [] },
+      { id: 'funds', label: 'Confirm deposit handoff', section: 'setup', owner: 'accounting', needs: ['intake'] },
+      { id: 'lease', label: 'Prepare agreement and move-in letters', section: 'setup', owner: 'property-manager', needs: ['funds'] },
+      { id: 'movein', label: 'Complete move-in details', section: 'movein', owner: 'front-desk', needs: ['lease'] },
+      { id: 'payments', label: 'Enable online payments', section: 'after', owner: 'accounting', needs: ['movein'] },
+      { id: 'filing', label: 'Finish after-move-in records', section: 'after', owner: 'front-desk', needs: ['movein'] },
     ],
   },
 };
-export type Stamp = { actor: Person; at: string; outcome: 'done' | 'na'; reason?: string };
-export type AssignmentState = { owner: Person; due: string; released?: Stamp; waiting?: { reason: string; followUp: string } };
+export type Stamp = { actor: Role; at: string; outcome: 'done' | 'na'; reason?: string };
+export type AssignmentState = { owner: Role; due: string; released?: Stamp; waiting?: { reason: string; followUp: string } };
 export type WorkOrder = { id: string; description: string; completed?: Stamp };
-export type HistoryEntry = { id: string; actor: Person; at: string; text: string };
-export type Sheet = { id: string; kind: FormKind; workflowOwner: Person; values: Record<string, string>; tasks: Record<string, Stamp>; assignments: Record<string, AssignmentState>; notes: HistoryEntry[]; workOrders: WorkOrder[]; history: HistoryEntry[] };
+export type HistoryEntry = { id: string; actor: Role; at: string; text: string };
+export type Sheet = { id: string; kind: FormKind; workflowOwner: Role; values: Record<string, string>; tasks: Record<string, Stamp>; assignments: Record<string, AssignmentState>; notes: HistoryEntry[]; workOrders: WorkOrder[]; history: HistoryEntry[] };
 export type Status = 'ready' | 'waiting' | 'upcoming' | 'done';
 export const allRows = (kind: FormKind) => [...TEMPLATES[kind].header, ...TEMPLATES[kind].sections.flatMap(s => s.rows)];
 export const assignmentRows = (sheet: Sheet, id: string) => allRows(sheet.kind).filter(r => r.assignment === id);
@@ -178,61 +177,61 @@ export function releaseIssues(sheet: Sheet, id: string): string[] {
 export function nextAssignments(sheet: Sheet, id: string) {
   return TEMPLATES[sheet.kind].assignments.filter(a => a.needs.includes(id));
 }
-export function visibleInbox(sheets: Sheet[], person: Person, status: Status) {
+export function visibleInbox(sheets: Sheet[], role: Role, status: Status) {
   return sheets.flatMap(sheet => TEMPLATES[sheet.kind].assignments
-    .filter(a => sheet.assignments[a.id].owner === person && assignmentStatus(sheet, a.id) === status)
+    .filter(a => sheet.assignments[a.id].owner === role && assignmentStatus(sheet, a.id) === status)
     .map(assignment => ({ sheet, assignment })))
     .sort((a, b) => (a.sheet.assignments[a.assignment.id].due || '9999').localeCompare(b.sheet.assignments[b.assignment.id].due || '9999') || a.sheet.id.localeCompare(b.sheet.id));
 }
-function event(sheet: Sheet, actor: Person, at: string, text: string): HistoryEntry {
+function event(sheet: Sheet, actor: Role, at: string, text: string): HistoryEntry {
   return { id: `${sheet.id}-${sheet.history.length}-${at}`, actor, at, text };
 }
-export function completeTask(sheet: Sheet, taskId: string, actor: Person, at: string, outcome: 'done' | 'na' = 'done', reason = ''): Sheet {
+export function completeTask(sheet: Sheet, taskId: string, actor: Role, at: string, outcome: 'done' | 'na' = 'done', reason = ''): Sheet {
   const row = allRows(sheet.kind).find(r => r.id === taskId && r.type === 'task');
   if (!row?.assignment || sheet.tasks[taskId] || sheet.assignments[row.assignment].owner !== actor || assignmentStatus(sheet, row.assignment) !== 'ready') return sheet;
   if (outcome === 'na' && !reason.trim()) return sheet;
   return { ...sheet, tasks: { ...sheet.tasks, [taskId]: { actor, at, outcome, ...(reason.trim() ? { reason: reason.trim() } : {}) } }, history: [...sheet.history, event(sheet, actor, at, `${outcome === 'done' ? 'Completed' : 'Marked not applicable'}: ${row.label}${reason.trim() ? ' — ' + reason.trim() : ''}`)] };
 }
-export function undoTask(sheet: Sheet, taskId: string, actor: Person, at: string): Sheet {
+export function undoTask(sheet: Sheet, taskId: string, actor: Role, at: string): Sheet {
   const row = allRows(sheet.kind).find(r => r.id === taskId);
   if (!row?.assignment || !sheet.tasks[taskId] || sheet.assignments[row.assignment].owner !== actor || sheet.assignments[row.assignment].released) return sheet;
   const tasks = { ...sheet.tasks }; delete tasks[taskId];
   return { ...sheet, tasks, history: [...sheet.history, event(sheet, actor, at, `Corrected completion: ${row.label}`)] };
 }
-export function editField(sheet: Sheet, fieldId: string, value: string, actor: Person): Sheet {
+export function editField(sheet: Sheet, fieldId: string, value: string, actor: Role): Sheet {
   const row = allRows(sheet.kind).find(r => r.id === fieldId && r.type !== 'task');
   if (!row || (row.assignment ? sheet.assignments[row.assignment].owner !== actor || !!sheet.assignments[row.assignment].released : sheet.workflowOwner !== actor)) return sheet;
   return { ...sheet, values: { ...sheet.values, [fieldId]: value } };
 }
-export function releaseAssignment(sheet: Sheet, id: string, actor: Person, at: string): Sheet {
+export function releaseAssignment(sheet: Sheet, id: string, actor: Role, at: string): Sheet {
   if (!sheet.assignments[id] || sheet.assignments[id].owner !== actor || assignmentStatus(sheet, id) !== 'ready' || releaseIssues(sheet, id).length) return sheet;
   const def = TEMPLATES[sheet.kind].assignments.find(a => a.id === id)!;
-  const recipients = nextAssignments(sheet, id).map(a => `${PEOPLE[sheet.assignments[a.id].owner].name} (${a.label})`);
+  const recipients = nextAssignments(sheet, id).map(a => `${ROLES[sheet.assignments[a.id].owner]} (${a.label})`);
   return { ...sheet, assignments: { ...sheet.assignments, [id]: { ...sheet.assignments[id], released: { actor, at, outcome: 'done' } } }, history: [...sheet.history, event(sheet, actor, at, `${def.label} released${recipients.length ? ' → ' + recipients.join('; ') : ' — assignment finished'}`)] };
 }
-export function setWaiting(sheet: Sheet, id: string, actor: Person, reason: string, followUp: string, at: string): Sheet {
+export function setWaiting(sheet: Sheet, id: string, actor: Role, reason: string, followUp: string, at: string): Sheet {
   if (!reason.trim() || !followUp || assignmentStatus(sheet, id) !== 'ready' || sheet.assignments[id].owner !== actor) return sheet;
   return { ...sheet, assignments: { ...sheet.assignments, [id]: { ...sheet.assignments[id], waiting: { reason: reason.trim(), followUp } } }, history: [...sheet.history, event(sheet, actor, at, `Waiting: ${reason.trim()} · Follow up ${followUp}`)] };
 }
-export function resumeAssignment(sheet: Sheet, id: string, actor: Person, at: string): Sheet {
+export function resumeAssignment(sheet: Sheet, id: string, actor: Role, at: string): Sheet {
   if (assignmentStatus(sheet, id) !== 'waiting' || sheet.assignments[id].owner !== actor) return sheet;
   return { ...sheet, assignments: { ...sheet.assignments, [id]: { ...sheet.assignments[id], waiting: undefined } }, history: [...sheet.history, event(sheet, actor, at, `Resumed: ${TEMPLATES[sheet.kind].assignments.find(a => a.id === id)!.label}`)] };
 }
-export function reassign(sheet: Sheet, id: string, owner: Person, actor: Person, at: string): Sheet {
+export function reassign(sheet: Sheet, id: string, owner: Role, actor: Role, at: string): Sheet {
   if (actor !== sheet.workflowOwner || !sheet.assignments[id] || sheet.assignments[id].released || sheet.assignments[id].owner === owner) return sheet;
-  return { ...sheet, assignments: { ...sheet.assignments, [id]: { ...sheet.assignments[id], owner } }, history: [...sheet.history, event(sheet, actor, at, `Reassigned ${TEMPLATES[sheet.kind].assignments.find(a => a.id === id)!.label}: ${PEOPLE[sheet.assignments[id].owner].name} → ${PEOPLE[owner].name}`)] };
+  return { ...sheet, assignments: { ...sheet.assignments, [id]: { ...sheet.assignments[id], owner } }, history: [...sheet.history, event(sheet, actor, at, `Reassigned ${TEMPLATES[sheet.kind].assignments.find(a => a.id === id)!.label}: ${ROLES[sheet.assignments[id].owner]} → ${ROLES[owner]}`)] };
 }
-export function addNote(sheet: Sheet, text: string, actor: Person, at: string): Sheet {
+export function addNote(sheet: Sheet, text: string, actor: Role, at: string): Sheet {
   if (!text.trim()) return sheet;
   const note = event(sheet, actor, at, text.trim());
   return { ...sheet, notes: [...sheet.notes, note], history: [...sheet.history, event(sheet, actor, at, 'Added a note on the back')] };
 }
-export function addWorkOrder(sheet: Sheet, description: string, actor: Person, at: string): Sheet {
+export function addWorkOrder(sheet: Sheet, description: string, actor: Role, at: string): Sheet {
   if (sheet.kind !== 'vacancy' || !description.trim() || (actor !== sheet.workflowOwner && actor !== sheet.assignments.inspection.owner) || sheet.assignments['turn-work'].released) return sheet;
   const workOrder: WorkOrder = { id: `DEMO-${sheet.id}-${sheet.workOrders.length + 1}`, description: description.trim() };
   return { ...sheet, workOrders: [...sheet.workOrders, workOrder], history: [...sheet.history, event(sheet, actor, at, `Added work order: ${workOrder.description}`)] };
 }
-export function completeWorkOrder(sheet: Sheet, id: string, actor: Person, at: string): Sheet {
+export function completeWorkOrder(sheet: Sheet, id: string, actor: Role, at: string): Sheet {
   if (sheet.kind !== 'vacancy' || sheet.assignments['turn-work'].owner !== actor || assignmentStatus(sheet, 'turn-work') !== 'ready' || !sheet.workOrders.some(w => w.id === id && !w.completed)) return sheet;
   return { ...sheet, workOrders: sheet.workOrders.map(w => w.id === id ? { ...w, completed: { actor, at, outcome: 'done' } } : w), history: [...sheet.history, event(sheet, actor, at, `Completed work order: ${id}`)] };
 }
@@ -243,20 +242,20 @@ export function localDay(date: Date): string {
 }
 export function createExamples(now = new Date()): Sheet[] {
   const day = (offset: number) => { const d = new Date(localDay(now) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); };
-  const make = (id: string, kind: FormKind, address: string): Sheet => ({ id, kind, workflowOwner: 'alex', values: { names: 'Example Tenant', address, 'property-code': id, city: 'Example City, OR', 'submitted-date': day(-2), 'inspection-date': day(21), prorated: '0', 'notice-date': day(-3), 'projected-moveout': day(20), 'owner-name': 'Example Owner', 'owner-notified': day(-1), 'owner-initial': 'Sam', 'listing-rent': '1850', availability: day(25), term: '12 Month', 'washer-dryer': 'Yes', 'landscape-contract': 'No', 'wsg': 'No', 'water-sewer': 'Yes', 'landscaping-paid': 'No', pets: 'Yes', 'movein-scheduled': day(3), 'movein-appointment': day(3), 'lease-type': 'Fixed Term', 'lease-months': '12' }, tasks: {}, assignments: Object.fromEntries(TEMPLATES[kind].assignments.map((a, i) => [a.id, { owner: a.owner, due: i < 3 ? day(i === 1 ? 0 : 1) : '' }])), notes: [], workOrders: [], history: [] });
+  const make = (id: string, kind: FormKind, address: string): Sheet => ({ id, kind, workflowOwner: 'front-desk', values: { names: 'Example Tenant', address, 'property-code': id, city: 'Example City, OR', 'submitted-date': day(-2), 'inspection-date': day(21), prorated: '0', 'notice-date': day(-3), 'projected-moveout': day(20), 'owner-name': 'Example Owner', 'owner-notified': day(-1), 'owner-initial': 'PM', 'listing-rent': '1850', availability: day(25), term: '12 Month', 'washer-dryer': 'Yes', 'landscape-contract': 'No', 'wsg': 'No', 'water-sewer': 'Yes', 'landscaping-paid': 'No', pets: 'Yes', 'movein-scheduled': day(3), 'movein-appointment': day(3), 'lease-type': 'Fixed Term', 'lease-months': '12' }, tasks: {}, assignments: Object.fromEntries(TEMPLATES[kind].assignments.map((a, i) => [a.id, { owner: a.owner, due: i < 3 ? day(i === 1 ? 0 : 1) : '' }])), notes: [], workOrders: [], history: [] });
   const seed = (sheet: Sheet, id: string) => {
     const actor = sheet.assignments[id].owner;
     for (const row of assignmentRows(sheet, id)) if (row.type === 'task') sheet.tasks[row.id] = { actor, at: 'Example starting record', outcome: 'done' };
     sheet.assignments[id].released = { actor, at: 'Example starting record', outcome: 'done' };
   };
   const first = make('VT-104', 'vacancy', '123 Example Lane · Unit 4'); seed(first, 'notice');
-  first.tasks['landscaper-email'] = { actor: 'sam', at: 'Example starting record', outcome: 'na', reason: 'No landscaping contract in this example' };
+  first.tasks['landscaper-email'] = { actor: 'property-manager', at: 'Example starting record', outcome: 'na', reason: 'No landscaping contract in this example' };
   first.assignments.keys.waiting = { reason: 'Waiting for tenant to return keys', followUp: day(19) };
   const second = make('VT-105', 'vacancy', '789 Sample Court · Unit 1'); seed(second, 'notice'); seed(second, 'owner'); seed(second, 'advertising'); seed(second, 'keys'); seed(second, 'inspection');
-  second.values = { ...second.values, 'keys-returned': day(-2), 'key-channel': 'HD', 'keys-receiver': 'Alex', 'actual-moveout': day(-2), 'house-keys': '2', 'mail-keys': '1', 'inspection-date': day(-1) };
+  second.values = { ...second.values, 'keys-returned': day(-2), 'key-channel': 'HD', 'keys-receiver': ROLES['front-desk'], 'actual-moveout': day(-2), 'house-keys': '2', 'mail-keys': '1', 'inspection-date': day(-1) };
   second.workOrders = [{ id: 'DEMO-VT-105-1', description: 'Replace damaged bedroom blinds' }, { id: 'DEMO-VT-105-2', description: 'Touch up bedroom paint' }];
   second.assignments.closeout.waiting = { reason: 'Awaiting invoice details; accounting follow-up remains assigned', followUp: day(1) };
   const third = make('NT-202', 'setup', '456 Sample Street · Unit 2'); seed(third, 'intake'); seed(third, 'funds');
-  third.tasks['utility-addendum'] = { actor: 'sam', at: 'Example starting record', outcome: 'na', reason: 'No addendum needed in this example' };
+  third.tasks['utility-addendum'] = { actor: 'property-manager', at: 'Example starting record', outcome: 'na', reason: 'No addendum needed in this example' };
   return [first, second, third];
 }
