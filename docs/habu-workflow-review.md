@@ -9,7 +9,7 @@ This review uses fictional properties and temporary React state. It does not ass
 ## Confirmed operating rules
 
 - Front Desk starts vacancy intake.
-- Assign to roles now: Front Desk, Property Manager, Maintenance, Accounting. Later map roles to groups and named people.
+- Assign to roles now: Front Desk, Property Manager, Maintenance, Accounting. The paper demo and routing review share these roles; Front Desk also handles advertising. Later map roles to groups and named people.
 - Actual key return is Day 0. The following day is Day 1.
 - Standard property readiness is due at the end of Day 10, counting weekends and holidays.
 - Longer targets require a major remodel, reason, and revised target.

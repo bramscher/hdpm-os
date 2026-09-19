@@ -12,7 +12,7 @@ describe('turn schedule', () => {
   it('proposes Day 1 inspection, Day 8 work, Day 10 verification without changing accounting or completed dates', () => {
     const s = newReview('test', 'Example', day);
     s.assignments.closeout.due = '2026-10-01';
-    s.assignments.keys.released = { actor: 'alex', at: 'sample', outcome: 'done' };
+    s.assignments.keys.released = { actor: 'front-desk', at: 'sample', outcome: 'done' };
     s.assignments.keys.due = '2026-09-09';
     const p = scheduleProposal(s, day, 'standard', '', '')!;
     expect(targetDate(p)).toBe('2026-09-20');
@@ -35,29 +35,29 @@ describe('turn schedule', () => {
 describe('role inbox and handoff', () => {
   it('releases owner and keys concurrently from Front Desk, but keeps inspection blocked', () => {
     let s = newReview('test', 'Example', day);
-    for (const row of TEMPLATES.vacancy.sections.flatMap(s => s.rows).filter(r => r.assignment === 'notice' && r.type === 'task')) s = { ...s, ...completeTask(s, row.id, 'alex', '2026-09-10T20:00:00Z') };
-    s = { ...s, ...releaseAssignment(s, 'notice', 'alex', '2026-09-10T20:00:00Z') };
-    expect(inbox([s], 'sam', 'ready', day).map(v => v.stage.id)).toEqual(['owner']);
-    expect(inbox([s], 'alex', 'ready', day).map(v => v.stage.id)).toEqual(['keys']);
-    expect(inbox([s], 'sam', 'upcoming', day).map(v => v.stage.id)).toContain('inspection');
-    expect(releaseAssignment(s, 'notice', 'alex', 'later')).toBe(s);
+    for (const row of TEMPLATES.vacancy.sections.flatMap(s => s.rows).filter(r => r.assignment === 'notice' && r.type === 'task')) s = { ...s, ...completeTask(s, row.id, 'front-desk', '2026-09-10T20:00:00Z') };
+    s = { ...s, ...releaseAssignment(s, 'notice', 'front-desk', '2026-09-10T20:00:00Z') };
+    expect(inbox([s], 'property-manager', 'ready', day).map(v => v.stage.id)).toEqual(['owner']);
+    expect(inbox([s], 'front-desk', 'ready', day).map(v => v.stage.id)).toEqual(['keys']);
+    expect(inbox([s], 'property-manager', 'upcoming', day).map(v => v.stage.id)).toContain('inspection');
+    expect(releaseAssignment(s, 'notice', 'front-desk', 'later')).toBe(s);
   });
   it('prioritizes urgency then due dates and flags blocked delays separately', () => {
     const s = newReview('a', 'Example', day), other = newReview('b', 'Example 2', day);
     s.assignments.notice.due = '2026-09-01'; other.priority = 'Urgent';
-    expect(inbox([s, other], 'alex', 'ready', day).map(v => v.sheet.id)).toEqual(['b', 'a']);
+    expect(inbox([s, other], 'front-desk', 'ready', day).map(v => v.sheet.id)).toEqual(['b', 'a']);
     s.assignments.inspection.due = '2026-09-09';
     expect(timing(s, 'inspection', day)).toBe('At risk · prerequisite late');
     expect(timing(s, 'notice', day)).toBe('Overdue');
   });
   it('uses four roles, and the maintenance handoff makes verification ready', () => {
     const examples = reviewExamples(new Date('2026-09-10T20:00:00Z'));
-    expect(examples.flatMap(s => Object.values(s.assignments).map(a => a.owner))).not.toContain('jordan');
+    expect(new Set(examples.flatMap(s => Object.values(s.assignments).map(a => a.owner)))).toEqual(new Set(['front-desk', 'property-manager', 'maintenance', 'accounting']));
     let s = examples[1];
-    expect(releaseAssignment(s, 'turn-work', 'taylor', 'sample')).toBe(s);
-    s = { ...s, workOrders: s.workOrders.map(w => ({ ...w, completed: { actor: 'taylor', at: 'sample', outcome: 'done' } })) };
-    s = { ...s, ...releaseAssignment(s, 'turn-work', 'taylor', '2026-09-10T20:00:00Z') };
-    expect(inbox([s], 'sam', 'ready', day).map(v => v.stage.id)).toContain('verify');
+    expect(releaseAssignment(s, 'turn-work', 'maintenance', 'sample')).toBe(s);
+    s = { ...s, workOrders: s.workOrders.map(w => ({ ...w, completed: { actor: 'maintenance', at: 'sample', outcome: 'done' } })) };
+    s = { ...s, ...releaseAssignment(s, 'turn-work', 'maintenance', '2026-09-10T20:00:00Z') };
+    expect(inbox([s], 'property-manager', 'ready', day).map(v => v.stage.id)).toContain('verify');
   });
 });
 

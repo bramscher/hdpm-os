@@ -128,7 +128,7 @@ Review: Blank draft of the existing demo sheet. Editing this template preview do
 
 **Early Termination Fee:** ________________
 
-- [ ] Email to Penny Charge (if applicable)
+- [ ] Email Accounting about charges (if applicable)
 
 **Hold Over Rent Due:** ________________
 

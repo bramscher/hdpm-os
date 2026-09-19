@@ -1,6 +1,6 @@
-import { TEMPLATES, assignmentStatus, createExamples, localDay, type Sheet, type Person } from './model';
+import { TEMPLATES, assignmentStatus, createExamples, localDay, type Sheet, type Role } from './model';
 
-export const ROLES: Partial<Record<Person, string>> = { alex: 'Front Desk', sam: 'Property Manager', taylor: 'Maintenance', morgan: 'Accounting' };
+export { ROLES } from './model';
 export const STAGES = TEMPLATES.vacancy.assignments;
 export type ReviewSheet = Sheet & { priority: 'Normal' | 'High' | 'Urgent'; schedule: { mode: 'standard' | 'remodel'; target: string; reason: string }; };
 export function addDays(day: string, days: number) {
@@ -27,7 +27,7 @@ export function timing(sheet: ReviewSheet, id: string, today: string) {
   if (due < today) return state === 'upcoming' ? 'At risk · prerequisite late' : 'Overdue';
   return due === today ? 'Due today' : 'Scheduled';
 }
-export function inbox(sheets: ReviewSheet[], role: Person, status: string, today: string) {
+export function inbox(sheets: ReviewSheet[], role: Role, status: string, today: string) {
   const rank = { Urgent: 0, High: 1, Normal: 2 };
   return sheets.flatMap(sheet => STAGES.filter(a => sheet.assignments[a.id].owner === role && assignmentStatus(sheet, a.id) === status).map(stage => ({ sheet, stage })))
     .sort((a, b) => {
@@ -40,15 +40,14 @@ export function inbox(sheets: ReviewSheet[], role: Person, status: string, today
 export function reviewExamples(now = new Date()): ReviewSheet[] {
   const today = localDay(now);
   const [a, b] = createExamples(now).filter(s => s.kind === 'vacancy');
-  const convert = (s: Sheet): ReviewSheet => ({ ...s, assignments: Object.fromEntries(Object.entries(s.assignments).map(([id, v]) => [id, { ...v, owner: v.owner === 'jordan' ? 'alex' : v.owner }])), priority: 'Normal', schedule: { mode: 'standard', target: '', reason: '' } });
+  const convert = (s: Sheet): ReviewSheet => ({ ...s, priority: 'Normal', schedule: { mode: 'standard', target: '', reason: '' } });
   const first = convert(a); first.assignments.keys.waiting!.followUp = addDays(today, 2);
   const second = scheduleProposal(convert(b), addDays(today, -4), 'standard', '', '')!;
   second.assignments['turn-work'].due = addDays(today, -1); second.priority = 'High';
   second.assignments.closeout.due = ''; // Accounting is separate from the property-ready target.
-  second.values['keys-receiver'] = 'Front Desk';
   const third = newReview('VT-106', '456 Demo Avenue · Unit 2', today);
   return [first, second, third];
 }
 export function newReview(id: string, address: string, today: string): ReviewSheet {
-  return { id, kind: 'vacancy', workflowOwner: 'alex', values: { address, 'property-code': id, 'notice-date': today }, tasks: {}, assignments: Object.fromEntries(STAGES.map(a => [a.id, { owner: a.owner === 'jordan' ? 'alex' : a.owner, due: a.id === 'notice' ? today : '' }])), notes: [], workOrders: [], history: [], priority: 'Normal', schedule: { mode: 'standard', target: '', reason: '' } };
+  return { id, kind: 'vacancy', workflowOwner: 'front-desk', values: { address, 'property-code': id, 'notice-date': today }, tasks: {}, assignments: Object.fromEntries(STAGES.map(a => [a.id, { owner: a.owner, due: a.id === 'notice' ? today : '' }])), notes: [], workOrders: [], history: [], priority: 'Normal', schedule: { mode: 'standard', target: '', reason: '' } };
 }
