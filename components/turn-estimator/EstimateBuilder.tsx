@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import EstimateReview from "./EstimateReview";
+import { STARTER_TEMPLATES, type EstimateTemplate } from "@/lib/turn-estimator/templates";
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 
 export interface BuilderSeed {
@@ -12,6 +15,7 @@ export interface BuilderSeed {
   unit_turn_id?: string | null;
   wo_number?: string | null;
   wo_description?: string | null;
+  resume_id?: string;
 }
 
 /** One agent-drafted line, as returned by /api/turn-estimator/estimates/draft. */
@@ -25,6 +29,7 @@ interface DraftedLine {
 }
 
 interface Row {
+  included?: boolean;
   key: string;
   item_code: string;
   qty: string;
@@ -35,9 +40,8 @@ interface Row {
 }
 
 const money = (n: number) => `$${n.toFixed(2)}`;
-let seq = 0;
 const newRow = (): Row => ({
-  key: `r${seq++}`,
+  key: crypto.randomUUID(),
   item_code: "",
   qty: "1",
   minutes: "",
@@ -55,18 +59,30 @@ export default function EstimateBuilder({
   seed: BuilderSeed;
   autoDraft?: boolean;
 }) {
+  const router = useRouter();
   const itemByCode = useMemo(() => {
     const m = new Map<string, PriceBookItem>();
     for (const it of items) m.set(it.item_code, it);
     return m;
   }, [items]);
 
+  const [templates, setTemplates] = useState<EstimateTemplate[]>(STARTER_TEMPLATES);
+  const [templateId, setTemplateId] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [savedId, setSavedId] = useState(seed.resume_id ?? "");
+  const draftVersion = useRef(0);
+  const draftIdentity = useRef(seed.resume_id ?? '');
+  const lastSaved = useRef('');
+  const autoSavePaused = useRef(false);
+  const [saveStatus, setSaveStatus] = useState("");
+  const [loaded, setLoaded] = useState(!seed.resume_id);
   const [propertyName, setPropertyName] = useState(seed.property_name ?? "");
   const [unitName, setUnitName] = useState(seed.unit_name ?? "");
   const [authLimit, setAuthLimit] = useState("");
   const [rows, setRows] = useState<Row[]>([newRow()]);
   // Agent-draft state (autoDraft): pre-populate rows from the estimate-drafter.
   const [drafting, setDrafting] = useState(autoDraft);
+  const [draftRequested, setDraftRequested] = useState(autoDraft);
   const [draftSummary, setDraftSummary] = useState<string | null>(null);
   const [draftUnmapped, setDraftUnmapped] = useState<string[]>([]);
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -89,7 +105,7 @@ export default function EstimateBuilder({
 
   const specForRow = (r: Row) => {
     const item = itemByCode.get(r.item_code);
-    if (!item) return null;
+    if (!item || r.included === false) return null;
     const spec: Record<string, unknown> = { item_code: r.item_code };
     if (r.qty) spec.qty = Number(r.qty);
     if (r.minutes) spec.minutes = Number(r.minutes);
@@ -139,7 +155,8 @@ export default function EstimateBuilder({
   // On load with ?draft=1, run the estimate-drafter agent and pre-populate rows.
   // The result is advisory — staff review/edit before Save & Issue.
   useEffect(() => {
-    if (!autoDraft || !seed.work_order_id) return;
+    if (!draftRequested || !seed.work_order_id || seed.resume_id) return;
+    setDrafting(true);
     let cancelled = false;
     (async () => {
       try {
@@ -173,20 +190,56 @@ export default function EstimateBuilder({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [draftRequested]);
+
+
+  useEffect(() => {
+    fetch('/api/turn-estimator/templates').then(r=>r.json()).then(d=>{if(d.templates)setTemplates(d.templates);else setError(d.error);}).catch(()=>setError('Could not load saved templates'));
+    if(seed.resume_id)fetch(`/api/turn-estimator/saved-drafts?id=${seed.resume_id}`).then(r=>r.json()).then(d=>{
+      if(d.issued){setIssued(d.issued);router.replace(`/turn-estimator/estimates/${d.issued.estimateId}`);}
+      const saved=d.drafts?.[0]; if(!saved)throw new Error(d.error||'Draft not found');
+      setRows(saved.payload.rows);setPropertyName(saved.payload.propertyName);setUnitName(saved.payload.unitName);setAuthLimit(saved.payload.authLimit);setTemplateId(saved.payload.templateId||'');draftVersion.current=saved.version;setLoaded(true);setSaveStatus('Saved draft loaded');lastSaved.current=JSON.stringify({rows:saved.payload.rows,propertyName:saved.payload.propertyName,unitName:saved.payload.unitName,authLimit:saved.payload.authLimit,templateId:saved.payload.templateId||''});
+    }).catch(e=>setError(e.message));
+  }, [seed.resume_id]);
+  async function saveDraft(){
+    if(!loaded)return;setBusy('save');setError(null);
+    try{const id=draftIdentity.current||crypto.randomUUID();draftIdentity.current=id;
+      const r=await fetch('/api/turn-estimator/saved-drafts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,version:draftVersion.current,template_id:templateId&&!templateId.startsWith('starter-')?templateId:null,payload:{rows,propertyName,unitName,authLimit,templateId,seed}})});
+      const d=await r.json();if(!r.ok)throw new Error(d.error);setSavedId(id);draftVersion.current=d.draft.version;setSaveStatus('Saved — available in Estimates');lastSaved.current=JSON.stringify({rows,propertyName,unitName,authLimit,templateId});autoSavePaused.current=false;return id;
+    }catch(e){setError((e as Error).message);setSaveStatus('Not saved — use Save draft to retry');autoSavePaused.current=true;}finally{setBusy(null);}
+  }
+  useEffect(()=>{
+    const signature=JSON.stringify({rows,propertyName,unitName,authLimit,templateId});
+    if(!loaded||busy||drafting||issued||autoSavePaused.current||!propertyName.trim()||signature===lastSaved.current)return;
+    setSaveStatus('Unsaved changes');
+    const timer=setTimeout(()=>{void saveDraft();},1200);
+    return ()=>clearTimeout(timer);
+    // saveDraft captures this render's values; busy serializes saves and issue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[rows,propertyName,unitName,authLimit,templateId,loaded,busy,drafting,issued]);
+  function useTemplate(id:string){const t=templates.find(t=>t.id===id);if(!t)return;setTemplateId(id);setTemplateName(t.name);setRows(t.entries.map(e=>({...e,key:newRow().key})));setSaveStatus('Unsaved changes');}
+  async function saveTemplate(revision=false){
+    if(!templateName.trim())return setError('Enter a template name');setBusy('template');
+    try{const current=templates.find(t=>t.id===templateId);const r=await fetch('/api/turn-estimator/templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:templateName,entries:rows.map(r=>({...r,description:r.description||itemByCode.get(r.item_code)?.owner_description||itemByCode.get(r.item_code)?.name||'Scope check',included:r.included!==false})),family_id:revision&&!current?.id.startsWith('starter-')?current?.family_id:null,version:revision&&!current?.id.startsWith('starter-')?current?.version:0})});const d=await r.json();if(!r.ok)throw new Error(d.error);setTemplates(ts=>[d.template,...ts]);setTemplateId(d.template.id);setSaveStatus('Template version published');}catch(e){setError((e as Error).message);}finally{setBusy(null);}
+  }
 
   async function issue() {
     setError(null);
     const specs = validSpecs();
+    if(rows.some(r=>r.included!==false&&(!itemByCode.has(r.item_code)||/placeholder/i.test(itemByCode.get(r.item_code)?.name||"")))) return setError("Included scope needs an approved price-book item. Exclude checklist-only items before issuing.");
     if (!propertyName.trim()) return setError("Property name is required");
     if (specs.length === 0) return setError("Add at least one line item");
     setBusy("issue");
     try {
+      const draftId=await saveDraft();
+      if(!draftId)throw new Error("Save failed; estimate was not issued");
+      setBusy("issue");
       // 1. Create the estimate header.
       const createRes = await fetch("/api/turn-estimator/estimates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          saved_draft_id: draftId,
           property_name: propertyName.trim(),
           property_id: seed.property_id ?? null,
           unit_id: seed.unit_id ?? null,
@@ -217,6 +270,7 @@ export default function EstimateBuilder({
         authorization: issuedData.authorization,
         status: issuedData.estimate_status,
       });
+      router.push(`/turn-estimator/estimates/${estimateId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "issue failed");
     } finally {
@@ -224,115 +278,23 @@ export default function EstimateBuilder({
     }
   }
 
-  async function decide(decision: "APPROVED" | "DECLINED") {
-    if (!issued) return;
-    setBusy(decision);
-    setError(null);
-    try {
-      const reqRes = await fetch("/api/turn-estimator/approvals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ version_id: issued.versionId, kind: "PM" }),
-      });
-      const req = await reqRes.json();
-      if (!reqRes.ok) throw new Error(req.error || "request failed");
-      const patchRes = await fetch(`/api/turn-estimator/approvals/${req.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision }),
-      });
-      const patch = await patchRes.json();
-      if (!patchRes.ok) throw new Error(patch.error || "decision failed");
-      setIssued({ ...issued, status: decision === "APPROVED" ? "approved" : "declined" });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "approval failed");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function convert() {
-    if (!issued) return;
-    setBusy("convert");
-    setError(null);
-    try {
-      const res = await fetch("/api/turn-estimator/convert", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ version_id: issued.versionId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "convert failed");
-      setIssued({ ...issued, invoiceCode: data.invoice_code });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "convert failed");
-    } finally {
-      setBusy(null);
-    }
-  }
-
   const input = "rounded-lg border border-sand-200 px-2 py-1 text-sm";
 
-  // ── Post-issue view ──
-  if (issued) {
-    const approved = issued.status === "approved";
-    return (
-      <div className="space-y-4">
-        {error && <Banner>{error}</Banner>}
-        <div className="rounded-xl border border-sand-200 bg-white p-5 shadow-card">
-          <div className="text-xs uppercase tracking-wide text-charcoal-400">Estimate issued</div>
-          <div className="mt-1 text-2xl font-semibold text-charcoal-900">{money(issued.ownerTotal)}</div>
-          <div className="mt-1 text-sm text-charcoal-500">
-            {propertyName}
-            {unitName ? ` · #${unitName}` : ""} · status:{" "}
-            <span className="font-medium">{issued.status.replace(/_/g, " ")}</span>
-            {issued.authorization === "auto_approved" ? " (within authorization limit)" : " (over limit — needs approval)"}
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <a
-              href={`/api/turn-estimator/estimates/${issued.estimateId}/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-800"
-            >
-              📄 Owner estimate PDF
-            </a>
-            {!approved && !issued.invoiceCode && (
-              <>
-                <button type="button" disabled={busy != null} onClick={() => decide("APPROVED")}
-                  className="rounded-lg bg-charcoal-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-charcoal-800 disabled:opacity-50">
-                  {busy === "APPROVED" ? "…" : "Approve"}
-                </button>
-                <button type="button" disabled={busy != null} onClick={() => decide("DECLINED")}
-                  className="rounded-lg border border-sand-200 px-3 py-1.5 text-xs font-medium text-charcoal-700 hover:bg-sand-50 disabled:opacity-50">
-                  Decline
-                </button>
-              </>
-            )}
-            {approved && !issued.invoiceCode && (
-              <button type="button" disabled={busy != null} onClick={convert}
-                className="rounded-lg bg-charcoal-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-charcoal-800 disabled:opacity-50">
-                {busy === "convert" ? "Converting…" : "Convert to invoice"}
-              </button>
-            )}
-          </div>
-
-          {issued.invoiceCode && (
-            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-              ✅ Converted to draft invoice <b>{issued.invoiceCode}</b> — find it in{" "}
-              <a href="/maintenance/invoices" className="underline">Invoices</a>.
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // Issued estimates use the same review and next-step screen as the Estimates queue.
+  if (issued) return <EstimateReview estimateId={issued.estimateId}/>;
 
   // ── Build view ──
   return (
     <div className="space-y-4">
+      {seed.work_order_id && !seed.resume_id && !draftRequested && <div className="rounded-xl border border-green-200 bg-green-50 p-4"><p className="text-sm text-green-900">Choose a template below, add price-book items, or suggest scope from this work order. Review suggested scope and prices before issuing.</p><button type="button" disabled={busy != null} className="mt-3 min-h-11 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" onClick={()=>setDraftRequested(true)}>Auto-create draft from work order</button></div>}
+      <div className="flex flex-wrap gap-4 text-sm"><a href="/turn-estimator/price-book" target="_blank" rel="noopener noreferrer" className="text-green-800 underline">Open price book ↗</a><a href="/maintenance/workspace?view=schedule" target="_blank" rel="noopener noreferrer" className="text-green-800 underline">View availability & planned revenue ↗</a>{seed.work_order_id&&<a className="text-green-800 underline" href={`/maintenance/workspace?work_order=${seed.work_order_id}&schedule=1`} target="_blank" rel="noopener noreferrer">Plan a visit for this work order ↗</a>}</div>
       {error && <Banner>{error}</Banner>}
+      <div className="rounded-xl border border-sand-200 bg-white p-4 space-y-3">
+        <div className="flex flex-wrap gap-3 items-end"><label className="grow text-sm">Start from a template<select className="block mt-1 w-full rounded-lg border p-3" value={templateId} onChange={e=>useTemplate(e.target.value)}><option value="">Choose a starter or saved template</option>{templates.filter(t=>!t.archived).map(t=><option key={t.id} value={t.id}>{t.name} · v{t.version}</option>)}</select></label><a className="underline text-sm p-3" href="/maintenance/invoices?tab=estimates">Saved drafts</a></div>
+        <p className="text-xs text-charcoal-500">Choose a template before editing. Checked rows are chargeable scope; unchecked rows remain a checklist. Missing or placeholder prices must be reviewed before issue.</p>
+        <div className="flex flex-wrap gap-2"><input aria-label="Template name" className="rounded-lg border p-3" placeholder="Reusable template name" value={templateName} onChange={e=>setTemplateName(e.target.value)}/><button type="button" className="rounded-lg border p-3 text-sm" disabled={!!busy} onClick={()=>saveTemplate()}>Save as new template</button>{templateId&&!templateId.startsWith('starter-')&&<><button type="button" className="rounded-lg border p-3 text-sm" disabled={!!busy} onClick={()=>saveTemplate(true)}>Publish revision</button><button type="button" className="rounded-lg border p-3 text-sm" onClick={async()=>{const t=templates.find(t=>t.id===templateId);const r=await fetch('/api/turn-estimator/templates',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({family_id:t?.family_id})});if(r.ok){setTemplates(ts=>ts.map(x=>x.family_id===t?.family_id?{...x,archived:true}:x));setTemplateId('');}else setError('Archive failed');}}>Archive template</button></>}</div>
+        <p className="text-xs text-charcoal-500">Reusable template descriptions should contain general scope only. Property and work-order fields are not copied.</p>
+      </div>
 
       {drafting && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
@@ -385,8 +347,8 @@ export default function EstimateBuilder({
         </label>
       </div>
 
-      <div className="rounded-xl border border-sand-200 bg-white shadow-card">
-        <table className="w-full table-fixed text-sm">
+      <div className="overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
+        <table className="w-full min-w-[720px] table-fixed text-sm">
           <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
               <th className="px-3 py-2">Item</th>
@@ -404,6 +366,7 @@ export default function EstimateBuilder({
               return (
                 <tr key={r.key}>
                   <td className="px-3 py-2">
+                    <label className="flex gap-2 mb-2 text-xs"><input type="checkbox" checked={r.included!==false} onChange={e=>setRow(r.key,{included:e.target.checked})}/>Include in charge</label>
                     <select className={`${input} w-full min-w-0`} value={r.item_code} onChange={(e) => setRow(r.key, { item_code: e.target.value })}>
                       <option value="">— select —</option>
                       {items.map((it) => (
@@ -412,6 +375,7 @@ export default function EstimateBuilder({
                         </option>
                       ))}
                     </select>
+                    <input aria-label="Scope description" className={`${input} w-full mt-2`} placeholder="Scope / checklist description" value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
                   </td>
                   <td className="px-3 py-2">
                     <input className={`${input} w-full min-w-0`} value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} />
@@ -463,7 +427,9 @@ export default function EstimateBuilder({
               </div>
             </div>
           )}
-          <button type="button" disabled={busy != null} onClick={issue}
+          <button type="button" disabled={busy != null||drafting||!loaded} onClick={saveDraft} className="rounded-lg border p-3 text-sm">{busy==="save"?"Saving…":"Save draft"}</button>
+          <span role="status" className="text-xs">{saveStatus}</span>
+          <button type="button" disabled={busy != null||drafting||!loaded} onClick={issue}
             className="rounded-lg bg-charcoal-900 px-4 py-2 text-sm font-medium text-white hover:bg-charcoal-800 disabled:opacity-50">
             {busy === "issue" ? "Issuing…" : "Save & Issue Estimate"}
           </button>

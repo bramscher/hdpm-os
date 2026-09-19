@@ -1,3 +1,4 @@
+import { requireRole } from '@/lib/require-role';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { createInvoice, createCredit, getInvoices } from '@/lib/invoices';
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const roleGuard=await requireRole('finance','maintenance','pm','manager');if(!roleGuard.ok)return roleGuard.response;
     const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(

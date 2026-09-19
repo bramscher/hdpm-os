@@ -4,7 +4,7 @@ import { requestApproval } from '@/lib/turn-estimator/estimates';
 
 /** POST /api/turn-estimator/approvals — request an approval on a version. maintenance/pm/admin. */
 export async function POST(request: NextRequest) {
-  const guard = await requireRole('maintenance', 'pm', 'admin');
+  const guard = await requireRole('maintenance', 'pm', 'manager', 'admin');
   if (!guard.ok) return guard.response;
   let body: { version_id?: string; kind?: 'OWNER' | 'PM' | 'OPS' };
   try {

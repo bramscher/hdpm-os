@@ -25,7 +25,7 @@ interface LineSpec {
  * Body: { lines: LineSpec[], notes?, priced_asof? }
  */
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole('maintenance', 'pm', 'admin');
+  const guard = await requireRole('maintenance', 'pm', 'manager', 'admin');
   if (!guard.ok) return guard.response;
   const { id } = await ctx.params;
   let body: { lines?: LineSpec[]; notes?: string; priced_asof?: string };
@@ -49,6 +49,10 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
           { status: 400 }
         );
       }
+      if(/placeholder/i.test(`${item.name} ${item.internal_instructions}`))throw new Error(`${item.item_code} needs approved pricing before issue`);
+      if(item.pricing_method==='allowance'||item.pricing_method==='package')throw new Error('Itemize package/allowance scope before issuing; component overlap is not yet defined');
+      for(const value of [s.qty,s.minutes,s.est_labor_hours,s.est_material_cost,s.tenant_alloc_proposed,s.tax_amount])if(value!=null&&(!Number.isFinite(value)||value<0))throw new Error('Invalid line quantity, time, cost or allocation');
+      if(s.qty!=null&&s.qty<=0)throw new Error('Quantity must be positive');
       inputs.push({
         item,
         qty: s.qty,

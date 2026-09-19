@@ -1,3 +1,5 @@
+import { getSupabaseAdmin } from '@/lib/supabase';
+import { requireRole } from '@/lib/require-role';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getInvoiceById, updateInvoice, uploadInvoicePdf } from '@/lib/invoices';
@@ -10,6 +12,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const roleGuard=await requireRole('finance','maintenance','pm','manager');if(!roleGuard.ok)return roleGuard.response;
     const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
@@ -28,6 +31,8 @@ export async function POST(
     if (invoice.status === 'void') {
       return NextResponse.json({ error: 'Cannot generate PDF for a voided invoice' }, { status: 400 });
     }
+
+    if(invoice.maintenance_job_id && invoice.status!=='draft')return NextResponse.json({invoice});
 
     // Ensure numeric fields are numbers (Supabase may return strings)
     const safeInvoice = {
@@ -57,10 +62,11 @@ export async function POST(
     const pdfPath = await uploadInvoicePdf(pdfBuffer, invoice);
 
     // Update invoice record
-    const updatedInvoice = await updateInvoice(id, {
-      pdf_path: pdfPath,
-      status: 'generated',
-    });
+    let updatedInvoice;
+    if(invoice.maintenance_job_id){
+      const {data,error}=await getSupabaseAdmin().rpc('maintenance_finalize_invoice',{actor:session.user.email,request:{id,line_items:invoice.line_items,total_amount:Number(invoice.total_amount),pdf_path:pdfPath}});
+      if(error)throw new Error(error.message);updatedInvoice=data;
+    }else updatedInvoice=await updateInvoice(id,{pdf_path:pdfPath,status:'generated'});
 
     return NextResponse.json({ invoice: updatedInvoice });
   } catch (error) {

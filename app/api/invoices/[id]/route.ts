@@ -1,3 +1,4 @@
+import { requireRole } from '@/lib/require-role';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getInvoiceById, updateInvoice, deleteInvoice } from '@/lib/invoices';
@@ -35,6 +36,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const roleGuard=await requireRole('finance','maintenance','pm','manager');if(!roleGuard.ok)return roleGuard.response;
     const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
@@ -75,6 +77,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const roleGuard=await requireRole('finance','maintenance','pm','manager');if(!roleGuard.ok)return roleGuard.response;
     const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(

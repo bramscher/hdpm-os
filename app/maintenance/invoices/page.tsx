@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { InvoiceDashboard } from "./invoice-dashboard";
 
+export const metadata = { title: "HDPM-OS — Work & Billing" };
+
 export default async function InvoicesPage() {
   const session = await auth();
 

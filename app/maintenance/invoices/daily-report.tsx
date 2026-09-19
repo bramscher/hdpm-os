@@ -76,6 +76,7 @@ function allDaysDesc(from: string, to: string): string[] {
 
 /** Billable hours on a labor line: qty, else amount ÷ rate (estimated). */
 function laborHours(li: LineItem): { hours: number; estimated: boolean } {
+  if(li.workspace_task_id || (li.pricing_method && li.pricing_method!=='hourly')) return {hours:0,estimated:false};
   if (li.qty && li.qty > 0) return { hours: li.qty, estimated: false };
   const amount = li.amount || 0;
   if (li.unit_price && li.unit_price > 0) return { hours: amount / li.unit_price, estimated: true };

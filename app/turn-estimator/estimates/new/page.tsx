@@ -1,6 +1,9 @@
+import { requireRole } from '@/lib/require-role';
+import { redirect } from 'next/navigation';
 import { listPriceBookItems } from '@/lib/turn-estimator/price-book';
 import { getWorkOrderById } from '@/lib/work-orders';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import EstimateWorkOrderPicker from '@/components/turn-estimator/EstimateWorkOrderPicker';
 import EstimateBuilder, { type BuilderSeed } from '@/components/turn-estimator/EstimateBuilder';
 
 export const dynamic = 'force-dynamic';
@@ -15,9 +18,10 @@ export const metadata = { title: 'HDPM-OS — New Estimate' };
 export default async function NewEstimatePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from_wo?: string; turn?: string; draft?: string }>;
+  searchParams: Promise<{ from_wo?: string; turn?: string; draft?: string; resume?: string }>;
 }) {
-  const { from_wo, turn, draft } = await searchParams;
+  const guard=await requireRole('maintenance','pm','manager');if(!guard.ok)redirect('/maintenance/field');
+  const { from_wo, turn, draft, resume } = await searchParams;
   const items = await listPriceBookItems();
 
   let seed: BuilderSeed = {};
@@ -52,16 +56,23 @@ export default async function NewEstimatePage({
     }
   }
 
+  if (resume) {
+    const { data } = await getSupabaseAdmin().from("estimate_saved_draft").select("payload").eq("id",resume).single();
+    if(data) seed={...data.payload.seed,resume_id:resume};
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
+      <a href="/maintenance/invoices?tab=estimates" className="mb-5 inline-block text-sm text-green-800 underline">← Estimates</a>
       <h1 className="text-display text-charcoal-900">New Estimate</h1>
       <p className="mb-6 mt-1 text-sm text-charcoal-500">
         {seed.wo_number
           ? `Seeded from work order ${seed.wo_number}. `
           : ''}
-        Add price-book line items, issue the estimate, get approval, then convert it to an HDMS invoice.
+        Scope and price the work, get approval when needed, then schedule and bill completed work.
       </p>
-      <EstimateBuilder items={items} seed={seed} autoDraft={draft === '1' && !!seed.work_order_id} />
+      {!seed.work_order_id && !resume && <EstimateWorkOrderPicker/>}
+      <EstimateBuilder key={resume || from_wo || turn || "new"} items={items} seed={seed} autoDraft={draft === '1' && !!seed.work_order_id} />
     </div>
   );
 }
