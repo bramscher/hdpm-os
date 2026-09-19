@@ -5,7 +5,7 @@ import { createEstimate } from '@/lib/turn-estimator/estimates';
 
 /** POST /api/turn-estimator/estimates — create a draft estimate. maintenance/pm/admin. */
 export async function POST(request: NextRequest) {
-  const guard = await requireRole('maintenance', 'pm', 'admin');
+  const guard = await requireRole('maintenance', 'pm', 'manager', 'admin');
   if (!guard.ok) return guard.response;
   let body: Record<string, unknown>;
   try {

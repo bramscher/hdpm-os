@@ -12,7 +12,7 @@ export const maxDuration = 120;
  * maintenance/pm/admin.
  */
 export async function POST(request: NextRequest) {
-  const guard = await requireRole('maintenance', 'pm', 'admin');
+  const guard = await requireRole('maintenance', 'pm', 'manager', 'admin');
   if (!guard.ok) return guard.response;
 
   let body: { work_order_id?: string };

@@ -140,12 +140,12 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
           </a>
         )}
         <Link
-          href={`/turn-estimator/estimates/new?from_wo=${wo.id}&draft=1`}
+          href={`/turn-estimator/estimates/new?from_wo=${wo.id}`}
           className="mo-btn"
           style={{ textDecoration: 'none' }}
-          title="Draft a turn/HDMS estimate from this work order with the agent"
+          title="Create an estimate using the price book, a template, or suggested scope"
         >
-          Draft estimate ✨
+          Create estimate
         </Link>
         <Link href="/maintenance/board" className="badge">
           ← Back to board

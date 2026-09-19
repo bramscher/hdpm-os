@@ -25,7 +25,7 @@ interface LineSpec {
  * Body: { lines: LineSpec[], notes?, priced_asof? }
  */
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole('maintenance', 'pm', 'admin');
+  const guard = await requireRole('maintenance', 'pm', 'manager', 'admin');
   if (!guard.ok) return guard.response;
   const { id } = await ctx.params;
   let body: { lines?: LineSpec[]; notes?: string; priced_asof?: string };

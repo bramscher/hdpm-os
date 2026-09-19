@@ -16,7 +16,6 @@ import {
   Plus,
   TrendingUp,
   Wallet,
-  Sparkles,
 } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
@@ -30,6 +29,8 @@ import { CsvUploader } from "./csv-uploader";
 import { WorkOrderTable } from "./work-order-table";
 import { WorkspaceInvoice } from "./workspace-invoice";
 import { InvoiceForm } from "./invoice-form";
+import type { EstimateQueueItem } from "@/lib/turn-estimator/estimate-queue";
+import { EstimatesTab } from "./estimates-tab";
 import { InvoiceList } from "./invoice-list";
 import { CreditForm } from "./credit-form";
 import { BillableReport } from "./billable-report";
@@ -170,7 +171,7 @@ function PillToggle<T extends string>({
 // ============================================
 
 type View = "main" | "table" | "form";
-type Tab = "work-orders" | "invoices" | "report" | "reconcile";
+type Tab = "work-orders" | "estimates" | "invoices" | "report" | "reconcile";
 
 interface InvoiceDashboardProps {
   userEmail: string;
@@ -185,6 +186,23 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const isAdmin = session?.user?.isAdmin === true;
   const [view, setView] = useState<View>("main");
   const [activeTab, setActiveTab] = useState<Tab>("work-orders");
+  function changeTab(tab: Tab) {
+    setActiveTab(tab);
+    window.history.replaceState(null, '', `/maintenance/invoices?tab=${tab}`);
+  }
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['work-orders','estimates','invoices','report','reconcile'].includes(tab)) setActiveTab(tab as Tab);
+  }, [searchParams]);
+  const [workOrderEstimates, setWorkOrderEstimates] = useState<EstimateQueueItem[]>([]);
+  useEffect(() => {
+    if (activeTab !== 'work-orders') return;
+    let cancelled = false;
+    fetch('/api/turn-estimator/estimate-queue').then(r => r.ok ? r.json() : null).then(data => {
+      if (!cancelled && data) setWorkOrderEstimates(data.estimates);
+    }).catch(() => { /* Estimates tab provides the retry UI if unavailable. */ });
+    return () => { cancelled = true; };
+  }, [activeTab]);
   const [reportView, setReportView] = useState<"billable" | "daily" | "inhouse" | "hdms-recon">("billable");
   const [parsedRows, setParsedRows] = useState<WorkOrderRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<WorkOrderRow | null>(null);
@@ -561,7 +579,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   function handleEditInvoice(invoice: HdmsInvoice) {
     setEditInvoice(invoice);
     setSelectedRow(null);
-    setActiveTab("invoices");
+    changeTab("invoices");
     setView("form");
   }
 
@@ -582,7 +600,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
 
   function handleInvoiceSaved() {
     fetchInvoices();
-    setActiveTab("invoices");
+    changeTab("invoices");
     setView("main");
     setSelectedRow(null);
     setEditInvoice(null);
@@ -596,6 +614,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   }
 
   function handleBackFromForm() {
+    changeTab(editInvoice ? "invoices" : activeTab);
     fetchInvoices();
     if (editInvoice || fromPdfScan || fromWorkOrder) {
       setView("main");
@@ -613,7 +632,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
 
   return (
     <div className="max-w-5xl mx-auto">
-      <a href="/maintenance/workspace" className="mb-5 block rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-medium text-green-900">Open maintenance workspace — Today, Schedule, Jobs & Estimates, Billing →</a>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-charcoal-500">Scope → approval → completed work → billing</p><a href="/maintenance/workspace" className="font-medium text-green-800 underline">Daily work & schedule →</a></div>
       {/* Page Header */}
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-charcoal-900 tracking-tight">Maintenance</h1>
@@ -645,8 +664,84 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
       {/* Main Content */}
       {view === "main" && (
         <div className="space-y-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Tab Bar */}
+          <div className="bg-white rounded-xl border border-sand-200 shadow-card px-2 py-1.5 flex gap-1 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => changeTab("work-orders")}
+              className={`flex-1 flex items-center justify-center gap-2 whitespace-nowrap px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                activeTab === "work-orders"
+                  ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
+                  : "text-charcoal-400 hover:text-charcoal-600"
+              }`}
+            >
+              <Wrench className="h-4 w-4" />
+              Work Orders
+              {!woLoading && (
+                <span className={`text-xs font-normal ${activeTab === "work-orders" ? "text-charcoal-500" : "text-charcoal-400"}`}>
+                  ({sortedWo.length})
+                </span>
+              )}
+            </button>
+            <button type="button" onClick={() => changeTab("estimates")} aria-current={activeTab === 'estimates' ? 'page' : undefined}
+              className={`flex-1 flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === 'estimates' ? 'bg-white text-charcoal-900 shadow-sm border border-sand-200' : 'text-charcoal-400 hover:text-charcoal-600'}`}>
+              <FileText className="h-4 w-4"/>Estimates
+            </button>
+            <button
+              type="button"
+              onClick={() => changeTab("invoices")}
+              className={`flex-1 flex items-center justify-center gap-2 whitespace-nowrap px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                activeTab === "invoices"
+                  ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
+                  : "text-charcoal-400 hover:text-charcoal-600"
+              }`}
+            >
+              <FileText className="h-4 w-4" />
+              Invoices
+              {!isLoadingInvoices && (
+                <span className={`text-xs font-normal ${activeTab === "invoices" ? "text-charcoal-500" : "text-charcoal-400"}`}>
+                  ({invoices.length})
+                </span>
+              )}
+            </button>
+            {/* Reporting is admin-only (ADMIN_EMAILS) — hidden for all other staff. */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => changeTab("report")}
+                className={`flex-1 flex items-center justify-center gap-2 whitespace-nowrap px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  activeTab === "report"
+                    ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
+                    : "text-charcoal-400 hover:text-charcoal-600"
+                }`}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Reports
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => changeTab("reconcile")}
+              className={`flex-1 flex items-center justify-center gap-2 whitespace-nowrap px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                activeTab === "reconcile"
+                  ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
+                  : "text-charcoal-400 hover:text-charcoal-600"
+              }`}
+            >
+              <Wallet className="h-4 w-4" />
+              Reconcile
+            </button>
+          </div>
+
+          {activeTab === 'estimates' && <EstimatesTab onChooseWorkOrder={() => changeTab('work-orders')}/>}
+
+          {/* ============================== */}
+          {/* Work Orders Tab                */}
+          {/* ============================== */}
+          {activeTab === "work-orders" && (
+            <div className="space-y-6">
+              {/* Work-order statistics belong with the work-order list. */}
+          {activeTab === "work-orders" && <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               {
                 label: "Open",
@@ -724,78 +819,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 </>
               )}
             </div>
-          </div>
-
-          {/* Tab Bar */}
-          <div className="bg-white rounded-xl border border-sand-200 shadow-card px-2 py-1.5 flex gap-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab("work-orders")}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                activeTab === "work-orders"
-                  ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
-                  : "text-charcoal-400 hover:text-charcoal-600"
-              }`}
-            >
-              <Wrench className="h-4 w-4" />
-              Work Orders
-              {!woLoading && (
-                <span className={`text-xs font-normal ${activeTab === "work-orders" ? "text-charcoal-500" : "text-charcoal-400"}`}>
-                  ({sortedWo.length})
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("invoices")}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                activeTab === "invoices"
-                  ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
-                  : "text-charcoal-400 hover:text-charcoal-600"
-              }`}
-            >
-              <FileText className="h-4 w-4" />
-              Invoices
-              {!isLoadingInvoices && (
-                <span className={`text-xs font-normal ${activeTab === "invoices" ? "text-charcoal-500" : "text-charcoal-400"}`}>
-                  ({invoices.length})
-                </span>
-              )}
-            </button>
-            {/* Reporting is admin-only (ADMIN_EMAILS) — hidden for all other staff. */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setActiveTab("report")}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                  activeTab === "report"
-                    ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
-                    : "text-charcoal-400 hover:text-charcoal-600"
-                }`}
-              >
-                <TrendingUp className="h-4 w-4" />
-                Report
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setActiveTab("reconcile")}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                activeTab === "reconcile"
-                  ? "bg-white text-charcoal-900 shadow-sm border border-sand-200"
-                  : "text-charcoal-400 hover:text-charcoal-600"
-              }`}
-            >
-              <Wallet className="h-4 w-4" />
-              Reconcile
-            </button>
-          </div>
-
-          {/* ============================== */}
-          {/* Work Orders Tab                */}
-          {/* ============================== */}
-          {activeTab === "work-orders" && (
-            <div className="space-y-6">
+          </div>}
+              <div className="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-900"><strong>Estimate first.</strong> Open a work order’s estimate to use a template, price-book items, or suggested scope. Use <strong>Quick invoice</strong> for a simple, already-authorized repair that is ready to bill.</div>
               {/* Filters */}
               <div className="bg-white rounded-xl border border-sand-200 shadow-card px-5 py-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -985,6 +1010,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                         </tr>
                       ) : (
                         paginatedWo.map((wo) => {
+                          const existingEstimate = workOrderEstimates.find(e => e.workOrderId === wo.id && e.stage !== 'closed');
                           const afStatus = wo.appfolio_status || "New";
                           const afStyle = APPFOLIO_STATUS_STYLES[afStatus] || { bg: "bg-blue-100/80", text: "text-blue-700" };
                           const priorityStyle = PRIORITY_STYLES[wo.priority || "Normal"] || PRIORITY_STYLES.Normal;
@@ -995,29 +1021,9 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                               className="group border-b border-charcoal-50/80 hover:bg-charcoal-50 transition-colors"
                             >
                               <td className="sticky left-0 bg-white group-hover:bg-charcoal-50 border-r border-charcoal-100/80 px-2 py-2.5 text-center transition-colors">
-                                <div className="inline-flex items-center gap-1">
-                                  <a
-                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}`}
-                                    title="Create Estimate"
-                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-green-50/80 text-green-700 hover:bg-green-100 hover:text-green-900 transition-colors"
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                  </a>
-                                  <a
-                                    href={`/turn-estimator/estimates/new?from_wo=${wo.id}&draft=1`}
-                                    title="Draft estimate with the agent"
-                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-blue-50/80 text-blue-600 hover:bg-blue-100 hover:text-blue-800 transition-colors"
-                                  >
-                                    <Sparkles className="h-4 w-4" />
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCreateInvoiceFromWo(wo)}
-                                    title="Create Invoice"
-                                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-terra-50/80 text-terra-600 hover:bg-terra-100 hover:text-terra-800 transition-colors"
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                  </button>
+                                <div className="flex flex-col items-stretch gap-1.5">
+                                  <a href={existingEstimate?.href || `/turn-estimator/estimates/new?from_wo=${wo.id}`} className="inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-green-700 px-3 py-2 text-xs font-medium text-white hover:bg-green-800"><FileText className="h-3.5 w-3.5"/>{existingEstimate ? (existingEstimate.stage === "draft" ? "Continue estimate" : "View estimate") : "Create estimate"}</a>
+                                  <button type="button" onClick={() => handleCreateInvoiceFromWo(wo)} className="min-h-9 rounded-lg px-2 py-1 text-xs text-charcoal-500 hover:bg-sand-100" title="Invoice a simple, already-authorized repair">Quick invoice</button>
                                 </div>
                               </td>
                               <td className="px-4 py-2.5 text-charcoal-600 font-mono text-[11px] whitespace-nowrap">
@@ -1208,6 +1214,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
         />
       )}
 
+      {view === "form" && fromWorkOrder && !editInvoice && <div className="mb-5 rounded-xl border border-sand-200 bg-white p-4 text-sm text-charcoal-600"><strong>Quick invoice — already-authorized work.</strong> Review completed work and charges below. For a turn, multiple tasks, or uncertain scope, <a className="text-green-800 underline" href={`/turn-estimator/estimates/new?from_wo=${selectedRow?.work_order_id}`}>start with an estimate</a>.</div>}
       {view === "form" && (editInvoice?.maintenance_job_id ? <WorkspaceInvoice invoice={editInvoice} onBack={handleBackFromForm} onSaved={handleInvoiceSaved}/> :
         <InvoiceForm
           workOrder={selectedRow}

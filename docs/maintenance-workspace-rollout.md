@@ -6,13 +6,14 @@ The production migration `20260919_maintenance_workspace.sql` was applied throug
 
 ## Start here
 
-- Office: `/maintenance/workspace` (also linked from Invoices).
+- Maintenance flow: `/maintenance/invoices` — Work Orders → Estimates → Invoices → Reports → Reconcile.
+- Daily work and scheduling: `/maintenance/workspace`.
 - Technician: `/maintenance/field`.
-- Estimate templates: `/turn-estimator/estimates/new`.
+- Estimate queue: `/maintenance/invoices?tab=estimates`; templates and price-book scope start at `/turn-estimator/estimates/new`.
 
-1. In Jobs & Estimates, add an existing work order. This opts the job into the workspace without duplicating the original work order.
+1. In Work Orders, choose Create estimate (or continue/review the existing estimate). Use Quick invoice for simple, already-authorized work ready to bill. Starting from a template also offers a work-order picker before editing.
 2. Create an estimate from Standard unit turn, Light turn / refresh, or Maintenance visit / punch list. Confirm each chargeable item, resolve missing or placeholder pricing, and save or issue. Save a reusable template or publish a new version when useful.
-3. For an approved estimate, return to its job and choose Import approved scope. Alternatively, add separately authorized price-book tasks directly. Use task billing for this workflow; whole-estimate conversion and imported task billing cannot both bill the same scope.
+3. Open an approved estimate and choose Set up job & schedule. This creates or reopens the linked job and imports its approved scope, then opens the job directly. Alternatively, add separately authorized price-book tasks directly in the workspace. Whole-estimate conversion and imported task billing cannot both bill the same scope.
 4. Schedule a visit and assign technicians. The schedule is a local HDPM plan; it does not write back to AppFolio.
 5. Technicians enter actual minutes, date, progress and work/material notes. Save unfinished work or submit it for review. Office can accept, hold, or return a question.
 6. Select completed, reviewed tasks to add to the job's rolling draft. A task is reserved once, including work shared by multiple technicians. Generating an invoice with scope remaining requires recorded progress-billing authorization.
@@ -38,3 +39,9 @@ Today and the calendar distinguish actual recorded hours from completed service 
 - `npm run build`: passed.
 
 The proposal in `invoice-manager-plan.md` remains the broader roadmap. This document describes the implemented first release and its operational limits.
+
+## Estimates navigation cleanup
+
+The Estimates queue combines saved drafts and issued estimates, grouped as Drafts, Awaiting approval, Approved, In billing, and Closed. Partial task drafts remain under Approved with an explicit undrafted-task count. The review page provides scope, estimate PDF, recorded approval/decline, job setup, and authorized full-scope invoice conversion. Existing approval and conversion role boundaries are retained; manager create/issue access now matches the existing manager builder and approval workflow. Work-order actions reopen existing active estimates instead of silently starting another draft. Suggested scope is explicitly requested and reviewed before issue; it does not approve work or send messages.
+
+Validation for this cleanup: 919 tests across 90 files passed, including new queue-stage and estimate-to-job handoff checks. The production build passed. No additional database migration is required.
