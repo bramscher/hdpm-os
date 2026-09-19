@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CsvUploader } from "./csv-uploader";
 import { WorkOrderTable } from "./work-order-table";
+import { WorkspaceInvoice } from "./workspace-invoice";
 import { InvoiceForm } from "./invoice-form";
 import { InvoiceList } from "./invoice-list";
 import { CreditForm } from "./credit-form";
@@ -287,6 +288,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   // ============================================
 
   useEffect(() => {
+    const invoiceId=searchParams.get("invoice");
+    if(invoiceId){fetch(`/api/invoices/${invoiceId}`).then(r=>r.json()).then(d=>{if(d.invoice){setEditInvoice(d.invoice);setView("form");setFromWorkOrder(false);}}).catch(()=>toast.error("Could not open invoice"));return;}
     const fromWo = searchParams.get("from_wo");
     if (!fromWo) return;
 
@@ -610,6 +613,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
 
   return (
     <div className="max-w-5xl mx-auto">
+      <a href="/maintenance/workspace" className="mb-5 block rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-medium text-green-900">Open maintenance workspace — Today, Schedule, Jobs & Estimates, Billing →</a>
       {/* Page Header */}
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-charcoal-900 tracking-tight">Maintenance</h1>
@@ -1204,7 +1208,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
         />
       )}
 
-      {view === "form" && (
+      {view === "form" && (editInvoice?.maintenance_job_id ? <WorkspaceInvoice invoice={editInvoice} onBack={handleBackFromForm} onSaved={handleInvoiceSaved}/> :
         <InvoiceForm
           workOrder={selectedRow}
           editInvoice={editInvoice}

@@ -1,3 +1,5 @@
+import { requireRole } from '@/lib/require-role';
+import { redirect } from 'next/navigation';
 import { listPriceBookItems } from '@/lib/turn-estimator/price-book';
 import { getWorkOrderById } from '@/lib/work-orders';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -15,9 +17,10 @@ export const metadata = { title: 'HDPM-OS — New Estimate' };
 export default async function NewEstimatePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from_wo?: string; turn?: string; draft?: string }>;
+  searchParams: Promise<{ from_wo?: string; turn?: string; draft?: string; resume?: string }>;
 }) {
-  const { from_wo, turn, draft } = await searchParams;
+  const guard=await requireRole('maintenance','pm','manager');if(!guard.ok)redirect('/maintenance/field');
+  const { from_wo, turn, draft, resume } = await searchParams;
   const items = await listPriceBookItems();
 
   let seed: BuilderSeed = {};
@@ -50,6 +53,11 @@ export default async function NewEstimatePage({
         unit_turn_id: data.id as string,
       };
     }
+  }
+
+  if (resume) {
+    const { data } = await getSupabaseAdmin().from("estimate_saved_draft").select("payload").eq("id",resume).single();
+    if(data) seed={...data.payload.seed,resume_id:resume};
   }
 
   return (

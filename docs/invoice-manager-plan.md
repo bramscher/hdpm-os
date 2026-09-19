@@ -1,6 +1,6 @@
 # Maintenance workspace and invoice manager — proposal
 
-Status: draft for Craig's review, September 18, 2026. Branch: `feature/invoice-manager`.
+Status: implementation roadmap, September 18, 2026. Branch: `feature/invoice-manager`. The first working release is described in [maintenance-workspace-rollout.md](maintenance-workspace-rollout.md); sections below include capabilities planned for later iterations.
 
 ## Problem and intended result
 

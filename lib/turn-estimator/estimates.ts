@@ -15,6 +15,7 @@ import { tryAdvanceTurn } from './turns';
 import type { LineInput, PricedLine } from './types';
 
 export interface CreateEstimateInput {
+  saved_draft_id?: string;
   unit_turn_id?: string | null;
   work_order_id?: string | null;
   wo_number?: string | null;
@@ -37,6 +38,10 @@ export interface EstimateRow {
 
 export async function createEstimate(input: CreateEstimateInput, actor: string): Promise<EstimateRow> {
   const supabase = getSupabaseAdmin();
+  if (input.saved_draft_id) {
+    const {data,error}=await supabase.rpc('maintenance_estimate_header',{actor,request:input});
+    if(error)throw new Error(error.message);return data as EstimateRow;
+  }
   const { data, error } = await supabase
     .from('estimate')
     .insert({
@@ -95,88 +100,12 @@ export async function issueEstimateVersion(
 
   const { lines, totals } = priceEstimate(lineInputs, cfg);
 
-  // Next version number.
-  const { data: last } = await supabase
-    .from('estimate_version')
-    .select('version_number')
-    .eq('estimate_id', estimateId)
-    .order('version_number', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const versionNumber = ((last?.version_number as number) ?? 0) + 1;
-
-  const pricedAsof = opts.pricedAsof ?? new Date().toISOString().slice(0, 10);
-
-  const { data: version, error: verErr } = await supabase
-    .from('estimate_version')
-    .insert({
-      estimate_id: estimateId,
-      version_number: versionNumber,
-      status: 'issued',
-      owner_total: totals.owner_total,
-      internal_cost_total: totals.internal_cost_total,
-      tenant_alloc_proposed_total: totals.tenant_alloc_proposed_total,
-      margin: totals.margin,
-      priced_asof: pricedAsof,
-      notes: opts.notes ?? null,
-      created_by: actor,
-    })
-    .select()
-    .single();
-  if (verErr || !version) throw new Error(`issue version failed: ${verErr?.message}`);
-
-  const lineRows = lines.map((l, i) => ({
-    estimate_version_id: version.id,
-    line_no: i + 1,
-    price_book_item_id: l.price_book_item_id,
-    price_book_item_code: l.price_book_item_code,
-    category: l.category,
-    pricing_method: l.pricing_method,
-    description: l.description,
-    room: l.room,
-    location: l.location,
-    qty: l.qty,
-    uom: l.uom,
-    est_labor_hours: l.est_labor_hours,
-    est_material_cost: l.est_material_cost,
-    internal_cost: l.internal_cost,
-    owner_unit_price: l.owner_unit_price,
-    owner_extended: l.owner_extended,
-    tax_amount: l.tax_amount,
-    tenant_alloc_proposed: l.tenant_alloc_proposed,
-    responsibility: l.responsibility,
-    responsibility_rationale: l.responsibility_rationale,
-  }));
-  if (lineRows.length > 0) {
-    const { error: lineErr } = await supabase.from('estimate_line').insert(lineRows);
-    if (lineErr) throw new Error(`insert estimate lines failed: ${lineErr.message}`);
-  }
-
-  // Supersede the prior current version.
-  if (est.current_version_id) {
-    await supabase
-      .from('estimate_version')
-      .update({ status: 'superseded' })
-      .eq('id', est.current_version_id);
-  }
-
   const limit = (est.authorization_limit as number | null) ?? cfg.default_authorization_limit;
   const authorization = evaluateAuthorization(totals.owner_total, limit);
   const estimateStatus = authorization === 'auto_approved' ? 'approved' : 'approval_pending';
-
-  await supabase
-    .from('estimate')
-    .update({ current_version_id: version.id, status: estimateStatus })
-    .eq('id', estimateId);
-
-  await logAudit('estimate', estimateId, 'estimate_version_issued', actor, {
-    version_id: version.id,
-    version_number: versionNumber,
-    owner_total: totals.owner_total,
-    authorization,
-    limit,
-  });
-
+  const {data: issued,error: issueError}=await supabase.rpc('maintenance_issue_estimate',{actor,request:{estimate_id:estimateId,lines,...totals,priced_asof:opts.pricedAsof??new Date().toISOString().slice(0,10),notes:opts.notes??null,authorization,estimate_status:estimateStatus}});
+  if(issueError)throw new Error(issueError.message);
+  const versionNumber=issued.version_number;
   // Advance the linked turn's lifecycle (best-effort; leaves the turn alone if
   // it isn't at a compatible state). Issue → ESTIMATE_READY → APPROVED/pending.
   const turnId = est.unit_turn_id as string | null;
@@ -190,16 +119,7 @@ export async function issueEstimateVersion(
     );
   }
 
-  return {
-    version_id: version.id,
-    version_number: versionNumber,
-    lines,
-    owner_total: totals.owner_total,
-    internal_cost_total: totals.internal_cost_total,
-    margin: totals.margin,
-    authorization,
-    estimate_status: estimateStatus,
-  };
+  return {...issued, lines};
 }
 
 /** Record an owner/PM/OPS approval request against a version. */

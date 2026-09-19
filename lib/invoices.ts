@@ -7,6 +7,8 @@ import { weekStartPacific, weeksBefore } from './eos/scorecard';
 
 /** An individual billable line item on an invoice */
 export interface LineItem {
+  pricing_method?: string;
+  workspace_task_id?: string;
   description: string;
   account?: string;        // GL account code from work order (e.g. "6500: Keys, Locks...")
   type?: LineItemType;     // categorization for the line item
@@ -76,7 +78,7 @@ export const WEEKLY_HOURS_TARGET = { min: 30, max: 36 } as const;
 /** Total labor hours on an invoice = sum of labor-line qty. */
 export function invoiceLaborHours(inv: Pick<HdmsInvoice, 'line_items'>): number {
   return (inv.line_items ?? []).reduce(
-    (sum, li) => ((li.type || 'labor') === 'labor' && li.qty && li.qty > 0 ? sum + li.qty : sum),
+    (sum, li) => ((li.type || 'labor') === 'labor' && (!li.pricing_method || li.pricing_method==='hourly') && !li.workspace_task_id && li.qty && li.qty > 0 ? sum + li.qty : sum),
     0
   );
 }
@@ -126,7 +128,7 @@ export function weeklyBillableHours(
           : null;
     if (!bucket) continue;
     for (const li of inv.line_items ?? []) {
-      if ((li.type || 'labor') !== 'labor' || !li.qty || li.qty <= 0) continue;
+      if ((li.type || 'labor') !== 'labor' || li.workspace_task_id || (li.pricing_method && li.pricing_method!=='hourly') || !li.qty || li.qty <= 0) continue;
       bucket.total += li.qty;
       const tech = li.technician?.trim();
       if (tech) bucket.byTech[tech] = (bucket.byTech[tech] ?? 0) + li.qty;
@@ -173,6 +175,7 @@ export function displayAssignee(raw: string | null | undefined): string | null {
 }
 
 export interface HdmsInvoice {
+  maintenance_job_id?: string | null;
   id: string;
   invoice_number: number;
   invoice_code: string;
@@ -351,6 +354,7 @@ export async function duplicateInvoice(id: string, createdBy: string): Promise<H
 
   const source = await getInvoiceById(id);
   if (!source) throw new Error('Invoice not found');
+  if(source.maintenance_job_id)throw new Error('Linked work cannot be duplicated; add new approved scope in the maintenance workspace');
 
   // All rows sharing this base number → next free suffix.
   const { data: siblings, error: sibErr } = await supabase
@@ -564,6 +568,7 @@ export async function deleteInvoice(id: string): Promise<void> {
   }
 
   // Delete PDF from storage if it exists
+  if(invoice.maintenance_job_id)throw new Error('Release the unissued draft from the maintenance workspace; linked invoices cannot be deleted');
   if (invoice.pdf_path) {
     const { error: storageError } = await supabase.storage
       .from('hdms-invoices')
@@ -602,7 +607,9 @@ export async function uploadInvoicePdf(
   const sanitizedName = invoice.property_name.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-');
   const dateStr = invoice.completed_date || date.toISOString().split('T')[0];
 
-  const path = `${year}/${month}/${invoice.invoice_code}_${sanitizedName}_${dateStr}.pdf`;
+  // Each workspace render has its own object; a losing concurrent render cannot overwrite the issued PDF.
+  const suffix = invoice.maintenance_job_id ? `_${crypto.randomUUID()}` : '';
+  const path = `${year}/${month}/${invoice.invoice_code}_${sanitizedName}_${dateStr}${suffix}.pdf`;
 
   const { error } = await supabase.storage
     .from('hdms-invoices')

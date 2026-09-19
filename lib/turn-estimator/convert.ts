@@ -45,10 +45,11 @@ export async function convertEstimateVersionToInvoice(
 
   const { data: est, error: eErr } = await supabase
     .from('estimate')
-    .select('id, status, property_name, unit_name, property_id, unit_turn_id')
+    .select('id, status, property_name, unit_name, property_id, unit_turn_id, work_order_id, wo_number, current_version_id')
     .eq('id', version.estimate_id)
     .single();
   if (eErr || !est) throw new Error(`estimate not found: ${eErr?.message}`);
+  if(est.current_version_id!==versionId)throw new Error('Only the current approved estimate can be converted');
   if (est.status !== 'approved') {
     throw new Error(`estimate must be approved to convert (status: ${est.status})`);
   }
@@ -77,6 +78,7 @@ export async function convertEstimateVersionToInvoice(
     const amount = num(r.owner_extended) + num(r.tax_amount);
     const li: LineItem = {
       description: r.description as string,
+      pricing_method: r.pricing_method as string,
       type,
       qty: num(r.qty),
       unit_price: num(r.owner_unit_price),
@@ -97,11 +99,15 @@ export async function convertEstimateVersionToInvoice(
   const materialsAmount = sumBy((t) => t === 'materials' || t === 'appliance');
   const totalAmount = Math.round(lineItems.reduce((s, li) => s + li.amount, 0) * 100) / 100;
 
+  const {data: wo}=est.work_order_id?await supabase.from('work_orders').select('property_address').eq('id',est.work_order_id).maybeSingle():{data:null};
+
   const { data: inv, error: iErr } = await supabase
     .from('hdms_invoices')
     .insert({
       property_name: est.property_name ?? 'Unknown',
-      property_address: est.property_id ?? '',
+      property_address: wo?.property_address ?? '',
+      work_order_id: est.work_order_id,
+      wo_reference: est.wo_number,
       description: `Turn estimate v${version.version_number}${est.unit_name ? ` — ${est.unit_name}` : ''}`,
       labor_amount: laborAmount,
       materials_amount: materialsAmount,
