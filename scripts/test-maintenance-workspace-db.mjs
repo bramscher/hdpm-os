@@ -65,6 +65,27 @@ const est=await header();ok((await header()).id===est.id,'saved draft has one es
 const issueRequest={estimate_id:est.id,owner_total:125,internal_cost_total:35,tenant_alloc_proposed_total:0,margin:90,priced_asof:'2026-01-01',authorization:'auto_approved',estimate_status:'approved',lines:[{price_book_item_id:crypto.randomUUID(),price_book_item_code:'TEST',category:'handyman',pricing_method:'flat',description:'Fixture',qty:1,uom:'each',internal_cost:35,owner_unit_price:125,owner_extended:125,tax_amount:0,tenant_alloc_proposed:0,responsibility:'owner'}]};
 const issue=async()=>(await db.query('SELECT maintenance_issue_estimate($1,$2::jsonb) result',['office@example.test',JSON.stringify(issueRequest)])).rows[0].result;
 const issued=await issue();ok((await issue()).version_id===issued.version_id,'issue retry is idempotent');
+await db.exec(await readFile(new URL('../supabase/migrations/20260920_delete_estimate_draft.sql',import.meta.url),'utf8'));
+const remove=async(id,kind='saved',actor='office@example.test')=>db.query('SELECT maintenance_delete_estimate_draft($1,$2::jsonb)',[actor,JSON.stringify({id,kind})]);
+await rejects(()=>remove(draftId),/Only unissued/);
+await rejects(()=>remove(est.id,'header'),/Only unissued/);
+const accidental=crypto.randomUUID();await save({id:accidental,version:0,payload:{rows:[]}});
+await rejects(()=>remove(accidental,'saved','tech@example.test'),/FORBIDDEN/);
+await remove(accidental);
+ok((await db.query('SELECT id FROM estimate_saved_draft WHERE id=$1',[accidental])).rows.length===0,'standalone draft deleted');
+await rejects(()=>save({id:accidental,version:1,payload:{rows:[]}}),/deleted/);
+for(const kind of ['saved','header']){
+ const id=crypto.randomUUID();await save({id,version:0,payload:{rows:[]}});
+ const linked=(await db.query('SELECT maintenance_estimate_header($1,$2::jsonb) result',['office@example.test',JSON.stringify({saved_draft_id:id,work_order_id:wo.id})])).rows[0].result;
+ await remove(kind==='saved'?id:linked.id,kind);
+ ok((await db.query('SELECT id FROM estimate WHERE id=$1',[linked.id])).rows.length===0,'unissued linked header deleted');
+ ok((await db.query('SELECT id FROM estimate_saved_draft WHERE id=$1',[id])).rows.length===0,'linked saved draft deleted');
+}
+const bare=(await db.query('INSERT INTO estimate(work_order_id) VALUES($1) RETURNING id',[wo.id])).rows[0];
+await remove(bare.id,'header');
+ok((await db.query('SELECT id FROM estimate WHERE id=$1',[bare.id])).rows.length===0,'header-only draft deleted');
+ok((await db.query('SELECT id FROM work_orders WHERE id=$1',[wo.id])).rows.length===1,'linked work order preserved');
+ok((await db.query("SELECT id FROM maintenance_workspace_audit WHERE op='delete_estimate_draft'")).rows.length===4,'deletions audited');
 await db.exec('SET ROLE anon');await rejects(()=>db.query('SELECT * FROM maintenance_work_record'),/permission denied/);await rejects(()=>call({op:'job',work_order_id:wo.id}),/permission denied/);await db.exec('RESET ROLE');
 console.log(`${checks} maintenance database checks passed`);
 }catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}

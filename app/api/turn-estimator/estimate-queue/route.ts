@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { estimateStage, type EstimateQueueItem } from '@/lib/turn-estimator/estimate-queue';
@@ -31,7 +31,7 @@ export async function GET() {
     const billedEstimates = new Set(versions.filter(v => billedVersions.has(v.id)).map(v => v.estimate_id));
     const reserved = new Set(allocations.map(a => a.task_id));
     const rows: EstimateQueueItem[] = drafts.filter(d => !issuedDrafts.has(d.id)).map(d => ({
-      id: d.id, property: d.payload.propertyName || 'Untitled estimate', unit: d.payload.unitName || '',
+      id: d.id, draftKind: 'saved', property: d.payload.propertyName || 'Untitled estimate', unit: d.payload.unitName || '',
       workOrder: d.payload.seed?.wo_number || '', workOrderId: d.payload.seed?.work_order_id || null,
       stage: 'draft', status: 'draft', total: null, updatedAt: d.updated_at,
       href: `/turn-estimator/estimates/new?resume=${d.id}`, taskCount: 0, undraftedTasks: 0,
@@ -42,7 +42,7 @@ export async function GET() {
       const scope = tasks.filter(t => t.source_estimate_id === h.id);
       const allocated = scope.filter(t => reserved.has(t.id)).length;
       rows.push({
-        id: h.id, property: h.property_name || 'Untitled estimate', unit: h.unit_name || '', workOrder: h.wo_number || '',
+        id: h.id, draftKind: 'header', property: h.property_name || 'Untitled estimate', unit: h.unit_name || '', workOrder: h.wo_number || '',
         workOrderId: h.work_order_id, stage: estimateStage(h.status, !!version, billedEstimates.has(h.id), scope.length, allocated),
         status: h.status, total: version ? Number(version.owner_total) : null,
         updatedAt: h.updated_at || version?.created_at || h.created_at,
@@ -53,5 +53,24 @@ export async function GET() {
     return NextResponse.json({ estimates: rows, canCreate: guard.role !== 'finance' });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message || 'Could not load estimates' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const guard = await requireRole('maintenance', 'pm', 'manager');
+  if (!guard.ok) return guard.response;
+  const id = request.nextUrl.searchParams.get('id');
+  const kind = request.nextUrl.searchParams.get('kind');
+  if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) || !['saved', 'header'].includes(kind || '')) {
+    return NextResponse.json({ error: 'Invalid draft estimate' }, { status: 400 });
+  }
+  try {
+    const { error } = await getSupabaseAdmin().rpc('maintenance_delete_estimate_draft', {
+      actor: guard.email, request: { id, kind },
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 409 });
+    return NextResponse.json({ deleted: true });
+  } catch {
+    return NextResponse.json({ error: 'Could not delete draft estimate' }, { status: 500 });
   }
 }

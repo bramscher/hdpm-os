@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileText, RefreshCw, Search, Wrench } from 'lucide-react';
+import { FileText, RefreshCw, Search, Trash2, Wrench } from 'lucide-react';
 import type { EstimateQueueItem, EstimateStage } from '@/lib/turn-estimator/estimate-queue';
 
 const stages: [EstimateStage | 'all', string][] = [['all', 'All'], ['draft', 'Drafts'], ['approval_pending', 'Awaiting approval'], ['approved', 'Approved'], ['billing', 'In billing'], ['closed', 'Closed']];
@@ -11,6 +11,8 @@ const button = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-l
 
 export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => void }) {
   const [rows, setRows] = useState<EstimateQueueItem[]>([]);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [canCreate, setCanCreate] = useState(false);
@@ -27,6 +29,17 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  async function deleteDraft(row: EstimateQueueItem) {
+    if (deleting || !window.confirm(`Delete the draft estimate for ${row.property}${row.unit ? ` · ${row.unit}` : ''}? This cannot be undone. Any linked work order will be kept.`)) return;
+    setDeleting(row.id); setDeleteError('');
+    try {
+      const response = await fetch(`/api/turn-estimator/estimate-queue?id=${encodeURIComponent(row.id)}&kind=${row.draftKind}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not delete draft estimate');
+      setRows(current => current.filter(item => item.id !== row.id));
+    } catch (e) { setDeleteError((e as Error).message); }
+    finally { setDeleting(null); }
+  }
   const shown = rows.filter(row => (stage === 'all' || row.stage === stage) && `${row.property} ${row.unit} ${row.workOrder}`.toLowerCase().includes(search.toLowerCase()));
   return <section className="space-y-5" aria-label="Estimates">
     <div className="rounded-xl border border-sand-200 bg-white p-5">
@@ -46,6 +59,7 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
     </div>
     <label className="flex items-center gap-2 rounded-lg border border-sand-200 bg-white px-3"><Search className="h-4 w-4 text-charcoal-400"/><input className="min-h-11 w-full bg-transparent text-sm outline-none" aria-label="Search estimates" placeholder="Search property, unit, or work order" value={search} onChange={e => setSearch(e.target.value)}/></label>
     {error && <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">{error} <button className="underline" onClick={load}>Retry</button></p>}
+    {deleteError && <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">{deleteError}</p>}
     {loading ? <p role="status" className="p-6 text-sm text-charcoal-500">Loading estimates…</p> : !error && <div className="space-y-3">
       {!shown.length && <p className="rounded-xl border border-dashed border-sand-200 p-8 text-center text-sm text-charcoal-500">{rows.length ? 'No estimates match these filters.' : 'No estimates yet. Choose a work order or a template to prepare the first one.'}</p>}
       {shown.map(row => <article key={row.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-sand-200 bg-white p-5">
@@ -53,7 +67,7 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
           <p className="mt-1 text-sm text-charcoal-500">{row.workOrder ? `WO ${row.workOrder} · ` : ''}{new Date(row.updatedAt).toLocaleDateString()}{row.stage === 'closed' ? ` · ${row.status.replaceAll('_', ' ')}` : ''}</p>
           {row.taskCount > 0 && <p className="mt-1 text-xs text-charcoal-500">{row.undraftedTasks} of {row.taskCount} tasks not yet drafted</p>}
         </div>
-        <div className="flex flex-wrap items-center gap-4"><span className="font-semibold text-charcoal-800">{row.total === null ? 'Draft pricing' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format(row.total)}</span>{row.stage==='approved'&&row.workOrderId&&<Link className={`${button} bg-green-700 text-white`} href={`/maintenance/workspace?estimate=${row.id}&schedule=1`}>Schedule</Link>}<Link className={button} href={row.href}>{row.stage === 'draft' ? 'Continue estimate' : 'Review estimate'}</Link></div>
+        <div className="flex flex-wrap items-center gap-4"><span className="font-semibold text-charcoal-800">{row.total === null ? 'Draft pricing' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format(row.total)}</span>{row.stage==='approved'&&row.workOrderId&&<Link className={`${button} bg-green-700 text-white`} href={`/maintenance/workspace?estimate=${row.id}&schedule=1`}>Schedule</Link>}<Link className={button} href={row.href}>{row.stage === 'draft' ? 'Continue estimate' : 'Review estimate'}</Link>{canCreate && row.stage === 'draft' && row.status === 'draft' && row.draftKind && <button className={`${button} text-red-700 hover:bg-red-50 disabled:opacity-50`} disabled={deleting !== null} onClick={() => void deleteDraft(row)}><Trash2 className="h-4 w-4"/>{deleting === row.id ? 'Deleting…' : 'Delete draft'}</button>}</div>
       </article>)}
     </div>}
   </section>;

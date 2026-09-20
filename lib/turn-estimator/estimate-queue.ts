@@ -1,6 +1,7 @@
 export type EstimateStage = 'draft' | 'approval_pending' | 'approved' | 'billing' | 'closed';
 export interface EstimateQueueItem {
   id: string;
+  draftKind?: 'saved' | 'header';
   property: string;
   unit: string;
   workOrder: string;
