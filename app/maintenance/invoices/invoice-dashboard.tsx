@@ -21,6 +21,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { SkeletonRows } from "@/components/ui/skeleton";
+import { canCreateInvoices, canIssueInvoices } from "@/lib/invoice-permissions";
 import { useSession } from "next-auth/react";
 import { WorkOrderRow, HdmsInvoice, displayAssignee, TECHNICIANS, weeklyBillableHours, WEEKLY_HOURS_TARGET } from "@/lib/invoices";
 import { Button } from "@/components/ui/button";
@@ -184,6 +185,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   // Profit/markup reports (selection report, daily labor & markup) are gated
   // to the ADMIN_EMAILS allowlist — same gate as the KPI dashboard.
   const isAdmin = session?.user?.isAdmin === true;
+  const [newInvoiceType, setNewInvoiceType] = useState<"labor" | "appliance" | null>(null);
+  const canCreate = canCreateInvoices(session?.user?.role, session?.user?.email);
   const [view, setView] = useState<View>("main");
   const [activeTab, setActiveTab] = useState<Tab>("work-orders");
   function changeTab(tab: Tab) {
@@ -460,8 +463,19 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
     );
   }
 
+  function handleNewInvoice(type: "labor" | "appliance") {
+    setNewInvoiceType(type);
+    setSelectedRow(null);
+    setEditInvoice(null);
+    setFromPdfScan(false);
+    setFromWorkOrder(false);
+    changeTab("invoices");
+    setView("form");
+  }
+
   // Create invoice from work order
   function handleCreateInvoiceFromWo(wo: WorkOrder) {
+    setNewInvoiceType(null);
     const row: WorkOrderRow = {
       wo_number: wo.wo_number || wo.appfolio_id || "",
       property_name: wo.property_name || "",
@@ -523,6 +537,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   }
 
   function handlePdfScanned(fields: Record<string, unknown>) {
+    setNewInvoiceType(null);
     const rawLineItems = Array.isArray(fields.line_items) ? fields.line_items : [];
     const lineItems = rawLineItems.map((li: Record<string, unknown>) => ({
       account: String(li.account || ""),
@@ -569,6 +584,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   }
 
   function handleSelectRow(row: WorkOrderRow) {
+    setNewInvoiceType(null);
     setSelectedRow(row);
     setEditInvoice(null);
     setFromPdfScan(false);
@@ -577,6 +593,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   }
 
   function handleEditInvoice(invoice: HdmsInvoice) {
+    setNewInvoiceType(null);
     setEditInvoice(invoice);
     setSelectedRow(null);
     changeTab("invoices");
@@ -599,6 +616,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   }
 
   function handleInvoiceSaved() {
+    setNewInvoiceType(null);
     fetchInvoices();
     changeTab("invoices");
     setView("main");
@@ -616,7 +634,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   function handleBackFromForm() {
     changeTab(editInvoice ? "invoices" : activeTab);
     fetchInvoices();
-    if (editInvoice || fromPdfScan || fromWorkOrder) {
+    if (editInvoice || fromPdfScan || fromWorkOrder || newInvoiceType) {
+      setNewInvoiceType(null);
       setView("main");
       setEditInvoice(null);
       setFromPdfScan(false);
@@ -1126,20 +1145,25 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           {/* ============================== */}
           {activeTab === "invoices" && (
             <>
+              {canCreate && <div className="mb-4 flex flex-wrap items-center gap-3">
+                <button type="button" onClick={() => handleNewInvoice("appliance")} className="rounded-lg bg-green-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-800">+ New appliance invoice</button>
+                <button type="button" onClick={() => handleNewInvoice("labor")} className="rounded-lg border border-sand-300 px-4 py-2.5 text-sm">+ New invoice</button>
+                <p className="text-sm text-charcoal-500">Bill an appliance purchase for a property. Enter cost and quantity; the standard 10% appliance markup is prefilled.</p>
+              </div>}
               <div className="flex items-start gap-3 mb-4">
                 <div className="flex-1 bg-white rounded-xl border border-sand-200 shadow-card px-4 py-2.5 text-sm text-charcoal-600">
                   These invoice PDFs are generated and stored here in HDPM-OS. They are
                   <strong> not</strong> pushed to AppFolio automatically — download each PDF and
                   upload it to the AppFolio work order yourself, then mark it attached.
                 </div>
-                <button
+                {canIssueInvoices(session?.user?.role) && <button
                   type="button"
                   onClick={() => setShowCreditForm(true)}
                   className="shrink-0 h-10 px-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium hover:bg-red-100 transition-colors"
                   title="Create a credit memo to correct an over-billed or duplicate invoice"
                 >
                   + New credit
-                </button>
+                </button>}
               </div>
               <InvoiceList
                 invoices={invoices}
@@ -1221,6 +1245,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
       {view === "form" && fromWorkOrder && !editInvoice && <div className="mb-5 rounded-xl border border-sand-200 bg-white p-4 text-sm text-charcoal-600"><strong>Quick invoice — already-authorized work.</strong> Review completed work and charges below. For a turn, multiple tasks, or uncertain scope, <a className="text-green-800 underline" href={`/turn-estimator/estimates/new?from_wo=${selectedRow?.work_order_id}`}>start with an estimate</a>.</div>}
       {view === "form" && (editInvoice?.maintenance_job_id ? <WorkspaceInvoice invoice={editInvoice} onBack={handleBackFromForm} onSaved={handleInvoiceSaved}/> :
         <InvoiceForm
+          initialLineType={newInvoiceType ?? "labor"}
           workOrder={selectedRow}
           editInvoice={editInvoice}
           onBack={handleBackFromForm}

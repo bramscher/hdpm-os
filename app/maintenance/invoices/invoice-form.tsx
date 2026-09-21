@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { canEditInvoiceDraft, canIssueInvoices } from "@/lib/invoice-permissions";
+import { canEditInvoiceDraft, canCreateInvoices, canGenerateInvoice } from "@/lib/invoice-permissions";
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { ArrowLeft, Save, FileDown, Loader2, Trash2, Wrench, Package, Check, Sparkles, Clock, Refrigerator } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
 } from "@/lib/invoices";
 
 interface InvoiceFormProps {
+  initialLineType?: "labor" | "appliance";
   workOrder: WorkOrderRow | null;
   editInvoice: HdmsInvoice | null;
   onBack: () => void;
@@ -103,11 +104,11 @@ const TYPE_STYLES: Record<LineItemType, { bg: string; text: string; label: strin
   other: { bg: "bg-charcoal-50", text: "text-charcoal-600", label: "Other", icon: Wrench },
 };
 
-export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: InvoiceFormProps) {
+export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice, onBack, onSaved }: InvoiceFormProps) {
   const { data: session } = useSession();
   const role = session?.user?.role;
-  const canIssue = canIssueInvoices(role);
-  const canEdit = editInvoice ? canEditInvoiceDraft(role, session?.user?.email, editInvoice) : canIssue || role === 'field';
+  const canIssue = canGenerateInvoice(role, session?.user?.email, editInvoice);
+  const canEdit = editInvoice ? canEditInvoiceDraft(role, session?.user?.email, editInvoice) : canCreateInvoices(role, session?.user?.email);
   // Header fields
   const [propertyName, setPropertyName] = useState("");
   const [propertyAddress, setPropertyAddress] = useState("");
@@ -116,7 +117,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
   const [internalNotes, setInternalNotes] = useState("");
 
   // Line items
-  const [lineItems, setLineItems] = useState<FormLineItem[]>([blankLineItem()]);
+  const [lineItems, setLineItems] = useState<FormLineItem[]>([blankLineItem(initialLineType)]);
 
   // Scanned extra fields (read-only context shown to user)
   const [scannedMeta, setScannedMeta] = useState<{
@@ -543,8 +544,9 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
       setInternalNotes(noteParts.join("\n"));
     } else {
       savedInvoiceIdRef.current = null;
+      setLineItems([blankLineItem(initialLineType)]);
     }
-  }, [workOrder, editInvoice]);
+  }, [workOrder, editInvoice, initialLineType]);
 
   // ── Auto-save effect (debounced 2s) ──────────
   useEffect(() => {
@@ -894,7 +896,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
           Back
         </Button>
         <h3 className="text-lg font-semibold text-charcoal-900">
-          {editInvoice ? `Edit ${editInvoice.invoice_code}` : "New Invoice"}
+          {editInvoice ? `Edit ${editInvoice.invoice_code}` : initialLineType === "appliance" ? "New Appliance Invoice" : "New Invoice"}
         </h3>
 
         {/* Auto-save status indicator */}

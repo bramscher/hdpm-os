@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { canEditInvoiceDraft, invoiceDraftFields } from '@/lib/invoice-permissions';
+import { canEditInvoiceDraft, invoiceDraftFields, canCreateInvoices, canGenerateInvoice } from '@/lib/invoice-permissions';
 
 const mocks = vi.hoisted(() => ({
   role: 'field', email: 'alberto@highdesertpm.com',
   create: vi.fn(), credit: vi.fn(), get: vi.fn(), update: vi.fn(), remove: vi.fn(),
 }));
 vi.mock('@/lib/require-role', () => ({
+  requireCompanySession: async () => mocks.email.endsWith('@highdesertpm.com') ? {ok:true,role:mocks.role,email:mocks.email} : {ok:false,response:new Response('Unauthorized',{status:401})},
   requireRole: async (...roles: string[]) => mocks.role === 'admin' || roles.includes(mocks.role)
     ? { ok: true, role: mocks.role, email: mocks.email }
     : { ok: false, response: new Response('Forbidden', { status: 403 }) },
@@ -15,7 +16,7 @@ vi.mock('@/lib/auth', () => ({ auth: async () => ({ user: { email: mocks.email }
 vi.mock('@/lib/invoices', () => ({
   createInvoice: mocks.create, createCredit: mocks.credit, getInvoiceById: mocks.get,
   updateInvoice: mocks.update, deleteInvoice: mocks.remove, getInvoices: vi.fn(),
-  uploadInvoicePdf: vi.fn(), duplicateInvoice: vi.fn(),
+  uploadInvoicePdf: vi.fn(async()=> 'saved.pdf'), duplicateInvoice: vi.fn(),
 }));
 vi.mock('@/lib/af-bills', () => ({ attachAfBillsToInvoices: vi.fn() }));
 vi.mock('@/lib/invoice-pdf-template', () => ({ generateInvoicePdf: vi.fn() }));
@@ -81,5 +82,39 @@ describe('field invoice preparation', () => {
     expect(canEditInvoiceDraft('field', 'ALBERTO@highdesertpm.com', draft as never)).toBe(true);
     expect(canEditInvoiceDraft(undefined, undefined, draft as never)).toBe(false);
     expect(invoiceDraftFields({ status: 'generated', description: 'Work' })).toEqual({ description: 'Work' });
+  });
+});
+
+
+describe('Cheryl appliance invoice access', () => {
+  beforeEach(() => { mocks.role='staff'; mocks.email='cheryl@highdesertpm.com'; mocks.get.mockResolvedValue({...draft,created_by:mocks.email}); });
+  it('creates appliance invoices with the authenticated author', async()=>{
+    const items=[{type:'appliance',description:'Refrigerator',qty:1,cost:500,markup_pct:10,amount:550}];
+    expect((await POST(request({...input,line_items:items,labor_amount:0,materials_amount:550,total_amount:550}))).status).toBe(201);
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({created_by:mocks.email,line_items:items,total_amount:550}));
+  });
+  it('edits and generates her own ordinary drafts',async()=>{
+    expect((await PATCH(request({description:'New refrigerator'},'PATCH'),params)).status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith('draft-1',{description:'New refrigerator'},mocks.email);
+    expect((await generatePdf(request({}),params)).status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith('draft-1',{pdf_path:'saved.pdf',status:'generated'},mocks.email);
+  });
+  it('cannot edit or generate another author’s invoice',async()=>{
+    mocks.get.mockResolvedValue(draft);
+    expect((await PATCH(request({description:'Changed'},'PATCH'),params)).status).toBe(403);
+    expect((await generatePdf(request({}),params)).status).toBe(403);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it('does not gain credits, deletion, duplication, or arbitrary status changes',async()=>{
+    expect((await POST(request({...input,doc_type:'credit'}))).status).toBe(403);
+    expect((await DELETE(request({},'DELETE'),params)).status).toBe(403);
+    expect((await duplicate(request({}),params)).status).toBe(403);
+    expect((await changeStatus(request({status:'attached'},'PATCH'),params)).status).toBe(403);
+  });
+  it('limits the permission to Cheryl’s staff account',()=>{
+    expect(canCreateInvoices('staff','CHERYL@highdesertpm.com')).toBe(true);
+    expect(canCreateInvoices('staff','other@highdesertpm.com')).toBe(false);
+    expect(canGenerateInvoice('staff','cheryl@example.com')).toBe(false);
+    expect(canGenerateInvoice('read_only','cheryl@highdesertpm.com')).toBe(false);
   });
 });

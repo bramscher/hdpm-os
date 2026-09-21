@@ -1,4 +1,5 @@
-import { canEditInvoiceDraft, invoiceDraftFields } from '@/lib/invoice-permissions';
+import { requireInvoiceAuthor } from '@/lib/require-invoice-author';
+import { canEditInvoiceDraft, invoiceDraftFields, canIssueInvoices } from '@/lib/invoice-permissions';
 import { requireRole } from '@/lib/require-role';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
@@ -37,7 +38,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const roleGuard=await requireRole('finance','maintenance','pm','manager','field');if(!roleGuard.ok)return roleGuard.response;
+    const roleGuard=await requireInvoiceAuthor();if(!roleGuard.ok)return roleGuard.response;
     const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
@@ -54,7 +55,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    if (roleGuard.role === 'field') {
+    if (!canIssueInvoices(roleGuard.role)) {
       if (!canEditInvoiceDraft(roleGuard.role, roleGuard.email, existing)) {
         return NextResponse.json({ error: 'You can edit only your own unissued invoice drafts. Office review is required for other invoices.' }, { status: 403 });
       }

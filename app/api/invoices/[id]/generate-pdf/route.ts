@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { requireRole } from '@/lib/require-role';
+import { requireInvoiceAuthor } from '@/lib/require-invoice-author';
+import { canGenerateInvoice, canIssueInvoices } from '@/lib/invoice-permissions';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getInvoiceById, updateInvoice, uploadInvoicePdf } from '@/lib/invoices';
@@ -12,7 +13,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const roleGuard=await requireRole('finance','maintenance','pm','manager');if(!roleGuard.ok)return roleGuard.response;
+    const roleGuard=await requireInvoiceAuthor();if(!roleGuard.ok)return roleGuard.response;
+    if (!canGenerateInvoice(roleGuard.role, roleGuard.email)) return NextResponse.json({error: 'Office review is required to generate invoices.'}, {status: 403});
     const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
@@ -27,6 +29,8 @@ export async function POST(
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
+
+    if (!canGenerateInvoice(roleGuard.role, roleGuard.email, invoice)) return NextResponse.json({error: 'You can generate only your own invoice drafts.'}, {status: 403});
 
     if (invoice.status === 'void') {
       return NextResponse.json({ error: 'Cannot generate PDF for a voided invoice' }, { status: 400 });
@@ -66,7 +70,7 @@ export async function POST(
     if(invoice.maintenance_job_id){
       const {data,error}=await getSupabaseAdmin().rpc('maintenance_finalize_invoice',{actor:session.user.email,request:{id,line_items:invoice.line_items,total_amount:Number(invoice.total_amount),pdf_path:pdfPath}});
       if(error)throw new Error(error.message);updatedInvoice=data;
-    }else updatedInvoice=await updateInvoice(id,{pdf_path:pdfPath,status:'generated'});
+    }else updatedInvoice=await updateInvoice(id,{pdf_path:pdfPath,status:'generated'},canIssueInvoices(roleGuard.role) ? undefined : roleGuard.email);
 
     return NextResponse.json({ invoice: updatedInvoice });
   } catch (error) {
