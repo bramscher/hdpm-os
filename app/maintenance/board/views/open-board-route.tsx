@@ -329,7 +329,7 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
                 checked={addToCalendar}
                 onChange={(e) => setAddToCalendar(e.target.checked)}
               />
-              Add to Outlook calendar
+              Publish to Operations calendar
             </label>
             <button className="mo-btn" onClick={publish} disabled={publishing}>
               {publishing ? 'Publishing…' : `Publish route (${result.stops.length} stops)`}
@@ -406,7 +406,7 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
         Tick the stops for a run (the list respects the staff/HDMS filter above), then{' '}
         <b>Optimize route</b> for the least-driving order, and <b>Publish day route</b> to put it
         on the schedule: each stop&apos;s WO gets the route date + tech (audited), the run appears
-        on the home dashboard, and Outlook gets the crew&apos;s calendar event. Starts from the
+        on the home dashboard, and the Operations calendar gets the route event for Brody and Operations. Starts from the
         HDPM office. <b>View AppFolio calendar</b> stays the property-side view.
       </p>
     </section>

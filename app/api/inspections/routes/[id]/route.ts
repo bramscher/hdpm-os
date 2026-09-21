@@ -1,3 +1,4 @@
+import { routeCalendarEventUrl } from '@/lib/route-builder/calendar-destination';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -250,7 +251,7 @@ export async function DELETE(
     if (routePlan?.calendar_event_id && session.accessToken) {
       try {
         const graphRes = await fetch(
-          `https://graph.microsoft.com/v1.0/me/events/${routePlan.calendar_event_id}`,
+          routeCalendarEventUrl(routePlan.calendar_event_id),
           {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${session.accessToken}` },

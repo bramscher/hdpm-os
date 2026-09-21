@@ -41,7 +41,7 @@ export const authConfig = {
       issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
       authorization: {
         params: {
-          scope: "openid profile email User.Read Calendars.ReadWrite",
+          scope: "openid profile email User.Read Calendars.ReadWrite Calendars.ReadWrite.Shared",
         },
       },
     }),
