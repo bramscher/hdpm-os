@@ -160,7 +160,7 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
                           ? 'bg-red-50 text-red-700 font-semibold'
                           : 'text-charcoal-400';
                     return (
-                      <td key={w} title={e?.source_captured_at ? `Source captured ${new Date(e.source_captured_at).toLocaleString()}` : undefined} className={`px-2 py-2 text-center ${tone}`}>
+                      <td key={w} title={e?.source_captured_at ? `Source captured ${new Date(e.source_captured_at).toLocaleString('en-US', {timeZone: 'America/Los_Angeles', timeZoneName: 'short'})}` : undefined} className={`px-2 py-2 text-center ${tone}`}>
                         {isCurrent && m.source !== 'manual' && e?.value == null ? 'Unavailable' : fmtValue(e?.value ?? null)}
                       </td>
                     );
