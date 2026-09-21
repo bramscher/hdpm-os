@@ -47,6 +47,7 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
         <div><h2 className="text-lg font-semibold text-charcoal-900">Scope and price the work</h2><p className="mt-1 max-w-2xl text-sm text-charcoal-500">Start with an estimate for turns, multi-task jobs, or uncertain scope. Simple, already-authorized repairs can go straight to an invoice draft from Work Orders.</p></div>
         <button className={button} onClick={load} disabled={loading} aria-label="Refresh estimates"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
       </div>
+      <Link className={`${button} mt-3`} href="/company/issues#maintenance-followups">Maintenance follow-ups →</Link>
       {canCreate && <div className="mt-4 flex flex-wrap gap-3">
         <button className={`${button} bg-green-700 text-white`} onClick={onChooseWorkOrder}><Wrench className="h-4 w-4"/>Create from work order</button>
         <Link className={button} href="/turn-estimator/estimates/new?template=1"><FileText className="h-4 w-4"/>Start from template / price book</Link>
