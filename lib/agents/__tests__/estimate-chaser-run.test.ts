@@ -32,7 +32,7 @@ vi.mock('@/lib/appfolio', () => ({ fetchAppFolioVendorContacts: vi.fn(), fetchAp
 vi.mock('@/lib/zoom-sync', () => ({ normalizePhone: (s: string) => s }));
 vi.mock('@/lib/zoom-phone', () => ({ smsSenderEmail: () => 'cheryl@highdesertpm.com' }));
 vi.mock('../config', () => ({
-  getAgentConfig: async () => ({ enabled: true, autonomy_level: 3, max_per_day: 10 }),
+  getAgentConfig: async (_agent: string, action: string) => ({ enabled: action !== 'team_review' || !!mocks.rows.team_review?.length, autonomy_level: 3, max_per_day: 10 }),
   effectiveLevel: () => 3, isGloballyKilled: async () => false, isWithinQuietHours: () => false,
   getNotifyRecipients: mocks.notify,
 }));
@@ -77,3 +77,10 @@ describe('unassigned work-order chasers', () => {
     expect(mocks.proposal).not.toHaveBeenCalled();
   });
 });
+
+ it('retires legacy chases when the shared queue is enabled', async () => {
+  mocks.rows.team_review = [{enabled:true}];
+  const result = await runEstimateChaser();
+  expect(result.halted).toBe('shared team review queue enabled');
+  expect(mocks.enqueue).not.toHaveBeenCalled();
+ });

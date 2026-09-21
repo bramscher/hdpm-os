@@ -55,6 +55,8 @@ export async function POST(request: NextRequest) {
       on_track: onTrack,
       source: 'manual',
       entered_by: session.actor,
+      updated_at: new Date().toISOString(),
+      source_captured_at: null,
     },
     { onConflict: 'metric_id,week_start' }
   );

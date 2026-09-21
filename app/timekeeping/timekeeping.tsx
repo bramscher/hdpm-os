@@ -186,6 +186,7 @@ function TimekeepingView() {
         <div>
           <p className="tk-eyebrow">COMPANY / TIMEKEEPING</p>
           <h1>A clear record of your time.</h1>
+          <p>Your timecard is private to you and administrators.</p>
           <p>Work, leave and miles. Reviewed once, ready for payroll.</p>
         </div>
         <span className="tk-period-chip">
@@ -239,7 +240,7 @@ function TimekeepingView() {
                 </button>
               </>
             )}
-            {(data.canReview || data.isAdmin) && (
+            {data.isAdmin && (
               <button
                 disabled={busy}
                 aria-current={view === "review" ? "page" : undefined}
@@ -1738,7 +1739,7 @@ function SheetEditor({
         )}
         {!readOnly &&
           initial.state === "submitted" &&
-          initial.review_manager_id === actorId &&
+          isAdmin &&
           !own && (
             <>
               <label>

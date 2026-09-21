@@ -1,3 +1,5 @@
+import { isFollowupInteraction, handleFollowupInteraction } from '@/lib/agents/followup-slack';
+import { getAgentConfig } from '@/lib/agents/config';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { verifySlackSignature } from '@/lib/webhook-verify';
@@ -69,6 +71,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return new NextResponse(null, { status: 200 });
   }
+  if (isFollowupInteraction(payload)) return handleFollowupInteraction(payload);
   if (payload.type !== 'block_actions' || !payload.actions?.length) {
     return new NextResponse(null, { status: 200 });
   }
@@ -89,6 +92,7 @@ export async function POST(request: NextRequest) {
   const ecAction =
     typeof rawAction?.action_id === 'string' ? parseEcActionId(rawAction.action_id) : null;
   if (ecAction) {
+    if ((await getAgentConfig(ESTIMATE_CHASER_AGENT,'team_review'))?.enabled) return NextResponse.json({response_type:'ephemeral',text:'Use the shared follow-up review in Company Issues. This old card is retired.'});
     return handleEcAction(ecAction, actor, payload.response_url);
   }
 

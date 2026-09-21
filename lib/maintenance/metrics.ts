@@ -413,15 +413,13 @@ export async function computeAllMetrics(
   }
 
   // In-house billable hours from invoice labor lines (target 30–36/wk).
-  // 30d created_at over-fetch; the pure function windows on completed_date.
+  // Include older drafts completed recently; invoice creation date is not the work date.
   try {
-    const since30 = new Date(now.getTime() - 30 * DAY_MS).toISOString();
     const invoices = (await fetchAllRows(
       () =>
         supabase
           .from('hdms_invoices')
-          .select('status, line_items, completed_date, created_at')
-          .gte('created_at', since30),
+          .select('status, doc_type, line_items, completed_date, created_at'),
       'hdms_invoices'
     )) as Parameters<typeof weeklyBillableHours>[0];
     const weekly = weeklyBillableHours(invoices, now);

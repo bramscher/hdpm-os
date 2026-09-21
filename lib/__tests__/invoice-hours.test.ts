@@ -67,3 +67,16 @@ describe('weeklyBillableHours', () => {
     expect(r.weekHours).toBe(3);
   });
 });
+
+it('normalizes technician names while retaining genuinely unassigned labor', () => {
+  const result = weeklyBillableHours([inv('2026-08-04', [labor(2,'alberto'),labor(3,'Alberto Flores'),labor(1)])], NOW);
+  expect(result.byTech.Alberto).toBe(5);
+  expect(result.weekHours).toBe(6);
+});
+it('excludes credit memos and keeps flat-price/workspace quantities out of hour totals', () => {
+  const result = weeklyBillableHours([
+    {...inv('2026-08-04',[labor(5,'Alberto')]),doc_type:'credit'},
+    inv('2026-08-04',[{...labor(4,'Alberto'),pricing_method:'flat'},{...labor(2,'Alberto'),workspace_task_id:'task-1'}]),
+  ], NOW);
+  expect(result.weekHours).toBe(0);
+});

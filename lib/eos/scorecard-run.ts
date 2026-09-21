@@ -19,6 +19,7 @@ import {
   weeksBefore,
   extractMetricValue,
   isOnTrack,
+  isFreshScorecardSource,
 } from './scorecard';
 import type { ScorecardMetric } from './types';
 
@@ -35,7 +36,7 @@ export interface ScorecardRunResult {
   dryRun: boolean;
 }
 
-export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date } = {}): Promise<ScorecardRunResult> {
+export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date; weeklyActions?: boolean } = {}): Promise<ScorecardRunResult> {
   const now = opts.now ?? new Date();
   const dryRun = opts.dryRun === true;
   const supabase = getSupabaseAdmin();
@@ -84,11 +85,12 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date } = 
       result.skippedManualOverride++;
       continue;
     }
-    const value = extractMetricValue(snapshot, m.source_ref);
+    const capturedAt = snapshot.get(m.source_ref.split('.')[0])?.captured_at;
+    const sameWeek = !m.source_ref.startsWith('billable_hours.') || snapshot.get('billable_hours')?.value.weekStart === weekStart;
+    const value = sameWeek && isFreshScorecardSource(capturedAt, now) ? extractMetricValue(snapshot, m.source_ref) : null;
     if (value === null) {
       result.missingValue++;
       console.warn(`[scorecard] no snapshot value for ${m.name} (${m.source_ref})`);
-      continue;
     }
     const onTrack = isOnTrack(m.goal_op, m.goal_value, value);
     if (!dryRun) {
@@ -100,6 +102,8 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date } = 
           on_track: onTrack,
           source: 'auto',
           entered_by: 'system:scorecard',
+          updated_at: now.toISOString(),
+          source_captured_at: capturedAt ?? null,
         },
         { onConflict: 'metric_id,week_start' }
       );
@@ -137,11 +141,12 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date } = 
     const dot = m.source_ref.indexOf('.');
     const kpiName = m.source_ref.slice(0, dot);
     const path = m.source_ref.slice(dot + 1);
-    const value = extractNested(kpiValues.get(kpiName), path);
+    const point = kpiValues.get(kpiName);
+    const capturedAt = point?.captured_at;
+    const value = isFreshScorecardSource(capturedAt, now) ? extractNested(point?.value, path) : null;
     if (value === null) {
       result.missingValue++;
       console.warn(`[scorecard] no kpi_snapshot value for ${m.name} (${m.source_ref})`);
-      continue;
     }
     const onTrack = isOnTrack(m.goal_op, m.goal_value, value);
     if (!dryRun) {
@@ -153,6 +158,8 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date } = 
           on_track: onTrack,
           source: 'auto',
           entered_by: 'system:scorecard',
+          updated_at: now.toISOString(),
+          source_captured_at: capturedAt ?? null,
         },
         { onConflict: 'metric_id,week_start' }
       );
@@ -168,6 +175,8 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date } = 
     }
     result.autoFilled++;
   }
+
+  if (opts.weeklyActions === false) return result;
 
   // ── 2. Manual metrics missing this week → owner nudge ─────────────────
   for (const m of metrics) {
@@ -247,16 +256,16 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date } = 
 async function readLatestKpiSnapshots(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   names: string[]
-): Promise<Map<string, Record<string, unknown>>> {
-  const out = new Map<string, Record<string, unknown>>();
+): Promise<Map<string, {value: Record<string, unknown>; captured_at: string}>> {
+  const out = new Map<string, {value: Record<string, unknown>; captured_at: string}>();
   if (names.length === 0) return out;
   const { data } = await supabase
     .from('kpi_snapshots')
     .select('kpi_name, value, captured_at')
     .in('kpi_name', names)
     .order('captured_at', { ascending: false });
-  for (const row of (data ?? []) as { kpi_name: string; value: Record<string, unknown> }[]) {
-    if (!out.has(row.kpi_name)) out.set(row.kpi_name, row.value); // first = latest
+  for (const row of (data ?? []) as { kpi_name: string; value: Record<string, unknown>; captured_at: string }[]) {
+    if (!out.has(row.kpi_name)) out.set(row.kpi_name, {value: row.value, captured_at: row.captured_at}); // first = latest
   }
   return out;
 }

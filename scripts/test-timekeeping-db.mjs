@@ -40,6 +40,9 @@ try {
   await db.exec(adminScheduleMigration);
 
   await db.exec(autoMigration);
+  const privacyMigration = await readFile(new URL('../supabase/migrations/20260920_timekeeping_private_timecards.sql', import.meta.url), 'utf8');
+  await db.exec(privacyMigration);
+  await db.exec(privacyMigration);
 
   passed++;
   await db.exec(
@@ -147,7 +150,7 @@ try {
   );
   await reject(
     () =>
-      call(admin.email, { op: "approve", sheetId: s.id, version: s.version }),
+      call(manager.email, { op: "approve", sheetId: s.id, version: s.version }),
     /FORBIDDEN/,
   );
   await reject(
@@ -164,7 +167,7 @@ try {
       }),
     /FORBIDDEN|locked/,
   );
-  s = await call(manager.email, {
+  s = await call(admin.email, {
     op: "return",
     sheetId: s.id,
     version: s.version,
@@ -172,7 +175,7 @@ try {
   });
   check(
     s.state === "returned" && s.employee_signed_at === null,
-    "manager returns and invalidates current signature",
+    "admin returns and invalidates current signature",
   );
   s = await call(employee.email, {
     op: "submit",
@@ -181,12 +184,12 @@ try {
     days: [],
     attested: true,
   });
-  s = await call(manager.email, {
+  s = await call(admin.email, {
     op: "approve",
     sheetId: s.id,
     version: s.version,
   });
-  check(s.approved_by === manager.email, "actual reviewer attribution");
+  check(s.approved_by === admin.email, "actual reviewer attribution");
   const first = await call(admin.email, { op: "export", period: "2026-01-01" });
   check(
     first.snapshot.sheets[0].note === "Period notes" && first.version === 1,
@@ -232,7 +235,7 @@ try {
     days: [],
     attested: true,
   });
-  s = await call(manager.email, {
+  s = await call(admin.email, {
     op: "approve",
     sheetId: s.id,
     version: s.version,

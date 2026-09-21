@@ -37,6 +37,8 @@ export interface ScorecardEntry {
   value: number | null;
   on_track: boolean | null;
   source: 'auto' | 'manual';
+  updated_at?: string | null;
+  source_captured_at?: string | null;
   entered_by: string | null;
 }
 

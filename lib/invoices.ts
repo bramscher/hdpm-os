@@ -130,7 +130,7 @@ export function weeklyBillableHours(
     for (const li of inv.line_items ?? []) {
       if ((li.type || 'labor') !== 'labor' || li.workspace_task_id || (li.pricing_method && li.pricing_method!=='hourly') || !li.qty || li.qty <= 0) continue;
       bucket.total += li.qty;
-      const tech = li.technician?.trim();
+      const tech = normalizeTechnician(li.technician) || li.technician?.trim();
       if (tech) bucket.byTech[tech] = (bucket.byTech[tech] ?? 0) + li.qty;
     }
   }

@@ -70,3 +70,10 @@ export function offTrackStreak(entries: { on_track: boolean | null }[]): number 
   }
   return streak;
 }
+
+/** Daily operational snapshots should be no more than 36 hours old. */
+export function isFreshScorecardSource(capturedAt: string | null | undefined, now: Date): boolean {
+  if (!capturedAt) return false;
+  const age = now.getTime() - new Date(capturedAt).getTime();
+  return Number.isFinite(age) && age >= 0 && age <= 36 * 60 * 60 * 1000;
+}
