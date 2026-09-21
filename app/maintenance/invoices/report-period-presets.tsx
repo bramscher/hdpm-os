@@ -11,7 +11,7 @@ export function ReportPeriodPresets({
   to: string;
   onChange: (from: string, to: string) => void;
 }) {
-  const periods = invoiceReportPeriods();
+  const periods = invoiceReportPeriods(new Date(), 24);
   const selected = [...periods.payroll, ...periods.weeks].find(
     (p) => p.from === from && p.to === to,
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ScorecardMetric, ScorecardEntry } from '@/lib/eos/types';
 
@@ -9,6 +9,7 @@ interface Props {
   entries: ScorecardEntry[];
   weeks: string[]; // oldest → newest (YYYY-MM-DD Mondays)
   currentWeek: string;
+  incompleteHours?: Record<string,string[]>;
 }
 
 function fmtWeek(w: string): string {
@@ -40,8 +41,10 @@ function Sparkline({ values }: { values: (number | null)[] }) {
   );
 }
 
-export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: Props) {
+export default function ScorecardGrid({ metrics, entries, weeks, currentWeek, incompleteHours = {} }: Props) {
   const router = useRouter();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { const el = scrollRef.current; if (el) el.scrollLeft = el.scrollWidth; }, [currentWeek]);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -100,16 +103,20 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
           {note}
         </div>
       ) : null}
-      <div className="overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
-        <table className="w-full text-sm">
+      <div className="mb-2 flex gap-3 text-sm">
+        <button className="underline" onClick={() => scrollRef.current?.scrollTo({left: 0, behavior: 'smooth'})}>June 2026 / earliest weeks</button>
+        <button className="underline" onClick={() => { const el = scrollRef.current; el?.scrollTo({left: el.scrollWidth, behavior: 'smooth'}); }}>Latest weeks</button>
+      </div>
+      <div ref={scrollRef} tabIndex={0} role="region" aria-label="Weekly scorecard history, scroll horizontally" className="max-w-full overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
+        <table className="w-max min-w-full text-sm">
           <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
-              <th className="px-3 py-2">Metric</th>
+              <th className="sticky left-0 z-20 min-w-64 bg-sand-50 px-3 py-2">Metric</th>
               <th className="px-3 py-2">Owner</th>
               <th className="px-3 py-2">Goal</th>
               <th className="px-3 py-2">Trend</th>
               {weeks.map((w) => (
-                <th key={w} className={`px-2 py-2 text-center ${w === currentWeek ? 'text-charcoal-900' : ''}`}>
+                <th key={w} className={`min-w-20 whitespace-nowrap px-2 py-2 text-center ${w === currentWeek ? 'text-charcoal-900' : ''}`}>
                   {fmtWeek(w)}
                 </th>
               ))}
@@ -124,7 +131,7 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
               });
               return (
                 <tr key={m.id}>
-                  <td className="px-3 py-2 font-medium text-charcoal-900">{m.name}{m.source_ref?.startsWith("billable_hours.") && <span className="block text-xs font-normal text-charcoal-500">Tagged hourly invoice lines, including drafts</span>}</td>
+                  <td className="sticky left-0 z-10 min-w-64 bg-white px-3 py-2 font-medium text-charcoal-900">{m.name}{m.source_ref?.startsWith("billable_hours.") && <span className="block text-xs font-normal text-charcoal-500">Current invoice hours, including drafts</span>}</td>
                   <td className="px-3 py-2 text-charcoal-500">{m.owner_person ?? '—'}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-charcoal-500">
                     {m.goal_op === 'gte' ? '≥' : '≤'} {m.goal_value} {m.unit ?? ''}
@@ -153,15 +160,17 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
                         </td>
                       );
                     }
-                    const tone =
+                    const tech = m.source_ref === 'billable_hours.albertoHours' ? 'Alberto' : m.source_ref === 'billable_hours.brodyHours' ? 'Brody' : null;
+                    const incomplete = tech && incompleteHours[w]?.includes(tech);
+                    const tone = incomplete ? 'bg-amber-50 text-amber-900' :
                       e?.on_track === true
                         ? 'bg-green-50 text-green-800'
                         : e?.on_track === false
                           ? 'bg-red-50 text-red-700 font-semibold'
                           : 'text-charcoal-400';
                     return (
-                      <td key={w} title={e?.source_captured_at ? `Source captured ${new Date(e.source_captured_at).toLocaleString('en-US', {timeZone: 'America/Los_Angeles', timeZoneName: 'short'})}` : undefined} className={`px-2 py-2 text-center ${tone}`}>
-                        {isCurrent && m.source !== 'manual' && e?.value == null ? 'Unavailable' : fmtValue(e?.value ?? null)}
+                      <td key={w} title={incomplete ? 'Partial record: some labor lacks technician names or hours. This is not a complete weekly total.' : e?.source_captured_at ? `Source captured ${new Date(e.source_captured_at).toLocaleString('en-US', {timeZone: 'America/Los_Angeles', timeZoneName: 'short'})}` : undefined} className={`min-w-20 whitespace-nowrap px-2 py-2 text-center ${tone}`}>
+                        {incomplete && e?.value == null ? 'Incomplete' : isCurrent && m.source !== 'manual' && e?.value == null ? 'Unavailable' : fmtValue(e?.value ?? null)}{incomplete && e?.value != null ? '*' : ''}
                       </td>
                     );
                   })}

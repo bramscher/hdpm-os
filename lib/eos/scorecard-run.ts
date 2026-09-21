@@ -10,6 +10,7 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { reconcileBillableScorecard } from './billable-scorecard';
 import { logAudit } from '@/lib/audit';
 import { readLatestMetrics } from '@/lib/agents/metrics-history';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
@@ -80,7 +81,7 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date; wee
   const snapshot = await readLatestMetrics(snapshotNames);
 
   for (const m of metrics) {
-    if (m.source !== 'metrics_snapshot' || !m.source_ref) continue;
+    if (m.source !== 'metrics_snapshot' || !m.source_ref || ['billable_hours.albertoHours','billable_hours.brodyHours'].includes(m.source_ref)) continue;
     if (existing.get(m.id) === 'manual') {
       result.skippedManualOverride++;
       continue;
@@ -175,6 +176,8 @@ export async function runScorecardWeek(opts: { dryRun?: boolean; now?: Date; wee
     }
     result.autoFilled++;
   }
+
+  result.autoFilled += await reconcileBillableScorecard(metrics, now, dryRun);
 
   if (opts.weeklyActions === false) return result;
 
