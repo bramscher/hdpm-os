@@ -1,5 +1,7 @@
 "use client";
 
+import { useSession } from "next-auth/react";
+import { canEditInvoiceDraft, canIssueInvoices } from "@/lib/invoice-permissions";
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { ArrowLeft, Save, FileDown, Loader2, Trash2, Wrench, Package, Check, Sparkles, Clock, Refrigerator } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -102,6 +104,10 @@ const TYPE_STYLES: Record<LineItemType, { bg: string; text: string; label: strin
 };
 
 export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: InvoiceFormProps) {
+  const { data: session } = useSession();
+  const role = session?.user?.role;
+  const canIssue = canIssueInvoices(role);
+  const canEdit = editInvoice ? canEditInvoiceDraft(role, session?.user?.email, editInvoice) : canIssue || role === 'field';
   // Header fields
   const [propertyName, setPropertyName] = useState("");
   const [propertyAddress, setPropertyAddress] = useState("");
@@ -542,7 +548,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
 
   // ── Auto-save effect (debounced 2s) ──────────
   useEffect(() => {
-    if (!userHasEdited.current) return;
+    if (!canEdit || !userHasEdited.current) return;
     if (isSavingRef.current || isGeneratingRef.current) return;
 
     // Need at least property name and a completed date to persist — the invoice
@@ -590,7 +596,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyName, propertyAddress, woReference, completedDate, internalNotes, lineItems]);
+  }, [propertyName, propertyAddress, woReference, completedDate, internalNotes, lineItems, canEdit]);
 
   // ── Warn before page unload if unsaved ──────────
   useEffect(() => {
@@ -799,6 +805,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
   // ── Manual save / generate PDF ──────────
   async function handleSave(generatePdf: boolean) {
     setError(null);
+    if (!canEdit || (generatePdf && !canIssue)) return;
 
     if (!propertyName.trim() || !propertyAddress.trim()) {
       setError("Property name and address are required");
@@ -875,8 +882,11 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
   const hasScannedMeta = Object.values(scannedMeta).some(Boolean);
   const unpricedCount = lineItems.filter((li) => li.description.trim() && (parseFloat(li.amount) || 0) === 0).length;
 
+  if (!canEdit) return <div className="rounded-xl border p-6"><p>This invoice requires office review. You can prepare and edit your own unissued drafts.</p><Button onClick={onBack}>Back to Work &amp; Billing</Button></div>;
+
   return (
     <div className="animate-slide-up">
+      {!canIssue && <p className="mb-4 rounded-xl bg-amber-50 p-4 text-sm">Enter your completed work and save a draft. The office reviews the draft and generates the final invoice PDF. No estimate is required for already-authorized work.</p>}
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" size="sm" onClick={onBack} disabled={isLoading}>
@@ -1407,7 +1417,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
             )}
             Save as Draft
           </Button>
-          <Button
+          {canIssue && <Button
             onClick={() => handleSave(true)}
             disabled={isLoading}
             className="bg-terra-500 hover:bg-terra-600 text-white transition-all duration-200"
@@ -1418,7 +1428,7 @@ export function InvoiceForm({ workOrder, editInvoice, onBack, onSaved }: Invoice
               <FileDown className="h-4 w-4 mr-2" />
             )}
             Generate Invoice PDF
-          </Button>
+          </Button>}
         </div>
       </div>
     </div>
