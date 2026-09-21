@@ -4,10 +4,10 @@ export function canIssueInvoices(role?: string): boolean {
   return ['admin', 'finance', 'maintenance', 'pm', 'manager'].includes(role ?? '');
 }
 
-// Invoice-only access approved for the maintenance coordinator. This does not
-// change her staff role or grant company administration/timecard permissions.
+// Invoice-only access approved for Cheryl and Penny. This does not change
+// their staff roles or grant company administration/timecard permissions.
 export function isInvoiceCoordinator(email?: string | null): boolean {
-  return email?.trim().toLowerCase() === 'cheryl@highdesertpm.com';
+  return ['cheryl@highdesertpm.com', 'penny@highdesertpm.com'].includes(email?.trim().toLowerCase() ?? '');
 }
 
 export function canCreateInvoices(role?: string, email?: string | null): boolean {

@@ -86,8 +86,8 @@ describe('field invoice preparation', () => {
 });
 
 
-describe('Cheryl appliance invoice access', () => {
-  beforeEach(() => { mocks.role='staff'; mocks.email='cheryl@highdesertpm.com'; mocks.get.mockResolvedValue({...draft,created_by:mocks.email}); });
+describe.each(['cheryl@highdesertpm.com', 'penny@highdesertpm.com'])('Appliance invoice access for %s', email => {
+  beforeEach(() => { mocks.role='staff'; mocks.email=email; mocks.get.mockResolvedValue({...draft,created_by:mocks.email}); });
   it('creates appliance invoices with the authenticated author', async()=>{
     const items=[{type:'appliance',description:'Refrigerator',qty:1,cost:500,markup_pct:10,amount:550}];
     expect((await POST(request({...input,line_items:items,labor_amount:0,materials_amount:550,total_amount:550}))).status).toBe(201);
@@ -111,10 +111,16 @@ describe('Cheryl appliance invoice access', () => {
     expect((await duplicate(request({}),params)).status).toBe(403);
     expect((await changeStatus(request({status:'attached'},'PATCH'),params)).status).toBe(403);
   });
-  it('limits the permission to Cheryl’s staff account',()=>{
-    expect(canCreateInvoices('staff','CHERYL@highdesertpm.com')).toBe(true);
+  it('limits the permission to approved staff accounts',()=>{
+    expect(canCreateInvoices('staff',email.toUpperCase())).toBe(true);
     expect(canCreateInvoices('staff','other@highdesertpm.com')).toBe(false);
     expect(canGenerateInvoice('staff','cheryl@example.com')).toBe(false);
     expect(canGenerateInvoice('read_only','cheryl@highdesertpm.com')).toBe(false);
   });
+});
+
+it('preserves Craig’s full invoice access as admin', () => {
+  expect(canCreateInvoices('admin', 'craig@highdesertpm.com')).toBe(true);
+  expect(canGenerateInvoice('admin', 'craig@highdesertpm.com', draft as never)).toBe(true);
+  expect(canEditInvoiceDraft('admin', 'craig@highdesertpm.com', draft as never)).toBe(true);
 });
