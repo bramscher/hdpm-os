@@ -86,7 +86,7 @@
     },
     {
       "path": "/api/maintenance/cron/metrics",
-      "schedule": "30 13 * * *"
+      "schedule": "30 13,21 * * *"
     },
     {
       "path": "/api/agents/cron/estimate-chaser",
@@ -123,6 +123,10 @@
     {
       "path": "/api/maintenance/cron/followups",
       "schedule": "0 15,16 * * 1-5"
+    },
+    {
+      "path": "/api/eos/cron/scorecard-daily",
+      "schedule": "0 14 * * 1-5"
     }
   ]
 }

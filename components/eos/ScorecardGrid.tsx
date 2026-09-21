@@ -124,7 +124,7 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
               });
               return (
                 <tr key={m.id}>
-                  <td className="px-3 py-2 font-medium text-charcoal-900">{m.name}</td>
+                  <td className="px-3 py-2 font-medium text-charcoal-900">{m.name}{m.source_ref?.startsWith("billable_hours.") && <span className="block text-xs font-normal text-charcoal-500">Tagged hourly invoice lines, including drafts</span>}</td>
                   <td className="px-3 py-2 text-charcoal-500">{m.owner_person ?? '—'}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-charcoal-500">
                     {m.goal_op === 'gte' ? '≥' : '≤'} {m.goal_value} {m.unit ?? ''}
@@ -160,8 +160,8 @@ export default function ScorecardGrid({ metrics, entries, weeks, currentWeek }: 
                           ? 'bg-red-50 text-red-700 font-semibold'
                           : 'text-charcoal-400';
                     return (
-                      <td key={w} className={`px-2 py-2 text-center ${tone}`}>
-                        {fmtValue(e?.value ?? null)}
+                      <td key={w} title={e?.source_captured_at ? `Source captured ${new Date(e.source_captured_at).toLocaleString()}` : undefined} className={`px-2 py-2 text-center ${tone}`}>
+                        {isCurrent && m.source !== 'manual' && e?.value == null ? 'Unavailable' : fmtValue(e?.value ?? null)}
                       </td>
                     );
                   })}
