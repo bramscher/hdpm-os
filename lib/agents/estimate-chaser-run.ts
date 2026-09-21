@@ -199,6 +199,8 @@ export async function runEstimateChaser(opts: {
     expired: 0,
   };
 
+  if ((await getAgentConfig(ESTIMATE_CHASER_AGENT,'team_review'))?.enabled) return {...result,halted:'shared team review queue enabled'};
+
   // Guards: kill switch + per-action autonomy (missing/disabled row → L0).
   if (await isGloballyKilled()) {
     console.log('[Agents] estimate chaser halted: kill switch');

@@ -103,7 +103,7 @@ describe("approve and next review queue", () => {
     expect(nextReviewSheet(rows, sheet("Ben"), "manager")?.id).toBe("Zoe");
     expect(nextReviewSheet(rows, sheet("Zoe"), "manager")?.id).toBe("Amy");
   });
-  it("skips other periods, ineligible states, other managers, and the reviewer's own sheet", () => {
+  it("lets the admin review any assigned manager while skipping ineligible sheets", () => {
     const rows = [
       sheet("Amy"),
       sheet("Ben", { period_start: "2026-09-16" }),
@@ -113,7 +113,7 @@ describe("approve and next review queue", () => {
       sheet("Finn", { review_manager_id: "another-manager" }),
       sheet("Manager", { employee_id: "manager" }),
     ];
-    expect(nextReviewSheet(rows, sheet("Amy"), "manager")).toBeNull();
+    expect(nextReviewSheet(rows, sheet("Amy"), "manager")?.id).toBe("Finn");
   });
   it("respects the employee filter and finishes without selecting another employee", () => {
     expect(

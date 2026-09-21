@@ -659,7 +659,6 @@ export function canReadSheet(
 ): boolean {
   return (
     isAdmin ||
-    (sheet.employee_id !== actorId && sheet.review_manager_id === actorId) ||
     (sheet.employee_id === actorId &&
       (sheet.id === currentId || sheet.state !== "draft"))
   );

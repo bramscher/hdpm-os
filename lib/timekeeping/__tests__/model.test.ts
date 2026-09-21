@@ -336,7 +336,7 @@ describe("access and payroll", () => {
       expect(canReadSheet(historic, "employee", false, "new")).toBe(true);
       expect(canReadSheet(historic, "other", false, "new")).toBe(false);
     }
-    expect(canReadSheet(old, "manager", false, "new")).toBe(true);
+    expect(canReadSheet(old, "manager", false, "new")).toBe(false);
     expect(canReadSheet(old, "other", false, "new")).toBe(false);
     expect(canReadSheet(old, "admin", true, "new")).toBe(true);
   });

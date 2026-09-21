@@ -287,26 +287,9 @@ async function apply(ctx: Context, request: Record<string, unknown>) {
 }
 export async function bootstrap(ctx: Context) {
   if (ctx.isAdmin) await directory();
-  const all = await employees();
-  const assigned = checked(
-    await getSupabaseAdmin()
-      .from("timekeeping_sheet")
-      .select("id")
-      .eq("review_manager_id", ctx.employee.id)
-      .neq("employee_id", ctx.employee.id)
-      .limit(1),
-  );
-  const canReview =
-    !!assigned?.length ||
-    all.some(
-      (e) => e.manager_id === ctx.employee.id && e.id !== ctx.employee.id,
-    );
-  const managed = all.filter(
-    (e) =>
-      ctx.isAdmin ||
-      e.id === ctx.employee.id ||
-      e.manager_id === ctx.employee.id,
-  );
+  const all = ctx.isAdmin ? await employees() : [ctx.employee];
+  const canReview = ctx.isAdmin;
+  const managed = all;
   for (const e of managed) await ensureSheets(e);
   const tracksTime = recordsEmployeeTime(ctx.employee.staff_person);
   const own = tracksTime
@@ -325,6 +308,7 @@ export async function bootstrap(ctx: Context) {
   };
 }
 export async function listSheets(ctx: Context, period?: string) {
+  if (!ctx.isAdmin) throw new TimeError("Admin access required.", 403);
   if (period && (!validDate(period) || periodFor(period).start !== period))
     throw new TimeError("Choose a valid pay period.");
   const rows: Sheet[] = [];
@@ -334,10 +318,6 @@ export async function listSheets(ctx: Context, period?: string) {
       .select("*")
       .order("period_start", { ascending: false })
       .order("id");
-    if (!ctx.isAdmin)
-      query = query
-        .eq("review_manager_id", ctx.employee.id)
-        .neq("employee_id", ctx.employee.id);
     if (period) query = query.eq("period_start", period);
     const page = checked(await query.range(offset, offset + 499)) as Sheet[];
     rows.push(...page);

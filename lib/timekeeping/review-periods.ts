@@ -17,7 +17,6 @@ export function nextReviewSheet(
         sheet.id !== current.id &&
         sheet.period_start === current.period_start &&
         sheet.state === "submitted" &&
-        sheet.review_manager_id === reviewerId &&
         sheet.employee_id !== reviewerId &&
         (!employeeFilter || sheet.employee_id === employeeFilter),
     )

@@ -34,6 +34,8 @@ import {
   submittedSheets,
   history,
   payrollReview,
+  bootstrap,
+  listSheets,
 } from "../server";
 import { POST } from "@/app/api/timekeeping/route";
 
@@ -338,7 +340,7 @@ describe("timekeeping server identity and signatures", () => {
     expect(args.p_request).not.toHaveProperty("employee_signed_by");
     expect(args.p_request).not.toHaveProperty("employee_signed_at");
   });
-  it("saves, submits and permits manager review of a planned final-day departure", async () => {
+  it("saves, submits and permits admin review of a planned final-day departure", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-15T17:00:00Z")); // 9 AM Pacific
     try {
@@ -398,7 +400,7 @@ describe("timekeeping server identity and signatures", () => {
       };
       mock.results.push(signed, []);
       await command(
-        { employee: manager, email: manager.email, isAdmin: false },
+        { employee: manager, email: manager.email, isAdmin: true },
         { op: "approve", sheetId: s.id, version: 1 },
       );
       expect(mock.rpc.mock.calls.at(-1)![1]).toMatchObject({
@@ -610,7 +612,7 @@ describe("timekeeping server identity and signatures", () => {
         { email: manager.email, isAdmin: false, employee: manager },
         { op: "refresh", sheetId: s.id, version: 1 },
       ),
-    ).rejects.toThrow("administrator");
+    ).rejects.toMatchObject({ status: 403 });
     expect(mock.rpc).not.toHaveBeenCalled();
   });
   it("prevents personal time tracking and sheet generation for reviewer-only Craig", async () => {
@@ -690,4 +692,34 @@ describe("timekeeping server identity and signatures", () => {
     expect(mock.auth).not.toHaveBeenCalled();
     expect(mock.rpc).not.toHaveBeenCalled();
   });
+});
+
+describe("private employee timecards", () => {
+  it("rejects team-list requests by non-admins before reading any rows", async () => {
+    await expect(listSheets(ctx)).rejects.toMatchObject({ status: 403 });
+    expect(mock.from).not.toHaveBeenCalled();
+  });
+  it("allows admins to list all timecards", async () => {
+    mock.results.push([sheet()]);
+    expect(await listSheets({ ...ctx, isAdmin: true })).toEqual([sheet()]);
+  });
+  it("blocks assigned managers from reading history or approving another employee's timecard", async () => {
+    const manager = { ...ctx, employee: { ...employee, id: 'manager' } };
+    const submitted = { ...sheet(), state: 'submitted' as const };
+    mock.results.push(submitted, []);
+    await expect(history(manager, submitted.id)).rejects.toMatchObject({status:403});
+    mock.results.push(submitted, []);
+    await expect(command(manager, {op:'approve',sheetId:submitted.id,version:1})).rejects.toMatchObject({status:403});
+    expect(mock.rpc).not.toHaveBeenCalled();
+    expect(mock.from).not.toHaveBeenCalledWith('timekeeping_event');
+  });
+});
+
+it("bootstraps a non-admin with only their own timecard and no team access", async () => {
+  mock.results.push([], null, {employee_id: employee.id, version:1, shift:null});
+  const result = await bootstrap({...ctx, employee:{...employee,enabled:false}});
+  expect(result.canReview).toBe(false);
+  expect(result.employees).toEqual([]);
+  expect(mock.from).not.toHaveBeenCalledWith('timekeeping_employee');
+  expect(mock.filter).not.toHaveBeenCalledWith('timekeeping_sheet','eq','review_manager_id',expect.anything());
 });
