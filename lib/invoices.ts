@@ -540,15 +540,14 @@ export async function getInvoiceById(id: string): Promise<HdmsInvoice | null> {
   return invoice;
 }
 
-export async function updateInvoice(id: string, input: UpdateInvoiceInput): Promise<HdmsInvoice> {
+export async function updateInvoice(id: string, input: UpdateInvoiceInput, draftOwner?: string): Promise<HdmsInvoice> {
   const supabase = getSupabaseAdmin();
 
-  const { data, error } = await supabase
-    .from('hdms_invoices')
-    .update(input)
-    .eq('id', id)
-    .select()
-    .single();
+  let query = supabase.from('hdms_invoices').update(input).eq('id', id);
+  // Check at write time as well: office may have issued the draft since it was read.
+  if (draftOwner) query = query.eq('created_by', draftOwner).eq('status', 'draft')
+    .eq('doc_type', 'invoice').is('maintenance_job_id', null);
+  const { data, error } = await query.select().single();
 
   if (error) {
     console.error('Error updating invoice:', error);

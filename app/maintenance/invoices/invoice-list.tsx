@@ -1,5 +1,8 @@
 "use client";
 
+import { useSession } from "next-auth/react";
+import { canEditInvoiceDraft, canIssueInvoices } from "@/lib/invoice-permissions";
+
 import { ReportPeriodPresets } from "./report-period-presets";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -249,6 +252,8 @@ function PdfPreviewModal({
 // ============================================
 
 export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunReport, onReconcile, persistSelection, clearSelectionToken, isLoading }: InvoiceListProps) {
+  const { data: session } = useSession();
+  const canIssue = canIssueInvoices(session?.user?.role);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -991,8 +996,8 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                       </Button>
                     )}
 
-                    {/* Edit — available for all non-void invoices */}
-                    {!isVoid && (
+                    {/* Office edits, or a technician’s own unissued draft */}
+                    {canEditInvoiceDraft(session?.user?.role, session?.user?.email, invoice) && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1006,7 +1011,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                     )}
 
                     {/* Duplicate — same number with the next -1/-2 suffix, as a new draft */}
-                    {onDuplicate && !isVoid && (
+                    {canIssue && onDuplicate && !isVoid && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1042,7 +1047,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                     )}
 
                     {/* Mark as Attached */}
-                    {invoice.status === "generated" && (
+                    {canIssue && invoice.status === "generated" && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1060,7 +1065,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                     )}
 
                     {/* Void */}
-                    {!isVoid && (
+                    {canIssue && !isVoid && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1074,7 +1079,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                     )}
 
                     {/* Delete */}
-                    {isConfirmingDelete ? (
+                    {canIssue && (isConfirmingDelete ? (
                       <div className="flex items-center gap-1 ml-1 pl-1 border-l border-charcoal-200">
                         <span className="text-[10px] text-red-600 font-medium whitespace-nowrap">Delete?</span>
                         <Button
@@ -1111,7 +1116,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
-                    )}
+                    ))}
                   </div>
                 </div>
               </div>

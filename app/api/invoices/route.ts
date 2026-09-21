@@ -1,4 +1,5 @@
-import { requireRole } from '@/lib/require-role';
+import { requireInvoiceAuthor } from '@/lib/require-invoice-author';
+import { canIssueInvoices } from '@/lib/invoice-permissions';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { createInvoice, createCredit, getInvoices } from '@/lib/invoices';
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const roleGuard=await requireRole('finance','maintenance','pm','manager');if(!roleGuard.ok)return roleGuard.response;
+    const roleGuard=await requireInvoiceAuthor();if(!roleGuard.ok)return roleGuard.response;
     const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
@@ -42,6 +43,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
+    if (!canIssueInvoices(roleGuard.role) && body.doc_type && body.doc_type !== 'invoice') {
+      return NextResponse.json({ error: 'Credit memos require office review.' }, { status: 403 });
+    }
 
     // Validate required fields
     const { property_name, property_address, description } = body;
