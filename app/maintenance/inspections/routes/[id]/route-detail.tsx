@@ -307,7 +307,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
         return;
       }
       setCalendarLink(data.webLink || null);
-      alert("Route added to your Outlook calendar!");
+      alert("Route published to the Operations calendar for Brody and Operations.");
     } catch (err) {
       console.error("Calendar error:", err);
       alert(`Calendar error: ${err instanceof Error ? err.message : err}`);
@@ -507,7 +507,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
                 ) : (
                   <>
                     <CalendarPlus className="w-4 h-4" />
-                    Add to Outlook
+                    Publish to Operations
                   </>
                 )}
               </button>

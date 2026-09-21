@@ -3,14 +3,12 @@
  *
  * Mirrors the inspection-route calendar publish
  * (app/api/inspections/routes/[id]/calendar/route.ts): one event on the
- * publisher's calendar via Microsoft Graph, 8 AM start, per-stop arrival /
- * departure estimates, Apple + Google full-route links. Attendees: the crew
- * tech (email resolved from maint_digest_recipient) + the ops admin +
- * operations@. Set MAINT_ROUTE_CALENDAR_DRYRUN=1 to get the event JSON back
+ * operations calendar via Microsoft Graph, 8 AM start, per-stop arrival /
+ * departure estimates, Apple + Google full-route links. Attendees: Brody and operations@ only. Set MAINT_ROUTE_CALENDAR_DRYRUN=1 to get the event JSON back
  * instead of POSTing to Graph.
  */
 
-import { listDigestRecipients } from './recipients';
+import { ROUTE_CALENDAR_EVENTS_URL, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError, routeCalendarEventUrl } from '@/lib/route-builder/calendar-destination';
 
 const HDPM_OFFICE = {
   lat: 44.256798,
@@ -18,7 +16,6 @@ const HDPM_OFFICE = {
   address: '1515 SW Reindeer Ave, Redmond, OR 97756',
 };
 
-const OPS_ADMIN_EMAIL = 'craigbramscher@gmail.com';
 const START_HOUR = 8; // 8:00 AM PT
 
 export interface RouteCalendarStop {
@@ -143,25 +140,7 @@ export async function createRouteCalendarEvent(
     </div>
   `;
 
-  // ── Attendees: tech (from digest recipient map) + ops admin + operations@ ──
-  const recipients = await listDigestRecipients();
-  const techEmail =
-    recipients.find((r) => r.person.toLowerCase() === assignedTech.toLowerCase())?.email ?? null;
-
-  const attendees: { emailAddress: { address: string; name: string }; type: string }[] = [];
-  if (techEmail) {
-    attendees.push({ emailAddress: { address: techEmail, name: assignedTech }, type: 'required' });
-  }
-  if (techEmail?.toLowerCase() !== OPS_ADMIN_EMAIL) {
-    attendees.push({
-      emailAddress: { address: OPS_ADMIN_EMAIL, name: 'Craig Bramscher' },
-      type: 'required',
-    });
-  }
-  attendees.push({
-    emailAddress: { address: 'operations@highdesertpm.com', name: 'Operations' },
-    type: 'optional',
-  });
+  const attendees = routeCalendarAttendees();
 
   const event = {
     subject: `Maintenance Route - ${assignedTech} (${stops.length} stops)`,
@@ -184,7 +163,7 @@ export async function createRouteCalendarEvent(
     return { created: false, dryRun: true, event };
   }
 
-  const graphRes = await fetch('https://graph.microsoft.com/v1.0/me/events', {
+  const graphRes = await fetch(ROUTE_CALENDAR_EVENTS_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(event),
@@ -196,19 +175,17 @@ export async function createRouteCalendarEvent(
     return {
       created: false,
       error:
-        graphRes.status === 401
-          ? 'Calendar access expired. Please sign out and sign back in.'
-          : `Failed to create calendar event: ${graphRes.statusText}`,
+        routeCalendarAccessError(graphRes.status) ?? `Failed to create calendar event: ${graphRes.statusText}`,
     };
   }
 
   const created = await graphRes.json();
-  return { created: true, eventId: created.id, webLink: created.webLink ?? null };
+  return { created: true, eventId: storeRouteCalendarEventId(created.id), webLink: created.webLink ?? null };
 }
 
 /** Best-effort Graph event deletion when a route is canceled. */
 export async function deleteRouteCalendarEvent(eventId: string, accessToken: string): Promise<boolean> {
-  const res = await fetch(`https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(eventId)}`, {
+  const res = await fetch(routeCalendarEventUrl(eventId), {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${accessToken}` },
   });

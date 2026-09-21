@@ -1,3 +1,4 @@
+import { ROUTE_CALENDAR_EVENTS_URL, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError } from '@/lib/route-builder/calendar-destination';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -257,27 +258,7 @@ export async function POST(
     const firstStop = stopDetails[0];
     const location = firstStop ? firstStop.address : '';
 
-    // ── Attendees ──
-    const attendees = [];
-    const inspectorEmail = routePlan.assigned_to;
-    if (inspectorEmail) {
-      attendees.push({
-        emailAddress: { address: inspectorEmail, name: inspectorCapitalized },
-        type: 'required',
-      });
-    }
-    // Always cc the operations admin (Craig) as a required attendee on every route.
-    const opsAdminEmail = 'craigbramscher@gmail.com';
-    if (inspectorEmail?.toLowerCase() !== opsAdminEmail) {
-      attendees.push({
-        emailAddress: { address: opsAdminEmail, name: 'Craig Bramscher' },
-        type: 'required',
-      });
-    }
-    attendees.push({
-      emailAddress: { address: 'operations@highdesertpm.com', name: 'Operations' },
-      type: 'optional',
-    });
+    const attendees = routeCalendarAttendees();
 
     // ── Microsoft Graph event payload ──
     const event = {
@@ -311,7 +292,7 @@ export async function POST(
     }
 
     // ── Call Microsoft Graph API ──
-    const graphRes = await fetch('https://graph.microsoft.com/v1.0/me/events', {
+    const graphRes = await fetch(ROUTE_CALENDAR_EVENTS_URL, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -324,12 +305,8 @@ export async function POST(
       const errorBody = await graphRes.text();
       console.error('Microsoft Graph error:', graphRes.status, errorBody);
 
-      if (graphRes.status === 401) {
-        return NextResponse.json(
-          { error: 'Calendar access expired. Please sign out and sign back in.' },
-          { status: 401 }
-        );
-      }
+      const accessError = routeCalendarAccessError(graphRes.status);
+      if (accessError) return NextResponse.json({error: accessError}, {status: graphRes.status});
 
       return NextResponse.json(
         { error: `Failed to create calendar event: ${graphRes.statusText}` },
@@ -342,7 +319,7 @@ export async function POST(
     // Store the event ID on the route plan for cleanup on deletion
     await supabase
       .from('route_plans')
-      .update({ calendar_event_id: createdEvent.id })
+      .update({ calendar_event_id: storeRouteCalendarEventId(createdEvent.id) })
       .eq('id', id);
 
     return NextResponse.json({
