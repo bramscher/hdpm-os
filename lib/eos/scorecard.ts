@@ -77,3 +77,11 @@ export function isFreshScorecardSource(capturedAt: string | null | undefined, no
   const age = now.getTime() - new Date(capturedAt).getTime();
   return Number.isFinite(age) && age >= 0 && age <= 36 * 60 * 60 * 1000;
 }
+
+/** Keep the complete operating history visible from the first reporting month. */
+export const SCORECARD_HISTORY_START = '2026-06-01';
+export function scorecardWeeks(currentWeek: string): string[] {
+  const weeks: string[] = [];
+  for (let week = currentWeek; week >= SCORECARD_HISTORY_START; week = weeksBefore(week, 1)) weeks.unshift(week);
+  return weeks;
+}

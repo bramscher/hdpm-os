@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({metrics: [] as any[], existing: [] as any[], snapshot: new Map(), writes: [] as any[], from: vi.fn(), enqueue: vi.fn(), audit: vi.fn()}));
+const mocks = vi.hoisted(() => ({metrics: [] as any[], existing: [] as any[], snapshot: new Map(), writes: [] as any[], from: vi.fn(), enqueue: vi.fn(), audit: vi.fn(), reconcile: vi.fn(async()=>0)}));
 vi.mock('@/lib/supabase', () => ({getSupabaseAdmin: () => ({from:mocks.from})}));
+vi.mock('../billable-scorecard', () => ({reconcileBillableScorecard:mocks.reconcile}));
 vi.mock('@/lib/audit', () => ({logAudit:mocks.audit}));
 vi.mock('@/lib/agents/metrics-history', () => ({readLatestMetrics:async()=>mocks.snapshot}));
 vi.mock('@/lib/agents/outbox', () => ({enqueueOutbox:mocks.enqueue,dispatchOutbox:vi.fn()}));
@@ -10,8 +11,8 @@ import {isFreshScorecardSource} from '../scorecard';
 const now = new Date('2026-09-21T14:00:00Z');
 beforeEach(() => {
  vi.clearAllMocks(); mocks.writes=[]; mocks.existing=[];
- mocks.metrics=[{id:'hours',name:'Alberto',source:'metrics_snapshot',source_ref:'billable_hours.albertoHours',goal_op:'gte',goal_value:30}];
- mocks.snapshot=new Map([['billable_hours',{captured_at:'2026-09-21T13:30:00Z',value:{weekStart:'2026-09-21',albertoHours:2}}]]);
+ mocks.metrics=[{id:'hours',name:'Alberto',source:'metrics_snapshot',source_ref:'open_exceptions.total',goal_op:'gte',goal_value:30}];
+ mocks.snapshot=new Map([['open_exceptions',{captured_at:'2026-09-21T13:30:00Z',value:{weekStart:'2026-09-21',total:2}}]]);
  mocks.from.mockImplementation((table:string)=>{
   const q:any={};let result=table==='scorecard_metric'?mocks.metrics:mocks.existing;
   for(const method of ['select','eq','in','order'])q[method]=()=>q;
@@ -31,12 +32,11 @@ describe('daily scorecard refresh', () => {
   mocks.existing=[{metric_id:'hours',source:'manual'}];await runScorecardWeek({now,weeklyActions:false});expect(mocks.writes).toEqual([]);
  });
  it('replaces stale automatic values with unavailable rather than zero',async()=>{
-  mocks.snapshot.get('billable_hours').captured_at='2026-09-18T13:30:00Z';
+  mocks.snapshot.get('open_exceptions').captured_at='2026-09-18T13:30:00Z';
   await runScorecardWeek({now,weeklyActions:false});expect(mocks.writes[0]).toMatchObject({value:null,on_track:null});
  });
- it('does not attribute last week’s hours to Monday even when the source is recent',async()=>{
-  mocks.snapshot.get('billable_hours').value.weekStart='2026-09-14';
-  await runScorecardWeek({now,weeklyActions:false});expect(mocks.writes[0].value).toBeNull();
+ it('reconciles invoice history during the daily refresh',async()=>{
+  await runScorecardWeek({now,weeklyActions:false});expect(mocks.reconcile).toHaveBeenCalledWith(mocks.metrics,now,false);
  });
  it('makes no writes in dry run',async()=>{
   await runScorecardWeek({now,weeklyActions:false,dryRun:true});expect(mocks.writes).toEqual([]);expect(mocks.audit).not.toHaveBeenCalled();

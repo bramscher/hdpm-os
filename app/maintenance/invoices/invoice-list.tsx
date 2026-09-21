@@ -264,11 +264,24 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState("");
   const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
   const [afBilledOnly, setAfBilledOnly] = useState(false);
   const [techFilter, setTechFilter] = useState<TechFilter>("all");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  async function exportPeriod() {
+    setPrinting(true); setPrintError('');
+    try {
+      const response = await fetch(`/api/invoices/print-packet?from=${encodeURIComponent(dateFrom)}&to=${encodeURIComponent(dateTo)}`);
+      if(!response.ok) { const data=await response.json(); throw new Error(data.error||'Could not export invoices'); }
+      const url=URL.createObjectURL(await response.blob());
+      const a=document.createElement('a');a.href=url;a.download=`HDPM_Invoices_${dateFrom}_to_${dateTo}.pdf`;a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+    } catch(e) {setPrintError((e as Error).message);} finally {setPrinting(false);}
+  }
 
   // Staff names present in the data, known technicians first (Brody, Alberto, …).
   const techOptions = useMemo(() => {
@@ -691,6 +704,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {canIssue && <button type="button" disabled={printing || !dateFrom || !dateTo} onClick={() => void exportPeriod()} className="h-9 rounded-lg border border-sand-200 bg-white px-3 text-xs font-medium text-green-800 disabled:opacity-40">{printing ? 'Preparing PDF…' : 'Print all invoices in period'}</button>}
               <ReportPeriodPresets
                 from={dateFrom}
                 to={dateTo}
@@ -730,6 +744,8 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
             </div>
           </div>
 
+          {canIssue && <p className="text-xs text-charcoal-500">Choose a payroll period above to download one printable PDF of every invoice in that period, including draft review copies. Search, technician, paid, and checkbox filters do not limit the packet. Voids and credit memos are excluded.</p>}
+          {printError && <p role="alert" className="text-sm text-red-700">{printError}</p>}
           <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-sand-100">
             <div className="flex items-center gap-3">
               <button
