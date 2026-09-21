@@ -1,3 +1,6 @@
+import Followups from '@/app/maintenance/estimate-followups/followups';
+import { auth } from '@/lib/auth';
+import { canReviewFollowups } from '@/lib/agents/followup-access';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { weekStartPacific, weeksBefore } from '@/lib/eos/scorecard';
@@ -18,6 +21,8 @@ export const metadata = {
  * (/api/eos/cron/escalation) and the Friday scorecard pass.
  */
 export default async function IssuesPage() {
+  const session = await auth();
+  const showFollowups = !!session?.user?.email && await canReviewFollowups(session.user.email);
   const supabase = getSupabaseAdmin();
   const today = todayPacific(new Date());
   const horizon = rolledDueOn(today); // today + 7
@@ -116,6 +121,7 @@ export default async function IssuesPage() {
         title="Issues & To-Dos"
         description="The IDS queue, priority-ordered. Aged tripwires, agent escalations, off-track metrics and twice-missed to-dos file themselves; anything else goes in with + Issue. Solving happens with the humans in the room."
       />
+      {showFollowups && <Followups embedded/>}
       <IssuesBoard
         issues={issues}
         todos={todos}
