@@ -1,0 +1,64 @@
+.wb-guide { max-width: 1160px; margin: 0 auto; padding: 28px 28px 64px; color: #242a27; line-height: 1.65; }
+.wb-guide a { color: #166534; text-decoration: underline; text-underline-offset: 3px; }
+.wb-guide a:focus-visible, .wb-guide summary:focus-visible { outline: 2px solid #15803d; outline-offset: 5px; border-radius: 3px; }
+.wb-guide-back { font-size: 14px; }
+.wb-guide-intro { padding: 34px 0 28px; border-bottom: 1px solid #dce3dd; }
+.wb-guide-eyebrow { color: #486551; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.wb-guide h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 650; line-height: 1.2; letter-spacing: -.03em; margin: 9px 0 16px; }
+.wb-guide-intro > p:last-of-type { max-width: 740px; font-size: 18px; color: #58615b; }
+.wb-guide-jumps { display: flex; flex-wrap: wrap; gap: 10px 24px; margin-top: 24px; font-size: 14px; }
+.wb-guide-section { margin-top: 44px; scroll-margin-top: 24px; }
+.wb-guide-heading { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+.wb-guide-heading > span { flex: 0 0 36px; height: 36px; display: grid; place-items: center; border: 1px solid #c5d4c8; border-radius: 50%; color: #166534; font-size: 12px; font-weight: 700; }
+.wb-guide h2 { font-size: 23px; line-height: 1.35; font-weight: 650; letter-spacing: -.02em; margin-bottom: 6px; }
+.wb-guide-heading p { font-size: 14px; color: #647068; }
+.wb-guide h3 { font-size: 18px; font-weight: 650; line-height: 1.4; margin-bottom: 10px; }
+.wb-guide-flow { border: 1px solid #dce3dd; border-radius: 18px; background: #f4f7f3; padding: 28px; }
+.wb-guide-node { background: #fff; border: 1px solid #d8e2d9; border-radius: 12px; padding: 22px 26px; max-width: 720px; margin-inline: auto; font-size: 14px; }
+.wb-guide-node small { display: block; color: #496451; letter-spacing: .08em; font-size: 10px; font-weight: 700; margin-bottom: 8px; }
+.wb-guide-node a, .wb-guide-card > a, .wb-guide-footer a { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 14px; font-weight: 600; }
+.wb-guide-start, .wb-guide-finish { border-color: #8fb79a; box-shadow: inset 4px 0 #287345; }
+.wb-guide-arrow { display: flex; justify-content: center; color: #5b8065; padding: 9px; }
+.wb-guide-decision { width: fit-content; max-width: 100%; margin: 0 auto 22px; padding: 11px 22px; border: 1px solid #c3d0bd; border-radius: 24px; background: #e9efdf; text-align: center; font-size: 14px; font-weight: 650; }
+.wb-guide-branches { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.wb-guide-branches .wb-guide-node { position: relative; max-width: none; margin: 0; }
+.wb-guide-branches .wb-guide-node::before { content: ''; position: absolute; height: 22px; width: 1px; top: -23px; left: 50%; background: #b5c8b8; }
+.wb-guide-note { margin-top: 12px; border-top: 1px solid #e7ece5; padding-top: 12px; color: #59665d; font-size: 13px; }
+.wb-guide figcaption { max-width: 720px; margin: 20px auto 0; text-align: center; font-size: 13px; color: #59665d; }
+.wb-guide-lanes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.wb-guide-card { border: 1px solid #dce3dd; border-radius: 12px; background: #fff; padding: 24px; font-size: 14px; }
+.wb-guide-card p + p { margin-top: 14px; }
+.wb-guide-card .wb-guide-eyebrow { margin-bottom: 9px; }
+.wb-guide-callout { margin-top: 20px; border-left: 3px solid #6f9877; padding: 14px 18px; background: #eef3ed; font-size: 14px; border-radius: 0 8px 8px 0; }
+.wb-guide-routine { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.wb-guide-routine svg { color: #287345; margin-bottom: 16px; }
+.wb-guide ul { padding-left: 18px; list-style: disc; }
+.wb-guide li + li { margin-top: 12px; }
+.wb-guide-table-wrap { overflow-x: auto; border: 1px solid #dce3dd; border-radius: 12px; background: #fff; }
+.wb-guide table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; min-width: 610px; }
+.wb-guide caption { text-align: left; padding: 16px 20px; font-weight: 600; }
+.wb-guide th, .wb-guide td { padding: 16px 20px; vertical-align: top; border-top: 1px solid #e5ebe4; }
+.wb-guide thead { background: #eef3ed; }
+.wb-guide tbody th { width: 23%; font-weight: 600; }
+.wb-guide-faq { margin-top: 24px; }
+.wb-guide details { padding: 18px 0; border-bottom: 1px solid #dce3dd; font-size: 14px; }
+.wb-guide summary { font-weight: 600; cursor: pointer; }
+.wb-guide details p { padding-top: 12px; max-width: 850px; color: #58615b; }
+.wb-guide-footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid #dce3dd; font-size: 15px; }
+@media (max-width: 760px) {
+  .wb-guide { padding: 20px 16px 40px; }
+  .wb-guide-flow { padding: 18px 12px; }
+  .wb-guide-node { padding: 20px; }
+  .wb-guide-branches, .wb-guide-lanes, .wb-guide-routine { grid-template-columns: 1fr; }
+  .wb-guide-branches .wb-guide-node::before { display: none; }
+  .wb-guide h2 { font-size: 21px; }
+}
+@media print {
+  .wb-guide { max-width: none; padding: 0; font-size: 11pt; }
+  .wb-guide-back, .wb-guide-jumps { display: none; }
+  .wb-guide-section { margin-top: 24px; }
+  .wb-guide-node, .wb-guide-card, .wb-guide tr { break-inside: avoid; }
+  .wb-guide-flow { background: white; }
+  .wb-guide-table-wrap { overflow: visible; }
+  .wb-guide table { min-width: 0; }
+}
