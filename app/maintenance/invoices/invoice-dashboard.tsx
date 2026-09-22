@@ -190,6 +190,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const canReviewBilling = dailyBillingAccess(session?.user?.role || "read_only", session?.user?.email || "").office;
   const [newInvoiceType, setNewInvoiceType] = useState<"labor" | "appliance" | null>(null);
   const canCreate = canCreateInvoices(session?.user?.role, session?.user?.email);
+  const fieldInvoiceFlow = session?.user?.role === "field";
   const [view, setView] = useState<View>("main");
   const [activeTab, setActiveTab] = useState<Tab>("work-orders");
   function changeTab(tab: Tab) {
@@ -845,7 +846,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
               )}
             </div>
           </div>}
-              <div className="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-900"><strong>Estimate first.</strong> Open a work order’s estimate to use a template, price-book items, or suggested scope. Use <strong>Quick invoice</strong> for a simple, already-authorized repair that is ready to bill.</div>
+              <div className="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-900"><strong>Create an invoice from a work order.</strong> Choose <strong>Create invoice</strong> to fill in the property, work-order details, and labor description. Review the hours, materials, and charges before saving.</div>
               {/* Filters */}
               <div className="bg-white rounded-xl border border-sand-200 shadow-card px-5 py-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -1047,9 +1048,11 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                             >
                               <td className="sticky left-0 bg-white group-hover:bg-charcoal-50 border-r border-charcoal-100/80 px-2 py-2.5 text-center transition-colors">
                                 <div className="flex flex-col items-stretch gap-1.5">
+                                  {canCreate && <button type="button" onClick={() => handleCreateInvoiceFromWo(wo)} className="inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-terra-600 px-3 py-2 text-xs font-semibold text-white hover:bg-terra-700" title="Create an invoice prefilled from this work order"><Plus className="h-3.5 w-3.5"/>Create invoice</button>}
+                                  {!fieldInvoiceFlow && <>
                                   <a href={existingEstimate?.href || `/turn-estimator/estimates/new?from_wo=${wo.id}`} className="inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-green-700 px-3 py-2 text-xs font-medium text-white hover:bg-green-800"><FileText className="h-3.5 w-3.5"/>{existingEstimate ? (existingEstimate.stage === "draft" ? "Continue estimate" : "View estimate") : "Create estimate"}</a>
                                   <a href={existingEstimate?.stage==='approved'?`/maintenance/workspace?estimate=${existingEstimate.id}&schedule=1`:`/maintenance/workspace?work_order=${wo.id}&schedule=1`} className="min-h-9 rounded-lg border border-sand-200 px-2 py-1.5 text-xs text-green-800">Schedule</a>
-                                  <button type="button" onClick={() => handleCreateInvoiceFromWo(wo)} className="min-h-9 rounded-lg px-2 py-1 text-xs text-charcoal-500 hover:bg-sand-100" title="Invoice a simple, already-authorized repair">Quick invoice</button>
+                                  </>}
                                 </div>
                               </td>
                               <td className="px-4 py-2.5 text-charcoal-600 font-mono text-[11px] whitespace-nowrap">
@@ -1248,7 +1251,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
         />
       )}
 
-      {view === "form" && fromWorkOrder && !editInvoice && <div className="mb-5 rounded-xl border border-sand-200 bg-white p-4 text-sm text-charcoal-600"><strong>Quick invoice — already-authorized work.</strong> Review completed work and charges below. For a turn, multiple tasks, or uncertain scope, <a className="text-green-800 underline" href={`/turn-estimator/estimates/new?from_wo=${selectedRow?.work_order_id}`}>start with an estimate</a>.</div>}
+      {view === "form" && fromWorkOrder && !editInvoice && <div className="mb-5 rounded-xl border border-sand-200 bg-white p-4 text-sm text-charcoal-600"><strong>Invoice from work order {selectedRow?.wo_number}.</strong> The work-order details and labor description are filled in below. Confirm the work performed, enter the actual labor hours, and review materials and charges before saving.</div>}
       {view === "form" && (editInvoice?.maintenance_job_id ? <WorkspaceInvoice invoice={editInvoice} onBack={handleBackFromForm} onSaved={handleInvoiceSaved}/> :
         <InvoiceForm
           initialLineType={newInvoiceType ?? "labor"}
