@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import DailyBillingReview from "../daily-billing/review";
 import { dailyBillingAccess } from "@/lib/daily-billing/access";
-import { canCreateInvoices, canIssueInvoices } from "@/lib/invoice-permissions";
+import { canCreateInvoices, canIssueInvoices, canPrepareFieldInvoices } from "@/lib/invoice-permissions";
 import { useSession } from "next-auth/react";
 import { WorkOrderRow, HdmsInvoice, displayAssignee, TECHNICIANS, weeklyBillableHours, WEEKLY_HOURS_TARGET } from "@/lib/invoices";
 import { Button } from "@/components/ui/button";
@@ -190,7 +190,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const canReviewBilling = dailyBillingAccess(session?.user?.role || "read_only", session?.user?.email || "").office;
   const [newInvoiceType, setNewInvoiceType] = useState<"labor" | "appliance" | null>(null);
   const canCreate = canCreateInvoices(session?.user?.role, session?.user?.email);
-  const fieldInvoiceFlow = session?.user?.role === "field";
+  const fieldInvoiceFlow = canPrepareFieldInvoices(session?.user?.role, session?.user?.email);
   const [view, setView] = useState<View>("main");
   const [activeTab, setActiveTab] = useState<Tab>("work-orders");
   function changeTab(tab: Tab) {

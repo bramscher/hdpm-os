@@ -10,8 +10,13 @@ export function isInvoiceCoordinator(email?: string | null): boolean {
   return ['cheryl@highdesertpm.com', 'penny@highdesertpm.com'].includes(email?.trim().toLowerCase() ?? '');
 }
 
+// Alberto prepares his own work-order drafts under his existing staff role.
+export function canPrepareFieldInvoices(role?: string, email?: string | null): boolean {
+  return role === 'field' || (role === 'staff' && email?.trim().toLowerCase() === 'alberto@highdesertpm.com');
+}
+
 export function canCreateInvoices(role?: string, email?: string | null): boolean {
-  return canIssueInvoices(role) || role === 'field' || (role === 'staff' && isInvoiceCoordinator(email));
+  return canIssueInvoices(role) || canPrepareFieldInvoices(role, email) || (role === 'staff' && isInvoiceCoordinator(email));
 }
 
 export function canGenerateInvoice(role: string | undefined, email?: string | null, invoice?: Pick<HdmsInvoice, 'status' | 'created_by' | 'doc_type' | 'maintenance_job_id'> | null): boolean {
@@ -21,7 +26,7 @@ export function canGenerateInvoice(role: string | undefined, email?: string | nu
 
 export function canEditInvoiceDraft(role: string | undefined, email: string | null | undefined, invoice: Pick<HdmsInvoice, 'status' | 'created_by' | 'doc_type' | 'maintenance_job_id'>): boolean {
   if (canIssueInvoices(role)) return invoice.status !== 'void';
-  return (role === 'field' || (role === 'staff' && isInvoiceCoordinator(email))) && !!email && invoice.status === 'draft' && invoice.doc_type === 'invoice'
+  return (canPrepareFieldInvoices(role, email) || (role === 'staff' && isInvoiceCoordinator(email))) && !!email && invoice.status === 'draft' && invoice.doc_type === 'invoice'
     && !invoice.maintenance_job_id && invoice.created_by?.toLowerCase() === email.toLowerCase();
 }
 
