@@ -1,3 +1,4 @@
+import { recordedLaborHours, invoiceServiceDate } from './invoice-labor';
 import { getSupabaseAdmin } from './supabase';
 import { weekStartPacific, weeksBefore } from './eos/scorecard';
 
@@ -118,7 +119,7 @@ export function weeklyBillableHours(
 
   for (const inv of invoices) {
     if (inv.status === 'void' || inv.doc_type === 'credit') continue; // credits carry no labor hours
-    const day = (inv.completed_date ?? inv.created_at ?? '').slice(0, 10);
+    const day = invoiceServiceDate(inv);
     if (!day) continue;
     const bucket =
       day >= weekStart && day < nextWeekStart
@@ -128,10 +129,11 @@ export function weeklyBillableHours(
           : null;
     if (!bucket) continue;
     for (const li of inv.line_items ?? []) {
-      if ((li.type || 'labor') !== 'labor' || li.workspace_task_id || (li.pricing_method && li.pricing_method!=='hourly') || !li.qty || li.qty <= 0) continue;
-      bucket.total += li.qty;
+      const hours = recordedLaborHours(li);
+      if (!hours) continue;
+      bucket.total += hours;
       const tech = normalizeTechnician(li.technician) || li.technician?.trim();
-      if (tech) bucket.byTech[tech] = (bucket.byTech[tech] ?? 0) + li.qty;
+      if (tech) bucket.byTech[tech] = (bucket.byTech[tech] ?? 0) + hours;
     }
   }
 

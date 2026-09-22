@@ -1,0 +1,32 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const db=await PGlite.create();let count=0;
+const ok=(v,m)=>{assert.ok(v,m);count++};const bad=async(fn,re)=>{await assert.rejects(fn,re);count++};
+try {
+ const fixture=await readFile(new URL('./test-maintenance-workspace-db.mjs',import.meta.url),'utf8');
+ await db.exec(fixture.match(/await db.exec\(`([\s\S]*?)`\);/)[1]);
+ await db.exec(await readFile(new URL('../supabase/migrations/20260919_maintenance_workspace.sql',import.meta.url),'utf8'));
+ const sql=await readFile(new URL('../supabase/migrations/20260922_daily_billing_review.sql',import.meta.url),'utf8');await db.exec(sql);await db.exec(sql);
+ await db.exec("INSERT INTO staff VALUES('Cheryl','Cheryl','cheryl@highdesertpm.com',true,'staff'),('Penny','Penny','penny@highdesertpm.com',true,'staff')");
+ const wo=(await db.query("INSERT INTO work_orders(property_name,description) VALUES('Test','Repair') RETURNING id")).rows[0].id;
+ const call=async(r,actor='tech@example.test')=>(await db.query('SELECT maintenance_daily_billing_apply($1,$2::jsonb) result',[actor,JSON.stringify(r)])).rows[0].result;
+ const base={op:'record',id:crypto.randomUUID(),technician:'Alberto',work_order_id:wo,work_date:'2026-01-05',minutes:90,activity_kind:'job',progress:'done',note:'Completed fixture work',status:'submitted'};
+ const record=await call(base);ok(record.minutes===90&&record.task_id===null,'Canonical work record stores legacy work order activity');
+ await bad(()=>call({...base,id:crypto.randomUUID(),technician:'Brody'}),/FORBIDDEN/);
+ await bad(()=>call({...base,id:crypto.randomUUID(),activity_kind:'job',work_order_id:null}),/maintenance_record_job_link/);
+ await bad(()=>call({...base,id:crypto.randomUUID(),minutes:0}),/minutes/);
+ await bad(()=>call({...base,id:crypto.randomUUID(),work_date:'2099-01-01'}),/date/);
+ await bad(()=>call({...base,version:1}),/returned before editing/);
+ await bad(()=>call({op:'review',id:base.id,version:1,status:'reviewed',billability:'billable',note:'Approved'}),/FORBIDDEN/);
+ const reviewed=await call({op:'review',id:base.id,version:1,status:'reviewed',billability:'billable',note:'Approved'},'cheryl@highdesertpm.com');ok(reviewed.status==='reviewed','Coordinator can review work');
+ await bad(()=>call({op:'review',id:base.id,version:1,status:'held',billability:'review',note:'Wait',review_due:'2026-01-10'},'office@example.test'),/CONFLICT/);
+ await bad(()=>call({op:'review',id:base.id,version:2,status:'held',billability:'review',note:'Wait'},'office@example.test'),/review date/);
+ const overhead=await call({...base,id:crypto.randomUUID(),activity_kind:'travel',work_order_id:null,minutes:30});ok(overhead.activity_kind==='travel','Overhead uses same canonical log');
+ const issue={op:'disposition',issue_key:`wo:${wo}:no_invoice`,disposition:'deferred',owner:'Penny',review_on:'2026-01-10',note:'Check direct AppFolio bill'};
+ await bad(()=>call(issue),/FORBIDDEN/);ok((await call(issue,'penny@highdesertpm.com')).owner==='Penny','Review owner and due date stored');
+ await bad(()=>call({...issue,note:''},'office@example.test'),/check constraint/);
+ ok((await db.query('SELECT count(*)::int n FROM maintenance_workspace_audit')).rows[0].n>=4,'Writes audited');
+ await db.exec('SET ROLE anon');await bad(()=>db.query('SELECT * FROM maintenance_billing_review'),/permission denied/);await bad(()=>call(base),/permission denied/);await db.exec('RESET ROLE');
+ console.log(`${count} daily billing database checks passed`);
+} finally {await db.close()}

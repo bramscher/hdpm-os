@@ -1,5 +1,6 @@
 "use client";
 
+import { recordedLaborHours, invoiceServiceDate } from "@/lib/invoice-labor";
 import { ReportPeriodPresets } from "./report-period-presets";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -15,8 +16,6 @@ import { HdmsInvoice, LineItem, lineMarkup, TECHNICIANS, normalizeTechnician } f
 // renders this for admin users (ADMIN_EMAILS), same gate as the KPI dashboard.
 // ============================================
 
-/** Fallback hourly rate when a labor line has no qty and no unit price. */
-const DEFAULT_LABOR_RATE = 95;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -30,18 +29,7 @@ function formatHours(h: number): string {
 }
 
 /** The day an invoice is counted against: completed date, falling back to created. */
-function invoiceDay(inv: HdmsInvoice): string | null {
-  const raw = inv.completed_date || inv.created_at;
-  if (!raw) return null;
-  // completed_date is a Postgres DATE ("YYYY-MM-DD") — use it verbatim;
-  // new Date() would parse it as UTC midnight and shift it a day earlier locally.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return null;
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
+function invoiceDay(inv: HdmsInvoice): string | null { return invoiceServiceDate(inv); }
 
 function dayLabel(key: string): string {
   const [y, m, d] = key.split("-").map(Number);
@@ -74,13 +62,10 @@ function allDaysDesc(from: string, to: string): string[] {
   return days;
 }
 
-/** Billable hours on a labor line: qty, else amount ÷ rate (estimated). */
-function laborHours(li: LineItem): { hours: number; estimated: boolean } {
-  if(li.workspace_task_id || (li.pricing_method && li.pricing_method!=='hourly')) return {hours:0,estimated:false};
-  if (li.qty && li.qty > 0) return { hours: li.qty, estimated: false };
-  const amount = li.amount || 0;
-  if (li.unit_price && li.unit_price > 0) return { hours: amount / li.unit_price, estimated: true };
-  return { hours: amount / DEFAULT_LABOR_RATE, estimated: true };
+/** Same recorded-hour basis as the scorecard; unknown quantities stay unknown. */
+function laborHours(li: LineItem): { hours: number; missing: boolean } {
+  const hours = recordedLaborHours(li);
+  return {hours, missing: !li.workspace_task_id && (!li.pricing_method || li.pricing_method === 'hourly') && !hours};
 }
 
 interface DayRow {
@@ -88,7 +73,7 @@ interface DayRow {
   invoices: number;
   laborHours: number;
   laborBilled: number;
-  estimatedHours: number; // portion of laborHours derived from $ instead of qty
+  missingHourLines: number; // count of lines missing a recorded hour quantity
   materialsMarkup: number;
   applianceMarkup: number;
 }
@@ -137,7 +122,7 @@ export function DailyReport() {
       invoices: 0,
       laborHours: 0,
       laborBilled: 0,
-      estimatedHours: 0,
+      missingHourLines: 0,
       materialsMarkup: 0,
       applianceMarkup: 0,
     });
@@ -168,10 +153,10 @@ export function DailyReport() {
           const type = li.type || "labor";
           if (type === "labor") {
             if (tech !== "all" && lineBucket(li) !== tech) continue;
-            const { hours, estimated } = laborHours(li);
-            row.laborHours += hours;
+            const { hours, missing } = laborHours(li);
+            if (inv.doc_type !== "credit") row.laborHours += hours;
             row.laborBilled += li.amount || 0;
-            if (estimated) row.estimatedHours += hours;
+            if (missing && inv.doc_type !== "credit") row.missingHourLines++;
           } else if (type === "materials") {
             row.materialsMarkup += lineMarkup(li);
           } else if (type === "appliance") {
@@ -179,11 +164,10 @@ export function DailyReport() {
           }
         }
       } else {
-        // Legacy invoice — labor column only, hours estimated at the default rate.
+        // Legacy dollar-only labor cannot establish measured hours.
         const amount = inv.labor_amount || 0;
         row.laborBilled += amount;
-        row.laborHours += amount / DEFAULT_LABOR_RATE;
-        row.estimatedHours += amount / DEFAULT_LABOR_RATE;
+        if (amount && inv.doc_type !== "credit") row.missingHourLines++;
       }
     }
 
@@ -198,11 +182,11 @@ export function DailyReport() {
           invoices: t.invoices + r.invoices,
           laborHours: t.laborHours + r.laborHours,
           laborBilled: t.laborBilled + r.laborBilled,
-          estimatedHours: t.estimatedHours + r.estimatedHours,
+          missingHourLines: t.missingHourLines + r.missingHourLines,
           materialsMarkup: t.materialsMarkup + r.materialsMarkup,
           applianceMarkup: t.applianceMarkup + r.applianceMarkup,
         }),
-        { invoices: 0, laborHours: 0, laborBilled: 0, estimatedHours: 0, materialsMarkup: 0, applianceMarkup: 0 }
+        { invoices: 0, laborHours: 0, laborBilled: 0, missingHourLines: 0, materialsMarkup: 0, applianceMarkup: 0 }
       ),
     [rows]
   );
@@ -411,7 +395,7 @@ export function DailyReport() {
                       <td className="px-4 py-2.5 text-right text-xs text-charcoal-500">{r.invoices || "—"}</td>
                       <td className={`px-4 py-2.5 text-right text-xs ${!weekend && zeroHours ? "font-semibold text-amber-700" : "text-blue-600"}`}>
                         {formatHours(r.laborHours)}
-                        {r.estimatedHours > 0.05 && <span className="text-charcoal-300 ml-0.5">≈</span>}
+                        {r.missingHourLines > 0.05 && <span className="text-charcoal-300 ml-0.5">*</span>}
                       </td>
                       <td className="px-4 py-2.5 text-right text-xs text-blue-600">{formatCurrency(r.laborBilled)}</td>
                       <td className="px-4 py-2.5 text-right text-xs text-orange-600">{formatCurrency(r.materialsMarkup)}</td>
@@ -441,10 +425,9 @@ export function DailyReport() {
         </div>
       )}
 
-      {totals.estimatedHours > 0.05 && (
+      {totals.missingHourLines > 0.05 && (
         <p className="text-[10px] text-charcoal-400">
-          ≈ {formatHours(totals.estimatedHours)} of {formatHours(totals.laborHours)} hours are estimated from labor
-          dollars (lines without an hours quantity, at the line rate or ${DEFAULT_LABOR_RATE}/hr default).
+          * {totals.missingHourLines} labor lines have no recorded hour quantity. Their dollars are included, but hours are unknown and excluded.
         </p>
       )}
       <p className="text-[10px] text-charcoal-400">

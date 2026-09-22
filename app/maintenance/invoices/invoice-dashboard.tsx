@@ -21,6 +21,8 @@ import {
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { SkeletonRows } from "@/components/ui/skeleton";
+import DailyBillingReview from "../daily-billing/review";
+import { dailyBillingAccess } from "@/lib/daily-billing/access";
 import { canCreateInvoices, canIssueInvoices } from "@/lib/invoice-permissions";
 import { useSession } from "next-auth/react";
 import { WorkOrderRow, HdmsInvoice, displayAssignee, TECHNICIANS, weeklyBillableHours, WEEKLY_HOURS_TARGET } from "@/lib/invoices";
@@ -185,6 +187,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   // Profit/markup reports (selection report, daily labor & markup) are gated
   // to the ADMIN_EMAILS allowlist — same gate as the KPI dashboard.
   const isAdmin = session?.user?.isAdmin === true;
+  const canReviewBilling = dailyBillingAccess(session?.user?.role || "read_only", session?.user?.email || "").office;
   const [newInvoiceType, setNewInvoiceType] = useState<"labor" | "appliance" | null>(null);
   const canCreate = canCreateInvoices(session?.user?.role, session?.user?.email);
   const [view, setView] = useState<View>("main");
@@ -206,7 +209,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
     }).catch(() => { /* Estimates tab provides the retry UI if unavailable. */ });
     return () => { cancelled = true; };
   }, [activeTab]);
-  const [reportView, setReportView] = useState<"billable" | "daily" | "inhouse" | "hdms-recon">("billable");
+  const [reportView, setReportView] = useState<"billing-review" | "billable" | "daily" | "inhouse" | "hdms-recon">("billing-review");
   const [parsedRows, setParsedRows] = useState<WorkOrderRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<WorkOrderRow | null>(null);
   const [editInvoice, setEditInvoice] = useState<HdmsInvoice | null>(null);
@@ -726,8 +729,8 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                 </span>
               )}
             </button>
-            {/* Reporting is admin-only (ADMIN_EMAILS) — hidden for all other staff. */}
-            {isAdmin && (
+            {/* Billing review is available to office staff; payroll/profit reports stay admin-only. */}
+            {canReviewBilling && (
               <button
                 type="button"
                 onClick={() => changeTab("report")}
@@ -1180,17 +1183,18 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
           {/* ============================== */}
           {/* Report Tab                     */}
           {/* ============================== */}
-          {activeTab === "report" && isAdmin && (
+          {activeTab === "report" && canReviewBilling && (
             <div className="space-y-4">
               <div className="inline-flex rounded-lg border border-sand-200 overflow-hidden">
                   {(
                     [
+                      { id: "billing-review", label: "Daily Billing Review" },
                       { id: "billable", label: "Billable" },
                       { id: "daily", label: "Daily Labor & Markup" },
                       { id: "inhouse", label: "In-house vs Vendor" },
                       { id: "hdms-recon", label: "Billing Recon" },
                     ] as const
-                  ).map((v) => (
+                  ).filter(v => isAdmin || v.id === "billing-review").map((v) => (
                     <button
                       key={v.id}
                       type="button"
@@ -1205,7 +1209,9 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                     </button>
                   ))}
               </div>
-              {reportView === "daily" ? (
+              {!isAdmin || reportView === "billing-review" ? (
+                <DailyBillingReview embedded />
+              ) : reportView === "daily" ? (
                 <DailyReport />
               ) : reportView === "inhouse" ? (
                 <InhouseReport />
