@@ -1,5 +1,7 @@
 # Staff permissions
 
+The editable roster shows active staff only and suppresses Bianca, Jayme/Jaymen, Jen, and Bryce. Historical staff records and permission audit entries are retained.
+
 Admin → Staff permissions (`/admin/staff-permissions`) manages five capabilities: invoice drafts, invoice PDF generation, estimate drafts, estimate templates, and estimate issuing. Each setting supports Role default, On, and Off. Current role is shown; this page does not edit roles, sign-in eligibility, scheduling, invoice status/credit permissions, or estimate approval authority.
 
 Only a currently active database administrator can change access. Administrator capabilities cannot be disabled here. Inactive staff have no effective capabilities. Changes use an optimistic version and record actor, before/after overrides, reason, and timestamp. A stale editor must refresh before retrying. Restore a previous value or Role default to reverse a change.
