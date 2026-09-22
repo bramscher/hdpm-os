@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { canAuthorEstimates, canIssueEstimates } from '@/lib/turn-estimator/access';
 const m=vi.hoisted(()=>({role:'staff',email:'alberto@highdesertpm.com'}));
+vi.mock('@/lib/staff-capabilities-server',()=>({loadStaffCapabilities:async()=>({'estimate.draft':canAuthorEstimates(m.role,m.email),'estimate.template':canAuthorEstimates(m.role,m.email),'estimate.issue':canIssueEstimates(m.role),'invoice.draft':false,'invoice.generate':false})}));
 vi.mock('@/lib/require-role',()=>({requireCompanySession:async()=>({ok:true,...m})}));
 import { requireEstimateAuthor } from '@/lib/require-estimate-author';
 describe('estimate author access',()=>{

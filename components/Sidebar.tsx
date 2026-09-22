@@ -69,6 +69,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Admin",
     adminOnly: true,
     items: [
+      { label: "Staff permissions", href: "/admin/staff-permissions", icon: FileText, matchPrefix: "/admin/staff-permissions" },
       { label: "Company KPIs", href: "/dashboard", icon: Activity, matchPrefix: "/dashboard" },
       { label: "Paper Workflows", href: "/admin/habu-paper", icon: FileText, matchPrefix: "/admin/habu-paper", habuOwnerOnly: true },
       { label: "HABU Demo", href: "/admin/habu-demo", icon: Navigation, matchPrefix: "/admin/habu-demo", habuOwnerOnly: true },

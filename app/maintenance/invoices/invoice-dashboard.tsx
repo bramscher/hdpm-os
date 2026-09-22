@@ -190,7 +190,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   const isAdmin = session?.user?.isAdmin === true;
   const canReviewBilling = dailyBillingAccess(session?.user?.role || "read_only", session?.user?.email || "").office;
   const [newInvoiceType, setNewInvoiceType] = useState<"labor" | "appliance" | null>(null);
-  const canCreate = canCreateInvoices(session?.user?.role, session?.user?.email);
+  const canCreate = canCreateInvoices(session?.user?.role, session?.user?.email, session?.user?.capabilities);
   const fieldInvoiceFlow = canPrepareFieldInvoices(session?.user?.role, session?.user?.email);
   const [view, setView] = useState<View>("main");
   const [activeTab, setActiveTab] = useState<Tab>("work-orders");
@@ -655,7 +655,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
   // ============================================
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="w-full min-w-0">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-charcoal-500">Scope → approval → completed work → billing</p><div className="flex flex-wrap gap-4"><a href="/turn-estimator/price-book" className="font-medium text-green-800 underline">Price book</a><a href="/maintenance/workspace?view=schedule" className="font-medium text-green-800 underline">Availability & planned revenue →</a></div></div>
       {/* Page Header */}
       <div className="mb-8 flex items-center justify-between">
@@ -1050,7 +1050,7 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                               <td className="sticky left-0 bg-white group-hover:bg-charcoal-50 border-r border-charcoal-100/80 px-2 py-2.5 text-center transition-colors">
                                 <div className="flex flex-col items-stretch gap-1.5">
                                   {canCreate && <button type="button" onClick={() => handleCreateInvoiceFromWo(wo)} className="inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-terra-600 px-3 py-2 text-xs font-semibold text-white hover:bg-terra-700" title="Create an invoice prefilled from this work order"><Plus className="h-3.5 w-3.5"/>Create invoice</button>}
-                                  {canAuthorEstimates(session?.user?.role, session?.user?.email) && <>
+                                  {canAuthorEstimates(session?.user?.role, session?.user?.email, session?.user?.capabilities) && <>
                                   <a href={existingEstimate?.href || `/turn-estimator/estimates/new?from_wo=${wo.id}`} className="inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-green-700 px-3 py-2 text-xs font-medium text-white hover:bg-green-800"><FileText className="h-3.5 w-3.5"/>{existingEstimate ? (existingEstimate.stage === "draft" ? "Continue estimate" : "View estimate") : "Create estimate"}</a>
                                   {!fieldInvoiceFlow && <a href={existingEstimate?.stage==='approved'?`/maintenance/workspace?estimate=${existingEstimate.id}&schedule=1`:`/maintenance/workspace?work_order=${wo.id}&schedule=1`} className="min-h-9 rounded-lg border border-sand-200 px-2 py-1.5 text-xs text-green-800">Schedule</a>}
                                   </>}

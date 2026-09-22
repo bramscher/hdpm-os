@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   role: 'field', email: 'alberto@highdesertpm.com',
   create: vi.fn(), credit: vi.fn(), get: vi.fn(), update: vi.fn(), remove: vi.fn(),
 }));
+vi.mock('@/lib/staff-capabilities-server', () => ({loadStaffCapabilities: async () => ({'invoice.draft':canCreateInvoices(mocks.role,mocks.email),'invoice.generate':canGenerateInvoice(mocks.role,mocks.email),'estimate.draft':false,'estimate.template':false,'estimate.issue':false})}));
 vi.mock('@/lib/require-role', () => ({
   requireCompanySession: async () => mocks.email.endsWith('@highdesertpm.com') ? {ok:true,role:mocks.role,email:mocks.email} : {ok:false,response:new Response('Unauthorized',{status:401})},
   requireRole: async (...roles: string[]) => mocks.role === 'admin' || roles.includes(mocks.role)

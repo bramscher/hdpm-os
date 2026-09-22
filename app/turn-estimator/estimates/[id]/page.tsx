@@ -7,5 +7,5 @@ export default async function EstimatePage({ params }: { params: Promise<{ id: s
   const guard = await requireEstimateAuthor(true);
   if (!guard.ok) redirect('/maintenance/invoices');
   const { id } = await params;
-  return <main className="mx-auto max-w-4xl px-4 py-8"><EstimateReview estimateId={id}/></main>;
+  return <main className="w-full min-w-0 px-4 py-6 lg:px-8"><EstimateReview estimateId={id}/></main>;
 }

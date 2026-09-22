@@ -51,7 +51,7 @@ export async function GET() {
       });
     }
     rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return NextResponse.json({ estimates: rows, canCreate: guard.role !== 'finance', canDelete: ['admin','maintenance','pm','manager'].includes(guard.role) });
+    return NextResponse.json({ estimates: rows, canCreate: guard.capabilities['estimate.draft'], canDelete: ['admin','maintenance','pm','manager'].includes(guard.role) });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message || 'Could not load estimates' }, { status: 500 });
   }

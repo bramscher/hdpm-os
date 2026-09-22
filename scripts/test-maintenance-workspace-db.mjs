@@ -103,5 +103,24 @@ for (const name of ['alberto','brody','cheryl']) {
  await rejects(()=>db.query('SELECT maintenance_save_estimate_draft($1,$2::jsonb)',[actor,JSON.stringify({...payload,version:saved.version})]),/FORBIDDEN/);
 }
 await rejects(()=>db.query('SELECT maintenance_template_publish($1,$2::jsonb)',['tech@example.test',JSON.stringify({name:'Blocked',entries:[]})]),/FORBIDDEN/);
+await db.exec(await readFile(new URL('../supabase/migrations/20260922_staff_capabilities.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20260922_staff_capabilities.sql',import.meta.url),'utf8'));
+const caps=async identity=>(await db.query('SELECT staff_effective_capabilities($1) AS result',[identity])).rows[0].result;
+const change=async(request,actor='office@example.test')=>(await db.query('SELECT staff_capability_update($1,$2::jsonb) AS result',[actor,JSON.stringify(request)])).rows[0].result;
+ok(Object.values(await caps('alberto@highdesertpm.com')).every(v=>v===false),'inactive named staff denied');
+await db.query("UPDATE staff SET active=true WHERE person='alberto-author'");
+const policy=await change({person:'alberto-author',version:0,overrides:{'invoice.draft':true,'estimate.draft':true,'estimate.template':true},reason:'Enable author'});
+ok((await caps('alberto@highdesertpm.com'))['estimate.template'],'admin can grant capability');
+await rejects(()=>change({person:'alberto-author',version:0,overrides:{},reason:'Stale'}),/CONFLICT/);
+await rejects(()=>change({person:'alberto-author',version:1,overrides:{},reason:'Unauthorized'},'tech@example.test'),/FORBIDDEN/);
+await rejects(()=>change({person:'Craig',version:0,overrides:{},reason:'Lock out admin'}),/Administrator/);
+await rejects(()=>change({person:'alberto-author',version:1,overrides:{unknown:true},reason:'Unknown'}),/Invalid capabilities/);
+await rejects(()=>change({person:'alberto-author',version:1,overrides:{'invoice.draft':'yes'},reason:'Bad type'}),/Invalid capabilities/);
+await change({person:'alberto-author',version:policy.version,overrides:{'invoice.draft':false,'invoice.generate':true,'estimate.draft':false,'estimate.template':true,'estimate.issue':true},reason:'Revoke drafting'});
+ok(Object.values(await caps('alberto@highdesertpm.com')).every(v=>v===false),'revocation disables dependent capabilities');
+await rejects(()=>db.query('SELECT maintenance_template_publish($1,$2::jsonb)',['alberto@highdesertpm.com',JSON.stringify({name:'Blocked',entries:[]})]),/FORBIDDEN/);
+await rejects(()=>db.query('SELECT maintenance_save_estimate_draft($1,$2::jsonb)',['alberto@highdesertpm.com',JSON.stringify({id:crypto.randomUUID(),payload:{rows:[]}})]),/FORBIDDEN/);
+ok((await db.query('SELECT * FROM staff_capability_audit')).rows.length===2,'only successful changes audited');
+await db.exec('SET ROLE anon');await rejects(()=>caps('office@example.test'),/permission denied/);await rejects(()=>db.query('SELECT * FROM staff_capability_policy'),/permission denied/);await db.exec('RESET ROLE');
 console.log(`${checks} maintenance database checks passed`);
 }catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}

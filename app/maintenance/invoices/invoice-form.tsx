@@ -107,8 +107,8 @@ const TYPE_STYLES: Record<LineItemType, { bg: string; text: string; label: strin
 export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice, onBack, onSaved }: InvoiceFormProps) {
   const { data: session } = useSession();
   const role = session?.user?.role;
-  const canIssue = canGenerateInvoice(role, session?.user?.email, editInvoice);
-  const canEdit = editInvoice ? canEditInvoiceDraft(role, session?.user?.email, editInvoice) : canCreateInvoices(role, session?.user?.email);
+  const canIssue = canGenerateInvoice(role, session?.user?.email, editInvoice, session?.user?.capabilities);
+  const canEdit = editInvoice ? canEditInvoiceDraft(role, session?.user?.email, editInvoice, session?.user?.capabilities) : canCreateInvoices(role, session?.user?.email, session?.user?.capabilities);
   // Header fields
   const [propertyName, setPropertyName] = useState("");
   const [propertyAddress, setPropertyAddress] = useState("");
