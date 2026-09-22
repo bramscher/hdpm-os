@@ -23,14 +23,20 @@ function Down() {
 
 const lanes = [
   {
+    title: 'Estimate preparation & time check', names: 'Brody drafts · Alberto checks',
+    task: 'Use an estimate to define the job more clearly or put a price in front of the owner. Brody describes the work and proposed charges. Alberto checks the labor time, quantities, materials, and whether the numbers fit the real job.',
+    handoff: 'Resolve differences and record the confirmation in the work-order notes before the authorized reviewer issues the estimate for owner approval. Approved work joins the scheduling queue; the calendar handoff owner is still to be agreed.',
+    href: paths.estimates, link: 'Open estimates',
+  },
+  {
     title: 'Technicians', names: 'Alberto, Brody & assigned field staff',
     task: 'Start with the assigned work order and approved scope. Record actual minutes, progress, materials, and what remains after each visit. Flag blocked work early so the next ready job can be scheduled.',
     handoff: 'Submit work for office review. Prepare an invoice draft when assigned and your access allows it; the reviewer checks the charge before issuance.',
     href: paths.field, link: 'Open my day',
   },
   {
-    title: 'Scheduling & field coordination', names: 'Brody / designated scheduler',
-    task: 'Keep the next ready jobs visible. Confirm authorization, access, parts, technician, and visit length before booking. Compare available capacity with the local schedule and existing appointments.',
+    title: 'Scheduling & field coordination', names: 'Designated scheduler · owner to be agreed',
+    task: 'Pick up approved work from the scheduling queue once Craig has agreed who owns this handoff. Keep the next ready jobs visible. Confirm authorization, access, parts, technician, and visit length before booking. Compare available capacity with the local schedule and existing appointments.',
     handoff: 'Each booked visit needs a technician and a clear next task. Reassign gaps or blocked visits; keep travel and parts time realistic.',
     href: paths.schedule, link: 'Review availability',
   },
@@ -75,13 +81,13 @@ export default async function WorkBillingGuide() {
         <figure className="wb-guide-flow" aria-labelledby="flow-title">
           <div className="wb-guide-node wb-guide-start"><small>START · OFFICE / COORDINATOR</small><h3>Find the work order</h3><p>Confirm property, unit, request, responsible payer, and who owns the next step.</p><Link href={paths.orders}>Open Work Orders <ArrowRight size={15} aria-hidden="true" /></Link></div>
           <Down />
-          <div className="wb-guide-decision">Is the scope and charge already authorized?</div>
+          <div className="wb-guide-decision">Would clearer scope or owner price approval help?</div>
           <div className="wb-guide-branches">
-            <div className="wb-guide-node"><small>NEEDS SCOPE OR APPROVAL</small><h3>Prepare an estimate</h3><p>Use confirmed prices and a clear scope. Issue for review and record actual authorization before starting chargeable work.</p><p className="wb-guide-note">Waiting on a vendor or owner? Assign a follow-up and review every outgoing message.</p><Link href={paths.estimates}>Open Estimates <ArrowRight size={15} aria-hidden="true" /></Link></div>
-            <div className="wb-guide-node"><small>ALREADY AUTHORIZED REPAIR</small><h3>Continue from the work order</h3><p>Confirm the approved work and charge basis. A separate estimate is not needed just to prepare an invoice for authorized work.</p><p className="wb-guide-note">Check for an existing invoice or draft first. If the work is already complete, continue to recording and review. Keep additional scope pending until authorized.</p><Link href={paths.orders}>Find the work order <ArrowRight size={15} aria-hidden="true" /></Link></div>
+            <div className="wb-guide-node"><small>YES · USE AN ESTIMATE</small><h3>Prepare an estimate</h3><p>Create an estimate anytime you want to make the job more specific or give the owner a number to approve. Brody drafts the scope, labor allowance, materials, and price; Alberto checks the expected time, quantities, and numbers before it goes for owner approval.</p><p className="wb-guide-note">Record Alberto’s confirmation and any corrections with the work-order notes. The authorized office reviewer issues the estimate and records actual owner authorization. This is a team handoff; there is no separate Alberto sign-off button yet.</p><Link href={paths.estimates}>Open Estimates <ArrowRight size={15} aria-hidden="true" /></Link></div>
+            <div className="wb-guide-node"><small>NO · SCOPE AND CHARGE ALREADY CLEAR</small><h3>Continue from the work order</h3><p>Confirm the approved work and charge basis. Already-authorized repairs can continue from the work order; an estimate is still useful whenever more detail or price confirmation would help.</p><p className="wb-guide-note">Check for an existing invoice or draft first. If the work is already complete, continue to recording and review. Keep additional scope pending until authorized.</p><Link href={paths.orders}>Find the work order <ArrowRight size={15} aria-hidden="true" /></Link></div>
           </div>
           <Down />
-          <div className="wb-guide-node"><small>SCHEDULER → TECHNICIAN</small><h3>Book the next ready visit</h3><p>For approved estimates, choose “Set up job &amp; schedule.” Assign the technician and time; confirm access, parts, travel, and existing appointments. Check future gaps before ending the day.</p><Link href={paths.schedule}>Availability &amp; planned revenue <ArrowRight size={15} aria-hidden="true" /></Link></div>
+          <div className="wb-guide-node"><small>SCHEDULER → TECHNICIAN</small><h3>Approved work waits in the scheduling queue</h3><p>After approval, use the “Approved estimates ready to schedule” queue in the calendar. The person responsible for taking jobs from this queue onto the calendar is still to be agreed. That scheduler opens the estimate, chooses “Set up job &amp; schedule,” and confirms technician, access, parts, duration, and appointment time. Approval alone does not book a visit.</p><Link href={paths.schedule}>Availability &amp; planned revenue <ArrowRight size={15} aria-hidden="true" /></Link></div>
           <Down />
           <div className="wb-guide-node"><small>TECHNICIAN → OFFICE REVIEWER</small><h3>Do the work and record what happened</h3><p>Log the actual date, minutes, progress, and materials. Use the project task log for scoped tasks; use Daily closeout for other work-order activity, travel, parts runs, or shop time. Record each activity once.</p><Link href={paths.field}>Open Field / My Day <ArrowRight size={15} aria-hidden="true" /></Link></div>
           <Down />
@@ -105,6 +111,7 @@ export default async function WorkBillingGuide() {
           <article className="wb-guide-card"><Wrench aria-hidden="true" /><h3>After each visit</h3><ul><li>Record actual minutes, materials, and done / partial / blocked progress.</li><li>Describe remaining work and the next visit needed.</li><li>Flag changes before performing extra chargeable scope. Let the scheduler know when a gap opens.</li></ul></article>
           <article className="wb-guide-card"><ClipboardCheck aria-hidden="true" /><h3>Before leaving for the day</h3><ul><li>Technician submits work and accounts for travel, parts, and other activity; checks their timecard separately.</li><li>Office opens Daily Billing Review, reviews drafts and exceptions, and assigns follow-ups.</li><li>Scheduler confirms tomorrow’s ready work; Craig reviews unexplained time and recurring blockers.</li></ul></article>
         </div>
+        <p className="wb-guide-callout">For multiple jobs on one day, choose “View day route” in the technician’s calendar cell. Review every planned stop and the gaps between visits, then open driving directions. Routes follow appointment order; missing addresses need correction before a full route can open. Route previews do not change the calendar or publish Outlook events.</p>
         <p className="wb-guide-callout">Keep work records in HDPM. An Outlook “Daily billing closeout” reminder can link to <Link href={paths.review}>Daily Billing Review</Link>. A calendar appointment alone does not record work or create an invoice.</p>
       </section>
 

@@ -3,6 +3,9 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { calendarDays, dayMetrics, pacificDay, shiftDay, type Job, type Visit, type Workspace } from '@/lib/maintenance-workspace/model';
 import { dayPlan, plannedValues, remainingScope } from '@/lib/maintenance-workspace/planning';
+import { scheduledDayRoute } from '@/lib/maintenance-workspace/day-route';
+import DayRoute from './day-route';
+import ApprovedSchedulingQueue from './approved-scheduling-queue';
 
 const money = (n:number) => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
 const hours = (n:number) => (n/60).toFixed(1);
@@ -11,6 +14,7 @@ interface Props { data:Workspace; jobs:Job[]; person:string; day:string; setDay:
 export default function SchedulePanel({data,jobs,person,day,setDay,editVisit,openTime,addWorkOrder}:Props) {
   const [mode,setMode] = useState<'day'|'week'|'month'>('week');
   const [allStaff,setAllStaff] = useState(false);
+  const [route,setRoute] = useState<{person:string;date:string}|null>(null);
   const values = useMemo(()=>plannedValues(data),[data]);
   const dates = calendarDays(day,mode);
   const people = data.staff.filter(p=>person?p.person===person:allStaff||['Alberto','Brody'].includes(p.person)||data.visits.some(v=>v.technicians.includes(p.person)&&v.status!=='cancelled'));
@@ -40,14 +44,17 @@ export default function SchedulePanel({data,jobs,person,day,setDay,editVisit,ope
         const dailyRevenue=forecast.reduce((sum,v)=>sum+Math.round(v.revenue*100),0)/100;
         return <div key={d} className={d===pacificDay()?'mw-calendar-today':''}>
           <div className={`mw-capacity ${(plan.overbooked||0)>0||plan.conflict?'mw-warning':''}`}><b>{d<pacificDay()?'Past date':plan.capacity===null?'Workweek not set':`${hours(plan.available||0)}h unbooked`}</b><small>{hours(plan.booked)}h booked{plan.capacity!==null?` / ${hours(plan.capacity)}h capacity`:''}</small>{(plan.overbooked||0)>0&&<small>{hours(plan.overbooked!)}h over capacity</small>}{plan.conflict&&<small>Overlapping visits — review schedule</small>}</div>
+          {scheduledDayRoute(data.jobs,data.visits,p.person,d).length>1&&<button className="mw-calendar-route" aria-label={`View ${p.person} route for ${d}`} onClick={()=>setRoute({person:p.person,date:d})}>View day route →</button>}
           {data.visits.filter(v=>v.work_date===d&&v.technicians.includes(p.person)&&v.status!=='cancelled'&&jobs.some(j=>j.id===v.job_id)).sort((a,b)=>a.start_minute-b.start_minute).map(v=>{const planned=forecast.find(f=>f.visitId===v.id);return <button className="mw-calendar-visit" key={v.id} onClick={()=>editVisit(data.jobs.find(j=>j.id===v.job_id)!,v)}><b>{time(v.start_minute)} {data.jobs.find(j=>j.id===v.job_id)?.property_name}</b><small>{v.planned_minutes} min · {v.status}</small>{planned&&<small>{planned.priced?`${money(planned.revenue)} planned share`:'Needs approved pricing'}</small>}</button>;})}
           {forecast.length>0&&<p className="mw-forecast">{money(dailyRevenue)} planned revenue</p>}
           {actual.actual>0&&<button className="mw-calendar-actual" onClick={()=>openTime(d,p.person)}>{actual.actual.toFixed(1)}h actual · {money(actual.completed)} completed service<br/>Draft {money(actual.draft)} · Issued {money(actual.issued)}</button>}
         </div>;
       })}</div>)}
     </div>
+    {route&&<DayRoute data={data} person={route.person} date={route.date} close={()=>setRoute(null)} editVisit={editVisit}/>}
     <p className="mw-footnote">Availability uses current saved Timekeeping workweeks, less all breaks, recorded off days and leave. Booked hours include every local job, even when filtering properties. AppFolio-only appointments and travel are not included; allow for them when booking. <Link href="/timekeeping">Review workweeks</Link>.</p>
     <p className="mw-footnote">Forecasts spread each job’s remaining approved value across all upcoming planned visits by crew minutes. Shared visits split the value between technicians; they never multiply the job total. Completed or already-drafted tasks are excluded. These are planning estimates, separate from earned revenue, invoices and cash receipts.</p>
+    <ApprovedSchedulingQueue data={data}/>
     <h2>Work needing a visit</h2><div className="mw-grid">{unscheduled.map(j=>{const scope=remainingScope(data,j.id);return <button key={j.id} className="mw-card mw-job" onClick={()=>editVisit(j,undefined,day)}><h3>{j.property_name} {j.unit_name}</h3><p>{j.title}</p><b>{scope.length?`${money(scope.reduce((sum,t)=>sum+Number(t.amount),0))} approved scope`:'Needs approved pricing'}</b><p>Schedule visit →</p></button>;})}</div>
   </section>;
 }
