@@ -21,6 +21,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { SkeletonRows } from "@/components/ui/skeleton";
+import { HowThisWorksLink } from "@/components/HowThisWorksLink";
 import DailyBillingReview from "../daily-billing/review";
 import { dailyBillingAccess } from "@/lib/daily-billing/access";
 import { canCreateInvoices, canIssueInvoices } from "@/lib/invoice-permissions";
@@ -658,7 +659,10 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
       {/* Page Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-charcoal-900 tracking-tight">Work &amp; Billing</h1>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <h1 className="text-xl font-semibold text-charcoal-900 tracking-tight">Work &amp; Billing</h1>
+            <HowThisWorksLink href="/maintenance/invoices/how-it-works" section="Work & Billing" />
+          </div>
           <p className="mt-1 text-sm text-charcoal-500">Work orders, estimates, and invoices in one place.</p>
         </div>
 
