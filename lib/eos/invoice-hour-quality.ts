@@ -1,11 +1,12 @@
 import { normalizeTechnician, type HdmsInvoice } from '@/lib/invoices';
 import { weeksBefore } from './scorecard';
+import { invoiceServiceDate } from '@/lib/invoice-labor';
 type Invoice = Pick<HdmsInvoice,'status'|'line_items'|'completed_date'|'created_at'> & {doc_type?:string;labor_amount?:number};
 /** Missing attribution or quantities prevent treating a technician total as complete. */
 export function invoiceWeekQuality(invoices:Invoice[],start:string) {
  const end=weeksBefore(start,-1),incomplete=new Set<string>();let hasInvoices=false;
  for(const invoice of invoices){
-  const date=(invoice.completed_date||invoice.created_at||'').slice(0,10);
+  const date=invoiceServiceDate(invoice)||'';
   if(invoice.status==='void'||invoice.doc_type==='credit'||date<start||date>=end)continue;
   hasInvoices=true;
   const labor=(invoice.line_items||[]).filter(li=>(li.type||'labor')==='labor'&&!li.workspace_task_id&&(!li.pricing_method||li.pricing_method==='hourly'));
