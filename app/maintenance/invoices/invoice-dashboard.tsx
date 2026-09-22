@@ -1,4 +1,5 @@
 "use client";
+import { canAuthorEstimates } from '@/lib/turn-estimator/access';
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
@@ -1049,9 +1050,9 @@ export function InvoiceDashboard({ userEmail, userName }: InvoiceDashboardProps)
                               <td className="sticky left-0 bg-white group-hover:bg-charcoal-50 border-r border-charcoal-100/80 px-2 py-2.5 text-center transition-colors">
                                 <div className="flex flex-col items-stretch gap-1.5">
                                   {canCreate && <button type="button" onClick={() => handleCreateInvoiceFromWo(wo)} className="inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-terra-600 px-3 py-2 text-xs font-semibold text-white hover:bg-terra-700" title="Create an invoice prefilled from this work order"><Plus className="h-3.5 w-3.5"/>Create invoice</button>}
-                                  {!fieldInvoiceFlow && <>
+                                  {canAuthorEstimates(session?.user?.role, session?.user?.email) && <>
                                   <a href={existingEstimate?.href || `/turn-estimator/estimates/new?from_wo=${wo.id}`} className="inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-green-700 px-3 py-2 text-xs font-medium text-white hover:bg-green-800"><FileText className="h-3.5 w-3.5"/>{existingEstimate ? (existingEstimate.stage === "draft" ? "Continue estimate" : "View estimate") : "Create estimate"}</a>
-                                  <a href={existingEstimate?.stage==='approved'?`/maintenance/workspace?estimate=${existingEstimate.id}&schedule=1`:`/maintenance/workspace?work_order=${wo.id}&schedule=1`} className="min-h-9 rounded-lg border border-sand-200 px-2 py-1.5 text-xs text-green-800">Schedule</a>
+                                  {!fieldInvoiceFlow && <a href={existingEstimate?.stage==='approved'?`/maintenance/workspace?estimate=${existingEstimate.id}&schedule=1`:`/maintenance/workspace?work_order=${wo.id}&schedule=1`} className="min-h-9 rounded-lg border border-sand-200 px-2 py-1.5 text-xs text-green-800">Schedule</a>}
                                   </>}
                                 </div>
                               </td>

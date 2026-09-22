@@ -87,5 +87,21 @@ ok((await db.query('SELECT id FROM estimate WHERE id=$1',[bare.id])).rows.length
 ok((await db.query('SELECT id FROM work_orders WHERE id=$1',[wo.id])).rows.length===1,'linked work order preserved');
 ok((await db.query("SELECT id FROM maintenance_workspace_audit WHERE op='delete_estimate_draft'")).rows.length===4,'deletions audited');
 await db.exec('SET ROLE anon');await rejects(()=>db.query('SELECT * FROM maintenance_work_record'),/permission denied/);await rejects(()=>call({op:'job',work_order_id:wo.id}),/permission denied/);await db.exec('RESET ROLE');
+await db.exec(await readFile(new URL('../supabase/migrations/20260922_estimate_authors.sql',import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20260922_estimate_authors.sql',import.meta.url),'utf8'));
+for (const name of ['alberto','brody','cheryl']) {
+ const actor=name+'@highdesertpm.com';
+ await db.query('INSERT INTO staff(person,email,active,access_role) VALUES($1,$2,true,$3)',[name+'-author',actor,'staff']);
+ const template=(await db.query('SELECT maintenance_template_publish($1,$2::jsonb) AS result',[actor,JSON.stringify({name:'Test template',entries:[],version:0})])).rows[0].result;
+ ok(template.created_by===actor,'named staff can publish a template');
+ const id=crypto.randomUUID();const payload={id,payload:{rows:[]}};
+ const saved=(await db.query('SELECT maintenance_save_estimate_draft($1,$2::jsonb) AS result',[actor,JSON.stringify(payload)])).rows[0].result;
+ ok(saved.created_by===actor,'named staff can save a draft');
+ await rejects(()=>db.query('SELECT maintenance_save_estimate_draft($1,$2::jsonb)',[actor,JSON.stringify({...payload,version:99})]),/CONFLICT/);
+ await db.query('UPDATE staff SET active=false WHERE email=$1',[actor]);
+ await rejects(()=>db.query('SELECT maintenance_template_publish($1,$2::jsonb)',[actor,JSON.stringify({name:'Blocked',entries:[]})]),/FORBIDDEN/);
+ await rejects(()=>db.query('SELECT maintenance_save_estimate_draft($1,$2::jsonb)',[actor,JSON.stringify({...payload,version:saved.version})]),/FORBIDDEN/);
+}
+await rejects(()=>db.query('SELECT maintenance_template_publish($1,$2::jsonb)',['tech@example.test',JSON.stringify({name:'Blocked',entries:[]})]),/FORBIDDEN/);
 console.log(`${checks} maintenance database checks passed`);
 }catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}

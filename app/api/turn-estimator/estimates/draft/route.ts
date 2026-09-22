@@ -1,5 +1,5 @@
+import { requireEstimateAuthor } from '@/lib/require-estimate-author';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
 import { draftEstimateFromWorkOrder } from '@/lib/agents/estimate-drafter-run';
 
 // The Claude call + AppFolio detail fetch can take a while.
@@ -12,7 +12,7 @@ export const maxDuration = 120;
  * maintenance/pm/admin.
  */
 export async function POST(request: NextRequest) {
-  const guard = await requireRole('maintenance', 'pm', 'manager', 'admin');
+  const guard = await requireEstimateAuthor();
   if (!guard.ok) return guard.response;
 
   let body: { work_order_id?: string };

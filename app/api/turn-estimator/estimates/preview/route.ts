@@ -1,5 +1,5 @@
+import { requireEstimateAuthor } from '@/lib/require-estimate-author';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
 import { resolvePriceBookItem } from '@/lib/turn-estimator/price-book';
 import { priceEstimate, evaluateAuthorization } from '@/lib/turn-estimator/pricing';
 import { getEstimatorConfig } from '@/lib/turn-estimator/config';
@@ -23,7 +23,7 @@ interface LineSpec {
  * Body: { lines: LineSpec[], authorization_limit?: number|null }
  */
 export async function POST(request: NextRequest) {
-  const guard = await requireRole('maintenance', 'pm', 'admin');
+  const guard = await requireEstimateAuthor();
   if (!guard.ok) return guard.response;
   let body: { lines?: LineSpec[]; authorization_limit?: number | null };
   try {

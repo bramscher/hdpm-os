@@ -16,6 +16,7 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [canCreate, setCanCreate] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
   const [stage, setStage] = useState<EstimateStage | 'all'>('all');
   const [search, setSearch] = useState('');
   const load = useCallback(async () => {
@@ -24,7 +25,7 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
       const response = await fetch('/api/turn-estimator/estimate-queue');
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setRows(data.estimates); setCanCreate(data.canCreate);
+      setRows(data.estimates); setCanCreate(data.canCreate); setCanDelete(data.canDelete === true);
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   }, []);
@@ -68,7 +69,7 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
           <p className="mt-1 text-sm text-charcoal-500">{row.workOrder ? `WO ${row.workOrder} · ` : ''}{new Date(row.updatedAt).toLocaleDateString()}{row.stage === 'closed' ? ` · ${row.status.replaceAll('_', ' ')}` : ''}</p>
           {row.taskCount > 0 && <p className="mt-1 text-xs text-charcoal-500">{row.undraftedTasks} of {row.taskCount} tasks not yet drafted</p>}
         </div>
-        <div className="flex flex-wrap items-center gap-4"><span className="font-semibold text-charcoal-800">{row.total === null ? 'Draft pricing' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format(row.total)}</span>{row.stage==='approved'&&row.workOrderId&&<Link className={`${button} bg-green-700 text-white`} href={`/maintenance/workspace?estimate=${row.id}&schedule=1`}>Schedule</Link>}<Link className={button} href={row.href}>{row.stage === 'draft' ? 'Continue estimate' : 'Review estimate'}</Link>{canCreate && row.stage === 'draft' && row.status === 'draft' && row.draftKind && <button className={`${button} text-red-700 hover:bg-red-50 disabled:opacity-50`} disabled={deleting !== null} onClick={() => void deleteDraft(row)}><Trash2 className="h-4 w-4"/>{deleting === row.id ? 'Deleting…' : 'Delete draft'}</button>}</div>
+        <div className="flex flex-wrap items-center gap-4"><span className="font-semibold text-charcoal-800">{row.total === null ? 'Draft pricing' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'}).format(row.total)}</span>{row.stage==='approved'&&row.workOrderId&&<Link className={`${button} bg-green-700 text-white`} href={`/maintenance/workspace?estimate=${row.id}&schedule=1`}>Schedule</Link>}<Link className={button} href={row.href}>{row.stage === 'draft' ? 'Continue estimate' : 'Review estimate'}</Link>{canDelete && row.stage === 'draft' && row.status === 'draft' && row.draftKind && <button className={`${button} text-red-700 hover:bg-red-50 disabled:opacity-50`} disabled={deleting !== null} onClick={() => void deleteDraft(row)}><Trash2 className="h-4 w-4"/>{deleting === row.id ? 'Deleting…' : 'Delete draft'}</button>}</div>
       </article>)}
     </div>}
   </section>;

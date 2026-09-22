@@ -1,4 +1,5 @@
-import { requireRole } from '@/lib/require-role';
+import { canIssueEstimates } from '@/lib/turn-estimator/access';
+import { requireEstimateAuthor } from '@/lib/require-estimate-author';
 import { redirect } from 'next/navigation';
 import { listPriceBookItems } from '@/lib/turn-estimator/price-book';
 import { getWorkOrderById } from '@/lib/work-orders';
@@ -20,7 +21,7 @@ export default async function NewEstimatePage({
 }: {
   searchParams: Promise<{ from_wo?: string; turn?: string; draft?: string; resume?: string }>;
 }) {
-  const guard=await requireRole('maintenance','pm','manager');if(!guard.ok)redirect('/maintenance/field');
+  const guard=await requireEstimateAuthor();if(!guard.ok)redirect('/maintenance/field');
   const { from_wo, turn, draft, resume } = await searchParams;
   const items = await listPriceBookItems();
 
@@ -72,7 +73,7 @@ export default async function NewEstimatePage({
         Scope and price the work, get approval when needed, then schedule and bill completed work.
       </p>
       {!seed.work_order_id && !resume && <EstimateWorkOrderPicker/>}
-      <EstimateBuilder key={resume || from_wo || turn || "new"} items={items} seed={seed} autoDraft={draft === '1' && !!seed.work_order_id} />
+      <EstimateBuilder canIssue={canIssueEstimates(guard.role)} key={resume || from_wo || turn || "new"} items={items} seed={seed} autoDraft={draft === '1' && !!seed.work_order_id} />
     </div>
   );
 }
