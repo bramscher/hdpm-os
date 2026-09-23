@@ -1,0 +1,658 @@
+[
+  {
+    "name": "Quick unit turn",
+    "family_id": "2c2e264b-d907-5167-a1d6-03f2af60537d",
+    "version": 0,
+    "entries": [
+      {
+        "item_code": "",
+        "description": "Scope check \u2014 rooms / condition / photos / ready-by date; confirm labor and materials with technician",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Minor wall repairs and paint touch-ups \u2014 rooms / repair areas / color: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Kitchen and bathroom caulk touch-ups \u2014 fixtures / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Adjust doors, cabinets, closet tracks and hardware \u2014 locations / counts: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Replace bulbs and furnace filters \u2014 counts / bulb types / filter sizes: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Remove small leftover items \u2014 items / volume / disposal plan: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Repair materials and consumables \u2014 named items / quantities; enter total cost for this row: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Rekey lock cylinders to match \u2014 cylinder count / brand: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Keys and replacement lock hardware \u2014 key counts / finish / parts: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Program garage remotes and verify access \u2014 remote count / model: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Garage remotes and batteries \u2014 models / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Inspect, replace and test smoke / CO devices \u2014 locations / device counts / wiring: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Smoke detectors \u2014 model / power type / quantity / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Carbon monoxide or combination detectors \u2014 model / quantity / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "APPLIANCE_CP",
+        "description": "Supply replacement appliance \u2014 type / model / dimensions / finish / quantity: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Deliver, install and test appliance \u2014 connections / access / scope: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Appliance connection materials \u2014 cord / hoses / adapters / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Remove and haul away old appliance \u2014 quantity / disposal plan: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "",
+        "description": "Final readiness check \u2014 completed tasks / photos / remaining punch list",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      }
+    ]
+  },
+  {
+    "name": "Full unit turn / extended occupancy (2+ years)",
+    "family_id": "2044bdf2-9488-5c0d-9a0a-5b830c10199f",
+    "version": 0,
+    "entries": [
+      {
+        "item_code": "",
+        "description": "Full scope inspection \u2014 rooms / condition / photos / ready-by date; 2+ years prompts inspection, condition determines work",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Patch walls and ceilings \u2014 rooms / repair sizes / texture: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Paint walls, trim and doors \u2014 rooms / colors / touch-up versus full repaint: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Paint and wall-repair materials \u2014 quantities / colors / supplies: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Kitchen and bathroom caulking \u2014 sinks / tubs / toilets / backsplashes / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Repair bathroom fixtures and fans \u2014 seats / drain stops / faucets / fans / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Kitchen and bathroom parts \u2014 models / sizes / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Repair doors, closet tracks and hardware \u2014 locations / counts: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Repair or replace screens and blinds \u2014 dimensions / locations / counts: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Doors, hardware, screens and blinds \u2014 parts / dimensions / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Minor flooring, baseboard and trim repairs \u2014 material / area / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Flooring and trim materials \u2014 type / dimensions / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Replace bulbs and furnace filters \u2014 counts / bulb types / filter sizes: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Bulbs, filters and small hardware \u2014 specifications / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Remove leftover items and debris \u2014 items / volume / disposal plan: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Disposal fees \u2014 actual quoted fee; enter total cost: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "",
+        "description": "Vendor cleaning / major painting / flooring \u2014 obtain quote and approved price-book item; exclude work already in labor lines",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "",
+        "description": "Office review \u2014 owner / proposed tenant responsibility, exclusions, approval limit and scheduling handoff",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Rekey lock cylinders to match \u2014 cylinder count / brand: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Keys and replacement lock hardware \u2014 key counts / finish / parts: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Program garage remotes and verify access \u2014 remote count / model: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Garage remotes and batteries \u2014 models / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Inspect, replace and test smoke / CO devices \u2014 locations / device counts / wiring: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Smoke detectors \u2014 model / power type / quantity / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Carbon monoxide or combination detectors \u2014 model / quantity / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "APPLIANCE_CP",
+        "description": "Supply replacement appliance \u2014 type / model / dimensions / finish / quantity: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Deliver, install and test appliance \u2014 connections / access / scope: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Appliance connection materials \u2014 cord / hoses / adapters / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Remove and haul away old appliance \u2014 quantity / disposal plan: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "",
+        "description": "Final readiness check \u2014 completed tasks / photos / remaining punch list",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      }
+    ]
+  },
+  {
+    "name": "Rekey & access",
+    "family_id": "da895c18-b21d-5029-9f02-4c37ed1df39d",
+    "version": 0,
+    "entries": [
+      {
+        "item_code": "",
+        "description": "Confirm lock / key / remote inventory and approved pricing; count service charges once per visit",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Rekey lock cylinders to match \u2014 cylinder count / brand: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Keys and replacement lock hardware \u2014 key counts / finish / parts: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Program garage remotes and verify access \u2014 remote count / model: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Garage remotes and batteries \u2014 models / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Install replacement doorknobs / deadbolts \u2014 locations / count / finish: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "",
+        "description": "Final access check \u2014 test all keys / locks / remotes; record key handoff",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      }
+    ]
+  },
+  {
+    "name": "Smoke / CO detector refresh",
+    "family_id": "b28671bd-34df-5954-bf6b-c64289373263",
+    "version": 0,
+    "entries": [
+      {
+        "item_code": "",
+        "description": "Verify device types, locations, power and interconnection requirements before pricing",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Inspect, replace and test smoke / CO devices \u2014 locations / device counts / wiring: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Smoke detectors \u2014 model / power type / quantity / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Carbon monoxide or combination detectors \u2014 model / quantity / locations: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Batteries and adapters \u2014 model / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "",
+        "description": "Final device test and location record \u2014 confirm completed installation",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      }
+    ]
+  },
+  {
+    "name": "Appliance replacement",
+    "family_id": "2c9ea681-f94e-524d-b933-560f92cc9fe3",
+    "version": 0,
+    "entries": [
+      {
+        "item_code": "",
+        "description": "Confirm supplier quote / availability / dimensions / connections; do not duplicate included delivery, installation or haul-away",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "APPLIANCE_CP",
+        "description": "Supply replacement appliance \u2014 type / model / dimensions / finish / quantity: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Deliver, install and test appliance \u2014 connections / access / scope: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Appliance connection materials \u2014 cord / hoses / adapters / quantities: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "LABOR_STD",
+        "description": "Remove and haul away old appliance \u2014 quantity / disposal plan: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "MATERIALS_CP",
+        "description": "Disposal or supplier fees not included elsewhere \u2014 description / total cost: ___",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      },
+      {
+        "item_code": "",
+        "description": "Final operation check and handoff \u2014 test / model and serial record / warranty details",
+        "qty": "1",
+        "minutes": "",
+        "material_cost": "",
+        "room": "",
+        "included": false
+      }
+    ]
+  }
+]
