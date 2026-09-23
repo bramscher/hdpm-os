@@ -1,10 +1,10 @@
+import { requireEstimateAuthor } from '@/lib/require-estimate-author';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
 /** GET /api/turn-estimator/estimates/[id] — estimate header + current version + lines. */
 export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole('maintenance', 'pm', 'manager', 'finance');
+  const guard = await requireEstimateAuthor(true);
   if (!guard.ok) return guard.response;
   const { id } = await ctx.params;
   const supabase = getSupabaseAdmin();

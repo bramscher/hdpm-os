@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   role: 'field', email: 'alberto@highdesertpm.com',
   create: vi.fn(), credit: vi.fn(), get: vi.fn(), update: vi.fn(), remove: vi.fn(),
 }));
+vi.mock('@/lib/staff-capabilities-server', () => ({loadStaffCapabilities: async () => ({'invoice.draft':canCreateInvoices(mocks.role,mocks.email),'invoice.generate':canGenerateInvoice(mocks.role,mocks.email),'estimate.draft':false,'estimate.template':false,'estimate.issue':false})}));
 vi.mock('@/lib/require-role', () => ({
   requireCompanySession: async () => mocks.email.endsWith('@highdesertpm.com') ? {ok:true,role:mocks.role,email:mocks.email} : {ok:false,response:new Response('Unauthorized',{status:401})},
   requireRole: async (...roles: string[]) => mocks.role === 'admin' || roles.includes(mocks.role)
@@ -74,7 +75,7 @@ describe('field invoice preparation', () => {
     expect(mocks.update).toHaveBeenCalledWith('draft-1', { description: 'Reviewed' });
   });
   it.each(['staff', 'read_only', 'inspector', 'front_desk'])('does not grant draft creation to %s', async role => {
-    mocks.role = role;
+    mocks.role = role; mocks.email = 'other@highdesertpm.com';
     expect((await POST(request(input))).status).toBe(403);
     expect(mocks.create).not.toHaveBeenCalled();
   });
@@ -123,4 +124,24 @@ it('preserves Craig’s full invoice access as admin', () => {
   expect(canCreateInvoices('admin', 'craig@highdesertpm.com')).toBe(true);
   expect(canGenerateInvoice('admin', 'craig@highdesertpm.com', draft as never)).toBe(true);
   expect(canEditInvoiceDraft('admin', 'craig@highdesertpm.com', draft as never)).toBe(true);
+});
+
+
+describe('Alberto invoice access with his production staff role', () => {
+  beforeEach(() => { mocks.role = 'staff'; });
+  it('shows the invoice action and creates his work-order draft', async () => {
+    expect(canCreateInvoices('staff', mocks.email)).toBe(true);
+    expect((await POST(request({...input, work_order_id:'wo-1'}))).status).toBe(201);
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({created_by:mocks.email, work_order_id:'wo-1'}));
+  });
+  it('allows updates to his own draft', async () => {
+    expect((await PATCH(request({description:'Actual completed work'}, 'PATCH'), params)).status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith('draft-1', {description:'Actual completed work'}, mocks.email);
+  });
+  it('does not grant office privileges or edits to another author', async () => {
+    expect((await POST(request({...input, doc_type:'credit'}))).status).toBe(403);
+    expect((await generatePdf(request({}), params)).status).toBe(403);
+    mocks.get.mockResolvedValue({...draft, created_by:'penny@highdesertpm.com'});
+    expect((await PATCH(request({description:'Changed'}, 'PATCH'), params)).status).toBe(403);
+  });
 });

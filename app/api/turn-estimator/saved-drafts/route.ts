@@ -1,8 +1,8 @@
+import { requireEstimateAuthor } from '@/lib/require-estimate-author';
 import { NextRequest,NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 export async function GET(req:NextRequest){
- const g=await requireRole('maintenance','pm','manager');if(!g.ok)return g.response;
+ const g=await requireEstimateAuthor();if(!g.ok)return g.response;
  const db=getSupabaseAdmin(),id=req.nextUrl.searchParams.get('id');
  let q=db.from('estimate_saved_draft').select('*').order('updated_at',{ascending:false});if(id)q=q.eq('id',id);
  const {data,error}=await q.limit(100);if(error)return NextResponse.json({error:error.message},{status:400});
@@ -19,4 +19,4 @@ export async function GET(req:NextRequest){
  }
  return NextResponse.json({drafts:(data||[]).filter(d=>id||!used.has(d.id)),issued});
 }
-export async function POST(req:NextRequest){const g=await requireRole('maintenance','pm','manager');if(!g.ok)return g.response;try{const b=await req.json();if(JSON.stringify(b.payload).length>150000||!Array.isArray(b.payload?.rows))throw new Error('Invalid estimate draft');const {data,error}=await getSupabaseAdmin().rpc('maintenance_save_estimate_draft',{actor:g.email,request:b});if(error)throw error;return NextResponse.json({draft:data});}catch(e){return NextResponse.json({error:(e as Error).message},{status:409});}}
+export async function POST(req:NextRequest){const g=await requireEstimateAuthor();if(!g.ok)return g.response;try{const b=await req.json();if(JSON.stringify(b.payload).length>150000||!Array.isArray(b.payload?.rows))throw new Error('Invalid estimate draft');const {data,error}=await getSupabaseAdmin().rpc('maintenance_save_estimate_draft',{actor:g.email,request:b});if(error)throw error;return NextResponse.json({draft:data});}catch(e){return NextResponse.json({error:(e as Error).message},{status:409});}}

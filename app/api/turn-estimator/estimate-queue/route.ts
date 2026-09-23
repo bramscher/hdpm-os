@@ -1,10 +1,11 @@
+import { requireEstimateAuthor } from '@/lib/require-estimate-author';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { estimateStage, type EstimateQueueItem } from '@/lib/turn-estimator/estimate-queue';
 
 export async function GET() {
-  const guard = await requireRole('maintenance', 'pm', 'manager', 'finance');
+  const guard = await requireEstimateAuthor(true);
   if (!guard.ok) return guard.response;
   try {
     const db = getSupabaseAdmin();
@@ -50,7 +51,7 @@ export async function GET() {
       });
     }
     rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return NextResponse.json({ estimates: rows, canCreate: guard.role !== 'finance' });
+    return NextResponse.json({ estimates: rows, canCreate: guard.capabilities['estimate.draft'], canDelete: ['admin','maintenance','pm','manager'].includes(guard.role) });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message || 'Could not load estimates' }, { status: 500 });
   }

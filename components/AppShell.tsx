@@ -27,7 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <MobileNav />
 
       {/* Page content */}
-      <main className="min-h-screen md:ml-[220px]">{children}</main>
+      <main className="min-h-screen min-w-0 overflow-x-clip md:ml-[220px]">{children}</main>
 
       {/* Per-page help → Notion SOP */}
       <HelpButton />

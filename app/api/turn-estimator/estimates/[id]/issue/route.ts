@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
+import { requireEstimateAuthor } from '@/lib/require-estimate-author';
 import { resolvePriceBookItem } from '@/lib/turn-estimator/price-book';
 import { issueEstimateVersion } from '@/lib/turn-estimator/estimates';
 import type { LineInput, Responsibility } from '@/lib/turn-estimator/types';
@@ -25,7 +25,7 @@ interface LineSpec {
  * Body: { lines: LineSpec[], notes?, priced_asof? }
  */
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole('maintenance', 'pm', 'manager', 'admin');
+  const guard = await requireEstimateAuthor(false, 'estimate.issue');
   if (!guard.ok) return guard.response;
   const { id } = await ctx.params;
   let body: { lines?: LineSpec[]; notes?: string; priced_asof?: string };

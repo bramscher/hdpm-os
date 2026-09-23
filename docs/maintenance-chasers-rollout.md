@@ -46,3 +46,11 @@ Sends remain waiting for a reply; they do not close work orders. Unknown deliver
 - A failed Slack card refresh does not undo a send. The database history and stale-version guard remain authoritative; the next refresh uses current state.
 - All routine items stay in the maintenance section. Only Request help promotes an item to the EOS issue queue; existing legacy escalations remain visible.
 - To pause the new trial, disable `estimate_chaser/team_review` or use the global kill switch. Activation disables the legacy send actions, so pausing the new trial does not intentionally restart them. Restore old settings only through a deliberate rollback reviewed against the activation audit record.
+
+## Production verification — September 21, 2026
+
+Vercel sign-in verified as bramscher. Both chaser migrations were applied successfully through the HDPM Supabase SQL editor; service-role reads verified both tables and the business-day function. Penny and Craig are active with Slack mappings. The shared-review configuration remains disabled.
+
+Main already contains the implementation through 61ac894/65b6717; current main at verification was ece3966. No older branch was deployed over that work. The live authenticated Company Issues page and authenticated cron preview both returned 167 candidates. The first seven cards show source sync dates from May–July 2026. Check source freshness and current AppFolio status before activating daily Slack delivery or selecting a real outbound trial.
+
+Vercel exports SLACK_BOT_TOKEN as [SENSITIVE]; the local invalid_auth result is from that placeholder, not proof that the deployed token is invalid. Production Slack authentication and modal round trip remain unverified. Existing preview flags remain unchanged. No internal Slack cards or external follow-ups were sent during this verification.

@@ -56,7 +56,7 @@ export async function PATCH(
     }
 
     if (!canIssueInvoices(roleGuard.role)) {
-      if (!canEditInvoiceDraft(roleGuard.role, roleGuard.email, existing)) {
+      if (!canEditInvoiceDraft(roleGuard.role, roleGuard.email, existing, roleGuard.capabilities)) {
         return NextResponse.json({ error: 'You can edit only your own unissued invoice drafts. Office review is required for other invoices.' }, { status: 403 });
       }
       const invoice = await updateInvoice(id, invoiceDraftFields(body), existing.created_by);

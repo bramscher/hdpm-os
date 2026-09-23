@@ -14,6 +14,8 @@
  *   import this file, keeping Supabase/Node deps out of the edge runtime.
  */
 
+import { loadStaffCapabilities } from "@/lib/staff-capabilities-server";
+import { effectiveCapabilities } from "@/lib/staff-capabilities";
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { getRoleForEmail } from "@/lib/roles";
@@ -69,6 +71,8 @@ export const authConfig = {
       if (session.user) {
         session.user.isAdmin = token.isAdmin === true;
         session.user.role = token.role;
+        try { session.user.capabilities = await loadStaffCapabilities(session.user.email || ''); }
+        catch { session.user.capabilities = effectiveCapabilities('staff', false, {}); console.error('[auth] Staff permissions unavailable'); }
       }
       return session;
     },

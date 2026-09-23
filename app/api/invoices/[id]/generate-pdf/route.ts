@@ -14,7 +14,7 @@ export async function POST(
 ) {
   try {
     const roleGuard=await requireInvoiceAuthor();if(!roleGuard.ok)return roleGuard.response;
-    if (!canGenerateInvoice(roleGuard.role, roleGuard.email)) return NextResponse.json({error: 'Office review is required to generate invoices.'}, {status: 403});
+    if (!canGenerateInvoice(roleGuard.role, roleGuard.email, undefined, roleGuard.capabilities)) return NextResponse.json({error: 'Office review is required to generate invoices.'}, {status: 403});
     const session = await auth();
     if (!session?.user?.email?.endsWith('@highdesertpm.com')) {
       return NextResponse.json(
@@ -30,7 +30,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    if (!canGenerateInvoice(roleGuard.role, roleGuard.email, invoice)) return NextResponse.json({error: 'You can generate only your own invoice drafts.'}, {status: 403});
+    if (!canGenerateInvoice(roleGuard.role, roleGuard.email, invoice, roleGuard.capabilities)) return NextResponse.json({error: 'You can generate only your own invoice drafts.'}, {status: 403});
 
     if (invoice.status === 'void') {
       return NextResponse.json({ error: 'Cannot generate PDF for a voided invoice' }, { status: 400 });

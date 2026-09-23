@@ -54,10 +54,16 @@ export default function EstimateBuilder({
   items,
   seed,
   autoDraft = false,
+  canIssue = false,
+  canManageTemplates = false,
+  canArchiveTemplates = false,
 }: {
   items: PriceBookItem[];
   seed: BuilderSeed;
   autoDraft?: boolean;
+  canIssue?: boolean;
+  canManageTemplates?: boolean;
+  canArchiveTemplates?: boolean;
 }) {
   const router = useRouter();
   const itemByCode = useMemo(() => {
@@ -292,7 +298,7 @@ export default function EstimateBuilder({
       <div className="rounded-xl border border-sand-200 bg-white p-4 space-y-3">
         <div className="flex flex-wrap gap-3 items-end"><label className="grow text-sm">Start from a template<select className="block mt-1 w-full rounded-lg border p-3" value={templateId} onChange={e=>useTemplate(e.target.value)}><option value="">Choose a starter or saved template</option>{templates.filter(t=>!t.archived).map(t=><option key={t.id} value={t.id}>{t.name} · v{t.version}</option>)}</select></label><a className="underline text-sm p-3" href="/maintenance/invoices?tab=estimates">Saved drafts</a></div>
         <p className="text-xs text-charcoal-500">Choose a template before editing. Checked rows are chargeable scope; unchecked rows remain a checklist. Missing or placeholder prices must be reviewed before issue.</p>
-        <div className="flex flex-wrap gap-2"><input aria-label="Template name" className="rounded-lg border p-3" placeholder="Reusable template name" value={templateName} onChange={e=>setTemplateName(e.target.value)}/><button type="button" className="rounded-lg border p-3 text-sm" disabled={!!busy} onClick={()=>saveTemplate()}>Save as new template</button>{templateId&&!templateId.startsWith('starter-')&&<><button type="button" className="rounded-lg border p-3 text-sm" disabled={!!busy} onClick={()=>saveTemplate(true)}>Publish revision</button><button type="button" className="rounded-lg border p-3 text-sm" onClick={async()=>{const t=templates.find(t=>t.id===templateId);const r=await fetch('/api/turn-estimator/templates',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({family_id:t?.family_id})});if(r.ok){setTemplates(ts=>ts.map(x=>x.family_id===t?.family_id?{...x,archived:true}:x));setTemplateId('');}else setError('Archive failed');}}>Archive template</button></>}</div>
+        {canManageTemplates && <div className="flex flex-wrap gap-2"><input aria-label="Template name" className="rounded-lg border p-3" placeholder="Reusable template name" value={templateName} onChange={e=>setTemplateName(e.target.value)}/><button type="button" className="rounded-lg border p-3 text-sm" disabled={!!busy} onClick={()=>saveTemplate()}>Save as new template</button>{templateId&&!templateId.startsWith('starter-')&&<><button type="button" className="rounded-lg border p-3 text-sm" disabled={!!busy} onClick={()=>saveTemplate(true)}>Publish revision</button>{canArchiveTemplates && <button type="button" className="rounded-lg border p-3 text-sm" onClick={async()=>{const t=templates.find(t=>t.id===templateId);const r=await fetch('/api/turn-estimator/templates',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({family_id:t?.family_id})});if(r.ok){setTemplates(ts=>ts.map(x=>x.family_id===t?.family_id?{...x,archived:true}:x));setTemplateId('');}else setError('Archive failed');}}>Archive template</button>}</>}</div>}
         <p className="text-xs text-charcoal-500">Reusable template descriptions should contain general scope only. Property and work-order fields are not copied.</p>
       </div>
 
@@ -412,13 +418,13 @@ export default function EstimateBuilder({
         </table>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <button type="button" onClick={() => setRows((rs) => [...rs, newRow()])}
           className="rounded-lg border border-sand-200 px-3 py-1.5 text-xs font-medium text-charcoal-700 hover:bg-sand-50">
           + Add line
         </button>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           {preview && (
             <div className="text-right">
               <div className="text-lg font-semibold text-charcoal-900">{money(preview.owner_total)}</div>
@@ -429,10 +435,11 @@ export default function EstimateBuilder({
           )}
           <button type="button" disabled={busy != null||drafting||!loaded} onClick={saveDraft} className="rounded-lg border p-3 text-sm">{busy==="save"?"Saving…":"Save draft"}</button>
           <span role="status" className="text-xs">{saveStatus}</span>
-          <button type="button" disabled={busy != null||drafting||!loaded} onClick={issue}
+          {canIssue && <button type="button" disabled={busy != null||drafting||!loaded} onClick={issue}
             className="rounded-lg bg-charcoal-900 px-4 py-2 text-sm font-medium text-white hover:bg-charcoal-800 disabled:opacity-50">
             {busy === "issue" ? "Issuing…" : "Save & Issue Estimate"}
-          </button>
+          </button>}
+          {!canIssue && <span className="text-xs text-charcoal-500">Save your draft for office review and issue.</span>}
         </div>
       </div>
     </div>

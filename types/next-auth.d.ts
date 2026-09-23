@@ -12,6 +12,7 @@ declare module "next-auth" {
       id?: string;
       isAdmin?: boolean;
       role?: AccessRole;
+      capabilities?: import("@/lib/staff-capabilities").Capabilities;
     };
   }
 }
