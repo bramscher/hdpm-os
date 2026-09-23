@@ -31,7 +31,10 @@ export function canGenerateInvoice(role: string | undefined, email?: string | nu
 export function canEditInvoiceDraft(role: string | undefined, email: string | null | undefined, invoice: Pick<HdmsInvoice, 'status' | 'created_by' | 'doc_type' | 'maintenance_job_id'>, capabilities?: Capabilities): boolean {
   if (capabilities && !capabilities['invoice.draft']) return false;
   if (canIssueInvoices(role)) return invoice.status !== 'void';
-  return (capabilities?.['invoice.draft'] || canPrepareFieldInvoices(role, email) || (role === 'staff' && isInvoiceCoordinator(email))) && !!email && (invoice.status === 'draft' || (invoice.status === 'generated' && capabilities?.['invoice.generate'] === true)) && invoice.doc_type === 'invoice'
+  // The staff settings toggle grants shared invoice editing, independently of PDF access.
+  if (capabilities) return capabilities['invoice.draft'] && !!email && invoice.status !== 'void'
+    && invoice.doc_type === 'invoice' && !invoice.maintenance_job_id;
+  return (canPrepareFieldInvoices(role, email) || (role === 'staff' && isInvoiceCoordinator(email))) && !!email && invoice.status === 'draft' && invoice.doc_type === 'invoice'
     && !invoice.maintenance_job_id && invoice.created_by?.toLowerCase() === email.toLowerCase();
 }
 

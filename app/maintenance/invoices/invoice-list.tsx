@@ -996,7 +996,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                       </Button>
                     )}
 
-                    {/* Office edits, or a technician’s own unissued draft */}
+                    {/* Shared editing controlled by the staff invoice permission */}
                     {canEditInvoiceDraft(session?.user?.role, session?.user?.email, invoice, session?.user?.capabilities) && (
                       <Button
                         variant="ghost"

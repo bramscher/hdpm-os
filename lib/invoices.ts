@@ -545,7 +545,7 @@ export async function getInvoiceById(id: string): Promise<HdmsInvoice | null> {
   return invoice;
 }
 
-export async function updateInvoice(id: string, input: UpdateInvoiceInput, draftOwner?: string, expectedStatus: 'draft' | 'generated' = 'draft'): Promise<HdmsInvoice> {
+export async function updateInvoice(id: string, input: UpdateInvoiceInput, draftOwner?: string, expectedStatus: 'draft' | 'generated' | 'attached' = 'draft'): Promise<HdmsInvoice> {
   const supabase = getSupabaseAdmin();
 
   let query = supabase.from('hdms_invoices').update(input).eq('id', id);

@@ -3,10 +3,10 @@ import { NextRequest } from 'next/server';
 import { canEditInvoiceDraft, invoiceDraftFields, canCreateInvoices, canGenerateInvoice } from '@/lib/invoice-permissions';
 
 const mocks = vi.hoisted(() => ({
-  generate: false, role: 'field', email: 'alberto@highdesertpm.com',
+  edit: undefined as boolean | undefined, generate: false, role: 'field', email: 'alberto@highdesertpm.com',
   create: vi.fn(), credit: vi.fn(), get: vi.fn(), update: vi.fn(), remove: vi.fn(),
 }));
-vi.mock('@/lib/staff-capabilities-server', () => ({loadStaffCapabilities: async () => ({'invoice.draft':canCreateInvoices(mocks.role,mocks.email),'invoice.generate':mocks.generate || canGenerateInvoice(mocks.role,mocks.email),'estimate.draft':false,'estimate.template':false,'estimate.issue':false})}));
+vi.mock('@/lib/staff-capabilities-server', () => ({loadStaffCapabilities: async () => ({'invoice.draft':mocks.edit ?? canCreateInvoices(mocks.role,mocks.email),'invoice.generate':mocks.generate || canGenerateInvoice(mocks.role,mocks.email),'estimate.draft':false,'estimate.template':false,'estimate.issue':false})}));
 vi.mock('@/lib/require-role', () => ({
   requireCompanySession: async () => mocks.email.endsWith('@highdesertpm.com') ? {ok:true,role:mocks.role,email:mocks.email} : {ok:false,response:new Response('Unauthorized',{status:401})},
   requireRole: async (...roles: string[]) => mocks.role === 'admin' || roles.includes(mocks.role)
@@ -33,7 +33,7 @@ const draft = { id: 'draft-1', status: 'draft', doc_type: 'invoice', created_by:
 const input = { property_name: 'Pilot', property_address: 'Test address', description: 'Completed repair', labor_amount: 95, materials_amount: 0 };
 
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.generate = false; mocks.role = 'field'; mocks.email = 'alberto@highdesertpm.com';
+  vi.clearAllMocks(); mocks.edit = undefined; mocks.generate = false; mocks.role = 'field'; mocks.email = 'alberto@highdesertpm.com';
   mocks.get.mockResolvedValue(draft); mocks.create.mockResolvedValue(draft); mocks.update.mockResolvedValue(draft);
 });
 
@@ -55,9 +55,8 @@ describe('field invoice preparation', () => {
     expect(mocks.update).toHaveBeenCalledWith('draft-1', { description: 'Updated work' }, mocks.email);
   });
   it.each([
-    { status: 'generated' }, { status: 'attached' }, { status: 'void' },
-    { created_by: 'brody@highdesertpm.com' }, { doc_type: 'credit' }, { maintenance_job_id: 'job-1' },
-  ])('rejects edits outside own ordinary drafts: %j', async override => {
+    { status: 'void' }, { doc_type: 'credit' }, { maintenance_job_id: 'job-1' },
+  ])('rejects protected invoice edits: %j', async override => {
     mocks.get.mockResolvedValue({ ...draft, ...override });
     expect((await PATCH(request({ description: 'Changed' }, 'PATCH'), params)).status).toBe(403);
     expect(mocks.update).not.toHaveBeenCalled();
@@ -100,11 +99,11 @@ describe.each(['cheryl@highdesertpm.com', 'penny@highdesertpm.com'])('Appliance 
     expect((await generatePdf(request({}),params)).status).toBe(200);
     expect(mocks.update).toHaveBeenCalledWith('draft-1',{pdf_path:'saved.pdf',status:'generated'},mocks.email);
   });
-  it('cannot edit or generate another author’s invoice',async()=>{
+  it('edits and generates shared invoices when both toggles are on',async()=>{
     mocks.get.mockResolvedValue(draft);
-    expect((await PATCH(request({description:'Changed'},'PATCH'),params)).status).toBe(403);
-    expect((await generatePdf(request({}),params)).status).toBe(403);
-    expect(mocks.update).not.toHaveBeenCalled();
+    expect((await PATCH(request({description:'Changed'},'PATCH'),params)).status).toBe(200);
+    expect((await generatePdf(request({}),params)).status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith('draft-1',{description:'Changed'},draft.created_by);
   });
   it('does not gain credits, deletion, duplication, or arbitrary status changes',async()=>{
     expect((await POST(request({...input,doc_type:'credit'}))).status).toBe(403);
@@ -138,11 +137,11 @@ describe('Alberto invoice access with his production staff role', () => {
     expect((await PATCH(request({description:'Actual completed work'}, 'PATCH'), params)).status).toBe(200);
     expect(mocks.update).toHaveBeenCalledWith('draft-1', {description:'Actual completed work'}, mocks.email);
   });
-  it('does not grant office privileges or edits to another author', async () => {
+  it('allows shared editing without granting office privileges', async () => {
     expect((await POST(request({...input, doc_type:'credit'}))).status).toBe(403);
     expect((await generatePdf(request({}), params)).status).toBe(403);
     mocks.get.mockResolvedValue({...draft, created_by:'penny@highdesertpm.com'});
-    expect((await PATCH(request({description:'Changed'}, 'PATCH'), params)).status).toBe(403);
+    expect((await PATCH(request({description:'Changed'}, 'PATCH'), params)).status).toBe(200);
   });
 });
 
@@ -160,9 +159,25 @@ describe('generated invoices with approved PDF permission', () => {
     expect((await generatePdf(request({}), params)).status).toBe(200);
     expect(mocks.update).toHaveBeenCalledWith('draft-1', { pdf_path: 'saved.pdf', status: 'generated' }, mocks.email, 'generated');
   });
-  it.each([{ status: 'attached' }, { status: 'void' }, { created_by: 'other@highdesertpm.com' }, { doc_type: 'credit' }, { maintenance_job_id: 'approved-job' }])('keeps office review for %j', async override => {
+  it.each([{ status: 'void' }, { doc_type: 'credit' }, { maintenance_job_id: 'approved-job' }])('keeps office review for %j', async override => {
     mocks.get.mockResolvedValue({ ...draft, status: 'generated', ...override });
     expect((await PATCH(request({ description: 'Changed' }, 'PATCH'), params)).status).toBe(403);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('shared invoice editing enforcement', () => {
+  it.each(['draft','generated','attached'])('edits another author’s %s invoice while preserving attribution', async status => {
+    mocks.role='staff';mocks.email='brody@highdesertpm.com';mocks.edit=true;
+    const original='penny@highdesertpm.com';mocks.get.mockResolvedValue({...draft,status,created_by:original});
+    expect((await PATCH(request({description:'Team correction',created_by:mocks.email,status:'void',doc_type:'credit'},'PATCH'),params)).status).toBe(200);
+    if(status==='draft')expect(mocks.update).toHaveBeenCalledWith('draft-1',{description:'Team correction'},original);
+    else expect(mocks.update).toHaveBeenCalledWith('draft-1',{description:'Team correction',status:'draft',pdf_path:null},original,status);
+  });
+  it('denies the save API when the toggle is off even for an office role', async () => {
+    mocks.role='maintenance';mocks.edit=false;
+    expect((await PATCH(request({description:'Changed'},'PATCH'),params)).status).toBe(403);
     expect(mocks.update).not.toHaveBeenCalled();
   });
 });
