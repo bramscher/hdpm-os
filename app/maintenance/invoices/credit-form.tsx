@@ -138,7 +138,7 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" aria-label="Credit details">
-        <fieldset disabled={saving} className="min-w-0 p-5 space-y-4">
+        <fieldset disabled={saving} onChange={() => setError(null)} className="min-w-0 p-5 space-y-4">
           <p className="text-xs text-charcoal-500">
             A credit offsets an invoice that was over-billed or submitted in duplicate. It
             generates a PDF (upload it to AppFolio as a credit) and nets against invoices in
@@ -180,7 +180,7 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
             <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Credit items</h3><Button type="button" variant="outline" size="sm" onClick={() => setItems(current => [...current, {id: crypto.randomUUID(), description: "", type: "other", amount: ""}])}><Plus className="mr-1 h-4 w-4"/>Add credit item</Button></div>
             <p className="text-xs text-charcoal-500">Enter positive amounts. Labor, materials, appliances, and other items combine into one credit memo.</p>
             {items.map((item, index) => <div key={item.id} className="rounded-xl border border-sand-200 bg-charcoal-50/50 p-3 space-y-3">
-              <div className="flex items-center justify-between"><span className="text-xs font-semibold">Item {index + 1}</span><button type="button" disabled={items.length === 1} aria-label={`Remove credit item ${index + 1}`} className="p-2 text-red-700 disabled:opacity-30" onClick={() => setItems(current => current.filter(row => row.id !== item.id))}><Trash2 className="h-4 w-4"/></button></div>
+              <div className="flex items-center justify-between"><span className="text-xs font-semibold">Item {index + 1}</span><button type="button" disabled={items.length === 1} aria-label={`Remove credit item ${index + 1}`} className="p-2 text-red-700 disabled:opacity-30" onClick={() => { setError(null); setItems(current => current.filter(row => row.id !== item.id)); }}><Trash2 className="h-4 w-4"/></button></div>
               <label className="block text-xs font-medium text-charcoal-600">Item description<Input aria-label={`Credit item ${index + 1} description`} value={item.description} onChange={e => updateItem(item.id, {description:e.target.value})} placeholder="Labor overcharge / returned materials" className="mt-1"/></label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-xs font-medium text-charcoal-600">Applies to<select aria-label={`Credit item ${index + 1} type`} className={`${inputClass} mt-1`} value={item.type} onChange={e => updateItem(item.id, {type:e.target.value as LineItemType})}>{BUCKETS.map(bucket => <option value={bucket.value} key={bucket.value}>{bucket.label}</option>)}</select></label>
