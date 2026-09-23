@@ -10,6 +10,8 @@ import { aggregate, chargedSplit } from "@/lib/invoice-analysis";
 
 import type { ReconciliationPaymentState } from "@/lib/reconciliation-draft";
 
+import { unreconciledInvoices, availableReconciliationPayments, reconciliationPaymentChoice } from "@/lib/reconciliation-options";
+
 const DEFAULT_PAYEE = "High Desert Maintenance Services";
 
 function formatCurrency(amount: number | null): string {
@@ -51,13 +53,15 @@ interface PaymentReconcileModalProps {
 type Mode = "existing" | "new";
 
 export function PaymentReconcileModal({
-  invoices,
+  invoices: selectedInvoices,
   onClose,
   onRecorded, savedPayment, onPaymentChange, draftSaveStatus,
 }: PaymentReconcileModalProps) {
+  const invoices = useMemo(() => unreconciledInvoices(selectedInvoices), [selectedInvoices]);
   // Captured payments to reconcile against.
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
+  const [paymentLoadError, setPaymentLoadError] = useState("");
   const [mode, setMode] = useState<Mode>(savedPayment?.mode ?? "existing");
   const [selectedPaymentId, setSelectedPaymentId] = useState<string>(savedPayment?.selectedPaymentId ?? "");
 
@@ -96,19 +100,14 @@ export function PaymentReconcileModal({
       try {
         const res = await fetch("/api/payments");
         const data = await res.json();
-        if (res.ok) {
-          const list: Payment[] = data.payments || [];
-          setPayments(list);
-          // Default: pick an existing payment if any exist, else the new-payment form.
-          if (savedPayment) {
-            // Resume exactly what the user had entered.
-          } else if (list.length > 0) {
-            setMode("existing");
-            setSelectedPaymentId(list[0].id);
-          } else {
-            setMode("new");
-          }
-        }
+        if (!res.ok) throw new Error(data.error || "Could not load payments");
+        const list: Payment[] = data.payments || [];
+        setPayments(availableReconciliationPayments(list));
+        const choice = reconciliationPaymentChoice(list, savedPayment);
+        setMode(choice.mode);
+        setSelectedPaymentId(choice.selectedPaymentId);
+      } catch (error) {
+        setPaymentLoadError(error instanceof Error ? error.message : 'Could not load payments. Close and reopen to retry.');
       } finally {
         setLoadingPayments(false);
       }
@@ -124,7 +123,7 @@ export function PaymentReconcileModal({
     Math.round((split.total - (split.labor + split.materials + split.appliance + split.other)) * 100) /
     100;
   const tiesOut = Math.abs(tieDiff) < 0.01;
-  const alreadyPaid = useMemo(() => invoices.filter((i) => i.payment_id), [invoices]);
+  const alreadyPaid = useMemo(() => selectedInvoices.filter((i) => i.payment_id), [selectedInvoices]);
 
   const selectedPayment = payments.find((p) => p.id === selectedPaymentId) || null;
 
@@ -151,7 +150,7 @@ export function PaymentReconcileModal({
   const canRecord =
     !saving &&
     invoices.length > 0 &&
-    alreadyPaid.length === 0 &&
+    !loadingPayments && !paymentLoadError &&
     (mode === "existing" ? !!selectedPayment : !!paidOn && hasNewAmount && !!payee.trim());
 
   async function handleRecord() {
@@ -233,13 +232,14 @@ export function PaymentReconcileModal({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {paymentLoadError && <p role="alert" className="text-sm text-red-700">{paymentLoadError} Close and reopen to retry.</p>}
+          <p className="text-xs text-charcoal-500">Choose the payment received for these invoices, or enter a new payment. Fully applied payments and previously reconciled invoices are excluded.</p>
           {alreadyPaid.length > 0 && (
             <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
                 {alreadyPaid.length} of these invoices are already reconciled to another payment
-                ({alreadyPaid.map((i) => i.invoice_code).join(", ")}). Remove them from your
-                selection first.
+                ({alreadyPaid.map((i) => i.invoice_code).join(", ")}). They have been excluded from this selection and its totals.
               </span>
             </div>
           )}
@@ -270,7 +270,7 @@ export function PaymentReconcileModal({
                 </div>
               ) : payments.length === 0 ? (
                 <p className="text-xs text-charcoal-500">
-                  No captured payments yet — switch to <strong>New payment</strong>, or capture one
+                  No payments with an unapplied balance — switch to <strong>New payment</strong>, or capture one
                   from the Reconcile page first.
                 </p>
               ) : (
@@ -283,6 +283,7 @@ export function PaymentReconcileModal({
                     onChange={(e) => setSelectedPaymentId(e.target.value)}
                     className="w-full h-10 rounded-md border border-sand-300 bg-white px-3 text-sm text-charcoal-800 focus:outline-none focus:ring-2 focus:ring-terra-300"
                   >
+                    <option value="">Choose the payment for these invoices…</option>
                     {payments.map((p) => {
                       const hasAmt = p.amount != null;
                       const remaining = hasAmt
