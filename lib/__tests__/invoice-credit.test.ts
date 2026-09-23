@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { creditItemsForInvoice, normalizeCreditItems } from '../invoice-credit';
+import { creditItemsForInvoice, normalizeCreditItems, creditBalancePreview } from '../invoice-credit';
 import { createCredit, type HdmsInvoice } from '../invoices';
 import { generateInvoicePdf } from '../invoice-pdf-template';
 
@@ -61,5 +61,20 @@ describe('itemized credit memos', () => {
     expect(pdf).toContain('Labor adjustment');
     expect(pdf).toContain('Returned materials');
     expect(pdf).toContain('125.00');
+  });
+});
+
+
+describe('credit balance preview', () => {
+  it('shows the original invoice less the proposed credit in cents', () => {
+    expect(creditBalancePreview({ id: 'invoice', total_amount: 222.33 }, [], 100)).toEqual({ original: 222.33, existingCredits: 0, net: 122.33 });
+  });
+  it('deducts existing linked credits but excludes void and unrelated documents', () => {
+    const credit = { doc_type: 'credit' as const, credits_invoice_id: 'invoice', status: 'generated' as const, total_amount: -20 };
+    expect(creditBalancePreview({ id: 'invoice', total_amount: 222.33 }, [credit, { ...credit, status: 'void' }, { ...credit, credits_invoice_id: 'other' }], 100).net).toBe(102.33);
+  });
+  it('retains all three original credit items', () => {
+    const rows = [{ description: 'Labor', type: 'labor' as const, amount: 170 }, { description: 'Smoke detector', type: 'materials' as const, amount: 37.33 }, { description: 'Paint disposables', type: 'materials' as const, amount: 15 }];
+    expect(creditItemsForInvoice({ invoice_code: 'INV-315', total_amount: 222.33, line_items: rows }).map(row => row.amount)).toEqual([170, 37.33, 15]);
   });
 });

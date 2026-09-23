@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import { X, Loader2, FileMinus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { normalizeCreditItems, creditItemsForInvoice } from "@/lib/invoice-credit";
+import { normalizeCreditItems, creditItemsForInvoice, creditBalancePreview } from "@/lib/invoice-credit";
 import type { HdmsInvoice, LineItemType } from "@/lib/invoices";
 
 interface CreditFormProps {
@@ -50,6 +50,10 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
     const value = Number(item.amount);
     return sum + (Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0);
   }, 0) / 100;
+  const linkedInvoice = linkable.find(invoice => invoice.id === linkedId);
+  const balance = linkedInvoice ? creditBalancePreview(linkedInvoice, invoices, amount) : null;
+  const money = (value: number) => value.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
   function updateItem(id: string, patch: Partial<(typeof items)[number]>) {
     setItems(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
   }
@@ -117,7 +121,7 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
       <div className="absolute inset-0 bg-charcoal-900/40" onClick={saving ? undefined : onClose} />
       <div role="dialog" aria-modal="true" aria-labelledby="credit-title" className="relative w-full max-w-2xl max-h-[90dvh] mx-4 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-sand-200">
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-sand-200">
           <div className="flex items-center gap-2">
             <FileMinus className="h-4 w-4 text-red-600" />
             <h2 id="credit-title" className="text-sm font-semibold text-charcoal-800">New credit memo</h2>
@@ -133,7 +137,8 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
         </div>
 
         {/* Body */}
-        <fieldset disabled={saving} className="min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" aria-label="Credit details">
+        <fieldset disabled={saving} className="min-w-0 p-5 space-y-4">
           <p className="text-xs text-charcoal-500">
             A credit offsets an invoice that was over-billed or submitted in duplicate. It
             generates a PDF (upload it to AppFolio as a credit) and nets against invoices in
@@ -144,7 +149,7 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
             <label className="block text-xs font-medium text-charcoal-600 mb-1">
               Correcting invoice <span className="text-charcoal-400">(optional)</span>
             </label>
-            <select className={inputClass} value={linkedId} onChange={(e) => onPickLinked(e.target.value)}>
+            <select aria-label="Correcting invoice" className={inputClass} value={linkedId} onChange={(e) => onPickLinked(e.target.value)}>
               <option value="">Standalone credit (no linked invoice)</option>
               {linkable.map((i) => (
                 <option key={i.id} value={i.id}>
@@ -191,26 +196,30 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Not shown on the PDF" />
           </div>
 
-          {amount > 0 && (
-            <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-              <span className="text-xs font-medium text-red-700">Credit total</span>
-              <span className="text-sm font-semibold text-red-700">-${amount.toFixed(2)}</span>
-            </div>
-          )}
-
-          {error && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
-          )}
         </fieldset>
+        </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-charcoal-200/60 bg-charcoal-50/80">
+        {/* Keep totals, errors, and actions outside the scrolling item list. */}
+        <div className="shrink-0 px-5 py-3 border-t border-charcoal-200/60 bg-white space-y-3">
+          <div aria-label="Credit summary" aria-live="polite" className="rounded-xl border border-sand-200 bg-charcoal-50 px-4 py-3 space-y-1 text-sm">
+            {balance && <div className="flex justify-between gap-3"><span>Original invoice</span><span>{money(balance.original)}</span></div>}
+            {balance && balance.existingCredits > 0 && <div className="flex justify-between gap-3"><span>Existing credits</span><span>−{money(balance.existingCredits)}</span></div>}
+            <div className="flex justify-between gap-3 font-semibold text-red-700"><span>Credit total</span><span>−{money(amount)}</span></div>
+            {balance && <>
+              <div className="flex justify-between gap-3 border-t border-sand-200 pt-1 font-semibold"><span>New net invoice amount</span><span>{money(balance.net)}</span></div>
+              <p className="text-xs text-charcoal-500">After linked credits; payments are not included.</p>
+              {balance.net < 0 && <p className="text-xs text-amber-800">This credit exceeds the remaining invoice amount.</p>}
+            </>}
+          </div>
+          {error && <p role="alert" className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+          <div className="flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" onClick={onClose} disabled={saving} className="text-xs h-9">
             Cancel
           </Button>
           <Button size="sm" onClick={submit} disabled={saving} className="text-xs h-9">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create credit"}
           </Button>
+          </div>
         </div>
       </div>
     </div>
