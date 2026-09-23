@@ -1,6 +1,6 @@
 # iPhone timekeeping and job activity plan
 
-Status: planning only. No location collection, payroll changes, or invoice automation is enabled by this document.
+Status: plan plus an interactive sample-data preview at `/timekeeping/gps-preview` on the feature deployment. The preview simulates a job, parts trip, confirmation, and daily review using browser memory only. It is not an installable PWA or native app. No location collection, payroll changes, or invoice automation is enabled.
 Branch: `feature/gps-timekeeping`. Updated September 22, 2026.
 
 ## Agreed pilot choices
