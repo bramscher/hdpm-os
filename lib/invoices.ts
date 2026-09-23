@@ -1,5 +1,6 @@
 import { recordedLaborHours, invoiceServiceDate } from './invoice-labor';
 import { getSupabaseAdmin } from './supabase';
+import { normalizeCreditItems } from './invoice-credit';
 import { weekStartPacific, weeksBefore } from './eos/scorecard';
 
 // ============================================
@@ -410,8 +411,10 @@ export async function duplicateInvoice(id: string, createdBy: string): Promise<H
 export async function createCredit(
   input: Omit<CreateInvoiceInput, 'doc_type'>
 ): Promise<HdmsInvoice> {
+  // Itemized credits derive their totals on the server, never from caller summaries.
+  const credit = input.line_items?.length ? { ...input, ...normalizeCreditItems(input.line_items) } : input;
   const neg = (n: number) => -Math.abs(n);
-  const line_items = input.line_items?.map((li) => ({
+  const line_items = credit.line_items?.map((li) => ({
     ...li,
     // Explicit type required — analyze() defaults a typeless line to 'labor',
     // which would wrongly credit the labor bucket. Default a credit line to 'other'.
@@ -420,11 +423,11 @@ export async function createCredit(
     ...(li.cost != null ? { cost: neg(li.cost) } : {}),
   }));
   return createInvoice({
-    ...input,
+    ...credit,
     doc_type: 'credit',
-    labor_amount: neg(input.labor_amount),
-    materials_amount: neg(input.materials_amount),
-    total_amount: neg(input.total_amount),
+    labor_amount: neg(credit.labor_amount),
+    materials_amount: neg(credit.materials_amount),
+    total_amount: neg(credit.total_amount),
     line_items,
   });
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { X, Loader2, FileMinus } from "lucide-react";
+import { X, Loader2, FileMinus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { normalizeCreditItems, creditItemsForInvoice } from "@/lib/invoice-credit";
 import type { HdmsInvoice, LineItemType } from "@/lib/invoices";
 
 interface CreditFormProps {
@@ -34,8 +35,7 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
   const [propertyName, setPropertyName] = useState("");
   const [propertyAddress, setPropertyAddress] = useState("");
   const [description, setDescription] = useState("");
-  const [amountStr, setAmountStr] = useState("");
-  const [type, setType] = useState<LineItemType>("other");
+  const [items, setItems] = useState([{ id: "initial", description: "", type: "other" as LineItemType, amount: "" }]);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +46,13 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
     [invoices]
   );
 
-  const amount = parseFloat(amountStr) || 0;
+  const amount = items.reduce((sum, item) => {
+    const value = Number(item.amount);
+    return sum + (Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0);
+  }, 0) / 100;
+  function updateItem(id: string, patch: Partial<(typeof items)[number]>) {
+    setItems(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
+  }
 
   function onPickLinked(id: string) {
     setLinkedId(id);
@@ -55,7 +61,7 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
       setPropertyName(inv.property_name);
       setPropertyAddress(inv.property_address);
       // Default to a full reversal; trim the amount for a partial over-bill credit.
-      setAmountStr(String(Math.abs(Number(inv.total_amount) || 0)));
+      setItems(creditItemsForInvoice(inv).map(item => ({ id: crypto.randomUUID(), description: item.description, type: item.type!, amount: String(item.amount) })));
       if (!description.trim()) {
         setDescription(`Credit for ${inv.invoice_code} — duplicate/over-bill correction`);
       }
@@ -72,10 +78,9 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
       setError("A description is required.");
       return;
     }
-    if (!(amount > 0)) {
-      setError("Enter a credit amount greater than zero.");
-      return;
-    }
+    let credit: ReturnType<typeof normalizeCreditItems>;
+    try { credit = normalizeCreditItems(items.map(({description, type, amount}) => ({description, type, amount: Number(amount)}))); }
+    catch (e) { setError((e as Error).message); return; }
 
     setSaving(true);
     try {
@@ -89,10 +94,10 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
           property_address: propertyAddress.trim(),
           description: description.trim(),
           // Positive magnitudes — the server (createCredit) stores them negative.
-          total_amount: amount,
-          labor_amount: 0,
-          materials_amount: 0,
-          line_items: [{ description: description.trim(), type, amount }],
+          total_amount: credit.total_amount,
+          labor_amount: credit.labor_amount,
+          materials_amount: credit.materials_amount,
+          line_items: credit.line_items,
           internal_notes: notes.trim() || undefined,
         }),
       });
@@ -110,15 +115,17 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-charcoal-900/40" onClick={saving ? undefined : onClose} />
-      <div className="relative w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
+      <div role="dialog" aria-modal="true" aria-labelledby="credit-title" className="relative w-full max-w-2xl max-h-[90dvh] mx-4 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-sand-200">
           <div className="flex items-center gap-2">
             <FileMinus className="h-4 w-4 text-red-600" />
-            <h2 className="text-sm font-semibold text-charcoal-800">New credit memo</h2>
+            <h2 id="credit-title" className="text-sm font-semibold text-charcoal-800">New credit memo</h2>
           </div>
           <button
             onClick={onClose}
+            disabled={saving}
+            aria-label="Close credit memo"
             className="flex items-center justify-center h-8 w-8 rounded-lg text-charcoal-400 hover:text-charcoal-600 hover:bg-charcoal-100 transition-colors"
           >
             <X className="h-4 w-4" />
@@ -126,7 +133,7 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <fieldset disabled={saving} className="min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
           <p className="text-xs text-charcoal-500">
             A credit offsets an invoice that was over-billed or submitted in duplicate. It
             generates a PDF (upload it to AppFolio as a credit) and nets against invoices in
@@ -145,6 +152,7 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-charcoal-500">Selecting an invoice replaces the items with a full credit. Adjust or remove items for a partial credit.</p>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
@@ -163,29 +171,18 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
             <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Duplicate bill correction" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-charcoal-600 mb-1">Credit amount</label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={amountStr}
-                onChange={(e) => setAmountStr(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-charcoal-600 mb-1">Applies to</label>
-              <select className={inputClass} value={type} onChange={(e) => setType(e.target.value as LineItemType)}>
-                {BUCKETS.map((b) => (
-                  <option key={b.value} value={b.value}>
-                    {b.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <section aria-label="Credit items" className="space-y-3">
+            <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Credit items</h3><Button type="button" variant="outline" size="sm" onClick={() => setItems(current => [...current, {id: crypto.randomUUID(), description: "", type: "other", amount: ""}])}><Plus className="mr-1 h-4 w-4"/>Add credit item</Button></div>
+            <p className="text-xs text-charcoal-500">Enter positive amounts. Labor, materials, appliances, and other items combine into one credit memo.</p>
+            {items.map((item, index) => <div key={item.id} className="rounded-xl border border-sand-200 bg-charcoal-50/50 p-3 space-y-3">
+              <div className="flex items-center justify-between"><span className="text-xs font-semibold">Item {index + 1}</span><button type="button" disabled={items.length === 1} aria-label={`Remove credit item ${index + 1}`} className="p-2 text-red-700 disabled:opacity-30" onClick={() => setItems(current => current.filter(row => row.id !== item.id))}><Trash2 className="h-4 w-4"/></button></div>
+              <label className="block text-xs font-medium text-charcoal-600">Item description<Input aria-label={`Credit item ${index + 1} description`} value={item.description} onChange={e => updateItem(item.id, {description:e.target.value})} placeholder="Labor overcharge / returned materials" className="mt-1"/></label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs font-medium text-charcoal-600">Applies to<select aria-label={`Credit item ${index + 1} type`} className={`${inputClass} mt-1`} value={item.type} onChange={e => updateItem(item.id, {type:e.target.value as LineItemType})}>{BUCKETS.map(bucket => <option value={bucket.value} key={bucket.value}>{bucket.label}</option>)}</select></label>
+                <label className="block text-xs font-medium text-charcoal-600">Credit amount<Input aria-label={`Credit item ${index + 1} amount`} className="mt-1" type="number" min="0.01" step="0.01" value={item.amount} onChange={e => updateItem(item.id, {amount:e.target.value})} placeholder="0.00"/></label>
+              </div>
+            </div>)}
+          </section>
 
           <div>
             <label className="block text-xs font-medium text-charcoal-600 mb-1">
@@ -204,7 +201,7 @@ export function CreditForm({ invoices, onClose, onCreated }: CreditFormProps) {
           {error && (
             <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
           )}
-        </div>
+        </fieldset>
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-charcoal-200/60 bg-charcoal-50/80">
