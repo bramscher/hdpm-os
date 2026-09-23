@@ -3,6 +3,7 @@ import { canIssueInvoices } from '@/lib/invoice-permissions';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { createInvoice, createCredit, getInvoices } from '@/lib/invoices';
+import { CreditValidationError } from '@/lib/invoice-credit';
 import { attachAfBillsToInvoices } from '@/lib/af-bills';
 
 export async function GET(request: NextRequest) {
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {
+    if (error instanceof CreditValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
     console.error('Create invoice error:', error);
     const message = error instanceof Error ? error.message : 'Failed to create invoice';
     return NextResponse.json({ error: message }, { status: 500 });
