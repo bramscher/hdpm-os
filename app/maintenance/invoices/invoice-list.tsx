@@ -40,6 +40,7 @@ import type { ReconciliationListState } from "@/lib/reconciliation-draft";
 const PAGE_SIZE = 25;
 
 interface InvoiceListProps {
+  reconciliationOnly?: boolean;
   reconciliationState?: ReconciliationListState;
   onReconciliationStateChange?: (state: ReconciliationListState) => void;
   invoices: HdmsInvoice[];
@@ -244,7 +245,7 @@ function PdfPreviewModal({
 // Invoice List
 // ============================================
 
-export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunReport, onReconcile, isLoading, reconciliationState, onReconciliationStateChange }: InvoiceListProps) {
+export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunReport, onReconcile, isLoading, reconciliationOnly, reconciliationState, onReconciliationStateChange }: InvoiceListProps) {
   const { data: session } = useSession();
   const canIssue = canIssueInvoices(session?.user?.role);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -259,7 +260,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
   const [dateTo, setDateTo] = useState(reconciliationState?.dateTo ?? "");
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState("");
-  const [paidFilter, setPaidFilter] = useState<PaidFilter>(reconciliationState?.paidFilter ?? "all");
+  const [paidFilter, setPaidFilter] = useState<PaidFilter>(reconciliationOnly ? "unpaid" : reconciliationState?.paidFilter ?? "all");
   const [afBilledOnly, setAfBilledOnly] = useState(reconciliationState?.afBilledOnly ?? false);
   const [techFilter, setTechFilter] = useState<TechFilter>(reconciliationState?.techFilter ?? "all");
   const [sortField, setSortField] = useState<SortField>(reconciliationState?.sortField ?? "date");
@@ -381,6 +382,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
 
   // Drop any selected IDs that are no longer present (e.g. after delete/refresh).
   useEffect(() => {
+    if (isLoading) return;
     setSelectedIds((prev) => {
       const live = new Set(invoices.map((i) => i.id));
       let changed = false;
@@ -391,7 +393,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
       }
       return changed ? next : prev;
     });
-  }, [invoices]);
+  }, [invoices, isLoading]);
 
   const selectedInvoices = useMemo(
     () => invoices.filter((i) => selectedIds.has(i.id)),
@@ -527,7 +529,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-charcoal-900">
-            All Invoices
+            {reconciliationOnly ? "Unreconciled invoices" : "All Invoices"}
             <span className="ml-2 text-sm font-normal text-charcoal-400">({invoices.length})</span>
           </h3>
           <Button
@@ -576,7 +578,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
               <SortButton field="tech" label="Assigned" />
               <span className="mx-1 text-sand-300">|</span>
               <div className="inline-flex rounded-lg border border-sand-200 overflow-hidden">
-                {(["all", "unpaid", "paid"] as PaidFilter[]).map((f) => (
+                {((reconciliationOnly ? ["unpaid"] : ["all", "unpaid", "paid"]) as PaidFilter[]).map((f) => (
                   <button
                     key={f}
                     type="button"

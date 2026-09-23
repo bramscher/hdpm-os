@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { HdmsInvoice } from '@/lib/invoices';
 import { newReconciliationDraft, type ReconciliationDraft, type ReconciliationListState, type ReconciliationPaymentState } from '@/lib/reconciliation-draft';
+import { unreconciledInvoices } from '@/lib/reconciliation-options';
 import { InvoiceList } from './invoice-list';
 import { PaymentReconcileModal } from './payment-reconcile-modal';
 
@@ -10,6 +11,7 @@ export function ReconciliationWorkspace({invoices,isLoading,onEdit,onRefresh,onR
   invoices:HdmsInvoice[];isLoading:boolean;onEdit:(invoice:HdmsInvoice)=>void;onRefresh:()=>void;onRecorded:()=>void;
 }) {
   const [draft,setDraft] = useState<ReconciliationDraft|null>(null);
+  const eligibleInvoices = useMemo(() => draft?.recordedAt ? invoices : unreconciledInvoices(invoices), [invoices, draft?.recordedAt]);
   const current = useRef<ReconciliationDraft|null>(null);
   const revision = useRef<string|null>(null);
   const queue = useRef<Promise<boolean>>(Promise.resolve(true));
@@ -77,13 +79,14 @@ export function ReconciliationWorkspace({invoices,isLoading,onEdit,onRefresh,onR
     <p className="text-xs text-charcoal-500">Your date range, invoice selections, filters, and payment details are saved to your account. This draft stays until you delete it or start a new reconciliation. Saving a draft does not record a payment.</p>
     {error&&<div role="alert" className="text-sm text-red-700">{error} {loaded&&!conflict&&draft&&<button className="underline" onClick={()=>void save(current.current!)}>Retry save</button>} {(!loaded||conflict)&&<button className="underline" onClick={()=>window.location.reload()}>Reload saved draft</button>}</div>}
     {open&&draft&&<>
+      {!draft.recordedAt&&<p className="text-sm text-charcoal-500">Showing unreconciled invoices only. Previously reconciled invoices remain under Recorded payments.</p>}
       {draft.recordedAt&&<p className="text-sm">Payment recorded {new Date(draft.recordedAt).toLocaleString()}. This saved selection is retained for reference. Start a new reconciliation to record another payment.</p>}
-      <InvoiceList key={draft.id} invoices={invoices} isLoading={isLoading} onRefresh={onRefresh}
+      <InvoiceList key={draft.id} invoices={eligibleInvoices} reconciliationOnly={!draft.recordedAt} isLoading={isLoading} onRefresh={onRefresh}
         onEdit={async invoice=>{if(await save(current.current!))onEdit(invoice);}}
         reconciliationState={draft.list} onReconciliationStateChange={draft.recordedAt||conflict?undefined:updateList}
         onReconcile={draft.recordedAt||conflict?undefined:()=>setPaymentOpen(true)} />
     </>}
-    {paymentOpen&&draft&&!draft.recordedAt&&<PaymentReconcileModal invoices={invoices.filter(i=>draft.list.invoiceIds.includes(i.id))}
+    {paymentOpen&&draft&&!draft.recordedAt&&<PaymentReconcileModal invoices={eligibleInvoices.filter(i=>draft.list.invoiceIds.includes(i.id))}
       savedPayment={draft.payment} onPaymentChange={updatePayment}
       draftSaveStatus={error||status} onClose={()=>setPaymentOpen(false)}
       onRecorded={()=>{const d=current.current;if(d)void save({...d,recordedAt:new Date().toISOString()});setPaymentOpen(false);onRecorded();}} />}
