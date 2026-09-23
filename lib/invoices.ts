@@ -263,7 +263,7 @@ export interface UpdateInvoiceInput {
   total_amount?: number;
   line_items?: LineItem[];
   internal_notes?: string;
-  pdf_path?: string;
+  pdf_path?: string | null;
 }
 
 /** Represents a parsed work order row (from CSV, PDF scan, or AppFolio API) */
@@ -545,12 +545,12 @@ export async function getInvoiceById(id: string): Promise<HdmsInvoice | null> {
   return invoice;
 }
 
-export async function updateInvoice(id: string, input: UpdateInvoiceInput, draftOwner?: string): Promise<HdmsInvoice> {
+export async function updateInvoice(id: string, input: UpdateInvoiceInput, draftOwner?: string, expectedStatus: 'draft' | 'generated' = 'draft'): Promise<HdmsInvoice> {
   const supabase = getSupabaseAdmin();
 
   let query = supabase.from('hdms_invoices').update(input).eq('id', id);
-  // Check at write time as well: office may have issued the draft since it was read.
-  if (draftOwner) query = query.eq('created_by', draftOwner).eq('status', 'draft')
+  // Recheck ownership and the observed lifecycle at write time (including office attachment).
+  if (draftOwner) query = query.eq('created_by', draftOwner).eq('status', expectedStatus)
     .eq('doc_type', 'invoice').is('maintenance_job_id', null);
   const { data, error } = await query.select().single();
 

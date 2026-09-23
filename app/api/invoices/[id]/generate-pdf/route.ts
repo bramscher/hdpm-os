@@ -70,7 +70,9 @@ export async function POST(
     if(invoice.maintenance_job_id){
       const {data,error}=await getSupabaseAdmin().rpc('maintenance_finalize_invoice',{actor:session.user.email,request:{id,line_items:invoice.line_items,total_amount:Number(invoice.total_amount),pdf_path:pdfPath}});
       if(error)throw new Error(error.message);updatedInvoice=data;
-    }else updatedInvoice=await updateInvoice(id,{pdf_path:pdfPath,status:'generated'},canIssueInvoices(roleGuard.role) ? undefined : roleGuard.email);
+    }else if (!canIssueInvoices(roleGuard.role) && invoice.status === 'generated') {
+      updatedInvoice=await updateInvoice(id,{pdf_path:pdfPath,status:'generated'},invoice.created_by,'generated');
+    }else updatedInvoice=await updateInvoice(id,{pdf_path:pdfPath,status:'generated'},canIssueInvoices(roleGuard.role) ? undefined : invoice.created_by);
 
     return NextResponse.json({ invoice: updatedInvoice });
   } catch (error) {
