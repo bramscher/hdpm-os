@@ -21,8 +21,7 @@ export default async function PriceBookPage() {
       <a href="/maintenance/invoices?tab=estimates" className="mb-5 inline-block text-sm text-green-800 underline">← Estimates</a>
       <h1 className="text-display text-charcoal-900">Price Book</h1>
       <p className="mb-6 mt-1 text-sm text-charcoal-500">
-        Effective-dated pricing for turn estimates. Repricing creates a new effective row — it never
-        changes a price on an estimate that was already issued.
+        Choose labor rates, materials and services for estimates. Updating a price applies to future estimates; previously issued estimates keep their saved prices.
         {isAdmin ? '' : ' Sign in as an admin to make changes.'}
       </p>
       <PriceBookAdmin initialItems={items} isAdmin={isAdmin} />
