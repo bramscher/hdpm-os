@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PRICING_LABELS, needsPriceReview, priceBookName, priceBookRate } from "@/lib/turn-estimator/price-book-display";
 import type { PriceBookItem, PricingMethod } from "@/lib/turn-estimator/types";
 
 const METHODS: PricingMethod[] = [
@@ -14,24 +15,6 @@ const METHODS: PricingMethod[] = [
   "allowance",
 ];
 
-const money = (n: number) => `$${n.toFixed(2)}`;
-
-/** Compact price summary per method. */
-function priceLabel(it: PriceBookItem): string {
-  switch (it.pricing_method) {
-    case "hourly":
-      return `${money(it.base_price)}/hr`;
-    case "service_min":
-      return `${money(it.base_price)} min · +${money(it.increment_price ?? 0)}/${it.increment_minutes ?? 15}m`;
-    case "cost_plus":
-      return `cost +${it.markup_pct ?? 0}%`;
-    case "per_qty":
-      return `${money(it.base_price)}/${it.uom}`;
-    default:
-      return money(it.base_price);
-  }
-}
-
 export default function PriceBookAdmin({
   initialItems,
   isAdmin,
@@ -43,6 +26,9 @@ export default function PriceBookAdmin({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [showPending, setShowPending] = useState(false);
+  const pendingCount = items.filter(needsPriceReview).length;
+  const visibleItems = items.filter(item => showPending === needsPriceReview(item));
 
   async function refresh() {
     const res = await fetch("/api/turn-estimator/price-book");
@@ -50,7 +36,7 @@ export default function PriceBookAdmin({
   }
 
   async function reprice(it: PriceBookItem) {
-    const raw = window.prompt(`New price for ${it.item_code} (${priceLabel(it)})`, String(it.base_price));
+    const raw = window.prompt(`New price for ${priceBookName(it)} — ${priceBookRate(it)}`, String(it.base_price));
     if (raw == null) return;
     const base_price = Number(raw);
     if (Number.isNaN(base_price)) {
@@ -90,7 +76,7 @@ export default function PriceBookAdmin({
   }
 
   async function retire(it: PriceBookItem) {
-    if (!window.confirm(`Retire ${it.item_code}? It stays on past estimates but won't be selectable.`))
+    if (!window.confirm(`Retire ${priceBookName(it)}? It stays on past estimates but won't be selectable.`))
       return;
     setBusy(it.item_code);
     setError(null);
@@ -128,26 +114,27 @@ export default function PriceBookAdmin({
         </div>
       )}
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button type="button" aria-pressed={!showPending} onClick={() => setShowPending(false)} className={`rounded-lg border px-3 py-2 text-sm ${!showPending ? 'bg-charcoal-900 text-white' : 'bg-white'}`}>Current prices ({items.length - pendingCount})</button>
+        <button type="button" aria-pressed={showPending} onClick={() => setShowPending(true)} className={`rounded-lg border px-3 py-2 text-sm ${showPending ? 'bg-charcoal-900 text-white' : 'bg-white'}`}>Needs pricing review ({pendingCount})</button>
+      </div>
+      {showPending && <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">These items have unfinished prices and are not ready for estimates. Their saved amounts are provisional and need review before use.</p>}
       <div className="overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
+          <thead className="bg-sand-50 text-left text-xs text-charcoal-500">
             <tr>
-              <th className="px-3 py-2">Code</th>
-              <th className="px-3 py-2">Name</th>
-              <th className="px-3 py-2">Category</th>
-              <th className="px-3 py-2">Method</th>
+              <th className="px-3 py-2">Service or item</th>
+              <th className="px-3 py-2">How it is charged</th>
               <th className="px-3 py-2">Price</th>
               {isAdmin && <th className="px-3 py-2">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-sand-100">
-            {items.map((it) => (
+            {visibleItems.map((it) => (
               <tr key={it.id}>
-                <td className="px-3 py-2 font-mono text-xs text-charcoal-700">{it.item_code}</td>
-                <td className="px-3 py-2 text-charcoal-800">{it.name}</td>
-                <td className="px-3 py-2 text-charcoal-600">{it.category}</td>
-                <td className="px-3 py-2 text-charcoal-600">{it.pricing_method}</td>
-                <td className="px-3 py-2 font-medium text-charcoal-900">{priceLabel(it)}</td>
+                <td className="px-3 py-2 text-charcoal-800">{priceBookName(it)}{it.owner_description && <p className="mt-1 text-xs text-charcoal-500">{it.owner_description}</p>}</td>
+                <td className="px-3 py-2 text-charcoal-600">{PRICING_LABELS[it.pricing_method]}</td>
+                <td className="px-3 py-2 font-medium text-charcoal-900">{needsPriceReview(it) ? "Not ready to quote" : priceBookRate(it)}</td>
                 {isAdmin && (
                   <td className="px-3 py-2">
                     <div className="flex gap-2">
@@ -157,7 +144,7 @@ export default function PriceBookAdmin({
                         onClick={() => reprice(it)}
                         className="rounded-md border border-sand-200 px-2 py-0.5 text-xs text-charcoal-700 hover:bg-sand-50 disabled:opacity-50"
                       >
-                        Reprice
+                        Update price
                       </button>
                       <button
                         type="button"
@@ -172,10 +159,10 @@ export default function PriceBookAdmin({
                 )}
               </tr>
             ))}
-            {items.length === 0 && (
+            {visibleItems.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 6 : 5} className="px-3 py-6 text-center text-charcoal-400">
-                  No price-book items yet — run the seed or add one.
+                <td colSpan={isAdmin ? 4 : 3} className="px-3 py-6 text-center text-charcoal-400">
+                  {showPending ? "No items need pricing review." : "No current prices. Add an item to get started."}
                 </td>
               </tr>
             )}
@@ -211,7 +198,7 @@ function AddItemForm({
 
   async function submit() {
     if (!f.item_code || !f.name) {
-      onError("item_code and name are required");
+      onError("An internal reference and item name are required");
       return;
     }
     setSaving(true);
@@ -247,21 +234,21 @@ function AddItemForm({
   const input = "rounded-lg border border-sand-200 px-2 py-1 text-sm";
   return (
     <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-sand-200 bg-sand-50 p-3 md:grid-cols-3">
-      <input className={input} placeholder="item_code (e.g. CLEAN_STD)" value={f.item_code} onChange={set("item_code")} />
-      <input className={input} placeholder="name" value={f.name} onChange={set("name")} />
-      <input className={input} placeholder="category" value={f.category} onChange={set("category")} />
+      <input className={input} placeholder="Internal reference — unique item identifier" value={f.item_code} onChange={set("item_code")} />
+      <input className={input} placeholder="Item name" value={f.name} onChange={set("name")} />
+      <input className={input} placeholder="Category" value={f.category} onChange={set("category")} />
       <select className={input} value={f.pricing_method} onChange={set("pricing_method")}>
         {METHODS.map((m) => (
-          <option key={m} value={m}>{m}</option>
+          <option key={m} value={m}>{PRICING_LABELS[m]}</option>
         ))}
       </select>
-      <input className={input} placeholder="base price" value={f.base_price} onChange={set("base_price")} />
-      <input className={input} placeholder="uom (each/hour/room…)" value={f.uom} onChange={set("uom")} />
+      <input className={input} placeholder="Base price in dollars" value={f.base_price} onChange={set("base_price")} />
+      <input className={input} placeholder="Charge per: item, hour, room…" value={f.uom} onChange={set("uom")} />
       {f.pricing_method === "service_min" && (
         <>
           <input className={input} placeholder="included minutes" value={f.included_minutes} onChange={set("included_minutes")} />
-          <input className={input} placeholder="increment minutes" value={f.increment_minutes} onChange={set("increment_minutes")} />
-          <input className={input} placeholder="increment price" value={f.increment_price} onChange={set("increment_price")} />
+          <input className={input} placeholder="Additional time block in minutes" value={f.increment_minutes} onChange={set("increment_minutes")} />
+          <input className={input} placeholder="Price per additional time block" value={f.increment_price} onChange={set("increment_price")} />
         </>
       )}
       {f.pricing_method === "cost_plus" && (

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import EstimateReview from "./EstimateReview";
+import { needsPriceReview, priceBookName } from "@/lib/turn-estimator/price-book-display";
 import { STARTER_TEMPLATES, type EstimateTemplate } from "@/lib/turn-estimator/templates";
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 
@@ -297,7 +298,7 @@ export default function EstimateBuilder({
       {error && <Banner>{error}</Banner>}
       <div className="rounded-xl border border-sand-200 bg-white p-4 space-y-3">
         <div className="flex flex-wrap gap-3 items-end"><label className="grow text-sm">Start from a template<select className="block mt-1 w-full rounded-lg border p-3" value={templateId} onChange={e=>useTemplate(e.target.value)}><option value="">Choose a starter or saved template</option>{templates.filter(t=>!t.archived).map(t=><option key={t.id} value={t.id}>{t.name} · v{t.version}</option>)}</select></label><a className="underline text-sm p-3" href="/maintenance/invoices?tab=estimates">Saved drafts</a></div>
-        <p className="text-xs text-charcoal-500">Choose a template before editing. Checked rows are chargeable scope; unchecked rows remain a checklist. Missing or placeholder prices must be reviewed before issue.</p>
+        <p className="text-xs text-charcoal-500">Choose a template before editing. Checked rows are chargeable scope; unchecked rows remain a checklist. Items marked Needs pricing review cannot be quoted yet.</p>
         {canManageTemplates && <div className="flex flex-wrap gap-2"><input aria-label="Template name" className="rounded-lg border p-3" placeholder="Reusable template name" value={templateName} onChange={e=>setTemplateName(e.target.value)}/><button type="button" className="rounded-lg border p-3 text-sm" disabled={!!busy} onClick={()=>saveTemplate()}>Save as new template</button>{templateId&&!templateId.startsWith('starter-')&&<><button type="button" className="rounded-lg border p-3 text-sm" disabled={!!busy} onClick={()=>saveTemplate(true)}>Publish revision</button>{canArchiveTemplates && <button type="button" className="rounded-lg border p-3 text-sm" onClick={async()=>{const t=templates.find(t=>t.id===templateId);const r=await fetch('/api/turn-estimator/templates',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({family_id:t?.family_id})});if(r.ok){setTemplates(ts=>ts.map(x=>x.family_id===t?.family_id?{...x,archived:true}:x));setTemplateId('');}else setError('Archive failed');}}>Archive template</button>}</>}</div>}
         <p className="text-xs text-charcoal-500">Reusable template descriptions should contain general scope only. Property and work-order fields are not copied.</p>
       </div>
@@ -376,8 +377,8 @@ export default function EstimateBuilder({
                     <select className={`${input} w-full min-w-0`} value={r.item_code} onChange={(e) => setRow(r.key, { item_code: e.target.value })}>
                       <option value="">— select —</option>
                       {items.map((it) => (
-                        <option key={it.id} value={it.item_code}>
-                          {it.name} ({it.item_code})
+                        <option key={it.id} value={it.item_code} disabled={needsPriceReview(it)}>
+                          {priceBookName(it)}{needsPriceReview(it) ? " — Needs pricing review" : ""}
                         </option>
                       ))}
                     </select>
