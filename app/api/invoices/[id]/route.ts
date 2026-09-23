@@ -57,9 +57,13 @@ export async function PATCH(
 
     if (!canIssueInvoices(roleGuard.role)) {
       if (!canEditInvoiceDraft(roleGuard.role, roleGuard.email, existing, roleGuard.capabilities)) {
-        return NextResponse.json({ error: 'You can edit only your own unissued invoice drafts. Office review is required for other invoices.' }, { status: 403 });
+        return NextResponse.json({ error: 'You can edit your own drafts and, with PDF permission, your own generated invoices. Attached invoices require office review.' }, { status: 403 });
       }
-      const invoice = await updateInvoice(id, invoiceDraftFields(body), existing.created_by);
+      const changes = invoiceDraftFields(body);
+      // A correction invalidates the old PDF; it must be generated again.
+      const invoice = existing.status === 'generated'
+        ? await updateInvoice(id, { ...changes, status: 'draft', pdf_path: null }, existing.created_by, 'generated')
+        : await updateInvoice(id, changes, existing.created_by);
       return NextResponse.json({ invoice });
     }
 

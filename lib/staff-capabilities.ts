@@ -1,6 +1,6 @@
 export const CAPABILITIES = [
- {key:'invoice.draft',label:'Create and edit invoice drafts',description:'Prepare invoices from work orders. Staff can edit their own unissued drafts.'},
- {key:'invoice.generate',label:'Generate invoice PDFs',description:'Generate a PDF from an allowed invoice draft. Requires invoice drafts.'},
+ {key:'invoice.draft',label:'Create and edit invoice drafts',description:'Prepare invoices from work orders. Staff can edit their own drafts, plus their own generated invoices when PDF permission is enabled.'},
+ {key:'invoice.generate',label:'Generate invoice PDFs',description:'Generate PDFs and correct own generated invoices before attachment. Requires invoice drafts.'},
  {key:'estimate.draft',label:'Create and edit estimates',description:'Add scope, line items, pricing details, and save shared drafts.'},
  {key:'estimate.template',label:'Create and revise templates',description:'Save reusable estimate templates and publish revisions. Requires estimate drafts.'},
  {key:'estimate.issue',label:'Issue estimates',description:'Create the priced estimate version; existing approval rules still apply. Requires estimate drafts.'},

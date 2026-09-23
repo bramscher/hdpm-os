@@ -3,10 +3,10 @@ import { NextRequest } from 'next/server';
 import { canEditInvoiceDraft, invoiceDraftFields, canCreateInvoices, canGenerateInvoice } from '@/lib/invoice-permissions';
 
 const mocks = vi.hoisted(() => ({
-  role: 'field', email: 'alberto@highdesertpm.com',
+  generate: false, role: 'field', email: 'alberto@highdesertpm.com',
   create: vi.fn(), credit: vi.fn(), get: vi.fn(), update: vi.fn(), remove: vi.fn(),
 }));
-vi.mock('@/lib/staff-capabilities-server', () => ({loadStaffCapabilities: async () => ({'invoice.draft':canCreateInvoices(mocks.role,mocks.email),'invoice.generate':canGenerateInvoice(mocks.role,mocks.email),'estimate.draft':false,'estimate.template':false,'estimate.issue':false})}));
+vi.mock('@/lib/staff-capabilities-server', () => ({loadStaffCapabilities: async () => ({'invoice.draft':canCreateInvoices(mocks.role,mocks.email),'invoice.generate':mocks.generate || canGenerateInvoice(mocks.role,mocks.email),'estimate.draft':false,'estimate.template':false,'estimate.issue':false})}));
 vi.mock('@/lib/require-role', () => ({
   requireCompanySession: async () => mocks.email.endsWith('@highdesertpm.com') ? {ok:true,role:mocks.role,email:mocks.email} : {ok:false,response:new Response('Unauthorized',{status:401})},
   requireRole: async (...roles: string[]) => mocks.role === 'admin' || roles.includes(mocks.role)
@@ -33,7 +33,7 @@ const draft = { id: 'draft-1', status: 'draft', doc_type: 'invoice', created_by:
 const input = { property_name: 'Pilot', property_address: 'Test address', description: 'Completed repair', labor_amount: 95, materials_amount: 0 };
 
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.role = 'field'; mocks.email = 'alberto@highdesertpm.com';
+  vi.clearAllMocks(); mocks.generate = false; mocks.role = 'field'; mocks.email = 'alberto@highdesertpm.com';
   mocks.get.mockResolvedValue(draft); mocks.create.mockResolvedValue(draft); mocks.update.mockResolvedValue(draft);
 });
 
@@ -143,5 +143,26 @@ describe('Alberto invoice access with his production staff role', () => {
     expect((await generatePdf(request({}), params)).status).toBe(403);
     mocks.get.mockResolvedValue({...draft, created_by:'penny@highdesertpm.com'});
     expect((await PATCH(request({description:'Changed'}, 'PATCH'), params)).status).toBe(403);
+  });
+});
+
+
+describe('generated invoices with approved PDF permission', () => {
+  beforeEach(() => { mocks.role = 'staff'; mocks.generate = true; mocks.get.mockResolvedValue({ ...draft, status: 'generated', pdf_path: 'old.pdf' }); });
+  it('restores Alberto’s edit pencil for his generated invoice', () => {
+    expect(canEditInvoiceDraft('staff', mocks.email, { ...draft, status: 'generated' } as never, { 'invoice.draft': true, 'invoice.generate': true } as never)).toBe(true);
+  });
+  it('saves corrections as a draft and invalidates the previous PDF with a write-time status guard', async () => {
+    expect((await PATCH(request({ description: 'Corrected labor', status: 'attached', created_by: 'other', pdf_path: 'fake' }, 'PATCH'), params)).status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith('draft-1', { description: 'Corrected labor', status: 'draft', pdf_path: null }, mocks.email, 'generated');
+  });
+  it('allows regenerating his PDF with the matching status guard', async () => {
+    expect((await generatePdf(request({}), params)).status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith('draft-1', { pdf_path: 'saved.pdf', status: 'generated' }, mocks.email, 'generated');
+  });
+  it.each([{ status: 'attached' }, { status: 'void' }, { created_by: 'other@highdesertpm.com' }, { doc_type: 'credit' }, { maintenance_job_id: 'approved-job' }])('keeps office review for %j', async override => {
+    mocks.get.mockResolvedValue({ ...draft, status: 'generated', ...override });
+    expect((await PATCH(request({ description: 'Changed' }, 'PATCH'), params)).status).toBe(403);
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 });
