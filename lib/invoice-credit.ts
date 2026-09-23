@@ -31,3 +31,16 @@ export function creditItemsForInvoice(invoice: Pick<HdmsInvoice, 'line_items' | 
   if (items.length && cents === Math.round(Math.abs(Number(invoice.total_amount)) * 100)) return items;
   return [{ description: `Credit for ${invoice.invoice_code}`, type: 'other', amount: Math.abs(Number(invoice.total_amount)) || 0 }];
 }
+
+/** Net invoice charges after non-void linked credits; intentionally excludes payments. */
+export function creditBalancePreview(
+  invoice: Pick<HdmsInvoice, 'id' | 'total_amount'>,
+  invoices: Pick<HdmsInvoice, 'doc_type' | 'credits_invoice_id' | 'status' | 'total_amount'>[],
+  proposedAmount: number,
+) {
+  const originalCents = Math.round(Number(invoice.total_amount) * 100);
+  const existingCents = invoices
+    .filter(credit => credit.doc_type === 'credit' && credit.credits_invoice_id === invoice.id && credit.status !== 'void')
+    .reduce((sum, credit) => sum + Math.round(Math.abs(Number(credit.total_amount)) * 100), 0);
+  return { original: originalCents / 100, existingCredits: existingCents / 100, net: (originalCents - existingCents - Math.round(proposedAmount * 100)) / 100 };
+}
