@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { HdmsInvoice } from "@/lib/invoices";
 import type { Payment, PaymentWithInvoices } from "@/lib/payments";
 import type { AfBillWithInvoice, AfBillSummary, SyncResult } from "@/lib/af-bills";
-import { InvoiceList } from "./invoice-list";
+import { ReconciliationWorkspace } from "./reconciliation-workspace";
 import { CapturePaymentModal } from "./capture-payment-modal";
 
 function formatCurrency(amount: number | null): string {
@@ -47,11 +47,8 @@ interface ReconcileTabProps {
   isLoadingInvoices: boolean;
   onRefreshInvoices: () => void;
   onEdit: (invoice: HdmsInvoice) => void;
-  onReconcile: (invoices: HdmsInvoice[]) => void;
   /** Bump to force a re-fetch of the payments ledger (e.g. after recording). */
   reloadToken: number;
-  /** Bump when a payment is recorded, to clear the saved reconcile selection. */
-  clearSelectionToken: number;
 }
 
 export function ReconcileTab({
@@ -59,11 +56,9 @@ export function ReconcileTab({
   isLoadingInvoices,
   onRefreshInvoices,
   onEdit,
-  onReconcile,
   reloadToken,
-  clearSelectionToken,
 }: ReconcileTabProps) {
-  const [mode, setMode] = useState<"ledger" | "new" | "billing">("ledger");
+  const [mode, setMode] = useState<"ledger" | "billing">("ledger");
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -212,38 +207,6 @@ export function ReconcileTab({
     }
   }
 
-  // ── New reconciliation: reuse the invoice list with the reconcile action ──
-  if (mode === "new") {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setMode("ledger")}
-            className="text-charcoal-500 hover:text-charcoal-700 text-xs h-8"
-          >
-            <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
-            Back to payments
-          </Button>
-          <span className="text-xs text-charcoal-400">
-            Filter to the payment&rsquo;s period, select the invoices it covered, then
-            &ldquo;Reconcile payment&rdquo;.
-          </span>
-        </div>
-        <InvoiceList
-          invoices={invoices}
-          onRefresh={onRefreshInvoices}
-          onEdit={onEdit}
-          onReconcile={onReconcile}
-          persistSelection
-          clearSelectionToken={clearSelectionToken}
-          isLoading={isLoadingInvoices}
-        />
-      </div>
-    );
-  }
-
   // ── AppFolio billing check: every HDMS bill in AppFolio vs our invoices ──
   if (mode === "billing") {
     return (
@@ -293,6 +256,7 @@ export function ReconcileTab({
   // ── Ledger of recorded payments ──
   return (
     <div className="space-y-4">
+      <ReconciliationWorkspace invoices={invoices} isLoading={isLoadingInvoices} onEdit={onEdit} onRefresh={onRefreshInvoices} onRecorded={()=>{void fetchPayments();onRefreshInvoices();}} />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-charcoal-800">Recorded payments</h2>
@@ -339,14 +303,7 @@ export function ReconcileTab({
             <Wallet className="h-3.5 w-3.5 mr-1.5" />
             Capture ACH payment
           </Button>
-          <Button
-            size="sm"
-            onClick={() => setMode("new")}
-            className="bg-terra-500 hover:bg-terra-600 text-white text-xs h-9"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            New reconciliation
-          </Button>
+
         </div>
       </div>
 

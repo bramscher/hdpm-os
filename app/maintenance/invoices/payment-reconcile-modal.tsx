@@ -8,6 +8,8 @@ import { HdmsInvoice } from "@/lib/invoices";
 import type { Payment } from "@/lib/payments";
 import { aggregate, chargedSplit } from "@/lib/invoice-analysis";
 
+import type { ReconciliationPaymentState } from "@/lib/reconciliation-draft";
+
 const DEFAULT_PAYEE = "High Desert Maintenance Services";
 
 function formatCurrency(amount: number | null): string {
@@ -38,6 +40,9 @@ function todayInput(): string {
 }
 
 interface PaymentReconcileModalProps {
+  savedPayment?: ReconciliationPaymentState | null;
+  onPaymentChange?: (state: ReconciliationPaymentState) => void;
+  draftSaveStatus?: string;
   invoices: HdmsInvoice[];
   onClose: () => void;
   onRecorded: () => void;
@@ -48,24 +53,28 @@ type Mode = "existing" | "new";
 export function PaymentReconcileModal({
   invoices,
   onClose,
-  onRecorded,
+  onRecorded, savedPayment, onPaymentChange, draftSaveStatus,
 }: PaymentReconcileModalProps) {
   // Captured payments to reconcile against.
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
-  const [mode, setMode] = useState<Mode>("existing");
-  const [selectedPaymentId, setSelectedPaymentId] = useState<string>("");
+  const [mode, setMode] = useState<Mode>(savedPayment?.mode ?? "existing");
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string>(savedPayment?.selectedPaymentId ?? "");
 
   // New-payment form.
-  const [payee, setPayee] = useState(DEFAULT_PAYEE);
-  const [paidOn, setPaidOn] = useState(todayInput());
-  const [amount, setAmount] = useState("");
-  const [reference, setReference] = useState("");
-  const [method, setMethod] = useState("ach");
-  const [memo, setMemo] = useState("");
+  const [payee, setPayee] = useState(savedPayment?.payee ?? DEFAULT_PAYEE);
+  const [paidOn, setPaidOn] = useState(savedPayment?.paidOn ?? todayInput());
+  const [amount, setAmount] = useState(savedPayment?.amount ?? "");
+  const [reference, setReference] = useState(savedPayment?.reference ?? "");
+  const [method, setMethod] = useState(savedPayment?.method ?? "ach");
+  const [memo, setMemo] = useState(savedPayment?.memo ?? "");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loadingPayments) onPaymentChange?.({mode,selectedPaymentId,payee,paidOn,amount,reference,method,memo});
+  }, [loadingPayments,mode,selectedPaymentId,payee,paidOn,amount,reference,method,memo,onPaymentChange]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -91,7 +100,9 @@ export function PaymentReconcileModal({
           const list: Payment[] = data.payments || [];
           setPayments(list);
           // Default: pick an existing payment if any exist, else the new-payment form.
-          if (list.length > 0) {
+          if (savedPayment) {
+            // Resume exactly what the user had entered.
+          } else if (list.length > 0) {
             setMode("existing");
             setSelectedPaymentId(list[0].id);
           } else {
@@ -199,6 +210,7 @@ export function PaymentReconcileModal({
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={saving ? undefined : onClose} />
 
       <div className="relative w-full max-w-3xl h-[90vh] mx-4 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
+        {draftSaveStatus && <p role="status" className="px-5 py-2 text-xs bg-sand-50">Draft: {draftSaveStatus}</p>}
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-charcoal-200/60 bg-charcoal-50/80">
           <div className="flex items-center gap-3">

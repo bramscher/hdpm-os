@@ -5,7 +5,7 @@ import { canEditInvoiceDraft, canIssueInvoices } from "@/lib/invoice-permissions
 
 import { ReportPeriodPresets } from "./report-period-presets";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Download,
   CheckCircle2,
@@ -34,10 +34,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { HdmsInvoice, TECHNICIANS } from "@/lib/invoices";
 
+import type { ReconciliationListState } from "@/lib/reconciliation-draft";
+
 // How many invoice cards to show per page.
 const PAGE_SIZE = 25;
 
 interface InvoiceListProps {
+  reconciliationState?: ReconciliationListState;
+  onReconciliationStateChange?: (state: ReconciliationListState) => void;
   invoices: HdmsInvoice[];
   onRefresh: () => void;
   onEdit: (invoice: HdmsInvoice) => void;
@@ -47,17 +51,6 @@ interface InvoiceListProps {
   onRunReport?: (invoices: HdmsInvoice[]) => void;
   /** Reconcile the selected invoices to a trust-account payment. Button hidden when omitted. */
   onReconcile?: (invoices: HdmsInvoice[]) => void;
-  /**
-   * Persist the checkbox selection per user + period (the date-range filter), so
-   * the user can leave mid-reconcile and resume. Auto-saves on every change and
-   * restores when the period is reopened. Only enable in the reconcile flow.
-   */
-  persistSelection?: boolean;
-  /**
-   * Bump to signal that reconciliation for the current period committed: the
-   * saved draft is deleted and the selection cleared. (Paired with persistSelection.)
-   */
-  clearSelectionToken?: number;
   isLoading: boolean;
 }
 
@@ -251,7 +244,7 @@ function PdfPreviewModal({
 // Invoice List
 // ============================================
 
-export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunReport, onReconcile, persistSelection, clearSelectionToken, isLoading }: InvoiceListProps) {
+export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunReport, onReconcile, isLoading, reconciliationState, onReconciliationStateChange }: InvoiceListProps) {
   const { data: session } = useSession();
   const canIssue = canIssueInvoices(session?.user?.role);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -260,17 +253,21 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
   const [previewInvoice, setPreviewInvoice] = useState<HdmsInvoice | null>(null);
 
   // ── Selection / filter / sort state ──────────
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(reconciliationState?.invoiceIds || []));
+  const [search, setSearch] = useState(reconciliationState?.search ?? "");
+  const [dateFrom, setDateFrom] = useState(reconciliationState?.dateFrom ?? "");
+  const [dateTo, setDateTo] = useState(reconciliationState?.dateTo ?? "");
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState("");
-  const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
-  const [afBilledOnly, setAfBilledOnly] = useState(false);
-  const [techFilter, setTechFilter] = useState<TechFilter>("all");
-  const [sortField, setSortField] = useState<SortField>("date");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [paidFilter, setPaidFilter] = useState<PaidFilter>(reconciliationState?.paidFilter ?? "all");
+  const [afBilledOnly, setAfBilledOnly] = useState(reconciliationState?.afBilledOnly ?? false);
+  const [techFilter, setTechFilter] = useState<TechFilter>(reconciliationState?.techFilter ?? "all");
+  const [sortField, setSortField] = useState<SortField>(reconciliationState?.sortField ?? "date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(reconciliationState?.sortDir ?? "desc");
+
+  useEffect(() => {
+    onReconciliationStateChange?.({invoiceIds:[...selectedIds],dateFrom,dateTo,search,paidFilter,afBilledOnly,techFilter,sortField,sortDir});
+  }, [selectedIds,dateFrom,dateTo,search,paidFilter,afBilledOnly,techFilter,sortField,sortDir,onReconciliationStateChange]);
 
   async function exportPeriod() {
     setPrinting(true); setPrintError('');
@@ -395,76 +392,6 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
       return changed ? next : prev;
     });
   }, [invoices]);
-
-  // ── Save & resume: persist the checkbox selection per user + period ──────────
-  // The period key is the date-range filter. restoredKeyRef tracks which period
-  // we've loaded so the auto-save never writes one period's selection under
-  // another's key, and skipNextSave suppresses the echo save right after a restore.
-  const restoredKeyRef = useRef<string | null>(null);
-  const skipNextSaveRef = useRef(false);
-  const seenClearTokenRef = useRef(clearSelectionToken);
-
-  // Restore the saved selection when a (new) period is opened.
-  useEffect(() => {
-    if (!persistSelection) return;
-    const key = `${dateFrom}|${dateTo}`;
-    if (restoredKeyRef.current === key) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/reconcile-selection?from=${encodeURIComponent(dateFrom)}&to=${encodeURIComponent(dateTo)}`
-        );
-        const data = await res.json();
-        if (cancelled) return;
-        const ids: string[] = Array.isArray(data.selection?.invoice_ids)
-          ? data.selection.invoice_ids
-          : [];
-        skipNextSaveRef.current = true;
-        setSelectedIds(new Set(ids));
-      } catch {
-        // best-effort restore; leave the current selection untouched on failure
-      } finally {
-        if (!cancelled) restoredKeyRef.current = key;
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [persistSelection, dateFrom, dateTo]);
-
-  // Auto-save (debounced) on every check/uncheck, once this period is restored.
-  useEffect(() => {
-    if (!persistSelection) return;
-    const key = `${dateFrom}|${dateTo}`;
-    if (restoredKeyRef.current !== key) return; // wait for this period's restore
-    if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false;
-      return;
-    }
-    const ids = [...selectedIds];
-    const t = setTimeout(() => {
-      fetch("/api/reconcile-selection", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: dateFrom, to: dateTo, invoice_ids: ids }),
-      }).catch(() => {});
-    }, 600);
-    return () => clearTimeout(t);
-  }, [persistSelection, selectedIds, dateFrom, dateTo]);
-
-  // Reconciliation committed → clear this period's saved draft and selection.
-  useEffect(() => {
-    if (!persistSelection || clearSelectionToken === undefined) return;
-    if (seenClearTokenRef.current === clearSelectionToken) return;
-    seenClearTokenRef.current = clearSelectionToken;
-    skipNextSaveRef.current = true;
-    setSelectedIds(new Set());
-    fetch(
-      `/api/reconcile-selection?from=${encodeURIComponent(dateFrom)}&to=${encodeURIComponent(dateTo)}`,
-      { method: "DELETE" }
-    ).catch(() => {});
-  }, [clearSelectionToken, persistSelection, dateFrom, dateTo]);
 
   const selectedInvoices = useMemo(
     () => invoices.filter((i) => selectedIds.has(i.id)),
@@ -765,9 +692,6 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                 {selectedIds.size} selected
                 {(hasDateFilter || search.trim()) && (
                   <span className="text-charcoal-300"> · {visible.length} shown</span>
-                )}
-                {persistSelection && (
-                  <span className="text-charcoal-300"> · saved for this period</span>
                 )}
               </span>
             </div>
