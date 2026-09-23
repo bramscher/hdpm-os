@@ -36,14 +36,14 @@ describe('itemized credit memos', () => {
   });
 
   it('prefills a linked invoice with editable category-specific credit items', () => {
-    expect(creditItemsForInvoice({ invoice_code: 'INV-1', total_amount: 125, line_items: items.slice(0, 2) as HdmsInvoice['line_items'] })).toEqual([
+    expect(creditItemsForInvoice({ invoice_code: 'INV-1', total_amount: 125, line_items: items.slice(0, 2) as NonNullable<HdmsInvoice['line_items']> })).toEqual([
       { description: 'Credit: Labor adjustment', type: 'labor', amount: 100 },
       { description: 'Credit: Returned materials', type: 'materials', amount: 25 },
     ]);
   });
 
   it('preserves the full amount when linked invoice details do not match its total', () => {
-    expect(creditItemsForInvoice({ invoice_code: 'INV-1', total_amount: 150, line_items: items.slice(0, 2) as HdmsInvoice['line_items'] })).toEqual([
+    expect(creditItemsForInvoice({ invoice_code: 'INV-1', total_amount: 150, line_items: items.slice(0, 2) as NonNullable<HdmsInvoice['line_items']> })).toEqual([
       { description: 'Credit for INV-1', type: 'other', amount: 150 },
     ]);
   });
@@ -53,7 +53,7 @@ describe('itemized credit memos', () => {
     const saved = await createCredit({
       property_name: 'Test property', property_address: '123 Test Street', description: 'Billing correction', created_by: 'test@example.com',
       labor_amount: 999, materials_amount: 999, total_amount: 999,
-      line_items: items.slice(0, 2) as HdmsInvoice['line_items'],
+      line_items: items.slice(0, 2) as NonNullable<HdmsInvoice['line_items']>,
     });
     expect(saved).toMatchObject({ doc_type: 'credit', labor_amount: -100, materials_amount: -25, total_amount: -125 });
     expect(saved.line_items?.map(item => item.amount)).toEqual([-100, -25]);
