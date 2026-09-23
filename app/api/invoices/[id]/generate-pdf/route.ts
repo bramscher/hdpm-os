@@ -30,7 +30,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    if (!canGenerateInvoice(roleGuard.role, roleGuard.email, invoice, roleGuard.capabilities)) return NextResponse.json({error: 'You can generate only your own invoice drafts.'}, {status: 403});
+    if (!canGenerateInvoice(roleGuard.role, roleGuard.email, invoice, roleGuard.capabilities)) return NextResponse.json({error: 'You can generate PDFs only for invoices you are allowed to edit.'}, {status: 403});
 
     if (invoice.status === 'void') {
       return NextResponse.json({ error: 'Cannot generate PDF for a voided invoice' }, { status: 400 });
@@ -70,8 +70,8 @@ export async function POST(
     if(invoice.maintenance_job_id){
       const {data,error}=await getSupabaseAdmin().rpc('maintenance_finalize_invoice',{actor:session.user.email,request:{id,line_items:invoice.line_items,total_amount:Number(invoice.total_amount),pdf_path:pdfPath}});
       if(error)throw new Error(error.message);updatedInvoice=data;
-    }else if (!canIssueInvoices(roleGuard.role) && invoice.status === 'generated') {
-      updatedInvoice=await updateInvoice(id,{pdf_path:pdfPath,status:'generated'},invoice.created_by,'generated');
+    }else if (!canIssueInvoices(roleGuard.role) && (invoice.status === 'generated' || invoice.status === 'attached')) {
+      updatedInvoice=await updateInvoice(id,{pdf_path:pdfPath,status:'generated'},invoice.created_by,invoice.status);
     }else updatedInvoice=await updateInvoice(id,{pdf_path:pdfPath,status:'generated'},canIssueInvoices(roleGuard.role) ? undefined : invoice.created_by);
 
     return NextResponse.json({ invoice: updatedInvoice });
