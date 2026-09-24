@@ -1405,6 +1405,28 @@ interface ManagementFeesKpi {
   /** Σ occupied-unit market rent × property fee % × 12 (+ flat fees × 12).
       An ESTIMATE — actual lease rents are not on the v0 API. */
   estAnnualFeeRevenue: number | null;
+  /** Door-level breakdown for the admin Fee Index panel (added 2026-09-24). */
+  feeIndex?: ManagementFeeIndex;
+}
+
+export interface ManagementFeeTier {
+  pct: number;
+  properties: number;
+  doors: number;              // non-hidden revenue units
+  occupiedDoors: number;
+  /** Σ occupied-unit market rent × 12 — the base a fee % applies to. */
+  annualRentBase: number;
+  annualFees: number;         // annualRentBase × pct
+}
+
+export interface ManagementFeeIndex {
+  tiers: ManagementFeeTier[];  // sorted by pct ascending
+  flat: { properties: number; doors: number; annualFees: number };
+  noPolicy: { properties: number; doors: number };
+  /** Mean fee % weighted by door count (percent-fee doors only). */
+  doorWeightedAvgPct: number | null;
+  /** Σ fees ÷ Σ rent base — the rate actually earned on rent collected. */
+  effectiveRatePct: number | null;
 }
 
 interface V0PropertyWithFees {
@@ -1452,6 +1474,8 @@ export async function fetchManagementFeesKpi(): Promise<ManagementFeesKpi> {
   let flatCount = 0;
   let noPolicy = 0;
   let flatAnnual = 0;
+  const flatIds = new Set<string>();
+  const activeIds = new Set(active.map((p) => p.Id));
 
   for (const p of active) {
     const policy = p.CurrentManagementFeePolicy;
@@ -1461,6 +1485,7 @@ export async function fetchManagementFeesKpi(): Promise<ManagementFeesKpi> {
       tierCounts.set(pct, (tierCounts.get(pct) ?? 0) + 1);
     } else if (policy?.FeeType === 'Flat' && policy.FlatAmount != null) {
       flatCount++;
+      flatIds.add(p.Id);
       flatAnnual += (parseFloat(policy.FlatAmount) || 0) * 12;
     } else {
       noPolicy++;
@@ -1472,18 +1497,55 @@ export async function fetchManagementFeesKpi(): Promise<ManagementFeesKpi> {
     ? Math.round((pcts.reduce((a, b) => a + b, 0) / pcts.length) * 10) / 10
     : null;
 
-  // Estimated annual revenue: occupied, revenue units × market rent × fee %.
+  // Door-level tiers. Estimated annual revenue: occupied, revenue units ×
+  // market rent × fee %.
+  const tierAgg = new Map<number, ManagementFeeTier>();
+  for (const [pct, properties] of tierCounts) {
+    tierAgg.set(pct, { pct, properties, doors: 0, occupiedDoors: 0, annualRentBase: 0, annualFees: 0 });
+  }
+  let flatDoors = 0;
+  let noPolicyDoors = 0;
   let pctAnnual = 0;
   let ratedUnits = 0;
   for (const u of units) {
-    if (u.HiddenAt || u.NonRevenue || !u.CurrentOccupancyId || !u.PropertyId) continue;
+    if (u.HiddenAt || u.NonRevenue || !u.PropertyId || !activeIds.has(u.PropertyId)) continue;
     const pct = pctByProperty.get(u.PropertyId);
+    if (pct == null) {
+      if (flatIds.has(u.PropertyId)) flatDoors++;
+      else noPolicyDoors++;
+      continue;
+    }
+    const tier = tierAgg.get(pct)!;
+    tier.doors++;
+    if (!u.CurrentOccupancyId) continue;
+    tier.occupiedDoors++;
     const rent = u.MarketRent != null ? parseFloat(u.MarketRent) : NaN;
-    if (pct == null || !Number.isFinite(rent)) continue;
+    if (!Number.isFinite(rent)) continue;
+    tier.annualRentBase += rent * 12;
     pctAnnual += rent * (pct / 100) * 12;
     ratedUnits++;
   }
   const estAnnualFeeRevenue = ratedUnits > 0 ? Math.round(pctAnnual + flatAnnual) : null;
+
+  const feeTiers = [...tierAgg.values()]
+    .map((t) => ({
+      ...t,
+      annualRentBase: Math.round(t.annualRentBase),
+      annualFees: Math.round(t.annualRentBase * (t.pct / 100)),
+    }))
+    .sort((a, b) => a.pct - b.pct);
+  const pctDoors = feeTiers.reduce((a, t) => a + t.doors, 0);
+  const rentBase = feeTiers.reduce((a, t) => a + t.annualRentBase, 0);
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const feeIndex: ManagementFeeIndex = {
+    tiers: feeTiers,
+    flat: { properties: flatCount, doors: flatDoors, annualFees: Math.round(flatAnnual) },
+    noPolicy: { properties: noPolicy, doors: noPolicyDoors },
+    doorWeightedAvgPct: pctDoors
+      ? round2(feeTiers.reduce((a, t) => a + t.pct * t.doors, 0) / pctDoors)
+      : null,
+    effectiveRatePct: rentBase ? round2((pctAnnual / rentBase) * 100) : null,
+  };
 
   return {
     totalProperties: active.length,
@@ -1494,6 +1556,7 @@ export async function fetchManagementFeesKpi(): Promise<ManagementFeesKpi> {
     flatCount,
     noPolicy,
     estAnnualFeeRevenue,
+    feeIndex,
   };
 }
 
