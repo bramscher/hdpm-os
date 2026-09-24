@@ -127,6 +127,18 @@
     {
       "path": "/api/eos/cron/scorecard-daily",
       "schedule": "0 14 * * 1-5"
+    },
+    {
+      "path": "/api/agents/cron/activities",
+      "schedule": "0 14 * * 1-5"
+    },
+    {
+      "path": "/api/agents/cron/activities?kind=nudge",
+      "schedule": "0 20 * * 1-5"
+    },
+    {
+      "path": "/api/agents/cron/activities?kind=new",
+      "schedule": "30 15-23 * * 1-5"
     }
   ]
 }
