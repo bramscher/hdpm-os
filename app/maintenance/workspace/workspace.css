@@ -3,3 +3,18 @@
 
 .mw-capacity{font-size:12px;background:#f0f4ea;border-radius:8px;padding:9px;margin-bottom:10px}.mw-capacity small,.mw-crew-capacity{display:block;font-size:11px;margin-top:4px}.mw .mw-warning{color:#87421d;background:#fff0dc}.mw .mw-forecast{font-size:12px;font-weight:650;color:#315f51}.mw-plan-summary{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}.mw-plan-summary .mw-number{font-size:28px}.mw-plan-summary .mw-card{margin:0}.mw-plan-summary h3{font-size:13px}
 .mw .mw-calendar-route{margin:8px 0;padding:7px 10px;border:1px solid #b5cdbb;border-radius:7px;color:#166534;background:#f0f7f1;font-size:12px;font-weight:600}.mw .mw-day-route{margin-top:20px;scroll-margin-top:24px}.mw .mw-route-stops{list-style:none;padding:0;display:grid;gap:12px;margin-top:18px}.mw .mw-route-stops li{border-top:1px solid #e1e7e0;padding-top:14px}.mw .mw-route-stops h3{font-size:15px}.mw .mw-day-route a{color:#166534;text-decoration:underline;text-underline-offset:3px}
+
+/* Scheduling: full weeks in month view; appointments remain one per visit. */
+.mw-month-scroll{overflow:auto;border:1px solid #d9dfd7;border-radius:12px;margin:16px 0;background:#fff}
+.mw-month{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-width:770px}
+.mw-month-heading{padding:12px;background:#f1f4eb;font-size:12px;border-bottom:1px solid #d9dfd7}
+.mw-month-day{min-width:0;min-height:155px;padding:8px;border-right:1px solid #e1e6de;border-bottom:1px solid #e1e6de}
+.mw-month-muted{background:#f3f4f1;color:#748177}
+.mw .mw-month-date{border:0;background:transparent;padding:4px 6px;font-weight:650;min-height:36px}
+.mw .mw-month-more{padding:6px;font-size:12px;width:100%;border:0;background:#f1f4eb}
+.mw .mw-month .mw-calendar-visit{min-width:0;padding:8px;font-size:11px;overflow-wrap:anywhere}
+.mw .mw-calendar-visit strong{display:block;margin-top:6px}
+.mw .mw-visit-complete{background:#f0f1ed;color:#657368}
+.mw-no-visits{display:block;padding:8px;color:#748177;font-size:11px}
+.mw .mw-actions button[aria-pressed=true]{background:#183e38;color:white;border-color:#183e38}
+.mw-scheduling-queue{scroll-margin-top:24px;border-top:1px solid #d9dfd7;margin-top:24px}
