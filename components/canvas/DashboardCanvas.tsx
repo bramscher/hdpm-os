@@ -30,7 +30,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { canViewHabuDemo } from "@/lib/habu-demo-access";
-import { cn } from "@/lib/utils";
 
 function getGreeting() {
   // Force Pacific Time for Central Oregon
@@ -95,88 +94,47 @@ function fmtMins(mins: number): string {
 }
 
 // ────────────────────────────────────────────────
-// Streamdeck tiles
+// Compact rows (Notion-style, 2026-09-24): black icon + label, and the only
+// color on the page is a red count for anything unread / needing attention.
 // ────────────────────────────────────────────────
-
-type Tone = "terra" | "amber" | "green" | "blue" | "purple" | "red" | "charcoal";
-
-const ICON_TONES: Record<Tone, string> = {
-  terra: "bg-terra-100 text-terra-600",
-  amber: "bg-amber-100 text-amber-600",
-  green: "bg-green-100 text-green-600",
-  blue: "bg-blue-100 text-blue-600",
-  purple: "bg-purple-100 text-purple-600",
-  red: "bg-red-100 text-red-600",
-  charcoal: "bg-charcoal-100 text-charcoal-600",
-};
-
-const BADGE_TONES: Record<Tone, string> = {
-  terra: "bg-terra-500 text-white",
-  amber: "bg-amber-500 text-white",
-  green: "bg-green-500 text-white",
-  blue: "bg-blue-500 text-white",
-  purple: "bg-purple-500 text-white",
-  red: "bg-red-500 text-white",
-  charcoal: "bg-charcoal-700 text-white",
-};
 
 function Tile({
   href,
   icon: Icon,
   label,
-  tone,
   badge,
-  badgeTone,
   title,
 }: {
   href: string;
   icon: LucideIcon;
   label: string;
-  tone: Tone;
   badge?: number | null;
-  badgeTone?: Tone;
   title?: string;
 }) {
   return (
     <Link
       href={href}
       title={title}
-      className="group relative flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-sand-200 bg-sand-50/60 p-2 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-card"
+      className="group flex h-9 items-center gap-2.5 rounded-md px-2.5 text-[13px] text-charcoal-800 transition-colors hover:bg-sand-100"
     >
+      <Icon className="h-4 w-4 flex-shrink-0 text-charcoal-500 group-hover:text-charcoal-950" />
+      <span className="flex-1 truncate font-medium">{label}</span>
       {badge != null && badge > 0 && (
-        <span
-          className={cn(
-            "absolute right-1.5 top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
-            BADGE_TONES[badgeTone ?? "charcoal"]
-          )}
-        >
+        <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1.5 text-[10.5px] font-semibold tabular-nums text-white">
           {badge > 99 ? "99+" : badge}
         </span>
       )}
-      <span
-        className={cn(
-          "flex h-10 w-10 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110",
-          ICON_TONES[tone]
-        )}
-      >
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="text-center text-[11px] font-medium leading-tight text-charcoal-700">
-        {label}
-      </span>
     </Link>
   );
 }
 
 function TileSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <section className="mb-5 rounded-xl border border-sand-200 bg-white p-4 shadow-card">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-charcoal-400">
+    <section className="mb-5">
+      <p className="mb-1 border-b border-sand-200 px-2.5 pb-1.5 text-[11px] font-medium text-charcoal-400">
         {label}
       </p>
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
-        {children}
-      </div>
+      <div className="grid grid-cols-1 gap-x-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{children}</div>
     </section>
   );
 }
@@ -253,19 +211,14 @@ export function DashboardCanvas() {
   }, []);
 
   return (
-    <div className="px-6 py-6 max-w-5xl mx-auto">
+    <div className="px-6 py-8 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-6 animate-slide-up">
-        <p className="text-xs font-semibold text-terra-500 uppercase tracking-widest mb-1">
-          Dashboard
-        </p>
-        <h1 className="text-2xl font-bold text-charcoal-900 tracking-tight">
+      <div className="mb-7 animate-slide-up">
+        <p className="text-[11px] font-medium text-charcoal-400 mb-1">HDPM OS</p>
+        <h1 className="text-xl font-semibold text-charcoal-950 tracking-tight">
           {getGreeting()}
           {firstName ? `, ${firstName}` : ""}
         </h1>
-        <p className="text-sm text-charcoal-400 mt-1">
-          Your automation tools are ready.
-        </p>
       </div>
 
       {/* Today's field route (published from the maintenance board) */}
@@ -280,20 +233,17 @@ export function DashboardCanvas() {
         return (
           <div
             key={route.id}
-            className="mb-6 bg-white rounded-xl border border-terra-200 p-5 shadow-card relative overflow-hidden"
+            className="mb-6 rounded-lg border border-sand-200 p-4"
           >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-terra-50 rounded-bl-[80px] -mr-4 -mt-4 opacity-60" />
-            <div className="relative">
+            <div>
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-terra-100 rounded-xl flex items-center justify-center">
-                    <Route className="w-5 h-5 text-terra-600" />
-                  </div>
+                  <Route className="w-4 h-4 text-charcoal-950" />
                   <div>
-                    <p className="text-[11px] font-semibold text-terra-500 uppercase tracking-widest">
+                    <p className="text-[11px] font-medium text-charcoal-400">
                       Today&apos;s field route
                     </p>
-                    <h3 className="text-base font-semibold text-charcoal-900">
+                    <h3 className="text-sm font-semibold text-charcoal-950">
                       {route.assigned_tech ?? "HDMS crew"} · {route.stop_count} stops
                     </h3>
                   </div>
@@ -304,7 +254,7 @@ export function DashboardCanvas() {
                       href={mapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs font-medium text-terra-600 hover:text-terra-700"
+                      className="text-xs font-medium text-charcoal-950 underline-offset-2 hover:underline"
                     >
                       Open in Google Maps ↗
                     </a>
@@ -351,7 +301,7 @@ export function DashboardCanvas() {
         );
       })}
 
-      {/* Streamdeck grid — every feature, one small tile each */}
+      {/* Every feature, one compact row each */}
       <div className="stagger-children">
         <TileSection label="Maintenance OS">
           {/* One door in. The Dashboard tab is the default and drills into every
@@ -360,9 +310,7 @@ export function DashboardCanvas() {
             href="/maintenance/board"
             icon={Wrench}
             label="Maintenance"
-            tone="terra"
             badge={boardKpis?.attention}
-            badgeTone="red"
             title={
               boardKpis
                 ? `${boardKpis.open} open work orders · ${boardKpis.attention} need attention today`
@@ -373,14 +321,12 @@ export function DashboardCanvas() {
             href="/maintenance/board?view=turnover"
             icon={DoorOpen}
             label="Turnovers"
-            tone="purple"
             title="Unit turnover board"
           />
           <Tile
             href="/maintenance/board?view=vendor"
             icon={Users}
             label="Vendors"
-            tone="charcoal"
             title="Vendor scoreboard"
           />
         </TileSection>
@@ -390,32 +336,26 @@ export function DashboardCanvas() {
             href="/maintenance/inspections"
             icon={ClipboardCheck}
             label="Inspections"
-            tone="amber"
             badge={inspectionStats?.overdue}
-            badgeTone="red"
             title="Biannual inspection queue — badge is overdue count"
           />
           <Tile
             href="/maintenance/inspections/candidates"
             icon={MapPin}
             label="Candidates"
-            tone="blue"
             title="Units due for inspection from the AppFolio sync"
           />
           <Tile
             href="/maintenance/inspections/routes"
             icon={Route}
             label="Route Builder"
-            tone="green"
             badge={routeStats?.total_routes}
-            badgeTone="green"
             title="Inspection day routes — build, optimize, dispatch"
           />
           <Tile
             href="/maintenance/inspections/import"
             icon={Upload}
             label="Import"
-            tone="charcoal"
             title="CSV/XLSX inspection import"
           />
         </TileSection>
@@ -425,58 +365,49 @@ export function DashboardCanvas() {
             href="/maintenance/invoices"
             icon={FileText}
             label="Work & Billing"
-            tone="terra"
             title="Manage work orders, estimates, approvals, invoices, and reconciliation"
           />
           <Tile
             href="/comps"
             icon={BarChart3}
             label="Rent Comps"
-            tone="blue"
             title="Central Oregon rent comparisons — AppFolio, Rentometer, HUD"
           />
           <Tile
             href="/keys"
             icon={KeyRound}
             label="Key Manager"
-            tone="terra"
             title="Physical key registry and history"
           />
           <Tile
             href="/craigslist"
             icon={Megaphone}
             label="Craigslist Ads"
-            tone="purple"
             badge={vacancyCount}
-            badgeTone="purple"
             title="Vacant units → AI listing copy — badge is vacancy count"
           />
           <Tile
             href="/haven"
             icon={Sparkles}
             label="Haven"
-            tone="blue"
             title="AI leasing pipeline, escalations, tours, and reception metrics"
           />
           <Tile
             href="/properties/map"
             icon={Home}
             label="Property Map"
-            tone="green"
             title="All managed properties on a map — green active, yellow leaving management"
           />
           <Tile
             href="/reports/owner"
             icon={FileSpreadsheet}
             label="Owner Reports"
-            tone="green"
             title="Owner-facing reports"
           />
           <Tile
             href="/agents"
             icon={Bot}
             label="Agents"
-            tone="charcoal"
             title="Agent-OS briefs and automations"
           />
         </TileSection>
@@ -485,49 +416,40 @@ export function DashboardCanvas() {
           <TileSection label="Admin">
             {canViewHabuDemo(session?.user) && (
               <>
-                <Tile href="/admin/habu-paper" icon={FileText} label="Paper Workflows" tone="blue" title="Full workflow forms and personal process inbox" />
-                <Tile href="/admin/habu-demo" icon={Route} label="HABU Demo" tone="blue" title="Office jackets and subway routing map" />
+                <Tile href="/admin/habu-paper" icon={FileText} label="Paper Workflows" title="Full workflow forms and personal process inbox" />
+                <Tile href="/admin/habu-demo" icon={Route} label="HABU Demo" title="Office jackets and subway routing map" />
               </>
             )}
             <Tile
               href="/dashboard"
               icon={Activity}
               label="KPI Dashboard"
-              tone="terra"
               title="Owner goals, delinquency, vacancy, cycle time"
             />
             <Tile
               href="/dashboard/trends"
               icon={TrendingUp}
               label="Trends"
-              tone="blue"
               title="KPI trends over time"
             />
             <Tile
               href="/admin/zoom-sync"
               icon={Phone}
               label="Zoom Sync"
-              tone="blue"
               title="AppFolio contacts → Zoom Phone"
             />
           </TileSection>
         )}
       </div>
 
-      {/* Quick Stats / Status */}
-      <div className="mt-8 animate-slide-up" style={{ animationDelay: "200ms" }}>
-        <div className="bg-white rounded-xl border border-sand-200 p-5 shadow-card">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-green-400" />
-              <span className="text-sm font-medium text-charcoal-900">All systems operational</span>
-            </div>
-            <div className="flex items-center gap-6 text-xs text-charcoal-400">
-              <span>AppFolio API: <span className="text-green-600 font-medium">Connected</span></span>
-              <span>Rentometer: <span className="text-green-600 font-medium">Active</span></span>
-            </div>
-          </div>
-        </div>
+      {/* Status */}
+      <div className="mt-8 flex items-center gap-2 border-t border-sand-200 pt-3 text-[11.5px] text-charcoal-400 animate-slide-up">
+        <span className="h-1.5 w-1.5 rounded-full bg-charcoal-950" />
+        <span>All systems operational</span>
+        <span className="text-charcoal-300">·</span>
+        <span>AppFolio connected</span>
+        <span className="text-charcoal-300">·</span>
+        <span>Rentometer active</span>
       </div>
     </div>
   );

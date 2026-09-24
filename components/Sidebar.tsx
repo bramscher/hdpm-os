@@ -144,9 +144,9 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
       {/* Navigation */}
       <nav className="flex-1 px-2 mt-2 overflow-y-auto">
         {sections.map((section, i) => (
-          <div key={section.label ?? "home"} className={cn(i > 0 && "mt-5")}>
+          <div key={section.label ?? "home"} className={cn(i > 0 && "mt-4")}>
             {section.label && (
-              <p className="px-3 mb-1.5 text-2xs font-semibold text-charcoal-500 uppercase tracking-widest">
+              <p className="px-2.5 mb-1 text-[11px] font-medium text-charcoal-400">
                 {section.label}
               </p>
             )}
@@ -160,24 +160,24 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
                     href={item.href}
                     onClick={onNavigate}
                     className={cn(
-                      "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-colors duration-150 group",
+                      "relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] transition-colors duration-150 group",
                       isActive
-                        ? "text-terra-600"
-                        : "text-charcoal-500 hover:text-charcoal-900 hover:bg-charcoal-900/[0.04]"
+                        ? "font-semibold text-charcoal-950"
+                        : "font-medium text-charcoal-600 hover:text-charcoal-950 hover:bg-charcoal-900/[0.04]"
                     )}
                   >
                     {isActive && (
                       <motion.span
                         layoutId="nav-active-pill"
-                        className="absolute inset-0 rounded-lg nav-glass-active"
+                        className="absolute inset-0 rounded-md nav-glass-active"
                         transition={reducedMotion ? { duration: 0 } : springDefault}
                         aria-hidden
                       />
                     )}
                     <Icon
                       className={cn(
-                        "relative z-10 w-[18px] h-[18px] flex-shrink-0",
-                        !isActive && "text-charcoal-900"
+                        "relative z-10 w-4 h-4 flex-shrink-0",
+                        isActive ? "text-charcoal-950" : "text-charcoal-500"
                       )}
                     />
                     <span className="relative z-10 flex-1">{item.label}</span>
@@ -193,8 +193,8 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
       <div className="px-2 pb-4 mt-auto">
         <div className="border-t border-sand-200 pt-3">
           <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-terra-500/20 border border-terra-500/30 flex items-center justify-center flex-shrink-0">
-              <span className="text-2xs font-bold text-terra-600">{initials}</span>
+            <div className="w-7 h-7 rounded-full bg-charcoal-950 flex items-center justify-center flex-shrink-0">
+              <span className="text-2xs font-bold text-white">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-charcoal-900 truncate">{firstName}</p>
