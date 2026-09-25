@@ -27,6 +27,7 @@ import {
   Bot,
   Home,
   Sparkles,
+  Percent,
   type LucideIcon,
 } from "lucide-react";
 import { canViewHabuDemo } from "@/lib/habu-demo-access";
@@ -425,6 +426,12 @@ export function DashboardCanvas() {
               icon={Activity}
               label="KPI Dashboard"
               title="Owner goals, delinquency, vacancy, cycle time"
+            />
+            <Tile
+              href="/admin/fee-management"
+              icon={Percent}
+              label="Fee Management"
+              title="Fee Index and the owner fee increase campaign"
             />
             <Tile
               href="/dashboard/trends"

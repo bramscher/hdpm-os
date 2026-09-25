@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import Link from "next/link";
-import { ManagementFeeIndex, type ManagementFeesSnapshot } from "@/components/dashboard/ManagementFeeIndex";
 import {
   AreaChart,
   Area,
@@ -1971,13 +1970,6 @@ export default function DashboardPage() {
                 data={financials}
                 loading={financialsLoading}
                 onOpenConfig={() => setConfigOpen(true)}
-              />
-            )}
-
-            {sec.key === "money" && (
-              <ManagementFeeIndex
-                data={(kpis.management_fees?.data as ManagementFeesSnapshot | null) ?? null}
-                loading={kpis.management_fees?.loading}
               />
             )}
 

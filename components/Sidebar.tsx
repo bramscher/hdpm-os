@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw, Clock3, ListTodo } from "lucide-react";
+import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw, Clock3, ListTodo, Percent } from "lucide-react";
 import { canViewHabuDemo } from "@/lib/habu-demo-access";
 import { cn } from "@/lib/utils";
 import { springDefault } from "@/lib/motion";
@@ -74,6 +74,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Staff permissions", href: "/admin/staff-permissions", icon: FileText, matchPrefix: "/admin/staff-permissions" },
       { label: "Company KPIs", href: "/dashboard", icon: Activity, matchPrefix: "/dashboard" },
+      { label: "Fee Management", href: "/admin/fee-management", icon: Percent, matchPrefix: "/admin/fee-management" },
       { label: "Paper Workflows", href: "/admin/habu-paper", icon: FileText, matchPrefix: "/admin/habu-paper", habuOwnerOnly: true },
       { label: "HABU Demo", href: "/admin/habu-demo", icon: Navigation, matchPrefix: "/admin/habu-demo", habuOwnerOnly: true },
       { label: "Zoom Sync", href: "/admin/zoom-sync", icon: Phone, matchPrefix: "/admin/zoom-sync" },

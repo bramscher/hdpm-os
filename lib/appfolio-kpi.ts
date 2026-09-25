@@ -38,7 +38,7 @@ interface AppFolioConfig {
   developerId: string;
 }
 
-function getKpiConfig(): AppFolioConfig | null {
+export function getKpiConfig(): AppFolioConfig | null {
   const clientId = process.env.APPFOLIO_CLIENT_ID;
   const clientSecret = process.env.APPFOLIO_CLIENT_SECRET;
   const developerId = process.env.APPFOLIO_DEVELOPER_ID;
@@ -103,7 +103,7 @@ async function v0Fetch<T>(
   throw new Error(`AppFolio v0 error: max retries exceeded for ${path}`);
 }
 
-async function v0FetchAll<T>(
+export async function v0FetchAll<T>(
   path: string,
   params: Record<string, string>,
   config: AppFolioConfig,
