@@ -183,13 +183,15 @@ export function OwnerFeeOpportunity() {
     URL.revokeObjectURL(url);
   };
 
-  const th = (key: SortKey, label: string, right = true) => (
+  const th = (key: SortKey, label: string, right = true, help?: string) => (
     <th className={`py-2 pr-3 font-semibold ${right ? "text-right" : ""}`}>
       <button
         onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((-s.dir) as 1 | -1) : key === "name" || key === "renewal" ? 1 : -1 }))}
         className="uppercase tracking-wider hover:text-charcoal-900"
+        title={help}
       >
         {label}
+        {help && <span className="ml-0.5 normal-case text-charcoal-300">ⓘ</span>}
         {sort.key === key ? (sort.dir === 1 ? " ↑" : " ↓") : ""}
       </button>
     </th>
@@ -297,9 +299,19 @@ export function OwnerFeeOpportunity() {
               {th("gapPts", "Gap")}
               {th("nextRaiseYearly", "Next raise")}
               {th("addedYearly", "+ / yr")}
-              {th("grade", "Opportunity", false)}
+              {th(
+                "grade",
+                "Opportunity",
+                false,
+                "Opportunity (0–100): size of the $/yr gap to the door schedule. 100 = largest in the portfolio, 0 = at or above schedule. Dollars only."
+              )}
               {th("renewal", "Agreement end", false)}
-              {th("priority", "Priority")}
+              {th(
+                "priority",
+                "Priority",
+                true,
+                `Priority (0–100): who to call first. Blends added $/yr (weight ${payload.weights.addedDollars}), agreement end — sooner is higher (${payload.weights.renewalUrgency}), and fee gap (${payload.weights.feeGap}), each scaled across the portfolio. Edit weights in Schedule & weights.`
+              )}
               <th className="py-2 pr-3 font-semibold uppercase tracking-wider">Segment</th>
               <th className="py-2 pr-3 font-semibold uppercase tracking-wider">Status</th>
             </tr>
