@@ -3,9 +3,11 @@ import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { fetchFeeFacts } from '@/lib/fee-management/appfolio';
 import {
-  DEFAULT_TIER_RULES,
+  DEFAULT_DOOR_SCHEDULE,
+  DEFAULT_MAX_RAISE_PTS,
   DEFAULT_WEIGHTS,
-  parseTierRules,
+  parseDoorSchedule,
+  parseMaxRaise,
   parseWeights,
   type Agreement,
   type CampaignEntry,
@@ -77,7 +79,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     facts,
     capturedAt,
-    rules: parseTierRules(cfg.get('tier_targets')) ?? DEFAULT_TIER_RULES,
+    schedule: parseDoorSchedule(cfg.get('door_schedule')) ?? DEFAULT_DOOR_SCHEDULE,
+    maxRaisePts: parseMaxRaise(cfg.get('max_raise_pts')) ?? DEFAULT_MAX_RAISE_PTS,
     weights: parseWeights(cfg.get('priority_weights')) ?? DEFAULT_WEIGHTS,
     agreements: (agreements.data ?? []).map(
       (a): Agreement => ({

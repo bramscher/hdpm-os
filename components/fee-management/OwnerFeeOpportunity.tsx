@@ -13,17 +13,18 @@ import {
   type Agreement,
   type CampaignEntry,
   type CampaignStatus,
+  type DoorBand,
   type FeeFacts,
   type OwnerRow,
   type PriorityWeights,
   type Segment,
-  type TierRule,
 } from "@/lib/fee-management/model";
 
 interface Payload {
   facts: FeeFacts;
   capturedAt: string | null;
-  rules: TierRule[];
+  schedule: DoorBand[];
+  maxRaisePts: number;
   weights: PriorityWeights;
   agreements: Agreement[];
   campaign: CampaignEntry[];
@@ -31,9 +32,15 @@ interface Payload {
 
 type SortKey =
   | "name" | "propertyCount" | "doors" | "blendedPct" | "currentFeesMonthly" | "targetPct"
-  | "gapPts" | "addedMonthly" | "addedYearly" | "renewal" | "priority";
+  | "gapPts" | "nextRaiseYearly" | "addedYearly" | "grade" | "renewal" | "priority";
 
-const SEGMENTS: Segment[] = ["Personal call", "Letter", "Renewal-timed"];
+const SEGMENTS: Segment[] = ["Personal call", "Letter", "Renewal-timed", "Portfolio review"];
+
+/** Gray → deep red as the grade rises; the only color in the table. */
+function gradeColor(grade: number): string {
+  const t = Math.min(Math.max(grade, 0), 100) / 100;
+  return `hsl(0 ${Math.round(72 * t)}% ${Math.round(80 - 32 * t)}%)`;
+}
 
 const usd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -53,11 +60,11 @@ export function OwnerFeeOpportunity() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tierFilter, setTierFilter] = useState("all");
+  const [bandFilter, setBandFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | CampaignStatus>("all");
   const [segmentFilter, setSegmentFilter] = useState<"all" | Segment>("all");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "priority", dir: -1 });
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "grade", dir: -1 });
   const [expanded, setExpanded] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -86,7 +93,8 @@ export function OwnerFeeOpportunity() {
       payload
         ? buildOwnerRows({
             facts: payload.facts,
-            rules: payload.rules,
+            schedule: payload.schedule,
+            maxRaisePts: payload.maxRaisePts,
             weights: payload.weights,
             agreements: payload.agreements,
             campaign: payload.campaign,
@@ -97,13 +105,19 @@ export function OwnerFeeOpportunity() {
   );
   const summary = useMemo(() => portfolioSummary(rows), [rows]);
   const funnel = useMemo(() => campaignFunnel(rows), [rows]);
-  const tiers = useMemo(() => [...new Set(rows.map((r) => r.tier))].sort(), [rows]);
+  const bands = useMemo(
+    () =>
+      [...new Map(rows.map((r) => [r.bandLabel, r.band?.minDoors ?? 9999])).entries()]
+        .sort((a, b) => a[1] - b[1])
+        .map(([label]) => label),
+    [rows]
+  );
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     const out = rows.filter(
       (r) =>
-        (tierFilter === "all" || r.tier === tierFilter) &&
+        (bandFilter === "all" || r.bandLabel === bandFilter) &&
         (statusFilter === "all" || r.campaign.status === statusFilter) &&
         (segmentFilter === "all" || r.segments.includes(segmentFilter)) &&
         (!q || r.name.toLowerCase().includes(q) || r.properties.some((p) => p.property.name.toLowerCase().includes(q)))
@@ -117,7 +131,7 @@ export function OwnerFeeOpportunity() {
       const x = val(a), y = val(b);
       return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
     });
-  }, [rows, tierFilter, statusFilter, segmentFilter, search, sort]);
+  }, [rows, bandFilter, statusFilter, segmentFilter, search, sort]);
 
   const setCampaign = (entry: CampaignEntry) =>
     setPayload((p) => p && { ...p, campaign: [...p.campaign.filter((c) => c.ownerSetKey !== entry.ownerSetKey), entry] });
@@ -182,10 +196,10 @@ export function OwnerFeeOpportunity() {
     <div>
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <Stat label="Portfolio rate" value={`${pct(summary.currentEffectivePct)} → ${pct(summary.newEffectivePct)}`} sub="effective, on occupied rent" />
-        <Stat label="Added / mo" value={usd(summary.addedMonthly)} sub="if every owner moves to target" />
-        <Stat label="Added / yr" value={usd(summary.addedYearly)} sub={`${summary.ownersWithUpside} owners with upside`} />
-        <Stat label="Owners" value={rows.length.toLocaleString()} sub={`${rows.reduce((a, r) => a + r.doors, 0)} doors`} />
+        <Stat label="Portfolio rate" value={`${pct(summary.currentEffectivePct)} → ${pct(summary.newEffectivePct)}`} sub="effective now → at door schedule" />
+        <Stat label="At schedule" value={`+${usd(summary.addedYearly)}/yr`} sub={`${usd(summary.addedMonthly)}/mo · ${summary.ownersWithUpside} of ${rows.length} owners below`} />
+        <Stat label="First raise" value={`+${usd(summary.nextRaiseYearly)}/yr`} sub={`up to +${payload.maxRaisePts} pts each → ${pct(summary.nextRaiseEffectivePct)}`} />
+        <Stat label="Doors" value={rows.reduce((a, r) => a + r.doors, 0).toLocaleString()} sub={`${rows.length} owners`} />
       </div>
 
       {/* Campaign funnel */}
@@ -211,7 +225,7 @@ export function OwnerFeeOpportunity() {
           placeholder="Search owner or property"
           className="h-8 w-56 rounded-md border border-sand-200 px-2.5"
         />
-        <Select value={tierFilter} onChange={setTierFilter} options={[["all", "All tiers"], ...tiers.map((t) => [t, t] as [string, string])]} />
+        <Select value={bandFilter} onChange={setBandFilter} options={[["all", "All door bands"], ...bands.map((t) => [t, t] as [string, string])]} />
         <Select
           value={statusFilter}
           onChange={(v) => setStatusFilter(v as "all" | CampaignStatus)}
@@ -225,7 +239,7 @@ export function OwnerFeeOpportunity() {
         <span className="text-charcoal-400">{visible.length} owners</span>
         <div className="ml-auto flex items-center gap-2">
           <ToolbarButton onClick={() => setSettingsOpen((o) => !o)} icon={<Settings2 className="h-3.5 w-3.5" />}>
-            Targets &amp; weights
+            Schedule &amp; weights
           </ToolbarButton>
           <ToolbarButton onClick={exportCsv} icon={<Download className="h-3.5 w-3.5" />}>Export CSV</ToolbarButton>
           <ToolbarButton
@@ -240,9 +254,10 @@ export function OwnerFeeOpportunity() {
 
       {settingsOpen && (
         <SettingsPanel
-          rules={payload.rules}
+          schedule={payload.schedule}
+          maxRaisePts={payload.maxRaisePts}
           weights={payload.weights}
-          onSaved={(rules, weights) => setPayload((p) => p && { ...p, rules, weights })}
+          onSaved={(schedule, maxRaisePts, weights) => setPayload((p) => p && { ...p, schedule, maxRaisePts, weights })}
         />
       )}
 
@@ -258,10 +273,11 @@ export function OwnerFeeOpportunity() {
               <th className="py-2 pr-3 text-right font-semibold uppercase tracking-wider">Occ.</th>
               {th("blendedPct", "Blended")}
               {th("currentFeesMonthly", "Fees / mo")}
-              {th("targetPct", "Target")}
+              {th("targetPct", "Schedule")}
               {th("gapPts", "Gap")}
-              {th("addedMonthly", "+ / mo")}
+              {th("nextRaiseYearly", "Next raise")}
               {th("addedYearly", "+ / yr")}
+              {th("grade", "Opportunity", false)}
               {th("renewal", "Agreement end", false)}
               {th("priority", "Priority")}
               <th className="py-2 pr-3 font-semibold uppercase tracking-wider">Segment</th>
@@ -280,7 +296,7 @@ export function OwnerFeeOpportunity() {
                   </td>
                   <td className="py-2 pr-3 max-w-[220px]">
                     <p className="truncate font-medium text-charcoal-900" title={r.name}>{r.name}</p>
-                    <p className="truncate text-[11px] text-charcoal-400">{r.tier}</p>
+                    <p className="truncate text-[11px] text-charcoal-400">{r.bandLabel}</p>
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">{r.propertyCount}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{r.doors}</td>
@@ -292,8 +308,23 @@ export function OwnerFeeOpportunity() {
                   <td className="py-2 pr-3 text-right tabular-nums">{usd(r.currentFeesMonthly)}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{pct(r.targetPct)}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{r.gapPts ? `+${r.gapPts}` : "—"}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{r.addedMonthly > 0 ? usd(r.addedMonthly) : "—"}</td>
+                  <td
+                    className="py-2 pr-3 text-right tabular-nums whitespace-nowrap"
+                    title={r.raisesToTarget > 1 ? `${r.raisesToTarget} raises to reach schedule` : undefined}
+                  >
+                    {r.nextRaiseYearly > 0 ? (
+                      <>
+                        <span className="text-charcoal-500">{pct(r.nextRaisePct)}</span> {usd(r.nextRaiseYearly)}
+                        {r.raisesToTarget > 1 && <span className="ml-1 text-[10px] text-charcoal-400">1/{r.raisesToTarget}</span>}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="py-2 pr-3 text-right tabular-nums font-semibold">{r.addedYearly > 0 ? usd(r.addedYearly) : "—"}</td>
+                  <td className="py-2 pr-3">
+                    <GradeBar grade={r.grade} />
+                  </td>
                   <td className="py-2 pr-3 whitespace-nowrap">
                     {r.earliestRenewal ? (
                       <>
@@ -338,7 +369,7 @@ export function OwnerFeeOpportunity() {
                 {expanded === r.key && (
                   <tr className="border-b border-sand-200 bg-sand-50/60">
                     <td />
-                    <td colSpan={14} className="py-4 pr-4">
+                    <td colSpan={15} className="py-4 pr-4">
                       <OwnerDetail row={r} onSaveCampaign={saveCampaign} onSaveAgreement={saveAgreement} />
                     </td>
                   </tr>
@@ -347,7 +378,7 @@ export function OwnerFeeOpportunity() {
             ))}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={15} className="py-8 text-center text-charcoal-400">No owners match these filters.</td>
+                <td colSpan={16} className="py-8 text-center text-charcoal-400">No owners match these filters.</td>
               </tr>
             )}
           </tbody>
@@ -357,7 +388,10 @@ export function OwnerFeeOpportunity() {
       <p className="mt-4 text-[11px] text-charcoal-400 leading-relaxed">
         Estimates use AppFolio market rent on occupied revenue units (actual lease rents aren&apos;t on the v0 API), so
         vacant doors add nothing until leased. Blended fee % is weighted by that rent (<sup>d</sup> = no occupied doors,
-        weighted by door count). Targets apply each tier rule per property. Agreement ends marked &ldquo;proj.&rdquo; assume
+        weighted by door count). Schedule = the door-count rate for the owner&apos;s total doors (also the rule for new business);
+        fees above schedule are never lowered. Opportunity grades the full $/yr gap to schedule on a square-root curve
+        (100 = largest in the portfolio, 0 = at schedule). Next raise = one step of at most {payload.maxRaisePts} pts per
+        property; &ldquo;1/3&rdquo; means three raises to reach schedule. Agreement ends marked &ldquo;proj.&rdquo; assume
         a 1-year term auto-renewing on the management start anniversary; enter actual dates per property to override.
         AppFolio data as of {payload.capturedAt ? new Date(payload.capturedAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }) : "—"} PT.
       </p>
@@ -404,7 +438,7 @@ function OwnerDetail({
           <p className="mb-1.5 text-[11px] font-medium text-charcoal-400">Campaign</p>
           <div className="grid grid-cols-2 gap-2">
             <Field label="New fee %">
-              <input type="number" step="0.05" value={draft.newFeePct} placeholder={row.targetPct?.toString() ?? ""}
+              <input type="number" step="0.05" value={draft.newFeePct} placeholder={row.nextRaisePct?.toString() ?? ""}
                 onChange={(e) => setDraft({ ...draft, newFeePct: e.target.value })} className="input" />
             </Field>
             <Field label="Effective date">
@@ -456,7 +490,8 @@ function OwnerDetail({
                 <th className="py-1.5 px-2 font-semibold">Property</th>
                 <th className="py-1.5 pr-2 font-semibold text-right">Doors</th>
                 <th className="py-1.5 pr-2 font-semibold text-right">Fee</th>
-                <th className="py-1.5 pr-2 font-semibold text-right">Target</th>
+                <th className="py-1.5 pr-2 font-semibold text-right">Next</th>
+                <th className="py-1.5 pr-2 font-semibold text-right">Schedule</th>
                 <th className="py-1.5 pr-2 font-semibold text-right">+ / yr</th>
                 <th className="py-1.5 pr-2 font-semibold">Start</th>
                 <th className="py-1.5 pr-2 font-semibold">End</th>
@@ -505,6 +540,9 @@ function AgreementRow({ pr, onSave }: { pr: OwnerRow["properties"][number]; onSa
       <td className="py-1.5 pr-2 text-right tabular-nums">
         {p.feeType === "percent" ? `${p.feePct}%` : p.feeType === "flat" ? `${usd(p.flatMonthly ?? 0)}/mo` : "—"}
       </td>
+      <td className="py-1.5 pr-2 text-right tabular-nums">
+        {pr.nextRaisePct != null && pr.nextRaisePct !== p.feePct ? `${pr.nextRaisePct}%` : "—"}
+      </td>
       <td className="py-1.5 pr-2 text-right tabular-nums">{pr.targetPct != null ? `${pr.targetPct}%` : "—"}</td>
       <td className="py-1.5 pr-2 text-right tabular-nums">{pr.addedYearly > 0 ? usd(pr.addedYearly) : "—"}</td>
       <td className="py-1.5 pr-2">
@@ -547,29 +585,48 @@ function AgreementRow({ pr, onSave }: { pr: OwnerRow["properties"][number]; onSa
   );
 }
 
-// ── Settings: tier targets + priority weights ──────────────
+// ── Settings: door schedule, raise cap, priority weights ──────────────
 
 function SettingsPanel({
-  rules,
+  schedule,
+  maxRaisePts,
   weights,
   onSaved,
 }: {
-  rules: TierRule[];
+  schedule: DoorBand[];
+  maxRaisePts: number;
   weights: PriorityWeights;
-  onSaved: (rules: TierRule[], weights: PriorityWeights) => void;
+  onSaved: (schedule: DoorBand[], maxRaisePts: number, weights: PriorityWeights) => void;
 }) {
-  const [r, setR] = useState(rules.map((x) => ({ min: String(x.min), max: x.max == null ? "" : String(x.max), addPts: String(x.addPts) })));
+  const [bands, setBands] = useState(
+    schedule.map((b) => ({
+      minDoors: String(b.minDoors),
+      maxDoors: b.maxDoors == null ? "" : String(b.maxDoors),
+      targetPct: String(b.targetPct),
+      review: !!b.review,
+    }))
+  );
+  const [cap, setCap] = useState(String(maxRaisePts));
   const [w, setW] = useState({ addedDollars: String(weights.addedDollars), renewalUrgency: String(weights.renewalUrgency), feeGap: String(weights.feeGap) });
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    const tierTargets = r.map((x) => ({ min: Number(x.min), max: x.max === "" ? null : Number(x.max), addPts: Number(x.addPts) }));
+    const doorSchedule = bands.map((b) => ({
+      minDoors: Number(b.minDoors),
+      maxDoors: b.maxDoors === "" ? null : Number(b.maxDoors),
+      targetPct: Number(b.targetPct),
+      review: b.review,
+    }));
     const priorityWeights = { addedDollars: Number(w.addedDollars), renewalUrgency: Number(w.renewalUrgency), feeGap: Number(w.feeGap) };
     setSaving(true);
     try {
-      await put("/api/admin/fee-management/config", { tierTargets, priorityWeights });
-      onSaved([...tierTargets].sort((a, b) => a.min - b.min), priorityWeights);
-      toast.success("Targets and weights saved");
+      await put("/api/admin/fee-management/config", { doorSchedule, maxRaisePts: Number(cap), priorityWeights });
+      onSaved(
+        [...doorSchedule].sort((a, b) => a.minDoors - b.minDoors).map(({ review, ...b }) => (review ? { ...b, review } : b)),
+        Number(cap),
+        priorityWeights
+      );
+      toast.success("Schedule and weights saved");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -580,42 +637,61 @@ function SettingsPanel({
   return (
     <div className="mb-4 grid gap-6 rounded-xl border border-sand-200 p-4 lg:grid-cols-[1fr_280px]">
       <div>
-        <p className="mb-2 text-[12.5px] font-semibold text-charcoal-800">Tier targets</p>
+        <p className="mb-2 text-[12.5px] font-semibold text-charcoal-800">Door schedule</p>
         <table className="text-[12px]">
           <thead>
             <tr className="text-left text-[10.5px] uppercase tracking-wider text-charcoal-400">
-              <th className="pr-2 pb-1 font-semibold">From %</th>
-              <th className="pr-2 pb-1 font-semibold">Below %</th>
-              <th className="pr-2 pb-1 font-semibold">Add pts</th>
+              <th className="pr-2 pb-1 font-semibold">From doors</th>
+              <th className="pr-2 pb-1 font-semibold">To doors</th>
+              <th className="pr-2 pb-1 font-semibold">Fee %</th>
+              <th className="pr-2 pb-1 font-semibold">Review</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {r.map((x, i) => (
+            {bands.map((b, i) => (
               <tr key={i}>
-                {(["min", "max", "addPts"] as const).map((k) => (
+                {(["minDoors", "maxDoors", "targetPct"] as const).map((k) => (
                   <td key={k} className="pr-2 pb-1.5">
                     <input
                       type="number"
-                      step="0.05"
-                      value={x[k]}
-                      placeholder={k === "max" ? "no cap" : ""}
-                      onChange={(e) => setR(r.map((y, j) => (j === i ? { ...y, [k]: e.target.value } : y)))}
+                      step={k === "targetPct" ? "0.25" : "1"}
+                      value={b[k]}
+                      placeholder={k === "maxDoors" ? "and up" : ""}
+                      onChange={(e) => setBands(bands.map((y, j) => (j === i ? { ...y, [k]: e.target.value } : y)))}
                       className="input w-20"
                     />
                   </td>
                 ))}
+                <td className="pr-2 pb-1.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={b.review}
+                    title="Target is a starting point; portfolio gets a manual review"
+                    onChange={(e) => setBands(bands.map((y, j) => (j === i ? { ...y, review: e.target.checked } : y)))}
+                  />
+                </td>
                 <td className="pb-1.5 text-[11px] text-charcoal-400">
-                  {Number(x.addPts) === 0 ? "hold" : ""}
-                  <button onClick={() => setR(r.filter((_, j) => j !== i))} className="ml-2 hover:text-red-600" aria-label="Remove tier">✕</button>
+                  <button onClick={() => setBands(bands.filter((_, j) => j !== i))} className="hover:text-red-600" aria-label="Remove band">✕</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <button onClick={() => setR([...r, { min: "", max: "", addPts: "0" }])} className="mt-1 text-[12px] font-medium text-charcoal-600 hover:text-charcoal-900">
-          + Add tier
+        <button
+          onClick={() => setBands([...bands, { minDoors: "", maxDoors: "", targetPct: "", review: false }])}
+          className="mt-1 text-[12px] font-medium text-charcoal-600 hover:text-charcoal-900"
+        >
+          + Add band
         </button>
+        <label className="mt-4 flex items-center gap-3 text-[12px] text-charcoal-600">
+          Max raise per step (existing clients)
+          <input type="number" step="0.25" min={0.25} value={cap} onChange={(e) => setCap(e.target.value)} className="input w-20" />
+          <span className="text-charcoal-400">pts</span>
+        </label>
+        <p className="mt-1 text-[11px] text-charcoal-400">
+          Bands count an owner&apos;s total doors. New business goes straight to schedule; existing clients step up by at most this much per raise.
+        </p>
       </div>
       <div>
         <p className="mb-2 text-[12.5px] font-semibold text-charcoal-800">Priority weights</p>
@@ -639,6 +715,17 @@ function SettingsPanel({
 }
 
 // ── Small bits ──────────────────────────────────────────
+
+function GradeBar({ grade }: { grade: number }) {
+  return (
+    <div className="flex w-[112px] items-center gap-2" title={grade === 0 ? "At or above schedule" : `Opportunity grade ${grade} of 100`}>
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-sand-100">
+        {grade > 0 && <div className="h-full rounded-full" style={{ width: `${grade}%`, background: gradeColor(grade) }} />}
+      </div>
+      <span className="w-7 text-right text-[11.5px] font-semibold tabular-nums text-charcoal-900">{grade}</span>
+    </div>
+  );
+}
 
 function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
