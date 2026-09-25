@@ -26,6 +26,7 @@ import {
   type RaiseFloor,
 } from "@/lib/fee-management/model";
 import type { FeeVolumes } from "@/lib/fee-management/volumes";
+import { MarketBenchmarks } from "./MarketBenchmarks";
 
 interface MainPayload {
   facts: FeeFacts;
@@ -384,8 +385,10 @@ export function FeeSchedule() {
         &ldquo;% of a month&rdquo; fees use the average occupied market rent (actual lease rents aren&apos;t on the v0 API).
         Type a number under a volume to override it. Management fee scenarios come from the Owner Fee Opportunity tab&apos;s
         door schedule and raise steps. Industry ranges are 2026 national and Bend, OR published fee guides; check
-        Oregon rules before changing tenant-paid fees.
+        Oregon rules before changing tenant-paid fees. Market reference below.
       </p>
+
+      <MarketBenchmarks />
     </div>
   );
 }
