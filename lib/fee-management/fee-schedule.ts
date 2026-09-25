@@ -1,3 +1,5 @@
+import { DEFAULT_FATIGUE, parseFatigue, type FatigueAssumptions } from './fatigue';
+
 /**
  * Fee Schedule — HDPM's standard (non-management) fees: what we charge now,
  * industry benchmarks, and proposed alternates, flowed through to annual
@@ -55,6 +57,8 @@ export const MGMT_SCENARIO_LABELS: Record<MgmtScenario, string> = {
 export interface FeeScheduleConfig {
   lines: FeeLine[];
   mgmtScenario: MgmtScenario;
+  /** Fee-fatigue churn assumptions (optional in saved configs; defaults apply). */
+  fatigue?: FatigueAssumptions;
 }
 
 export interface VolumeContext {
@@ -71,6 +75,7 @@ export interface VolumeContext {
 
 export const DEFAULT_FEE_SCHEDULE: FeeScheduleConfig = {
   mgmtScenario: 'firstRaise',
+  fatigue: DEFAULT_FATIGUE,
   lines: [
     {
       id: 'lease_up',
@@ -283,5 +288,7 @@ export function parseFeeSchedule(v: unknown): FeeScheduleConfig | null {
       ...(raw.custom ? { custom: true } : {}),
     });
   }
-  return { lines, mgmtScenario: o.mgmtScenario as MgmtScenario };
+  const fatigue = o.fatigue == null ? DEFAULT_FATIGUE : parseFatigue(o.fatigue);
+  if (!fatigue) return null;
+  return { lines, mgmtScenario: o.mgmtScenario as MgmtScenario, fatigue };
 }
