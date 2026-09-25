@@ -129,7 +129,10 @@ export function OwnerFeeOpportunity() {
         (bandFilter === "all" || r.bandLabel === bandFilter) &&
         (statusFilter === "all" || r.campaign.status === statusFilter) &&
         (segmentFilter === "all" || r.segments.includes(segmentFilter)) &&
-        (!q || r.name.toLowerCase().includes(q) || r.properties.some((p) => p.property.name.toLowerCase().includes(q)))
+        (!q ||
+          r.name.toLowerCase().includes(q) ||
+          r.owners.some((o) => o.email?.toLowerCase().includes(q) || o.phone?.includes(q)) ||
+          r.properties.some((p) => p.property.name.toLowerCase().includes(q)))
     );
     const val = (r: OwnerRow): number | string => {
       if (sort.key === "name") return r.name.toLowerCase();
@@ -231,7 +234,7 @@ export function OwnerFeeOpportunity() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search owner or property"
+          placeholder="Search owner, email, or property"
           className="h-8 w-56 rounded-md border border-sand-200 px-2.5"
         />
         <Select value={bandFilter} onChange={setBandFilter} options={[["all", "All door bands"], ...bands.map((t) => [t, t] as [string, string])]} />
@@ -456,6 +459,41 @@ function OwnerDetail({
   return (
     <div className="grid gap-5 xl:grid-cols-[320px_1fr]">
       <div className="space-y-4">
+        <div className="rounded-lg border border-sand-200 bg-white p-3">
+          <p className="mb-2 text-[11px] font-medium text-charcoal-400">Contact</p>
+          {row.owners.length === 0 ? (
+            <p className="text-[12px] text-charcoal-500">No owner on file in AppFolio.</p>
+          ) : (
+            <ul className="space-y-2.5 text-[12.5px]">
+              {row.owners.map((o) => (
+                <li key={o.id}>
+                  <p className="font-semibold text-charcoal-900">
+                    {o.name}
+                    {o.percentOwned != null && o.percentOwned < 100 && (
+                      <span className="font-normal text-charcoal-400"> · {o.percentOwned}% owner</span>
+                    )}
+                  </p>
+                  {o.email ? (
+                    <a href={`mailto:${o.email}`} className="block truncate text-charcoal-700 underline-offset-2 hover:underline">
+                      {o.email}
+                    </a>
+                  ) : (
+                    <p className="text-charcoal-300">No email on file</p>
+                  )}
+                  {o.phone ? (
+                    <a href={`tel:${o.phone}`} className="block tabular-nums text-charcoal-700 hover:text-charcoal-950">
+                      {o.phone}
+                    </a>
+                  ) : (
+                    <p className="text-charcoal-300">No phone on file</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {row.lastFeeChange && <p className="mt-2.5 text-[11px] text-charcoal-400">Last fee change on file: {row.lastFeeChange}</p>}
+        </div>
+
         <div>
           <p className="mb-1.5 text-[11px] font-medium text-charcoal-400">Campaign</p>
           <div className="grid grid-cols-2 gap-2">
@@ -479,27 +517,6 @@ function OwnerDetail({
             </button>
             {c.updatedAt && <span className="text-[11px] text-charcoal-400">Updated {new Date(c.updatedAt).toLocaleDateString()}</span>}
           </div>
-        </div>
-
-        <div>
-          <p className="mb-1.5 text-[11px] font-medium text-charcoal-400">Contacts</p>
-          {row.owners.length === 0 ? (
-            <p className="text-[12px] text-charcoal-500">No owner on file in AppFolio.</p>
-          ) : (
-            <ul className="space-y-1.5 text-[12px]">
-              {row.owners.map((o) => (
-                <li key={o.id}>
-                  <span className="font-medium text-charcoal-900">{o.name}</span>
-                  {o.percentOwned != null && o.percentOwned < 100 && <span className="text-charcoal-400"> · {o.percentOwned}%</span>}
-                  <br />
-                  {o.email && <a href={`mailto:${o.email}`} className="text-charcoal-600 underline-offset-2 hover:underline">{o.email}</a>}
-                  {o.email && o.phone && <span className="text-charcoal-300"> · </span>}
-                  {o.phone && <a href={`tel:${o.phone}`} className="text-charcoal-600">{o.phone}</a>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {row.lastFeeChange && <p className="mt-2 text-[11px] text-charcoal-400">Last fee change on file: {row.lastFeeChange}</p>}
         </div>
       </div>
 
