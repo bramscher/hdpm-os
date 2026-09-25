@@ -20,6 +20,9 @@ import {
   type PriorityWeights,
   type Segment,
 } from "@/lib/fee-management/model";
+import type { FeeScheduleConfig } from "@/lib/fee-management/fee-schedule";
+import type { FeeVolumes } from "@/lib/fee-management/volumes";
+import { portfolioFatigue, volumeContext } from "@/lib/fee-management/portfolio";
 
 interface Payload {
   facts: FeeFacts;
@@ -29,11 +32,15 @@ interface Payload {
   weights: PriorityWeights;
   agreements: Agreement[];
   campaign: CampaignEntry[];
+  feeSchedule: FeeScheduleConfig;
 }
 
 type SortKey =
   | "name" | "propertyCount" | "doors" | "blendedPct" | "currentFeesMonthly" | "targetPct"
-  | "gapPts" | "nextRaiseYearly" | "addedYearly" | "grade" | "renewal" | "priority";
+  | "gapPts" | "nextRaiseYearly" | "addedYearly" | "grade" | "fatigue" | "renewal" | "priority";
+
+/** Same bands/colors as the Fee Schedule tab's fatigue section. */
+const FATIGUE_COLORS = ["hsl(142 60% 38%)", "hsl(45 90% 45%)", "hsl(25 90% 50%)", "hsl(0 85% 50%)"];
 
 const SEGMENTS: Segment[] = ["Personal call", "Letter", "Renewal-timed", "Portfolio review"];
 
@@ -93,6 +100,15 @@ export function OwnerFeeOpportunity() {
     }
   }, []);
 
+  // Volumes (12-month leases/renewals) price the other fees for the fatigue column; loads after the table.
+  const [volumes, setVolumes] = useState<FeeVolumes | null>(null);
+  useEffect(() => {
+    fetch("/api/admin/fee-management/volumes")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j?.volumes && setVolumes(j.volumes))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -113,6 +129,12 @@ export function OwnerFeeOpportunity() {
     [payload]
   );
   const summary = useMemo(() => portfolioSummary(rows), [rows]);
+  // Fatigue per owner from the saved Fee Schedule (scenario, other fees, assumptions) — matches that tab.
+  const fatigueByKey = useMemo(() => {
+    if (!payload || !volumes || !rows.length) return null;
+    const { fatigue } = portfolioFatigue(rows, payload.feeSchedule, volumeContext(payload.facts, volumes, todayIso()));
+    return new Map(fatigue.owners.map((o) => [o.key, o]));
+  }, [payload, volumes, rows]);
   const funnel = useMemo(() => campaignFunnel(rows), [rows]);
   const bands = useMemo(
     () =>
@@ -137,13 +159,14 @@ export function OwnerFeeOpportunity() {
     const val = (r: OwnerRow): number | string => {
       if (sort.key === "name") return r.name.toLowerCase();
       if (sort.key === "renewal") return r.earliestRenewal?.daysUntil ?? Number.MAX_SAFE_INTEGER;
+      if (sort.key === "fatigue") return fatigueByKey?.get(r.key)?.fatigue ?? -1;
       return (r[sort.key] as number | null) ?? -Infinity;
     };
     return out.sort((a, b) => {
       const x = val(a), y = val(b);
       return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
     });
-  }, [rows, bandFilter, statusFilter, segmentFilter, search, sort]);
+  }, [rows, bandFilter, statusFilter, segmentFilter, search, sort, fatigueByKey]);
 
   const setCampaign = (entry: CampaignEntry) =>
     setPayload((p) => p && { ...p, campaign: [...p.campaign.filter((c) => c.ownerSetKey !== entry.ownerSetKey), entry] });
@@ -305,6 +328,12 @@ export function OwnerFeeOpportunity() {
                 false,
                 "Opportunity (0–100): size of the $/yr gap to the door schedule. 100 = largest in the portfolio, 0 = at or above schedule. Dollars only."
               )}
+              {th(
+                "fatigue",
+                "Fatigue",
+                true,
+                "Fee fatigue (0–100): how hard the proposed fees in the saved Fee Schedule hit this owner — their total fee increase % plus points per new fee type. Higher = more likely to leave. Uses the Fee Schedule tab's management scenario and assumptions."
+              )}
               {th("renewal", "Agreement end", false)}
               {th(
                 "priority",
@@ -361,6 +390,9 @@ export function OwnerFeeOpportunity() {
                   <td className="py-2 pr-3">
                     <GradeBar grade={r.grade} />
                   </td>
+                  <td className="py-2 pr-3 text-right">
+                    <FatigueBadge f={fatigueByKey ? fatigueByKey.get(r.key) ?? null : undefined} />
+                  </td>
                   <td className="py-2 pr-3 whitespace-nowrap">
                     {r.earliestRenewal ? (
                       <>
@@ -405,7 +437,7 @@ export function OwnerFeeOpportunity() {
                 {expanded === r.key && (
                   <tr className="border-b border-sand-200 bg-sand-50/60">
                     <td />
-                    <td colSpan={15} className="py-4 pr-4">
+                    <td colSpan={16} className="py-4 pr-4">
                       <OwnerDetail row={r} onSaveCampaign={saveCampaign} onSaveAgreement={saveAgreement} />
                     </td>
                   </tr>
@@ -414,7 +446,7 @@ export function OwnerFeeOpportunity() {
             ))}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={16} className="py-8 text-center text-charcoal-400">No owners match these filters.</td>
+                <td colSpan={17} className="py-8 text-center text-charcoal-400">No owners match these filters.</td>
               </tr>
             )}
           </tbody>
@@ -773,6 +805,21 @@ function SettingsPanel({
 }
 
 // ── Small bits ──────────────────────────────────────────
+
+/** undefined = still loading volumes; null = no data for this owner. */
+function FatigueBadge({ f }: { f: { fatigue: number; increasePct: number; expectedLoss: number } | null | undefined }) {
+  if (f === undefined) return <span className="text-[11px] text-charcoal-300">…</span>;
+  if (!f || f.fatigue === 0) return <span className="text-[11px] text-charcoal-300" title="Fees don't rise under the saved Fee Schedule">0</span>;
+  return (
+    <span
+      className="inline-block min-w-[30px] rounded px-1.5 py-0.5 text-center text-[11px] font-semibold tabular-nums text-white"
+      style={{ background: FATIGUE_COLORS[Math.min(3, Math.floor(f.fatigue / 25))] }}
+      title={`Fees +${f.increasePct.toFixed(0)}% · expected loss ${f.expectedLoss.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}/yr`}
+    >
+      {f.fatigue}
+    </span>
+  );
+}
 
 function GradeBar({ grade }: { grade: number }) {
   return (
