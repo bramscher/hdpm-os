@@ -6,6 +6,12 @@
  * of owners on a property's current owner group — so co-owned properties are
  * one conversation and dollars never double count.
  *
+ * Targets come from the DOOR SCHEDULE: the fair rate for an owner's size
+ * (total doors across their properties), which is also the rule for new
+ * business. Existing clients move toward it in capped steps — smaller steps
+ * for bigger owners (per-band max), with a floor so anything under 7% moves
+ * at least 1 pt — and fees are never lowered for owners already above schedule.
+ *
  * All $ are estimates on occupied-unit market rent (actual lease rents are
  * not on the v0 API), matching the Fee Index.
  */
@@ -48,11 +54,21 @@ export interface FeeFacts {
   ownerSets: OwnerSet[];
 }
 
-export interface TierRule {
-  min: number;
-  /** Exclusive upper bound; null = open-ended (e.g. 10%+). */
-  max: number | null;
-  addPts: number;
+export interface DoorBand {
+  minDoors: number;
+  /** Inclusive upper bound; null = open-ended (e.g. 50+). */
+  maxDoors: number | null;
+  targetPct: number;
+  /** Largest single raise for an existing client in this band, in pts. */
+  maxRaisePts: number;
+  /** Target is a starting point only — the portfolio gets a manual review. */
+  review?: boolean;
+}
+
+/** Properties below `belowPct` step up at least `minPts` per raise. */
+export interface RaiseFloor {
+  belowPct: number;
+  minPts: number;
 }
 
 export interface PriorityWeights {
@@ -90,14 +106,18 @@ export interface CampaignEntry {
   updatedAt: string | null;
 }
 
-export const DEFAULT_TIER_RULES: TierRule[] = [
-  { min: 5, max: 6, addPts: 1.5 },
-  { min: 6, max: 7, addPts: 1.0 },
-  { min: 7, max: 8, addPts: 0.75 },
-  { min: 8, max: 9, addPts: 0.5 },
-  { min: 9, max: 10, addPts: 0.25 },
-  { min: 10, max: null, addPts: 0 },
+export const DEFAULT_DOOR_SCHEDULE: DoorBand[] = [
+  { minDoors: 1, maxDoors: 1, targetPct: 10, maxRaisePts: 1.5 },
+  { minDoors: 2, maxDoors: 3, targetPct: 9.5, maxRaisePts: 1.5 },
+  { minDoors: 4, maxDoors: 10, targetPct: 9, maxRaisePts: 1.25 },
+  { minDoors: 11, maxDoors: 15, targetPct: 8.5, maxRaisePts: 1 },
+  { minDoors: 16, maxDoors: 25, targetPct: 8, maxRaisePts: 0.75 },
+  { minDoors: 26, maxDoors: 49, targetPct: 7.5, maxRaisePts: 0.75 },
+  { minDoors: 50, maxDoors: null, targetPct: 7, maxRaisePts: 0.5, review: true },
 ];
+
+/** Anything under 7% moves at least 1 pt per raise, whatever the band. */
+export const DEFAULT_RAISE_FLOOR: RaiseFloor = { belowPct: 7, minPts: 1 };
 
 export const DEFAULT_WEIGHTS: PriorityWeights = { addedDollars: 0.6, renewalUrgency: 0.25, feeGap: 0.15 };
 
@@ -108,17 +128,37 @@ export const PERSONAL_CALL_TOP_N = 20;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export function ruleFor(pct: number, rules: TierRule[]): TierRule | null {
-  return rules.find((r) => pct >= r.min && (r.max == null || pct < r.max)) ?? null;
+export function bandFor(doors: number, schedule: DoorBand[]): DoorBand | null {
+  return schedule.find((b) => doors >= b.minDoors && (b.maxDoors == null || doors <= b.maxDoors)) ?? null;
 }
 
-export function targetPctFor(pct: number, rules: TierRule[]): number {
-  return round2(pct + (ruleFor(pct, rules)?.addPts ?? 0));
+export function bandLabel(b: DoorBand): string {
+  const doors = b.maxDoors == null ? `${b.minDoors}+` : b.minDoors === b.maxDoors ? `${b.minDoors}` : `${b.minDoors}–${b.maxDoors}`;
+  return `${doors} door${b.maxDoors === 1 && b.minDoors === 1 ? '' : 's'} · ${b.targetPct}%`;
 }
 
-export function tierLabel(rule: TierRule): string {
-  if (rule.max == null) return `${rule.min}%+`;
-  return `${rule.min}–${round2(rule.max - 0.01)}%`;
+/** Step size for one raise from `currentPct`: the band max, lifted to the floor below 7%. */
+export function raiseStep(currentPct: number, band: DoorBand, floor: RaiseFloor): number {
+  return currentPct < floor.belowPct ? Math.max(band.maxRaisePts, floor.minPts) : band.maxRaisePts;
+}
+
+/** Next capped step toward the schedule; never lowers a fee or overshoots it. */
+export function nextRaisePct(currentPct: number, band: DoorBand, floor: RaiseFloor): number {
+  if (currentPct >= band.targetPct) return currentPct;
+  return round2(Math.min(band.targetPct, currentPct + raiseStep(currentPct, band, floor)));
+}
+
+/** How many raises from `currentPct` to schedule (the step can change as the rate crosses the floor). */
+export function raisesToSchedule(currentPct: number, band: DoorBand, floor: RaiseFloor): number {
+  let pct = currentPct;
+  let n = 0;
+  while (pct < band.targetPct && n < 50) {
+    const next = nextRaisePct(pct, band, floor);
+    if (next <= pct) break;
+    pct = next;
+    n++;
+  }
+  return n;
 }
 
 /** ISO yyyy-mm-dd → UTC epoch days; dates here are calendar dates, not instants. */
@@ -185,12 +225,15 @@ export function nextRenewal(
 
 // ── Rollup ────────────────────────────────────────────────
 
-export type Segment = 'Personal call' | 'Letter' | 'Renewal-timed';
+export type Segment = 'Personal call' | 'Letter' | 'Renewal-timed' | 'Portfolio review';
 
 export interface OwnerPropertyRow {
   property: PropertyFact;
   targetPct: number | null;
+  nextRaisePct: number | null;
+  /** $/yr to reach the full schedule rate (0 if already at or above). */
   addedYearly: number;
+  nextRaiseYearly: number;
   renewal: Renewal | null;
   agreement: Agreement | undefined;
 }
@@ -208,12 +251,22 @@ export interface OwnerRow {
   /** Rent-weighted blended fee %; door-weighted when no %-fee door is occupied. */
   blendedPct: number | null;
   blendedBasis: 'rent' | 'doors' | null;
+  /** Door-schedule rate for this owner's size. */
   targetPct: number | null;
+  /** Points below schedule (0 when at or above — fees are never lowered). */
   gapPts: number | null;
   currentFeesMonthly: number;
   addedMonthly: number;
   addedYearly: number;
-  tier: string;
+  /** Rent-weighted blended rate after one capped raise. */
+  nextRaisePct: number | null;
+  nextRaiseYearly: number;
+  /** Raises needed to reach schedule at the cap (0 = already there). */
+  raisesToTarget: number;
+  band: DoorBand | null;
+  bandLabel: string;
+  /** 0–100 $ opportunity grade: √(added ÷ largest added) — 0 = at schedule. */
+  grade: number;
   earliestRenewal: Renewal | null;
   lastFeeChange: string | null;
   priority: number;
@@ -223,7 +276,8 @@ export interface OwnerRow {
 
 export interface RollupInput {
   facts: FeeFacts;
-  rules: TierRule[];
+  schedule: DoorBand[];
+  raiseFloor: RaiseFloor;
   weights: PriorityWeights;
   agreements: Agreement[];
   campaign: CampaignEntry[];
@@ -235,7 +289,7 @@ function emptyCampaign(key: string): CampaignEntry {
 }
 
 export function buildOwnerRows(input: RollupInput): OwnerRow[] {
-  const { facts, rules, weights, today } = input;
+  const { facts, schedule, raiseFloor, weights, today } = input;
   const agreementById = new Map(input.agreements.map((a) => [a.propertyId, a]));
   const campaignByKey = new Map(input.campaign.map((c) => [c.ownerSetKey, c]));
   const propsBySet = new Map<string, PropertyFact[]>();
@@ -250,12 +304,15 @@ export function buildOwnerRows(input: RollupInput): OwnerRow[] {
     const props = propsBySet.get(set.key);
     if (!props?.length) continue;
 
+    const doors = props.reduce((a, p) => a + p.doors, 0);
+    const band = bandFor(doors, schedule);
     let rentBase = 0;
     let currentPct = 0; // Σ rent × pct (annual $ at current %)
-    let targetPctFees = 0; // Σ rent × target
+    let added = 0; // Σ rent × max(0, schedule − pct)
+    let nextAdded = 0; // Σ rent × (next capped step − pct)
+    let raises = 0;
     let flatMonthly = 0;
     let doorPctSum = 0;
-    let doorTargetSum = 0;
     let pctDoors = 0;
     let earliest: Renewal | null = null;
     let lastFeeChange: string | null = null;
@@ -268,36 +325,37 @@ export function buildOwnerRows(input: RollupInput): OwnerRow[] {
       if (p.feeStartDate && (!lastFeeChange || p.feeStartDate > lastFeeChange)) lastFeeChange = p.feeStartDate;
 
       if (p.feeType === 'percent' && p.feePct != null) {
-        const target = targetPctFor(p.feePct, rules);
+        const target = band?.targetPct ?? p.feePct;
+        const next = band ? nextRaisePct(p.feePct, band, raiseFloor) : p.feePct;
         const rb = p.occupiedRentMonthly * 12;
+        const propAdded = (rb * Math.max(0, target - p.feePct)) / 100;
+        const propNext = (rb * (next - p.feePct)) / 100;
         rentBase += rb;
         currentPct += (rb * p.feePct) / 100;
-        targetPctFees += (rb * target) / 100;
+        added += propAdded;
+        nextAdded += propNext;
+        if (band) raises = Math.max(raises, raisesToSchedule(p.feePct, band, raiseFloor));
         doorPctSum += p.feePct * p.doors;
-        doorTargetSum += target * p.doors;
         pctDoors += p.doors;
-        propRows.push({ property: p, targetPct: target, addedYearly: (rb * (target - p.feePct)) / 100, renewal, agreement });
+        propRows.push({ property: p, targetPct: band ? target : null, nextRaisePct: next, addedYearly: propAdded, nextRaiseYearly: propNext, renewal, agreement });
       } else {
         if (p.feeType === 'flat') flatMonthly += p.flatMonthly ?? 0;
-        propRows.push({ property: p, targetPct: null, addedYearly: 0, renewal, agreement });
+        propRows.push({ property: p, targetPct: null, nextRaisePct: null, addedYearly: 0, nextRaiseYearly: 0, renewal, agreement });
       }
     }
 
     let blendedPct: number | null = null;
-    let targetPct: number | null = null;
     let blendedBasis: OwnerRow['blendedBasis'] = null;
     if (rentBase > 0) {
       blendedPct = (currentPct / rentBase) * 100;
-      targetPct = (targetPctFees / rentBase) * 100;
       blendedBasis = 'rent';
     } else if (pctDoors > 0) {
       blendedPct = doorPctSum / pctDoors;
-      targetPct = doorTargetSum / pctDoors;
       blendedBasis = 'doors';
     }
+    const targetPct = blendedPct != null && band ? band.targetPct : null;
+    const next = rentBase > 0 ? ((currentPct + nextAdded) / rentBase) * 100 : blendedPct;
 
-    const addedYearly = targetPctFees - currentPct;
-    const rule = blendedPct != null ? ruleFor(blendedPct, rules) : null;
     rows.push({
       key: set.key,
       name: set.name,
@@ -309,12 +367,17 @@ export function buildOwnerRows(input: RollupInput): OwnerRow[] {
       rentBaseYearly: rentBase,
       blendedPct: blendedPct != null ? round2(blendedPct) : null,
       blendedBasis,
-      targetPct: targetPct != null ? round2(targetPct) : null,
-      gapPts: blendedPct != null && targetPct != null ? round2(targetPct - blendedPct) : null,
+      targetPct,
+      gapPts: blendedPct != null && targetPct != null ? round2(Math.max(0, targetPct - blendedPct)) : null,
       currentFeesMonthly: currentPct / 12 + flatMonthly,
-      addedMonthly: addedYearly / 12,
-      addedYearly,
-      tier: blendedPct == null ? (flatMonthly > 0 ? 'Flat' : 'No policy') : rule ? tierLabel(rule) : 'Other',
+      addedMonthly: added / 12,
+      addedYearly: added,
+      nextRaisePct: next != null ? round2(next) : null,
+      nextRaiseYearly: nextAdded,
+      raisesToTarget: raises,
+      band,
+      bandLabel: blendedPct == null ? (flatMonthly > 0 ? 'Flat fee' : 'No fee policy') : band ? bandLabel(band) : 'Unbanded',
+      grade: 0,
       earliestRenewal: earliest,
       lastFeeChange,
       priority: 0,
@@ -323,9 +386,24 @@ export function buildOwnerRows(input: RollupInput): OwnerRow[] {
     });
   }
 
+  gradeOpportunity(rows);
   scorePriority(rows, weights);
   assignSegments(rows);
-  return rows.sort((a, b) => b.priority - a.priority || b.addedYearly - a.addedYearly);
+  return rows.sort((a, b) => b.grade - a.grade || b.addedYearly - a.addedYearly);
+}
+
+/**
+ * 0–100 $ opportunity grade. 0 = at or above schedule; 100 = the largest
+ * $/yr gap in the portfolio. Square-root curve: dollars are heavily skewed
+ * (a few $10k+ owners, median ~$600), so a straight ratio would leave nearly
+ * everyone at 0–10; √ keeps the big ones on top and still separates the
+ * middle. Any owner with upside grades at least 1.
+ */
+export function gradeOpportunity(rows: OwnerRow[]): void {
+  const max = Math.max(0, ...rows.map((r) => r.addedYearly));
+  for (const r of rows) {
+    r.grade = max > 0 && r.addedYearly > 0 ? Math.max(1, Math.round(100 * Math.sqrt(r.addedYearly / max))) : 0;
+  }
 }
 
 /**
@@ -361,6 +439,7 @@ export function assignSegments(rows: OwnerRow[]): void {
     if (personal) s.push('Personal call');
     else if (r.doors === 1) s.push('Letter');
     if (r.earliestRenewal && r.earliestRenewal.daysUntil <= RENEWAL_WINDOW_DAYS) s.push('Renewal-timed');
+    if (r.band?.review) s.push('Portfolio review');
     r.segments = s;
   }
 }
@@ -374,6 +453,8 @@ export interface PortfolioSummary {
   addedYearly: number;
   addedMonthly: number;
   newEffectivePct: number | null;
+  nextRaiseYearly: number;
+  nextRaiseEffectivePct: number | null;
   ownersWithUpside: number;
 }
 
@@ -381,6 +462,7 @@ export function portfolioSummary(rows: OwnerRow[]): PortfolioSummary {
   const rentBase = rows.reduce((a, r) => a + r.rentBaseYearly, 0);
   const current = rows.reduce((a, r) => a + ((r.blendedBasis === 'rent' ? r.blendedPct ?? 0 : 0) * r.rentBaseYearly) / 100, 0);
   const added = rows.reduce((a, r) => a + r.addedYearly, 0);
+  const next = rows.reduce((a, r) => a + r.nextRaiseYearly, 0);
   return {
     rentBaseYearly: rentBase,
     currentPctFeesYearly: current,
@@ -388,6 +470,8 @@ export function portfolioSummary(rows: OwnerRow[]): PortfolioSummary {
     addedYearly: added,
     addedMonthly: added / 12,
     newEffectivePct: rentBase ? round2(((current + added) / rentBase) * 100) : null,
+    nextRaiseYearly: next,
+    nextRaiseEffectivePct: rentBase ? round2(((current + next) / rentBase) * 100) : null,
     ownersWithUpside: rows.filter((r) => r.addedYearly > 0).length,
   };
 }
@@ -422,7 +506,8 @@ function csvCell(v: unknown): string {
 export function ownerRowsToCsv(rows: OwnerRow[]): string {
   const header = [
     'Owner', 'Emails', 'Phones', 'Properties', 'Doors', 'Occupied doors', 'Blended fee %', 'Blended basis',
-    'Est. fees / mo', 'Target fee %', 'Gap (pts)', 'Added / mo', 'Added / yr', 'Tier',
+    'Est. fees / mo', 'Door band', 'Schedule fee %', 'Gap (pts)', 'Added / mo', 'Added / yr', 'Opportunity grade',
+    'Next raise %', 'Next raise $ / yr', 'Raises to schedule',
     'Earliest agreement end', 'End date source', 'Days until', 'Notice by', 'Last fee change',
     'Priority', 'Segments', 'Status', 'New fee %', 'Effective date', 'Assigned to', 'Notes',
   ];
@@ -433,8 +518,9 @@ export function ownerRowsToCsv(rows: OwnerRow[]): string {
       r.owners.map((o) => o.phone).filter(Boolean).join('; '),
       r.propertyCount, r.doors, r.occupiedDoors,
       r.blendedPct ?? '', r.blendedBasis ?? '',
-      Math.round(r.currentFeesMonthly), r.targetPct ?? '', r.gapPts ?? '',
-      Math.round(r.addedMonthly), Math.round(r.addedYearly), r.tier,
+      Math.round(r.currentFeesMonthly), r.bandLabel, r.targetPct ?? '', r.gapPts ?? '',
+      Math.round(r.addedMonthly), Math.round(r.addedYearly), r.grade,
+      r.nextRaisePct ?? '', Math.round(r.nextRaiseYearly), r.raisesToTarget,
       r.earliestRenewal?.date ?? '', r.earliestRenewal?.source ?? '', r.earliestRenewal?.daysUntil ?? '',
       r.earliestRenewal?.noticeBy ?? '', r.lastFeeChange ?? '',
       r.priority, r.segments.join('; '),
@@ -453,24 +539,37 @@ const optDate = (v: unknown) => (v == null || v === '' ? null : isDate(v) ? v : 
 const optText = (v: unknown, max = 2000) =>
   v == null || v === '' ? null : typeof v === 'string' && v.length <= max ? v.trim() : undefined;
 
-export function parseTierRules(v: unknown): TierRule[] | null {
+/** Bands must start at 1 door and be contiguous; only the last may be open. */
+export function parseDoorSchedule(v: unknown): DoorBand[] | null {
   if (!Array.isArray(v) || v.length === 0 || v.length > 20) return null;
-  const out: TierRule[] = [];
+  const out: DoorBand[] = [];
   for (const r of v) {
-    const min = Number(r?.min);
-    const max = r?.max == null || r?.max === '' ? null : Number(r.max);
-    const addPts = Number(r?.addPts);
-    if (!Number.isFinite(min) || min < 0 || min > 100) return null;
-    if (max != null && (!Number.isFinite(max) || max <= min || max > 100)) return null;
-    if (!Number.isFinite(addPts) || addPts < 0 || addPts > 10) return null;
-    out.push({ min, max, addPts });
+    const minDoors = Number(r?.minDoors);
+    const maxDoors = r?.maxDoors == null || r?.maxDoors === '' ? null : Number(r.maxDoors);
+    const targetPct = Number(r?.targetPct);
+    const maxRaisePts = Number(r?.maxRaisePts);
+    if (!Number.isInteger(minDoors) || minDoors < 1) return null;
+    if (!Number.isFinite(maxRaisePts) || maxRaisePts <= 0 || maxRaisePts > 10) return null;
+    if (maxDoors != null && (!Number.isInteger(maxDoors) || maxDoors < minDoors)) return null;
+    if (!Number.isFinite(targetPct) || targetPct <= 0 || targetPct > 100) return null;
+    out.push({ minDoors, maxDoors, targetPct: round2(targetPct), maxRaisePts: round2(maxRaisePts), ...(r?.review ? { review: true } : {}) });
   }
-  out.sort((a, b) => a.min - b.min);
+  out.sort((a, b) => a.minDoors - b.minDoors);
+  if (out[0].minDoors !== 1) return null;
   for (let i = 1; i < out.length; i++) {
-    const prevMax = out[i - 1].max;
-    if (prevMax == null || prevMax > out[i].min) return null; // overlapping ranges
+    const prevMax = out[i - 1].maxDoors;
+    if (prevMax == null || out[i].minDoors !== prevMax + 1) return null; // gap or overlap
   }
   return out;
+}
+
+export function parseRaiseFloor(v: unknown): RaiseFloor | null {
+  const o = v as Record<string, unknown> | null;
+  const belowPct = Number(o?.belowPct);
+  const minPts = Number(o?.minPts);
+  if (!Number.isFinite(belowPct) || belowPct < 0 || belowPct > 100) return null;
+  if (!Number.isFinite(minPts) || minPts < 0 || minPts > 10) return null;
+  return { belowPct: round2(belowPct), minPts: round2(minPts) };
 }
 
 export function parseWeights(v: unknown): PriorityWeights | null {
