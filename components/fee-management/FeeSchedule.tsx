@@ -27,6 +27,8 @@ import {
 } from "@/lib/fee-management/model";
 import type { FeeVolumes } from "@/lib/fee-management/volumes";
 import { MarketBenchmarks } from "./MarketBenchmarks";
+import { FeeFatigue } from "./FeeFatigue";
+import { DEFAULT_FATIGUE } from "@/lib/fee-management/fatigue";
 
 interface MainPayload {
   facts: FeeFacts;
@@ -122,7 +124,7 @@ export function FeeSchedule() {
       vendorSpend: volumes.volumes.vendorSpend ?? 0,
       avgMonthlyRent: occupied ? facts.properties.reduce((a, p) => a + p.occupiedRentMonthly, 0) / occupied : 0,
     };
-    return { mgmt, ctx };
+    return { mgmt, ctx, rows };
   }, [main, volumes]);
 
   const cash = useMemo(() => (draft && derived ? computeCashFlow(draft, derived.ctx, derived.mgmt) : null), [draft, derived]);
@@ -405,6 +407,20 @@ export function FeeSchedule() {
         door schedule and raise steps. Industry ranges are 2026 national and Bend, OR published fee guides; check
         Oregon rules before changing tenant-paid fees. Market reference below.
       </p>
+
+      <FeeFatigue
+        rows={derived.rows}
+        cash={cash}
+        ctx={ctx}
+        scenario={draft.mgmtScenario}
+        assumptions={draft.fatigue ?? DEFAULT_FATIGUE}
+        onChange={(fatigue) => setDraft({ ...draft, fatigue })}
+        baseline={
+          volumes?.volumes.endedProperties != null && volumes.volumes.activeProperties != null
+            ? { ended: volumes.volumes.endedProperties, active: volumes.volumes.activeProperties }
+            : null
+        }
+      />
 
       <MarketBenchmarks />
     </div>

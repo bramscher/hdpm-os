@@ -16,6 +16,9 @@ export interface FeeVolumes {
   renewals: number;
   /** Outside-vendor maintenance spend, trailing 12 months (maintenance_economics KPI) — the base a markup applies to. */
   vendorSpend: number | null;
+  /** Properties whose management ended in the window, and the active count — HDPM's own owner churn. */
+  endedProperties: number;
+  activeProperties: number;
   windowStart: string;
   windowEnd: string;
 }
@@ -24,6 +27,11 @@ interface Tenant {
   UnitId?: string;
   MoveInOn?: string;
   HiddenAt?: string | null;
+}
+
+interface Property {
+  HiddenAt?: string | null;
+  ManagementEndDate?: string | null;
 }
 
 interface Lease {
@@ -43,6 +51,7 @@ export async function fetchFeeVolumes(): Promise<FeeVolumes> {
   // Sequential: the v0 API 429s readily.
   const tenants = await v0FetchAll<Tenant>('/tenants', { 'filters[LastUpdatedAtFrom]': from }, config, 1000, 30);
   const leases = await v0FetchAll<Lease>('/leases', { 'filters[LastUpdatedAtFrom]': from }, config, 1000, 30);
+  const properties = await v0FetchAll<Property>('/properties', { 'filters[LastUpdatedAtFrom]': '1970-01-01T00:00:00Z' }, config, 1000, 10);
 
   const moveIns = new Set<string>();
   for (const t of tenants) {
@@ -67,6 +76,8 @@ export async function fetchFeeVolumes(): Promise<FeeVolumes> {
     newLeases: moveIns.size,
     renewals: renewals.size,
     vendorSpend: Number.isFinite(spend) ? Math.round(spend) : null,
+    endedProperties: properties.filter((p) => inWindow(p.ManagementEndDate)).length,
+    activeProperties: properties.filter((p) => !p.HiddenAt && !p.ManagementEndDate).length,
     windowStart: from.slice(0, 10),
     windowEnd: end.toISOString().slice(0, 10),
   };
