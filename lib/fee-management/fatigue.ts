@@ -5,9 +5,13 @@
  * leaving within a year, and expected lost fees offset the gross gain.
  *
  * There is no published elasticity for property-management fee increases,
- * so the three sensitivity inputs are explicit, editable assumptions. The
+ * so the sensitivity inputs are explicit, editable assumptions. The
  * break-even figure (how many doors could leave before the change loses
  * money) needs no assumption at all.
+ *
+ * Churn is all-or-nothing per owner set: an owner who leaves takes every
+ * door and every fee. Expected values average that out, so large owners
+ * also get a stress test (what if they actually leave).
  */
 
 export interface FatigueAssumptions {
@@ -17,9 +21,36 @@ export interface FatigueAssumptions {
   pointsPerNewFee: number;
   /** Extra annual churn probability, in pts, for an owner at full fatigue. */
   maxAddedChurnPts: number;
+  /**
+   * Churn sensitivity by owner size (total doors): bigger owners have more to
+   * save and get courted with volume discounts. Sorted by minDoors; the last
+   * tier at or below an owner's doors applies.
+   */
+  sizeMultipliers?: { minDoors: number; multiplier: number }[];
+  /** Owners at or above this many doors get the large-owner stress test. */
+  largeOwnerDoors?: number;
 }
 
-export const DEFAULT_FATIGUE: FatigueAssumptions = { fullFatigueAtPct: 50, pointsPerNewFee: 10, maxAddedChurnPts: 15 };
+export const DEFAULT_SIZE_MULTIPLIERS = [
+  { minDoors: 1, multiplier: 1 },
+  { minDoors: 4, multiplier: 1.25 },
+  { minDoors: 16, multiplier: 1.5 },
+];
+
+export const DEFAULT_FATIGUE: FatigueAssumptions = {
+  fullFatigueAtPct: 50,
+  pointsPerNewFee: 10,
+  maxAddedChurnPts: 15,
+  sizeMultipliers: DEFAULT_SIZE_MULTIPLIERS,
+  largeOwnerDoors: 16,
+};
+
+export function sizeMultiplier(doors: number, a: FatigueAssumptions): number {
+  const tiers = [...(a.sizeMultipliers ?? DEFAULT_SIZE_MULTIPLIERS)].sort((x, y) => x.minDoors - y.minDoors);
+  let m = 1;
+  for (const t of tiers) if (doors >= t.minDoors) m = t.multiplier;
+  return m;
+}
 
 export interface OwnerFeeImpact {
   key: string;
@@ -32,8 +63,21 @@ export interface OwnerFeeImpact {
 export interface OwnerFatigue extends OwnerFeeImpact {
   increasePct: number;
   fatigue: number;
+  sizeMultiplier: number;
   addedChurn: number; // probability 0–1
   expectedLoss: number; // $/yr of proposed fees at risk
+}
+
+export interface LargeOwnerExposure {
+  threshold: number;
+  owners: OwnerFatigue[]; // large owners whose fees rise, by $ at stake
+  /** Net gain if the single largest at-risk owner actually leaves (certainty instead of expectation). */
+  netIfLargestLeaves: number | null;
+  largest: OwnerFatigue | null;
+  /** Net gain if every large at-risk owner leaves. */
+  netIfAllLeave: number | null;
+  feesAtStake: number;
+  doorsAtStake: number;
 }
 
 export interface FatigueResult {
@@ -51,6 +95,7 @@ export interface FatigueResult {
   /** Doors that could leave (at average proposed fees per door) before the change nets to $0. */
   breakEvenDoors: number;
   bands: { label: string; min: number; max: number; owners: number; doors: number; expectedLoss: number }[];
+  large: LargeOwnerExposure;
 }
 
 export const FATIGUE_BANDS = [
@@ -71,8 +116,9 @@ export function computeFatigue(owners: OwnerFeeImpact[], newFeeTypes: number, a:
     const increasePct = o.currentYearly > 0 ? ((o.proposedYearly - o.currentYearly) / o.currentYearly) * 100 : 0;
     const raised = o.proposedYearly > o.currentYearly;
     const fatigue = raised ? fatigueFor(increasePct, newFeeTypes, a) : 0;
-    const addedChurn = (fatigue / 100) * (a.maxAddedChurnPts / 100);
-    return { ...o, increasePct, fatigue, addedChurn, expectedLoss: addedChurn * o.proposedYearly };
+    const mult = sizeMultiplier(o.doors, a);
+    const addedChurn = Math.min(1, (fatigue / 100) * (a.maxAddedChurnPts / 100) * mult);
+    return { ...o, increasePct, fatigue, sizeMultiplier: mult, addedChurn, expectedLoss: addedChurn * o.proposedYearly };
   });
 
   const doors = rows.reduce((s, o) => s + o.doors, 0);
@@ -85,12 +131,19 @@ export function computeFatigue(owners: OwnerFeeImpact[], newFeeTypes: number, a:
   const doorsAfter = doors - expectedDoorsLost;
   const revPerDoorAfter = doorsAfter > 0 ? (proposed - expectedLoss) / doorsAfter : 0;
   const proposedPerDoor = doors ? proposed / doors : 0;
+  const netGain = grossGain - expectedLoss;
+
+  // Stress test: swap the expected loss for certainty on the big owners.
+  const threshold = a.largeOwnerDoors ?? 16;
+  const largeAtRisk = rows.filter((o) => o.doors >= threshold && o.fatigue > 0).sort((x, y) => y.proposedYearly - x.proposedYearly);
+  const extraIfLeaves = (o: OwnerFatigue) => o.proposedYearly - o.expectedLoss;
+  const largest = largeAtRisk[0] ?? null;
 
   return {
     owners: rows.sort((x, y) => y.expectedLoss - x.expectedLoss),
     grossGain,
     expectedLoss,
-    netGain: grossGain - expectedLoss,
+    netGain,
     expectedDoorsLost,
     expectedOwnersLost: rows.reduce((s, o) => s + o.addedChurn, 0),
     doors,
@@ -107,6 +160,15 @@ export function computeFatigue(owners: OwnerFeeImpact[], newFeeTypes: number, a:
         expectedLoss: inBand.reduce((s, o) => s + o.expectedLoss, 0),
       };
     }),
+    large: {
+      threshold,
+      owners: largeAtRisk,
+      largest,
+      netIfLargestLeaves: largest ? netGain - extraIfLeaves(largest) : null,
+      netIfAllLeave: largeAtRisk.length ? netGain - largeAtRisk.reduce((s, o) => s + extraIfLeaves(o), 0) : null,
+      feesAtStake: largeAtRisk.reduce((s, o) => s + o.proposedYearly, 0),
+      doorsAtStake: largeAtRisk.reduce((s, o) => s + o.doors, 0),
+    },
   };
 }
 
@@ -116,5 +178,20 @@ export function parseFatigue(v: unknown): FatigueAssumptions | null {
   if (!(a.fullFatigueAtPct > 0 && a.fullFatigueAtPct <= 1000)) return null;
   if (!(a.pointsPerNewFee >= 0 && a.pointsPerNewFee <= 100)) return null;
   if (!(a.maxAddedChurnPts >= 0 && a.maxAddedChurnPts <= 100)) return null;
-  return a;
+  // Size tiers and the large-owner threshold are optional (older saved configs lack them).
+  let sizeMultipliers = DEFAULT_SIZE_MULTIPLIERS;
+  if (o?.sizeMultipliers != null) {
+    if (!Array.isArray(o.sizeMultipliers) || o.sizeMultipliers.length === 0 || o.sizeMultipliers.length > 10) return null;
+    sizeMultipliers = [];
+    for (const t of o.sizeMultipliers as Record<string, unknown>[]) {
+      const minDoors = Number(t?.minDoors);
+      const multiplier = Number(t?.multiplier);
+      if (!Number.isInteger(minDoors) || minDoors < 1 || !(multiplier >= 0 && multiplier <= 10)) return null;
+      sizeMultipliers.push({ minDoors, multiplier });
+    }
+    sizeMultipliers.sort((x, y) => x.minDoors - y.minDoors);
+  }
+  const largeOwnerDoors = o?.largeOwnerDoors == null ? 16 : Number(o.largeOwnerDoors);
+  if (!Number.isInteger(largeOwnerDoors) || largeOwnerDoors < 1) return null;
+  return { ...a, sizeMultipliers, largeOwnerDoors };
 }

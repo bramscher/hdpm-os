@@ -1,6 +1,6 @@
 "use client";
 
-import type { FatigueAssumptions, FatigueResult } from "@/lib/fee-management/fatigue";
+import { DEFAULT_SIZE_MULTIPLIERS, type FatigueAssumptions, type FatigueResult } from "@/lib/fee-management/fatigue";
 
 const usd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -29,6 +29,14 @@ export function FeeFatigue({
   const baselinePct = baseline && baseline.active + baseline.ended > 0 ? (baseline.ended / (baseline.active + baseline.ended)) * 100 : null;
   const lossShare = result.grossGain > 0 ? Math.min(100, (result.expectedLoss / result.grossGain) * 100) : 0;
   const setA = (k: keyof FatigueAssumptions, v: string) => onChange({ ...assumptions, [k]: v === "" ? 0 : Math.max(0, Number(v)) });
+  const tiers = assumptions.sizeMultipliers ?? DEFAULT_SIZE_MULTIPLIERS;
+  const setTier = (i: number, k: "minDoors" | "multiplier", v: string) =>
+    onChange({
+      ...assumptions,
+      sizeMultipliers: tiers.map((t, j) => (j === i ? { ...t, [k]: v === "" ? 0 : Math.max(0, Number(v)) } : t)),
+    });
+  const large = result.large;
+  const signed = (n: number) => `${n >= 0 ? "+" : "−"}${usd(Math.abs(n))}`;
 
   return (
     <section id="fee-fatigue" className="mt-8 scroll-mt-6">
@@ -118,6 +126,79 @@ export function FeeFatigue({
             </div>
           </div>
 
+          {/* Large-owner exposure: all-or-nothing, not averages */}
+          {large.owners.length > 0 && (
+            <div className="mt-4 rounded-xl border-2 border-red-200 bg-red-50/30 p-4">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[13px] font-semibold text-charcoal-800">Large-owner exposure ({large.threshold}+ doors)</p>
+                  <p className="max-w-2xl text-[11.5px] text-charcoal-500">
+                    Losing one of these owners means losing every door they have. The expected-loss math averages that risk out;
+                    this stress test shows what happens if they actually leave.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-4 text-right">
+                  <div>
+                    <p className="text-[11px] text-charcoal-400">At stake</p>
+                    <p className="text-[15px] font-semibold tabular-nums text-charcoal-900">{usd(large.feesAtStake)}/yr</p>
+                    <p className="text-[11px] text-charcoal-400">{large.doorsAtStake} doors · {large.owners.length} owners</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-charcoal-400">Net if largest leaves</p>
+                    <p className={`text-[15px] font-semibold tabular-nums ${large.netIfLargestLeaves! >= 0 ? "text-green-700" : "text-red-600"}`}>
+                      {signed(large.netIfLargestLeaves!)}/yr
+                    </p>
+                    <p className="max-w-[160px] truncate text-[11px] text-charcoal-400" title={large.largest?.name}>{large.largest?.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-charcoal-400">Net if all of them leave</p>
+                    <p className={`text-[15px] font-semibold tabular-nums ${large.netIfAllLeave! >= 0 ? "text-green-700" : "text-red-600"}`}>
+                      {signed(large.netIfAllLeave!)}/yr
+                    </p>
+                    <p className="text-[11px] text-charcoal-400">worst case</p>
+                  </div>
+                </div>
+              </div>
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="text-left text-[10.5px] uppercase tracking-wider text-charcoal-400 border-b border-red-200">
+                    <th className="py-1.5 pr-3 font-semibold">Owner</th>
+                    <th className="py-1.5 pr-3 font-semibold text-right">Doors</th>
+                    <th className="py-1.5 pr-3 font-semibold text-right">Increase</th>
+                    <th className="py-1.5 pr-3 font-semibold text-right">Fatigue</th>
+                    <th className="py-1.5 pr-3 font-semibold text-right">Chance of leaving</th>
+                    <th className="py-1.5 pr-3 font-semibold text-right">Expected loss</th>
+                    <th className="py-1.5 font-semibold text-right">If they leave</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {large.owners.map((o) => (
+                    <tr key={o.key} className="border-b border-red-100 last:border-0">
+                      <td className="py-1.5 pr-3 max-w-[260px] truncate font-medium text-charcoal-900" title={o.name}>{o.name}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums font-semibold">{o.doors}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">+{o.increasePct.toFixed(0)}%</td>
+                      <td className="py-1.5 pr-3 text-right">
+                        <span
+                          className="inline-block min-w-[34px] rounded px-1.5 text-center text-[11px] font-semibold tabular-nums text-white"
+                          style={{ background: BAND_COLORS[Math.min(3, Math.floor(o.fatigue / 25))] }}
+                        >
+                          {o.fatigue}
+                        </span>
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums" title={`Includes the ${o.sizeMultiplier}× size multiplier`}>
+                        {(o.addedChurn * 100).toFixed(1)}%
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-red-600">−{usd(o.expectedLoss)}</td>
+                      <td className="py-1.5 text-right tabular-nums font-semibold text-red-700">
+                        −{usd(o.proposedYearly)} · {o.doors} doors
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {/* Most at risk */}
           <div className="mt-4 rounded-xl border border-sand-200 p-4">
             <p className="mb-2 text-[13px] font-semibold text-charcoal-800">Most at risk: call these before the change lands</p>
@@ -176,6 +257,21 @@ export function FeeFatigue({
             pts of annual churn
           </label>
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span>Size sensitivity (larger owners churn more easily):</span>
+          {tiers.map((t, i) => (
+            <label key={i} className="flex items-center gap-1.5">
+              <input type="number" min={1} value={t.minDoors} onChange={(e) => setTier(i, "minDoors", e.target.value)} className="input w-14" />
+              + doors ×
+              <input type="number" min={0} step={0.25} value={t.multiplier} onChange={(e) => setTier(i, "multiplier", e.target.value)} className="input w-16" />
+            </label>
+          ))}
+          <label className="flex items-center gap-1.5">
+            · stress-test owners with
+            <input type="number" min={1} value={assumptions.largeOwnerDoors ?? 16} onChange={(e) => setA("largeOwnerDoors", e.target.value)} className="input w-14" />
+            + doors
+          </label>
+        </div>
         <p className="mt-2 text-[11px] leading-relaxed text-charcoal-400">
           Baseline owner churn:{" "}
           {baselinePct != null ? (
@@ -184,8 +280,8 @@ export function FeeFatigue({
             <>refresh the volumes above to load HDPM&apos;s own rate</>
           )}
           ; industry sources cite ~20% average annual owner churn and ~10% for top firms. That churn happens anyway, so only the
-          fee-driven <i>extra</i> churn is counted here. There is no published data on how owners react to fee increases, so the three
-          inputs above are judgment calls: tune them to your experience. The break-even figure needs no assumptions. Other fees are
+          fee-driven <i>extra</i> churn is counted here. There is no published data on how owners react to fee increases, so the
+          inputs above (including size sensitivity) are judgment calls: tune them to your experience. The break-even figure needs no assumptions. Other fees are
           spread across owners per door; expected loss assumes a departing owner&apos;s full proposed fees for the year.
         </p>
       </div>
