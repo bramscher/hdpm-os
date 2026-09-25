@@ -146,10 +146,10 @@ function TileSection({ label, children }: { label: string; children: React.React
  */
 export function DashboardCanvas() {
   const { data: session } = useSession();
-  // Admin tile section is Craig-only by request (the admin pages themselves
-  // stay isAdmin-gated in middleware).
-  const showAdminSection =
-    session?.user?.email?.toLowerCase() === "craig@highdesertpm.com";
+  // Admin tile section shows for every admin (staff.access_role = 'admin');
+  // the admin pages stay role-gated in the proxy. HABU demo tiles inside it
+  // remain Craig-only via canViewHabuDemo.
+  const showAdminSection = session?.user?.isAdmin === true;
   const [inspectionStats, setInspectionStats] = useState<InspectionStats | null>(null);
   const [routeStats, setRouteStats] = useState<RouteStats | null>(null);
   const [vacancyCount, setVacancyCount] = useState<number | null>(null);
