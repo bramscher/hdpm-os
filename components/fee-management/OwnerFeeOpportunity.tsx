@@ -37,10 +37,18 @@ type SortKey =
 
 const SEGMENTS: Segment[] = ["Personal call", "Letter", "Renewal-timed", "Portfolio review"];
 
-/** Gray → deep red as the grade rises; the only color in the table. */
+/**
+ * Green (at schedule, no change) → yellow → orange → bright red (largest $
+ * opportunity), graduated continuously. Hue runs 142 → 0; lightness rises
+ * toward the red end so the top reads bright, not maroon.
+ */
 function gradeColor(grade: number): string {
   const t = Math.min(Math.max(grade, 0), 100) / 100;
-  return `hsl(0 ${Math.round(72 * t)}% ${Math.round(80 - 32 * t)}%)`;
+  // (1 − t)^1.5 leaves green quickly, so only "no change" reads as green.
+  const hue = Math.round(142 * Math.pow(1 - t, 1.5));
+  const sat = Math.round(68 + 22 * t);
+  const light = Math.round(36 + 6 * Math.sin(Math.PI * t) + 12 * t);
+  return `hsl(${hue} ${sat}% ${light}%)`;
 }
 
 const usd = (n: number) =>
@@ -238,6 +246,14 @@ export function OwnerFeeOpportunity() {
           options={[["all", "All segments"], ...SEGMENTS.map((s) => [s, s] as [string, string])]}
         />
         <span className="text-charcoal-400">{visible.length} owners</span>
+        <span className="hidden items-center gap-1.5 text-[11px] text-charcoal-400 md:flex" aria-hidden>
+          at schedule
+          <span
+            className="h-1.5 w-20 rounded-full"
+            style={{ background: `linear-gradient(90deg, ${[0, 25, 50, 75, 100].map((g) => gradeColor(g)).join(", ")})` }}
+          />
+          largest opportunity
+        </span>
         <div className="ml-auto flex items-center gap-2">
           <ToolbarButton onClick={() => setSettingsOpen((o) => !o)} icon={<Settings2 className="h-3.5 w-3.5" />}>
             Schedule &amp; weights
@@ -308,7 +324,9 @@ export function OwnerFeeOpportunity() {
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">{usd(r.currentFeesMonthly)}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{pct(r.targetPct)}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{r.gapPts ? `+${r.gapPts}` : "—"}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums font-medium" style={{ color: gradeColor(r.grade) }}>
+                    {r.gapPts ? `+${r.gapPts}` : "—"}
+                  </td>
                   <td
                     className="py-2 pr-3 text-right tabular-nums whitespace-nowrap"
                     title={r.raisesToTarget > 1 ? `${r.raisesToTarget} raises to reach schedule` : undefined}
@@ -322,7 +340,9 @@ export function OwnerFeeOpportunity() {
                       "—"
                     )}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums font-semibold">{r.addedYearly > 0 ? usd(r.addedYearly) : "—"}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums font-semibold" style={{ color: gradeColor(r.grade) }}>
+                    {r.addedYearly > 0 ? usd(r.addedYearly) : "—"}
+                  </td>
                   <td className="py-2 pr-3">
                     <GradeBar grade={r.grade} />
                   </td>
@@ -391,7 +411,7 @@ export function OwnerFeeOpportunity() {
         vacant doors add nothing until leased. Blended fee % is weighted by that rent (<sup>d</sup> = no occupied doors,
         weighted by door count). Schedule = the door-count rate for the owner&apos;s total doors (also the rule for new business);
         fees above schedule are never lowered. Opportunity grades the full $/yr gap to schedule on a square-root curve
-        (100 = largest in the portfolio, 0 = at schedule). Next raise = one step per property, capped by the band&apos;s
+        (100 = largest in the portfolio, 0 = at schedule), colored green → red. Next raise = one step per property, capped by the band&apos;s
         max step (smaller for bigger owners) and at least {payload.raiseFloor.minPts} pt for anything under{" "}
         {payload.raiseFloor.belowPct}%; &ldquo;1/3&rdquo; means three raises to reach schedule. Agreement ends marked &ldquo;proj.&rdquo; assume
         a 1-year term auto-renewing on the management start anniversary; enter actual dates per property to override.
@@ -727,11 +747,14 @@ function SettingsPanel({
 
 function GradeBar({ grade }: { grade: number }) {
   return (
-    <div className="flex w-[112px] items-center gap-2" title={grade === 0 ? "At or above schedule" : `Opportunity grade ${grade} of 100`}>
+    <div className="flex w-[112px] items-center gap-2" title={grade === 0 ? "At or above schedule — no change" : `Opportunity grade ${grade} of 100`}>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-sand-100">
-        {grade > 0 && <div className="h-full rounded-full" style={{ width: `${grade}%`, background: gradeColor(grade) }} />}
+        {/* At schedule shows a short green stub so "no change" reads as green, not empty. */}
+        <div className="h-full rounded-full" style={{ width: `${Math.max(grade, 6)}%`, background: gradeColor(grade) }} />
       </div>
-      <span className="w-7 text-right text-[11.5px] font-semibold tabular-nums text-charcoal-900">{grade}</span>
+      <span className="w-7 text-right text-[11.5px] font-semibold tabular-nums" style={{ color: gradeColor(grade) }}>
+        {grade}
+      </span>
     </div>
   );
 }
