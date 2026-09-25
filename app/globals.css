@@ -244,3 +244,10 @@
 .sidebar-gradient ::-webkit-scrollbar-thumb {
   background-color: rgba(0, 0, 0, 0.1);
 }
+
+/* Compact form control for dense admin tables (Fee Management). */
+@layer components {
+  .input {
+    @apply h-7 rounded-md border border-sand-200 bg-white px-2 text-[12px] text-charcoal-900 placeholder:text-charcoal-300;
+  }
+}
