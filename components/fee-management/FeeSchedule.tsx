@@ -7,13 +7,11 @@ import {
   BASIS_LABELS,
   MGMT_SCENARIO_LABELS,
   VOLUME_LABELS,
-  computeCashFlow,
   type FeeBasis,
   type FeeLine,
   type FeeScheduleConfig,
   type FeeValue,
   type MgmtScenario,
-  type VolumeContext,
   type VolumeSource,
 } from "@/lib/fee-management/fee-schedule";
 import {
@@ -29,6 +27,7 @@ import type { FeeVolumes } from "@/lib/fee-management/volumes";
 import { MarketBenchmarks } from "./MarketBenchmarks";
 import { FeeFatigue } from "./FeeFatigue";
 import { DEFAULT_FATIGUE } from "@/lib/fee-management/fatigue";
+import { portfolioFatigue, volumeContext } from "@/lib/fee-management/portfolio";
 
 interface MainPayload {
   facts: FeeFacts;
@@ -44,11 +43,6 @@ const usd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const signedUsd = (n: number) => (Math.round(n) === 0 ? "—" : `${n > 0 ? "+" : "−"}${usd(Math.abs(n))}`);
 const todayIso = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-const yearAgoIso = () => {
-  const d = new Date();
-  d.setDate(d.getDate() - 365);
-  return d.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-};
 
 function describe(v: FeeValue | null): string {
   if (!v) return "—";
@@ -89,12 +83,11 @@ export function FeeSchedule() {
     })();
   }, [loadVolumes]);
 
-  // Management fee scenarios + volume context from the same AppFolio facts as the owner rollup.
+  // Owner rollup + volume context from the same AppFolio facts; fee math shared with the owner tab.
   const derived = useMemo(() => {
     if (!main || !volumes) return null;
-    const { facts } = main;
     const rows = buildOwnerRows({
-      facts,
+      facts: main.facts,
       schedule: main.schedule,
       raiseFloor: main.raiseFloor,
       weights: main.weights,
@@ -102,32 +95,11 @@ export function FeeSchedule() {
       campaign: main.campaign,
       today: todayIso(),
     });
-    const current = rows.reduce((a, r) => a + r.currentFeesMonthly * 12, 0);
-    const mgmt: Record<MgmtScenario, number> = {
-      current,
-      firstRaise: current + rows.reduce((a, r) => a + r.nextRaiseYearly, 0),
-      schedule: current + rows.reduce((a, r) => a + r.addedYearly, 0),
-    };
-    const yearAgo = yearAgoIso();
-    const newProps = facts.properties.filter((p) => p.mgmtStartDate && p.mgmtStartDate >= yearAgo);
-    const existingSets = new Set(
-      facts.properties.filter((p) => !p.mgmtStartDate || p.mgmtStartDate < yearAgo).map((p) => p.ownerSetKey)
-    );
-    const occupied = facts.properties.reduce((a, p) => a + p.occupiedDoors, 0);
-    const ctx: VolumeContext = {
-      newLeases: volumes.volumes.newLeases,
-      renewals: volumes.volumes.renewals,
-      newProperties: newProps.length,
-      newOwners: new Set(newProps.map((p) => p.ownerSetKey).filter((k) => !existingSets.has(k))).size,
-      properties: facts.properties.length,
-      doors: facts.properties.reduce((a, p) => a + p.doors, 0),
-      vendorSpend: volumes.volumes.vendorSpend ?? 0,
-      avgMonthlyRent: occupied ? facts.properties.reduce((a, p) => a + p.occupiedRentMonthly, 0) / occupied : 0,
-    };
-    return { mgmt, ctx, rows };
+    return { rows, ctx: volumeContext(main.facts, volumes.volumes, todayIso()) };
   }, [main, volumes]);
 
-  const cash = useMemo(() => (draft && derived ? computeCashFlow(draft, derived.ctx, derived.mgmt) : null), [draft, derived]);
+  const pf = useMemo(() => (draft && derived ? portfolioFatigue(derived.rows, draft, derived.ctx) : null), [draft, derived]);
+  const cash = pf?.cash ?? null;
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
 
   const updateLine = (id: string, patch: Partial<FeeLine>) =>
@@ -173,7 +145,7 @@ export function FeeSchedule() {
   return (
     <div>
       {/* Summary: current vs proposed at a glance */}
-      <div className="grid gap-3 mb-4 lg:grid-cols-[1fr_220px_220px]">
+      <div className="grid gap-3 mb-4 lg:grid-cols-[1fr_200px_210px_200px]">
         <CompareCard
           current={{ total: cash.currentYearly, mgmt: cash.mgmt.currentYearly }}
           proposed={{ total: cash.proposedYearly, mgmt: cash.mgmt.proposedYearly }}
@@ -184,6 +156,25 @@ export function FeeSchedule() {
           sub={`${signedUsd(cash.deltaYearly / 12)}/mo${cash.deltaPct != null ? ` · ${cash.deltaPct >= 0 ? "+" : ""}${cash.deltaPct.toFixed(1)}%` : ""}`}
           tone={cash.deltaYearly > 0 ? "up" : cash.deltaYearly < 0 ? "down" : undefined}
         />
+        <a
+          href="#fee-fatigue"
+          className="block rounded-xl border border-sand-200 px-3.5 py-3 hover:border-charcoal-300 hover:bg-sand-50"
+          title="Gross change minus expected fee-driven owner churn. Click for the fatigue breakdown."
+        >
+          <p className="text-[11px] font-medium text-charcoal-400">Net after churn ↓</p>
+          <p
+            className={`mt-0.5 text-lg font-semibold tabular-nums ${
+              pf!.fatigue.netGain > 0 ? "text-green-700" : pf!.fatigue.netGain < 0 ? "text-red-600" : "text-charcoal-900"
+            }`}
+          >
+            {signedUsd(pf!.fatigue.netGain)}/yr
+          </p>
+          <p className="mt-0.5 text-[11px] text-charcoal-400">
+            {pf!.fatigue.expectedLoss > 0
+              ? `−${usd(pf!.fatigue.expectedLoss)} expected churn · break-even ${Math.floor(pf!.fatigue.breakEvenDoors)} doors`
+              : "no fee-driven churn expected"}
+          </p>
+        </a>
         <Stat
           label="Other fees share"
           value={`${cash.currentYearly ? Math.round(((cash.currentYearly - cash.mgmt.currentYearly) / cash.currentYearly) * 100) : 0}% → ${cash.proposedYearly ? Math.round(((cash.proposedYearly - cash.mgmt.proposedYearly) / cash.proposedYearly) * 100) : 0}%`}
@@ -409,10 +400,9 @@ export function FeeSchedule() {
       </p>
 
       <FeeFatigue
-        rows={derived.rows}
-        cash={cash}
-        ctx={ctx}
-        scenario={draft.mgmtScenario}
+        result={pf!.fatigue}
+        newFeeTypes={pf!.newFeeTypes}
+        ownerCount={derived.rows.length}
         assumptions={draft.fatigue ?? DEFAULT_FATIGUE}
         onChange={(fatigue) => setDraft({ ...draft, fatigue })}
         baseline={

@@ -1,9 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
-import type { CashFlow, MgmtScenario, VolumeContext } from "@/lib/fee-management/fee-schedule";
-import { computeFatigue, type FatigueAssumptions, type OwnerFeeImpact } from "@/lib/fee-management/fatigue";
-import type { OwnerRow } from "@/lib/fee-management/model";
+import type { FatigueAssumptions, FatigueResult } from "@/lib/fee-management/fatigue";
 
 const usd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -15,47 +12,26 @@ const BAND_COLORS = ["hsl(142 60% 38%)", "hsl(45 90% 45%)", "hsl(25 90% 50%)", "
  * effect via revenue per door.
  */
 export function FeeFatigue({
-  rows,
-  cash,
-  ctx,
-  scenario,
+  result,
+  newFeeTypes,
+  ownerCount,
   assumptions,
   onChange,
   baseline,
 }: {
-  rows: OwnerRow[];
-  cash: CashFlow;
-  ctx: VolumeContext;
-  scenario: MgmtScenario;
+  result: FatigueResult;
+  newFeeTypes: number;
+  ownerCount: number;
   assumptions: FatigueAssumptions;
   onChange: (a: FatigueAssumptions) => void;
   baseline: { ended: number; active: number } | null;
 }) {
-  const result = useMemo(() => {
-    // Other (non-management) fees are allocated to owners per door.
-    const perDoorCurrent = ctx.doors ? cash.lines.reduce((s, l) => s + l.currentYearly, 0) / ctx.doors : 0;
-    const perDoorProposed = ctx.doors ? cash.lines.reduce((s, l) => s + l.proposedYearly, 0) / ctx.doors : 0;
-    const newFeeTypes = cash.lines.filter((l) => l.currentYearly === 0 && l.proposedYearly > 0).length;
-    const impacts: OwnerFeeImpact[] = rows.map((r) => {
-      const mgmtNow = r.currentFeesMonthly * 12;
-      const mgmtAdd = scenario === "firstRaise" ? r.nextRaiseYearly : scenario === "schedule" ? r.addedYearly : 0;
-      return {
-        key: r.key,
-        name: r.name,
-        doors: r.doors,
-        currentYearly: mgmtNow + perDoorCurrent * r.doors,
-        proposedYearly: mgmtNow + mgmtAdd + perDoorProposed * r.doors,
-      };
-    });
-    return { ...computeFatigue(impacts, newFeeTypes, assumptions), newFeeTypes };
-  }, [rows, cash, ctx.doors, scenario, assumptions]);
-
   const baselinePct = baseline && baseline.active + baseline.ended > 0 ? (baseline.ended / (baseline.active + baseline.ended)) * 100 : null;
   const lossShare = result.grossGain > 0 ? Math.min(100, (result.expectedLoss / result.grossGain) * 100) : 0;
   const setA = (k: keyof FatigueAssumptions, v: string) => onChange({ ...assumptions, [k]: v === "" ? 0 : Math.max(0, Number(v)) });
 
   return (
-    <section className="mt-8">
+    <section id="fee-fatigue" className="mt-8 scroll-mt-6">
       <h2 className="text-[15px] font-semibold text-charcoal-900">Fee fatigue &amp; churn</h2>
       <p className="mb-3 max-w-3xl text-[12px] text-charcoal-500">
         Raising fees costs some owners&apos; goodwill. Each owner gets a 0–100 fatigue score from how much their total fees rise and
@@ -121,7 +97,7 @@ export function FeeFatigue({
               <p className="mb-2 text-[13px] font-semibold text-charcoal-800">Owners by fatigue</p>
               <div className="mb-2 flex h-3 overflow-hidden rounded-full bg-sand-100">
                 {result.bands.map((b, i) => (
-                  <div key={b.label} style={{ width: `${rows.length ? (b.owners / rows.length) * 100 : 0}%`, background: BAND_COLORS[i] }} title={`${b.label}: ${b.owners} owners`} />
+                  <div key={b.label} style={{ width: `${ownerCount ? (b.owners / ownerCount) * 100 : 0}%`, background: BAND_COLORS[i] }} title={`${b.label}: ${b.owners} owners`} />
                 ))}
               </div>
               <table className="w-full text-[12px]">
@@ -192,7 +168,7 @@ export function FeeFatigue({
           <label className="flex items-center gap-2">
             +
             <input type="number" min={0} value={assumptions.pointsPerNewFee} onChange={(e) => setA("pointsPerNewFee", e.target.value)} className="input w-14" />
-            fatigue pts per new fee type ({result.newFeeTypes} proposed)
+            fatigue pts per new fee type ({newFeeTypes} proposed)
           </label>
           <label className="flex items-center gap-2">
             Full fatigue adds
