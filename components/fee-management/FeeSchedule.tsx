@@ -167,14 +167,15 @@ export function FeeSchedule() {
   if (!draft || !cash || !derived) return <div className="h-64 rounded-xl bg-sand-50 animate-pulse" />;
 
   const { ctx } = derived;
-  const maxAbsDelta = Math.max(1, ...cash.lines.map((l) => Math.abs(l.deltaYearly)), Math.abs(cash.mgmt.proposedYearly - cash.mgmt.currentYearly));
 
   return (
     <div>
-      {/* Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <Stat label="Current fee revenue" value={`${usd(cash.currentYearly)}/yr`} sub={`${usd(cash.currentYearly / 12)}/mo`} />
-        <Stat label="Proposed fee revenue" value={`${usd(cash.proposedYearly)}/yr`} sub={`${usd(cash.proposedYearly / 12)}/mo`} />
+      {/* Summary: current vs proposed at a glance */}
+      <div className="grid gap-3 mb-4 lg:grid-cols-[1fr_220px_220px]">
+        <CompareCard
+          current={{ total: cash.currentYearly, mgmt: cash.mgmt.currentYearly }}
+          proposed={{ total: cash.proposedYearly, mgmt: cash.mgmt.proposedYearly }}
+        />
         <Stat
           label="Change"
           value={`${signedUsd(cash.deltaYearly)}/yr`}
@@ -182,9 +183,9 @@ export function FeeSchedule() {
           tone={cash.deltaYearly > 0 ? "up" : cash.deltaYearly < 0 ? "down" : undefined}
         />
         <Stat
-          label="Ancillary share"
+          label="Other fees share"
           value={`${cash.currentYearly ? Math.round(((cash.currentYearly - cash.mgmt.currentYearly) / cash.currentYearly) * 100) : 0}% → ${cash.proposedYearly ? Math.round(((cash.proposedYearly - cash.mgmt.proposedYearly) / cash.proposedYearly) * 100) : 0}%`}
-          sub="of fee revenue from non-management fees"
+          sub="of fee revenue from fees other than management"
         />
       </div>
 
@@ -206,44 +207,56 @@ export function FeeSchedule() {
       {/* Fee table */}
       <div className="overflow-x-auto rounded-xl border border-sand-200">
         <table className="w-full text-[12.5px]">
-          <thead className="bg-sand-50">
+          <thead>
+            <tr className="text-[11px] font-semibold">
+              <th colSpan={3} className="bg-white" />
+              <th colSpan={2} className={`${CUR_BAND} border-b border-sand-200 px-3 pt-2 pb-1 text-left text-charcoal-600`}>
+                Current
+              </th>
+              <th colSpan={2} className={`${PROP_BAND} border-b border-sky-200 px-3 pt-2 pb-1 text-left text-sky-800`}>
+                Proposed
+              </th>
+              <th colSpan={2} className="bg-white" />
+            </tr>
             <tr className="text-left text-[10.5px] uppercase tracking-wider text-charcoal-400 border-b border-sand-200">
-              <th className="py-2 px-3 font-semibold">Fee</th>
-              <th className="py-2 pr-3 font-semibold">Volume / yr</th>
-              <th className="py-2 pr-3 font-semibold">Current</th>
-              <th className="py-2 pr-3 font-semibold text-right">Current / yr</th>
-              <th className="py-2 pr-3 font-semibold">Industry</th>
-              <th className="py-2 pr-3 font-semibold">Proposed</th>
-              <th className="py-2 pr-3 font-semibold text-right">Proposed / yr</th>
-              <th className="py-2 pr-3 font-semibold text-right">Change / yr</th>
-              <th className="w-8" />
+              <th className="bg-sand-50 py-2 px-3 font-semibold">Fee</th>
+              <th className="bg-sand-50 py-2 pr-3 font-semibold">Volume / yr</th>
+              <th className="bg-sand-50 py-2 pr-3 font-semibold">Industry</th>
+              <th className={`${CUR_BAND} py-2 px-3 font-semibold`}>Fee</th>
+              <th className={`${CUR_BAND} py-2 pr-3 font-semibold text-right`}>Per year</th>
+              <th className={`${PROP_BAND} py-2 px-3 font-semibold text-sky-800/70`}>Fee</th>
+              <th className={`${PROP_BAND} py-2 pr-3 font-semibold text-right text-sky-800/70`}>Per year</th>
+              <th className="bg-sand-50 py-2 px-3 font-semibold text-right">Change / yr</th>
+              <th className="bg-sand-50 w-8" />
             </tr>
           </thead>
           <tbody>
             {/* Management fee: driven by the Owner Fee Opportunity tab */}
-            <tr className="border-b border-sand-200 bg-sand-50/50 align-top">
+            <tr className="border-b border-sand-200 align-top">
               <td className="py-2.5 px-3">
                 <p className="font-medium text-charcoal-900">Management fee</p>
                 <p className="text-[11px] text-charcoal-400">% of rent + flat-fee properties · from Owner Fee Opportunity</p>
               </td>
               <td className="py-2.5 pr-3 text-charcoal-500">{ctx.doors} doors</td>
-              <td className="py-2.5 pr-3 text-charcoal-500">Current rates</td>
-              <td className="py-2.5 pr-3 text-right tabular-nums">{usd(cash.mgmt.currentYearly)}</td>
               <td className="py-2.5 pr-3 text-[11.5px] text-charcoal-500">8–10% in Bend; ~8.5% national avg</td>
-              <td className="py-2.5 pr-3">
-                <select
-                  value={draft.mgmtScenario}
-                  onChange={(e) => setDraft({ ...draft, mgmtScenario: e.target.value as MgmtScenario })}
-                  className="input"
-                >
-                  {(Object.keys(MGMT_SCENARIO_LABELS) as MgmtScenario[]).map((k) => (
-                    <option key={k} value={k}>{MGMT_SCENARIO_LABELS[k]}</option>
-                  ))}
-                </select>
+              <td className={`${CUR_BAND} py-2.5 px-3 text-charcoal-600`}>Current rates</td>
+              <td className={`${CUR_BAND} py-2.5 pr-3 text-right tabular-nums text-charcoal-700`}>{usd(cash.mgmt.currentYearly)}</td>
+              <td className={`${PROP_BAND} py-2.5 px-3`}>
+                <Changed on={draft.mgmtScenario !== "current"}>
+                  <select
+                    value={draft.mgmtScenario}
+                    onChange={(e) => setDraft({ ...draft, mgmtScenario: e.target.value as MgmtScenario })}
+                    className="input w-[150px]"
+                  >
+                    {(Object.keys(MGMT_SCENARIO_LABELS) as MgmtScenario[]).map((k) => (
+                      <option key={k} value={k}>{MGMT_SCENARIO_LABELS[k]}</option>
+                    ))}
+                  </select>
+                </Changed>
               </td>
-              <td className="py-2.5 pr-3 text-right tabular-nums">{usd(cash.mgmt.proposedYearly)}</td>
-              <td className="py-2.5 pr-3 text-right tabular-nums font-semibold">
-                <Delta value={cash.mgmt.proposedYearly - cash.mgmt.currentYearly} max={maxAbsDelta} />
+              <td className={`${PROP_BAND} py-2.5 pr-3 text-right tabular-nums font-semibold text-charcoal-900`}>{usd(cash.mgmt.proposedYearly)}</td>
+              <td className="py-2.5 px-3 text-right">
+                <ChangePill value={cash.mgmt.proposedYearly - cash.mgmt.currentYearly} base={cash.mgmt.currentYearly} />
               </td>
               <td />
             </tr>
@@ -281,28 +294,30 @@ export function FeeSchedule() {
                     className="input w-[150px] tabular-nums"
                   />
                 </td>
-                <td className="py-2.5 pr-3">
-                  <ValueEditor value={line.current} onChange={(v) => updateLine(line.id, { current: v })} />
-                </td>
-                <td className="py-2.5 pr-3 text-right tabular-nums">{usd(currentYearly)}</td>
                 <td className="py-2.5 pr-3 max-w-[210px] text-[11.5px] leading-snug text-charcoal-500">
                   {line.industry || "—"}
                   {line.typical && typicalYearly != null && (
                     <button
                       onClick={() => updateLine(line.id, { proposed: { ...line.typical! } })}
-                      className="mt-1 block text-[11px] font-medium text-charcoal-700 underline-offset-2 hover:underline"
+                      className="mt-1 block text-[11px] font-medium text-sky-800 underline-offset-2 hover:underline"
                       title="Use this as the proposed fee"
                     >
-                      At {describe(line.typical)}: {usd(typicalYearly)}/yr →
+                      Use {describe(line.typical)} → {usd(typicalYearly)}/yr
                     </button>
                   )}
                 </td>
-                <td className="py-2.5 pr-3">
-                  <ValueEditor value={line.proposed} onChange={(v) => updateLine(line.id, { proposed: v })} />
+                <td className={`${CUR_BAND} py-2.5 px-3`}>
+                  <ValueEditor value={line.current} onChange={(v) => updateLine(line.id, { current: v })} />
                 </td>
-                <td className="py-2.5 pr-3 text-right tabular-nums">{usd(proposedYearly)}</td>
-                <td className="py-2.5 pr-3 text-right tabular-nums font-semibold">
-                  <Delta value={deltaYearly} max={maxAbsDelta} />
+                <td className={`${CUR_BAND} py-2.5 pr-3 text-right tabular-nums text-charcoal-700`}>{usd(currentYearly)}</td>
+                <td className={`${PROP_BAND} py-2.5 px-3`}>
+                  <Changed on={!sameValue(line.current, line.proposed)}>
+                    <ValueEditor value={line.proposed} onChange={(v) => updateLine(line.id, { proposed: v })} />
+                  </Changed>
+                </td>
+                <td className={`${PROP_BAND} py-2.5 pr-3 text-right tabular-nums font-semibold text-charcoal-900`}>{usd(proposedYearly)}</td>
+                <td className="py-2.5 px-3 text-right">
+                  <ChangePill value={deltaYearly} base={currentYearly} />
                 </td>
                 <td className="py-2.5 pr-2">
                   {line.custom && (
@@ -318,13 +333,16 @@ export function FeeSchedule() {
               </tr>
             ))}
 
-            <tr className="font-semibold text-charcoal-900">
-              <td className="py-2.5 px-3">Total fee revenue</td>
+            <tr className="border-t-2 border-sand-300 font-semibold text-charcoal-900">
+              <td className="py-3 px-3">Total fee revenue</td>
               <td colSpan={2} />
-              <td className="py-2.5 pr-3 text-right tabular-nums">{usd(cash.currentYearly)}</td>
-              <td colSpan={2} />
-              <td className="py-2.5 pr-3 text-right tabular-nums">{usd(cash.proposedYearly)}</td>
-              <td className="py-2.5 pr-3 text-right tabular-nums">{signedUsd(cash.deltaYearly)}</td>
+              <td className={CUR_BAND} />
+              <td className={`${CUR_BAND} py-3 pr-3 text-right tabular-nums`}>{usd(cash.currentYearly)}</td>
+              <td className={PROP_BAND} />
+              <td className={`${PROP_BAND} py-3 pr-3 text-right tabular-nums`}>{usd(cash.proposedYearly)}</td>
+              <td className="py-3 px-3 text-right">
+                <ChangePill value={cash.deltaYearly} base={cash.currentYearly} />
+              </td>
               <td />
             </tr>
           </tbody>
@@ -417,18 +435,93 @@ function ValueEditor({ value, onChange }: { value: FeeValue; onChange: (v: FeeVa
   );
 }
 
-function Delta({ value, max }: { value: number; max: number }) {
-  if (Math.round(value) === 0) return <span className="text-charcoal-300">—</span>;
-  const up = value > 0;
+const CUR_BAND = "bg-sand-50";
+const PROP_BAND = "bg-sky-50/70";
+
+const sameValue = (a: FeeValue, b: FeeValue) => a.basis === b.basis && a.amount === b.amount;
+
+/** Amber outline + tag on a proposed value that differs from current. */
+function Changed({ on, children }: { on: boolean; children: React.ReactNode }) {
+  if (!on) return <>{children}</>;
   return (
-    <div className="flex items-center justify-end gap-2">
-      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-sand-100">
-        <div
-          className={`h-full rounded-full ${up ? "bg-green-600" : "bg-red-600"}`}
-          style={{ width: `${Math.max(4, (Math.abs(value) / max) * 100)}%`, marginLeft: up ? 0 : "auto" }}
-        />
+    <div className="relative inline-block rounded-lg p-1 -m-1 ring-2 ring-amber-400/80 bg-amber-50/60">
+      <span className="absolute -top-2 right-1 rounded bg-amber-400 px-1 text-[9px] font-bold uppercase tracking-wider text-white">
+        changed
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/** Green (increase) / red (decrease) pill with $ and % change; gray when unchanged. */
+function ChangePill({ value, base }: { value: number; base: number }) {
+  if (Math.round(value) === 0) {
+    return <span className="inline-block rounded-full bg-sand-100 px-2 py-0.5 text-[11.5px] text-charcoal-400">No change</span>;
+  }
+  const up = value > 0;
+  const pct = base > 0 ? `${up ? "+" : "−"}${Math.abs((value / base) * 100).toFixed(0)}%` : "new";
+  return (
+    <span
+      className={`inline-flex flex-col items-end rounded-lg border px-2 py-1 leading-tight ${
+        up ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"
+      }`}
+    >
+      <span className="text-[12.5px] font-semibold tabular-nums">{signedUsd(value)}</span>
+      <span className="text-[10.5px] font-medium opacity-80">{pct}</span>
+    </span>
+  );
+}
+
+/** Current vs proposed as two stacked bars (management + other fees) on one scale. */
+function CompareCard({
+  current,
+  proposed,
+}: {
+  current: { total: number; mgmt: number };
+  proposed: { total: number; mgmt: number };
+}) {
+  const max = Math.max(current.total, proposed.total, 1);
+  const bar = (v: { total: number; mgmt: number }, tone: "cur" | "prop") => (
+    <div className="flex h-3.5 flex-1 overflow-hidden rounded-full bg-sand-100">
+      <div
+        className={tone === "cur" ? "bg-charcoal-400" : "bg-sky-700"}
+        style={{ width: `${(v.mgmt / max) * 100}%` }}
+        title={`Management ${usd(v.mgmt)}`}
+      />
+      <div
+        className={tone === "cur" ? "bg-charcoal-200" : "bg-sky-300"}
+        style={{ width: `${((v.total - v.mgmt) / max) * 100}%` }}
+        title={`Other fees ${usd(v.total - v.mgmt)}`}
+      />
+    </div>
+  );
+  return (
+    <div className="rounded-xl border border-sand-200 px-4 py-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[11px] font-medium text-charcoal-400">Annual fee revenue</p>
+        <p className="flex items-center gap-3 text-[10.5px] text-charcoal-400">
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-charcoal-400" />management</span>
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-charcoal-200" />other fees</span>
+        </p>
       </div>
-      <span className={up ? "text-green-700" : "text-red-600"}>{signedUsd(value)}</span>
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <span className="w-16 text-[11.5px] font-medium text-charcoal-500">Current</span>
+          {bar(current, "cur")}
+          <span className="w-36 text-right text-[13px] font-semibold tabular-nums text-charcoal-700">
+            {usd(current.total)}
+            <span className="ml-1 text-[11px] font-normal text-charcoal-400">/yr</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="w-16 text-[11.5px] font-semibold text-sky-800">Proposed</span>
+          {bar(proposed, "prop")}
+          <span className="w-36 text-right text-[13px] font-semibold tabular-nums text-charcoal-950">
+            {usd(proposed.total)}
+            <span className="ml-1 text-[11px] font-normal text-charcoal-400">/yr</span>
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
