@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { effectiveCapabilities } from '@/lib/staff-capabilities';
-import { isDepartedStaff } from '@/lib/staff-lifecycle';
-
-// Suppress these identities from this roster without removing historical records.
-const hiddenRosterIdentities = new Set(['jaymen', 'jaymen@highdesertpm.com', 'bryce', 'bryce bramscher', 'bryce@highdesertpm.com']);
-function hiddenFromRoster(identity: string | null) {
- return isDepartedStaff(identity) || hiddenRosterIdentities.has((identity || '').trim().toLowerCase());
-}
+import { hiddenFromRoster } from '@/lib/access/roster';
 export async function GET() {
  const guard=await requireRole('admin');if(!guard.ok)return guard.response;
  const db=getSupabaseAdmin();

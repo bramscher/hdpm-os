@@ -19,6 +19,7 @@ import { effectiveCapabilities } from "@/lib/staff-capabilities";
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { getRoleForEmail } from "@/lib/roles";
+import { getDeniedSections } from "@/lib/access/section-access";
 import { isDepartedStaff } from "@/lib/staff-lifecycle";
 
 export const AUTH_SECRET = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
@@ -71,6 +72,7 @@ export const authConfig = {
       if (session.user) {
         session.user.isAdmin = token.isAdmin === true;
         session.user.role = token.role;
+        session.user.deniedSections = token.deniedSections ?? [];
         try { session.user.capabilities = await loadStaffCapabilities(session.user.email || ''); }
         catch { session.user.capabilities = effectiveCapabilities('staff', false, {}); console.error('[auth] Staff permissions unavailable'); }
       }
@@ -87,6 +89,8 @@ export const authConfig = {
       const role = await getRoleForEmail(token.email);
       token.role = role;
       token.isAdmin = role === "admin";
+      // Per-person section switches (Admin → User settings); enforced by the proxy.
+      token.deniedSections = await getDeniedSections(token.email, role);
       return token;
     },
   },

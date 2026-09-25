@@ -13,6 +13,8 @@ declare module "next-auth" {
       isAdmin?: boolean;
       role?: AccessRole;
       capabilities?: import("@/lib/staff-capabilities").Capabilities;
+      /** Section keys switched off for this person (Admin → User settings). */
+      deniedSections?: string[];
     };
   }
 }
@@ -22,5 +24,6 @@ declare module "next-auth/jwt" {
     accessToken?: string;
     isAdmin?: boolean;
     role?: AccessRole;
+    deniedSections?: string[];
   }
 }

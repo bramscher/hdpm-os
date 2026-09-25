@@ -13,6 +13,7 @@
 import { getToken } from "next-auth/jwt";
 import { NextResponse, type NextRequest } from "next/server";
 import { isDepartedStaff } from "@/lib/staff-lifecycle";
+import { checkPath } from "@/lib/access/sections";
 
 const AUTH_SECRET = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
 
@@ -102,6 +103,19 @@ export default async function proxy(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  // Per-person section switches (Admin → User settings, lib/access/sections.ts).
+  // Stamped into the token by the jwt callback; unregistered paths pass through.
+  const access = checkPath(pathname, Array.isArray(token.deniedSections) ? token.deniedSections : []);
+  if (!access.allowed) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: `You don't have access to ${access.section.label}` }, { status: 403 });
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = "/";
+    url.search = `denied=${encodeURIComponent(access.section.key)}`;
     return NextResponse.redirect(url);
   }
 
