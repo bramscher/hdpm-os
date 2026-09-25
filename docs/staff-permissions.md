@@ -2,7 +2,7 @@
 
 The editable roster shows active staff only and suppresses Bianca, Jayme/Jaymen, Jen, and Bryce. Historical staff records and permission audit entries are retained.
 
-Admin → Staff permissions (`/admin/staff-permissions`) manages five capabilities: Create and edit invoices, invoice PDF generation, estimate drafts, estimate templates, and estimate issuing. Each setting supports Role default, On, and Off. Current role is shown; this page does not edit roles, sign-in eligibility, scheduling, invoice status/credit permissions, or estimate approval authority.
+Admin → User settings → Invoice & estimate abilities (`/admin/user-settings?tab=abilities`; the old `/admin/staff-permissions` URL redirects there) manages five capabilities: Create and edit invoices, invoice PDF generation, estimate drafts, estimate templates, and estimate issuing. Each setting supports Role default, On, and Off. Current role is shown; this page does not edit roles, sign-in eligibility, scheduling, invoice status/credit permissions, or estimate approval authority.
 
 Only a currently active database administrator can change access. Administrator capabilities cannot be disabled here. Inactive staff have no effective capabilities. Changes use an optimistic version and record actor, before/after overrides, reason, and timestamp. A stale editor must refresh before retrying. Restore a previous value or Role default to reverse a change.
 
@@ -15,3 +15,7 @@ Apply `20260922_estimate_authors.sql`, then `20260922_staff_capabilities.sql` be
 Work & Billing, estimate creation/review, and the permissions page now use the available content width. Wide data tables retain their own horizontal scroll on narrow displays; page content is contained within the shared sidebar layout.
 
 On September 23, 2026, shared invoice editing was enabled and verified for the current visible staff roster: Alberto, Ashley, Brody, Cheryl, Craig, Kennedy, Matt and Penny. Existing PDF and estimate settings were preserved. Hidden/departed identities were not re-enabled. No database migration was needed; the existing `invoice.draft` setting now controls shared invoice creation/editing.
+
+## Sections (added 2026-09-25)
+
+The **Sections** tab of User settings turns whole app sections on or off per person (Role default / On / Off). Sections are defined in `lib/access/sections.ts`; each declares its menu item, page prefixes, API prefixes and default roles. Switched-off sections disappear from the sidebar and home tiles, their pages redirect home, and their APIs return 403 (shared APIs stay open if the person has any section that uses them). Admins can be restricted, except User settings itself. Admin-group sections can only be granted to admins. Changes are audited in `staff_section_access_audit` and apply within about a minute.

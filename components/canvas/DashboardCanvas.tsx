@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Children, Fragment, isValidElement, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
@@ -31,6 +31,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { canViewHabuDemo } from "@/lib/habu-demo-access";
+import { sectionByKey, sectionForPage } from "@/lib/access/sections";
 
 function getGreeting() {
   // Force Pacific Time for Central Oregon
@@ -129,13 +130,33 @@ function Tile({
   );
 }
 
+/** Flatten fragments so tiles nested in <>…</> are filtered too. */
+function flattenTiles(children: React.ReactNode): React.ReactElement<{ href?: string }>[] {
+  return Children.toArray(children).flatMap((c) =>
+    isValidElement(c) && c.type === Fragment
+      ? flattenTiles((c.props as { children?: React.ReactNode }).children)
+      : isValidElement(c)
+        ? [c as React.ReactElement<{ href?: string }>]
+        : []
+  );
+}
+
 function TileSection({ label, children }: { label: string; children: React.ReactNode }) {
+  // Hide tiles whose section is switched off for this person (Admin → User settings).
+  const { data: session } = useSession();
+  const denied = new Set(session?.user?.deniedSections ?? []);
+  const tiles = flattenTiles(children).filter((t) => {
+    const href = t.props.href?.split("?")[0];
+    const key = href ? sectionForPage(href)?.key : undefined;
+    return !key || !denied.has(key);
+  });
+  if (tiles.length === 0) return null;
   return (
     <section className="mb-5">
       <p className="mb-1 border-b border-sand-200 px-2.5 pb-1.5 text-[11px] font-medium text-charcoal-400">
         {label}
       </p>
-      <div className="grid grid-cols-1 gap-x-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{children}</div>
+      <div className="grid grid-cols-1 gap-x-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{tiles}</div>
     </section>
   );
 }
@@ -150,6 +171,12 @@ export function DashboardCanvas() {
   // stay isAdmin-gated in middleware).
   const showAdminSection =
     session?.user?.email?.toLowerCase() === "craig@highdesertpm.com";
+  // Redirected here by the proxy from a switched-off section (?denied=<key>).
+  const [deniedNotice, setDeniedNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const key = new URLSearchParams(window.location.search).get("denied");
+    if (key) setDeniedNotice(sectionByKey(key)?.label ?? "that page");
+  }, []);
   const [inspectionStats, setInspectionStats] = useState<InspectionStats | null>(null);
   const [routeStats, setRouteStats] = useState<RouteStats | null>(null);
   const [vacancyCount, setVacancyCount] = useState<number | null>(null);
@@ -221,6 +248,13 @@ export function DashboardCanvas() {
           {firstName ? `, ${firstName}` : ""}
         </h1>
       </div>
+
+      {deniedNotice && (
+        <div className="mb-5 flex items-center justify-between rounded-lg border border-sand-200 bg-sand-50 px-3 py-2 text-[12.5px] text-charcoal-700">
+          <span>You don&apos;t have access to {deniedNotice}. Ask an admin to turn it on in User settings.</span>
+          <button onClick={() => setDeniedNotice(null)} className="text-charcoal-400 hover:text-charcoal-900" aria-label="Dismiss">✕</button>
+        </div>
+      )}
 
       {/* Today's field route (published from the maintenance board) */}
       {todayRoutes.map((route) => {

@@ -6,19 +6,18 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw, Clock3, ListTodo, Percent } from "lucide-react";
+import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw, Clock3, ListTodo, Percent, Users } from "lucide-react";
 import { canViewHabuDemo } from "@/lib/habu-demo-access";
+import { APP_SECTIONS, sectionForPage } from "@/lib/access/sections";
 import { cn } from "@/lib/utils";
 import { springDefault } from "@/lib/motion";
 
 interface NavItem {
-  habuOwnerOnly?: boolean;
+  key: string;
+  ownerOnly?: boolean;
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  matchPrefix?: string | string[];
-  matchExclude?: string;
-  matchExact?: boolean;
 }
 
 interface NavSection {
@@ -27,78 +26,28 @@ interface NavSection {
   items: NavItem[];
 }
 
-const NAV_SECTIONS: NavSection[] = [
-  {
-    label: null,
-    items: [
-      { label: "Dashboard", href: "/", icon: Home, matchExact: true },
-      { label: "Activities", href: "/activities", icon: ListTodo, matchPrefix: "/activities" },
-    ],
-  },
-  {
-    label: "Maintenance",
-    items: [
-      { label: "MaintOS", href: "/maintenance/board", icon: Wrench, matchPrefix: "/maintenance/board" },
-      { label: "Work & Billing", href: "/maintenance/invoices", icon: FileText, matchPrefix: ["/maintenance/invoices", "/turn-estimator/estimates", "/maintenance/workspace"] },
-      {
-        label: "Inspections",
-        href: "/maintenance/inspections",
-        icon: ClipboardCheck,
-        matchPrefix: "/maintenance/inspections",
-        matchExclude: "/maintenance/inspections/routes",
-      },
-      { label: "Route Builder", href: "/maintenance/inspections/routes", icon: Navigation, matchPrefix: "/maintenance/inspections/routes" },
-      { label: "Turns", href: "/turn-estimator/turns", icon: RefreshCw, matchPrefix: "/turn-estimator/turns" },
-      { label: "Price Book", href: "/turn-estimator/price-book", icon: BookOpen, matchPrefix: "/turn-estimator/price-book" },
-    ],
-  },
-  {
-    label: "Leasing",
-    items: [
-      { label: "Rent Comps", href: "/comps", icon: BarChart3, matchPrefix: "/comps" },
-      { label: "Craigslist", href: "/craigslist", icon: Megaphone, matchPrefix: "/craigslist" },
-      { label: "Keys", href: "/keys", icon: KeyRound, matchPrefix: "/keys" },
-    ],
-  },
-  {
-    label: "Company",
-    items: [
-      { label: "Company", href: "/company/scorecard", icon: Target, matchPrefix: "/company" },
-      { label: "Timekeeping", href: "/timekeeping", icon: Clock3, matchPrefix: "/timekeeping" },
-      { label: "Agents", href: "/agents", icon: Bot, matchPrefix: "/agents" },
-    ],
-  },
-  {
-    label: "Admin",
-    adminOnly: true,
-    items: [
-      { label: "Staff permissions", href: "/admin/staff-permissions", icon: FileText, matchPrefix: "/admin/staff-permissions" },
-      { label: "Company KPIs", href: "/dashboard", icon: Activity, matchPrefix: "/dashboard" },
-      { label: "Fee Management", href: "/admin/fee-management", icon: Percent, matchPrefix: "/admin/fee-management" },
-      { label: "Paper Workflows", href: "/admin/habu-paper", icon: FileText, matchPrefix: "/admin/habu-paper", habuOwnerOnly: true },
-      { label: "HABU Demo", href: "/admin/habu-demo", icon: Navigation, matchPrefix: "/admin/habu-demo", habuOwnerOnly: true },
-      { label: "Zoom Sync", href: "/admin/zoom-sync", icon: Phone, matchPrefix: "/admin/zoom-sync" },
-    ],
-  },
-];
+const NAV_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  home: Home, list: ListTodo, wrench: Wrench, file: FileText, clipboard: ClipboardCheck, navigation: Navigation,
+  refresh: RefreshCw, book: BookOpen, chart: BarChart3, megaphone: Megaphone, key: KeyRound, target: Target,
+  clock: Clock3, bot: Bot, users: Users, activity: Activity, percent: Percent, phone: Phone,
+};
+
+/** Menu built from the section registry (lib/access/sections.ts) — new sections appear automatically. */
+const NAV_SECTIONS: NavSection[] = (["main", "Maintenance", "Leasing", "Company", "Admin"] as const).map((group) => ({
+  label: group === "main" ? null : group,
+  adminOnly: group === "Admin",
+  items: APP_SECTIONS.filter((s) => s.group === group && s.nav)
+    .sort((x, y) => x.nav!.order - y.nav!.order)
+    .map((s) => ({ key: s.key, label: s.label, href: s.nav!.href, icon: NAV_ICONS[s.nav!.icon] ?? FileText, ownerOnly: s.ownerOnly })),
+}));
 
 function isItemActive(item: NavItem, pathname: string): boolean {
-  if (item.matchExact) return pathname === item.href;
-  const prefixes = item.matchPrefix ?? item.href;
-  const prefixMatch = (Array.isArray(prefixes) ? prefixes : [prefixes]).some(prefix => pathname.startsWith(prefix));
-  const excluded = item.matchExclude ? pathname.startsWith(item.matchExclude) : false;
-  return prefixMatch && !excluded;
+  return sectionForPage(pathname)?.key === item.key;
 }
 
 /** Section label for the current route — mobile top bar wayfinding. */
 export function currentSectionLabel(pathname: string): string {
-  for (const section of NAV_SECTIONS) {
-    for (const item of section.items) {
-      if (isItemActive(item, pathname)) return item.label;
-    }
-  }
-  if (pathname === "/") return "Dashboard";
-  return "HDPM";
+  return sectionForPage(pathname)?.label ?? "HDPM";
 }
 
 interface SidebarContentProps {
@@ -112,9 +61,13 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
   const isAdmin = session?.user?.isAdmin === true;
   const reducedMotion = useReducedMotion();
 
-  const sections = NAV_SECTIONS.filter((s) => !s.adminOnly || isAdmin).map(s => ({
-    ...s, items: s.items.filter(item => !item.habuOwnerOnly || canViewHabuDemo(session?.user)),
-  }));
+  const denied = new Set(session?.user?.deniedSections ?? []);
+  const sections = NAV_SECTIONS.filter((s) => !s.adminOnly || isAdmin)
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((item) => !denied.has(item.key) && (!item.ownerOnly || canViewHabuDemo(session?.user))),
+    }))
+    .filter((s) => s.items.length > 0);
 
   const initials = session?.user?.name
     ? session.user.name
