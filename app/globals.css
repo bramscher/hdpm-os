@@ -4,43 +4,44 @@
 
 @layer base {
   :root {
-    /* Apple-neutral (2026-08-05 re-skin): white/gray surfaces, terra accent */
-    --background: 240 20% 99%;
-    --foreground: 240 3% 11%;
+    /* Monochrome (2026-09-24 "HDPM OS" re-skin): black ink on white; red is
+       reserved for unread / needs-attention signals. */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 7%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 3% 11%;
+    --card-foreground: 0 0% 7%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 3% 11%;
+    --popover-foreground: 0 0% 7%;
 
-    --primary: 211 100% 45%;
+    --primary: 0 0% 7%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 11% 96%;
-    --secondary-foreground: 240 3% 15%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
 
-    --muted: 240 11% 96%;
-    --muted-foreground: 240 2% 44%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 42%;
 
-    --accent: 240 11% 96%;
-    --accent-foreground: 240 3% 15%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 9%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 11% 92%;
-    --input: 240 11% 92%;
-    --ring: 211 100% 45%;
+    --border: 0 0% 91%;
+    --input: 0 0% 88%;
+    --ring: 0 0% 7%;
 
-    --radius: 0.875rem;
+    --radius: 0.5rem;
 
-    /* Sidebar — light frosted */
-    --sidebar: 240 20% 99%;
-    --sidebar-foreground: 240 2% 44%;
-    --sidebar-accent: 211 100% 45%;
-    --sidebar-muted: 240 11% 96%;
-    --sidebar-border: 240 11% 92%;
+    /* Sidebar — flat off-white */
+    --sidebar: 0 0% 98%;
+    --sidebar-foreground: 0 0% 42%;
+    --sidebar-accent: 0 0% 7%;
+    --sidebar-muted: 0 0% 96%;
+    --sidebar-border: 0 0% 91%;
 
     /* Semantic */
     --success: 152 56% 40%;
@@ -66,41 +67,46 @@
 /* ===== SIDEBAR ===== */
 
 .sidebar-gradient {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-right: 1px solid #e8e8ed;
+  background: #fafafa;
+  border-right: 1px solid #eaeaea;
 }
 
 @media (prefers-reduced-transparency: reduce) {
   .sidebar-gradient {
-    background: #fbfbfd;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: #fafafa;
   }
 }
 
-/* ===== LOGIN BACKGROUND ===== */
+/* ===== LOGIN (HDPM OS) ===== */
 
-.login-panel {
-  background: #fbfbfd;
-  border-right: 1px solid #e8e8ed;
+/* Faint engineering grid for the black brand panel; an absolutely positioned
+   layer (the mask would otherwise fade the panel's text too). */
+.os-login-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 30% 60%, #000 55%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse at 30% 60%, #000 55%, transparent 100%);
 }
 
-.login-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 30% 20%, rgba(0, 113, 227, 0.05) 0%, transparent 60%),
-    radial-gradient(ellipse at 70% 80%, rgba(0, 113, 227, 0.03) 0%, transparent 50%);
-  pointer-events: none;
+@keyframes os-caret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.os-caret {
+  animation: os-caret 1.1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .os-caret { animation: none; }
 }
 
 /* ===== PAGE BACKGROUND TEXTURE ===== */
 
 .page-texture {
-  background-color: #fbfbfd;
+  background-color: #fff;
 }
 
 /* ===== ANIMATIONS ===== */
@@ -189,23 +195,14 @@
   }
 }
 
-/* Sandblasted-glass pill behind the selected nav item: frosted white with a
-   faint accent glow. Inset ring instead of border so layout never shifts. */
+/* Selected nav item: a flat gray pill, Notion-style. */
 .nav-glass-active {
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(8px) saturate(160%);
-  -webkit-backdrop-filter: blur(8px) saturate(160%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.7),
-    0 2px 8px rgba(0, 113, 227, 0.10),
-    0 0 16px rgba(0, 113, 227, 0.08);
+  background: rgba(0, 0, 0, 0.055);
 }
 
 @media (prefers-reduced-transparency: reduce) {
   .nav-glass-active {
-    background: #fff;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    background: #ededed;
   }
 }
 
