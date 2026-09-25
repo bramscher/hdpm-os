@@ -14,6 +14,7 @@ import {
   type CampaignStatus,
   type FeeFacts,
 } from '@/lib/fee-management/model';
+import { DEFAULT_FEE_SCHEDULE, parseFeeSchedule } from '@/lib/fee-management/fee-schedule';
 
 export const maxDuration = 120;
 
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
     capturedAt,
     schedule: parseDoorSchedule(cfg.get('door_schedule')) ?? DEFAULT_DOOR_SCHEDULE,
     raiseFloor: parseRaiseFloor(cfg.get('raise_floor')) ?? DEFAULT_RAISE_FLOOR,
+    feeSchedule: parseFeeSchedule(cfg.get('fee_schedule')) ?? DEFAULT_FEE_SCHEDULE,
     weights: parseWeights(cfg.get('priority_weights')) ?? DEFAULT_WEIGHTS,
     agreements: (agreements.data ?? []).map(
       (a): Agreement => ({

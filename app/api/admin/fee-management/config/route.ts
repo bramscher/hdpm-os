@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { parseDoorSchedule, parseRaiseFloor, parseWeights } from '@/lib/fee-management/model';
+import { parseFeeSchedule } from '@/lib/fee-management/fee-schedule';
 
-/** PUT { doorSchedule?, raiseFloor?, priorityWeights? } — validated, then upserted. */
+/** PUT { doorSchedule?, raiseFloor?, priorityWeights?, feeSchedule? } — validated, then upserted. */
 export async function PUT(request: NextRequest) {
   const guard = await requireRole('admin');
   if (!guard.ok) return guard.response;
@@ -35,6 +36,11 @@ export async function PUT(request: NextRequest) {
     const weights = parseWeights(body.priorityWeights);
     if (!weights) return NextResponse.json({ error: 'Weights must be non-negative and not all zero' }, { status: 400 });
     rows.push({ org_id: 'hdpm', key: 'priority_weights', value: weights, updated_at: now, updated_by: guard.email });
+  }
+  if (body.feeSchedule !== undefined) {
+    const schedule = parseFeeSchedule(body.feeSchedule);
+    if (!schedule) return NextResponse.json({ error: 'Check the fee schedule: every fee needs a name and non-negative amounts' }, { status: 400 });
+    rows.push({ org_id: 'hdpm', key: 'fee_schedule', value: schedule, updated_at: now, updated_by: guard.email });
   }
   if (!rows.length) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
 
