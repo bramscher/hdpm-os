@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_DOOR_SCHEDULE,
-  DEFAULT_MAX_RAISE_PTS,
+  DEFAULT_RAISE_FLOOR,
   DEFAULT_WEIGHTS,
   bandFor,
   buildOwnerRows,
@@ -12,6 +12,7 @@ import {
   parseCampaign,
   nextRaisePct,
   parseDoorSchedule,
+  raisesToSchedule,
   portfolioSummary,
   type FeeFacts,
   type PropertyFact,
@@ -32,7 +33,7 @@ const facts = (properties: PropertyFact[]): FeeFacts => ({
 
 const TODAY = '2026-09-24';
 const rows = (properties: PropertyFact[], extra: Partial<Parameters<typeof buildOwnerRows>[0]> = {}) =>
-  buildOwnerRows({ facts: facts(properties), schedule: DEFAULT_DOOR_SCHEDULE, maxRaisePts: DEFAULT_MAX_RAISE_PTS, weights: DEFAULT_WEIGHTS, agreements: [], campaign: [], today: TODAY, ...extra });
+  buildOwnerRows({ facts: facts(properties), schedule: DEFAULT_DOOR_SCHEDULE, raiseFloor: DEFAULT_RAISE_FLOOR, weights: DEFAULT_WEIGHTS, agreements: [], campaign: [], today: TODAY, ...extra });
 
 describe('door schedule', () => {
   it('maps owner door counts to the schedule rate', () => {
@@ -42,18 +43,29 @@ describe('door schedule', () => {
     expect(bandFor(50, DEFAULT_DOOR_SCHEDULE)?.review).toBe(true);
   });
 
-  it('steps toward schedule by the raise cap and never lowers a fee', () => {
-    expect(nextRaisePct(5.5, 9, 0.75)).toBe(6.25);
-    expect(nextRaisePct(8.8, 9, 0.75)).toBe(9);
-    expect(nextRaisePct(10, 9, 0.75)).toBe(10);
+  it('steps by band (bigger owners, smaller steps), floors sub-7% at 1 pt, never lowers or overshoots', () => {
+    const band = (d: number) => bandFor(d, DEFAULT_DOOR_SCHEDULE)!;
+    const F = DEFAULT_RAISE_FLOOR;
+    expect(nextRaisePct(5.5, band(2), F)).toBe(7); // 1.5 step
+    expect(nextRaisePct(7, band(8), F)).toBe(8.25); // 1.25 step
+    expect(nextRaisePct(7.5, band(20), F)).toBe(8); // 0.75 step, capped at 8% schedule
+    expect(nextRaisePct(5.5, band(30), F)).toBe(6.5); // 0.75 band lifted to the 1-pt floor
+    expect(nextRaisePct(6.8, band(60), F)).toBe(7); // floor, then capped at 7% schedule
+    expect(nextRaisePct(10, band(8), F)).toBe(10); // above schedule: unchanged
+    // 5.5% owner with 30 doors: 6.5 → 7.5 (schedule) = two raises
+    expect(raisesToSchedule(5.5, band(30), F)).toBe(2);
+    // 5.5% with 3 doors: 7 → 8.5 → 9.5 = three raises
+    expect(raisesToSchedule(5.5, band(3), F)).toBe(3);
   });
 
   it('rejects schedules with gaps, overlaps, or not starting at 1 door', () => {
     expect(parseDoorSchedule(DEFAULT_DOOR_SCHEDULE)).toEqual(DEFAULT_DOOR_SCHEDULE);
-    expect(parseDoorSchedule([{ minDoors: 1, maxDoors: 3, targetPct: 10 }, { minDoors: 5, maxDoors: null, targetPct: 9 }])).toBeNull();
-    expect(parseDoorSchedule([{ minDoors: 1, maxDoors: 3, targetPct: 10 }, { minDoors: 3, maxDoors: null, targetPct: 9 }])).toBeNull();
-    expect(parseDoorSchedule([{ minDoors: 2, maxDoors: null, targetPct: 9 }])).toBeNull();
-    expect(parseDoorSchedule([{ minDoors: 1, maxDoors: null, targetPct: 0 }])).toBeNull();
+    const b = (minDoors: number, maxDoors: number | null, targetPct = 9, maxRaisePts = 1) => ({ minDoors, maxDoors, targetPct, maxRaisePts });
+    expect(parseDoorSchedule([b(1, 3), b(5, null)])).toBeNull();
+    expect(parseDoorSchedule([b(1, 3), b(3, null)])).toBeNull();
+    expect(parseDoorSchedule([b(2, null)])).toBeNull();
+    expect(parseDoorSchedule([b(1, null, 0)])).toBeNull();
+    expect(parseDoorSchedule([b(1, null, 9, 0)])).toBeNull(); // step must be > 0
   });
 });
 
@@ -95,9 +107,9 @@ describe('buildOwnerRows', () => {
     expect(r.targetPct).toBe(9.5);
     expect(Math.round(r.addedYearly)).toBe(1620);
     expect(r.gapPts).toBe(3.25);
-    // next raise: a 5 → 5.75 (cap 0.75): 36000 × 0.75% = 270
-    expect(Math.round(r.nextRaiseYearly)).toBe(270);
-    expect(r.raisesToTarget).toBe(6); // 4.5 pts ÷ 0.75
+    // next raise: a 5 → 6.5 (2–3 door band steps 1.5): 36000 × 1.5% = 540
+    expect(Math.round(r.nextRaiseYearly)).toBe(540);
+    expect(r.raisesToTarget).toBe(3); // 5 → 6.5 → 8 → 9.5
   });
 
   it('gives owners at or above schedule a zero gap and zero grade', () => {
@@ -177,9 +189,9 @@ describe('summaries', () => {
     // single-door owners → 10%: 12000×4% + 12000×2% = 720
     expect(Math.round(s.addedYearly)).toBe(720);
     expect(s.newEffectivePct).toBe(10);
-    // first raise capped at 0.75: 12000×0.75% × 2 = 180
-    expect(Math.round(s.nextRaiseYearly)).toBe(180);
-    expect(s.nextRaiseEffectivePct).toBe(7.75);
+    // first raise, single-door band steps 1.5: 12000×1.5% × 2 = 360
+    expect(Math.round(s.nextRaiseYearly)).toBe(360);
+    expect(s.nextRaiseEffectivePct).toBe(8.5);
   });
 
   it('funnel uses the accepted new fee when on file', () => {

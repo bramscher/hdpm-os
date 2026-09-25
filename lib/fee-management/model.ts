@@ -8,8 +8,9 @@
  *
  * Targets come from the DOOR SCHEDULE: the fair rate for an owner's size
  * (total doors across their properties), which is also the rule for new
- * business. Existing clients move toward it in capped steps (max pts per
- * raise), and fees are never lowered for owners already above schedule.
+ * business. Existing clients move toward it in capped steps — smaller steps
+ * for bigger owners (per-band max), with a floor so anything under 7% moves
+ * at least 1 pt — and fees are never lowered for owners already above schedule.
  *
  * All $ are estimates on occupied-unit market rent (actual lease rents are
  * not on the v0 API), matching the Fee Index.
@@ -58,8 +59,16 @@ export interface DoorBand {
   /** Inclusive upper bound; null = open-ended (e.g. 50+). */
   maxDoors: number | null;
   targetPct: number;
+  /** Largest single raise for an existing client in this band, in pts. */
+  maxRaisePts: number;
   /** Target is a starting point only — the portfolio gets a manual review. */
   review?: boolean;
+}
+
+/** Properties below `belowPct` step up at least `minPts` per raise. */
+export interface RaiseFloor {
+  belowPct: number;
+  minPts: number;
 }
 
 export interface PriorityWeights {
@@ -98,17 +107,17 @@ export interface CampaignEntry {
 }
 
 export const DEFAULT_DOOR_SCHEDULE: DoorBand[] = [
-  { minDoors: 1, maxDoors: 1, targetPct: 10 },
-  { minDoors: 2, maxDoors: 3, targetPct: 9.5 },
-  { minDoors: 4, maxDoors: 10, targetPct: 9 },
-  { minDoors: 11, maxDoors: 15, targetPct: 8.5 },
-  { minDoors: 16, maxDoors: 25, targetPct: 8 },
-  { minDoors: 26, maxDoors: 49, targetPct: 7.5 },
-  { minDoors: 50, maxDoors: null, targetPct: 7, review: true },
+  { minDoors: 1, maxDoors: 1, targetPct: 10, maxRaisePts: 1.5 },
+  { minDoors: 2, maxDoors: 3, targetPct: 9.5, maxRaisePts: 1.5 },
+  { minDoors: 4, maxDoors: 10, targetPct: 9, maxRaisePts: 1.25 },
+  { minDoors: 11, maxDoors: 15, targetPct: 8.5, maxRaisePts: 1 },
+  { minDoors: 16, maxDoors: 25, targetPct: 8, maxRaisePts: 0.75 },
+  { minDoors: 26, maxDoors: 49, targetPct: 7.5, maxRaisePts: 0.75 },
+  { minDoors: 50, maxDoors: null, targetPct: 7, maxRaisePts: 0.5, review: true },
 ];
 
-/** Largest single raise for an existing client (5.5% → 7% = two raises). */
-export const DEFAULT_MAX_RAISE_PTS = 0.75;
+/** Anything under 7% moves at least 1 pt per raise, whatever the band. */
+export const DEFAULT_RAISE_FLOOR: RaiseFloor = { belowPct: 7, minPts: 1 };
 
 export const DEFAULT_WEIGHTS: PriorityWeights = { addedDollars: 0.6, renewalUrgency: 0.25, feeGap: 0.15 };
 
@@ -128,10 +137,28 @@ export function bandLabel(b: DoorBand): string {
   return `${doors} door${b.maxDoors === 1 && b.minDoors === 1 ? '' : 's'} · ${b.targetPct}%`;
 }
 
-/** Next capped step toward the schedule; never lowers a fee. */
-export function nextRaisePct(currentPct: number, targetPct: number, maxRaisePts: number): number {
-  if (currentPct >= targetPct) return currentPct;
-  return round2(Math.min(targetPct, currentPct + maxRaisePts));
+/** Step size for one raise from `currentPct`: the band max, lifted to the floor below 7%. */
+export function raiseStep(currentPct: number, band: DoorBand, floor: RaiseFloor): number {
+  return currentPct < floor.belowPct ? Math.max(band.maxRaisePts, floor.minPts) : band.maxRaisePts;
+}
+
+/** Next capped step toward the schedule; never lowers a fee or overshoots it. */
+export function nextRaisePct(currentPct: number, band: DoorBand, floor: RaiseFloor): number {
+  if (currentPct >= band.targetPct) return currentPct;
+  return round2(Math.min(band.targetPct, currentPct + raiseStep(currentPct, band, floor)));
+}
+
+/** How many raises from `currentPct` to schedule (the step can change as the rate crosses the floor). */
+export function raisesToSchedule(currentPct: number, band: DoorBand, floor: RaiseFloor): number {
+  let pct = currentPct;
+  let n = 0;
+  while (pct < band.targetPct && n < 50) {
+    const next = nextRaisePct(pct, band, floor);
+    if (next <= pct) break;
+    pct = next;
+    n++;
+  }
+  return n;
 }
 
 /** ISO yyyy-mm-dd → UTC epoch days; dates here are calendar dates, not instants. */
@@ -250,7 +277,7 @@ export interface OwnerRow {
 export interface RollupInput {
   facts: FeeFacts;
   schedule: DoorBand[];
-  maxRaisePts: number;
+  raiseFloor: RaiseFloor;
   weights: PriorityWeights;
   agreements: Agreement[];
   campaign: CampaignEntry[];
@@ -262,7 +289,7 @@ function emptyCampaign(key: string): CampaignEntry {
 }
 
 export function buildOwnerRows(input: RollupInput): OwnerRow[] {
-  const { facts, schedule, maxRaisePts, weights, today } = input;
+  const { facts, schedule, raiseFloor, weights, today } = input;
   const agreementById = new Map(input.agreements.map((a) => [a.propertyId, a]));
   const campaignByKey = new Map(input.campaign.map((c) => [c.ownerSetKey, c]));
   const propsBySet = new Map<string, PropertyFact[]>();
@@ -283,7 +310,7 @@ export function buildOwnerRows(input: RollupInput): OwnerRow[] {
     let currentPct = 0; // Σ rent × pct (annual $ at current %)
     let added = 0; // Σ rent × max(0, schedule − pct)
     let nextAdded = 0; // Σ rent × (next capped step − pct)
-    let maxGap = 0;
+    let raises = 0;
     let flatMonthly = 0;
     let doorPctSum = 0;
     let pctDoors = 0;
@@ -299,7 +326,7 @@ export function buildOwnerRows(input: RollupInput): OwnerRow[] {
 
       if (p.feeType === 'percent' && p.feePct != null) {
         const target = band?.targetPct ?? p.feePct;
-        const next = nextRaisePct(p.feePct, target, maxRaisePts);
+        const next = band ? nextRaisePct(p.feePct, band, raiseFloor) : p.feePct;
         const rb = p.occupiedRentMonthly * 12;
         const propAdded = (rb * Math.max(0, target - p.feePct)) / 100;
         const propNext = (rb * (next - p.feePct)) / 100;
@@ -307,7 +334,7 @@ export function buildOwnerRows(input: RollupInput): OwnerRow[] {
         currentPct += (rb * p.feePct) / 100;
         added += propAdded;
         nextAdded += propNext;
-        maxGap = Math.max(maxGap, target - p.feePct);
+        if (band) raises = Math.max(raises, raisesToSchedule(p.feePct, band, raiseFloor));
         doorPctSum += p.feePct * p.doors;
         pctDoors += p.doors;
         propRows.push({ property: p, targetPct: band ? target : null, nextRaisePct: next, addedYearly: propAdded, nextRaiseYearly: propNext, renewal, agreement });
@@ -347,7 +374,7 @@ export function buildOwnerRows(input: RollupInput): OwnerRow[] {
       addedYearly: added,
       nextRaisePct: next != null ? round2(next) : null,
       nextRaiseYearly: nextAdded,
-      raisesToTarget: maxGap > 0 && maxRaisePts > 0 ? Math.ceil(round2(maxGap / maxRaisePts)) : 0,
+      raisesToTarget: raises,
       band,
       bandLabel: blendedPct == null ? (flatMonthly > 0 ? 'Flat fee' : 'No fee policy') : band ? bandLabel(band) : 'Unbanded',
       grade: 0,
@@ -520,10 +547,12 @@ export function parseDoorSchedule(v: unknown): DoorBand[] | null {
     const minDoors = Number(r?.minDoors);
     const maxDoors = r?.maxDoors == null || r?.maxDoors === '' ? null : Number(r.maxDoors);
     const targetPct = Number(r?.targetPct);
+    const maxRaisePts = Number(r?.maxRaisePts);
     if (!Number.isInteger(minDoors) || minDoors < 1) return null;
+    if (!Number.isFinite(maxRaisePts) || maxRaisePts <= 0 || maxRaisePts > 10) return null;
     if (maxDoors != null && (!Number.isInteger(maxDoors) || maxDoors < minDoors)) return null;
     if (!Number.isFinite(targetPct) || targetPct <= 0 || targetPct > 100) return null;
-    out.push({ minDoors, maxDoors, targetPct: round2(targetPct), ...(r?.review ? { review: true } : {}) });
+    out.push({ minDoors, maxDoors, targetPct: round2(targetPct), maxRaisePts: round2(maxRaisePts), ...(r?.review ? { review: true } : {}) });
   }
   out.sort((a, b) => a.minDoors - b.minDoors);
   if (out[0].minDoors !== 1) return null;
@@ -534,9 +563,13 @@ export function parseDoorSchedule(v: unknown): DoorBand[] | null {
   return out;
 }
 
-export function parseMaxRaise(v: unknown): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 && n <= 10 ? round2(n) : null;
+export function parseRaiseFloor(v: unknown): RaiseFloor | null {
+  const o = v as Record<string, unknown> | null;
+  const belowPct = Number(o?.belowPct);
+  const minPts = Number(o?.minPts);
+  if (!Number.isFinite(belowPct) || belowPct < 0 || belowPct > 100) return null;
+  if (!Number.isFinite(minPts) || minPts < 0 || minPts > 10) return null;
+  return { belowPct: round2(belowPct), minPts: round2(minPts) };
 }
 
 export function parseWeights(v: unknown): PriorityWeights | null {

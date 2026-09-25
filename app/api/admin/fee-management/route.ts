@@ -4,10 +4,10 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { fetchFeeFacts } from '@/lib/fee-management/appfolio';
 import {
   DEFAULT_DOOR_SCHEDULE,
-  DEFAULT_MAX_RAISE_PTS,
+  DEFAULT_RAISE_FLOOR,
   DEFAULT_WEIGHTS,
   parseDoorSchedule,
-  parseMaxRaise,
+  parseRaiseFloor,
   parseWeights,
   type Agreement,
   type CampaignEntry,
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     facts,
     capturedAt,
     schedule: parseDoorSchedule(cfg.get('door_schedule')) ?? DEFAULT_DOOR_SCHEDULE,
-    maxRaisePts: parseMaxRaise(cfg.get('max_raise_pts')) ?? DEFAULT_MAX_RAISE_PTS,
+    raiseFloor: parseRaiseFloor(cfg.get('raise_floor')) ?? DEFAULT_RAISE_FLOOR,
     weights: parseWeights(cfg.get('priority_weights')) ?? DEFAULT_WEIGHTS,
     agreements: (agreements.data ?? []).map(
       (a): Agreement => ({

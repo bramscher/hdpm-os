@@ -15,6 +15,7 @@ import {
   type CampaignStatus,
   type DoorBand,
   type FeeFacts,
+  type RaiseFloor,
   type OwnerRow,
   type PriorityWeights,
   type Segment,
@@ -24,7 +25,7 @@ interface Payload {
   facts: FeeFacts;
   capturedAt: string | null;
   schedule: DoorBand[];
-  maxRaisePts: number;
+  raiseFloor: RaiseFloor;
   weights: PriorityWeights;
   agreements: Agreement[];
   campaign: CampaignEntry[];
@@ -94,7 +95,7 @@ export function OwnerFeeOpportunity() {
         ? buildOwnerRows({
             facts: payload.facts,
             schedule: payload.schedule,
-            maxRaisePts: payload.maxRaisePts,
+            raiseFloor: payload.raiseFloor,
             weights: payload.weights,
             agreements: payload.agreements,
             campaign: payload.campaign,
@@ -198,7 +199,7 @@ export function OwnerFeeOpportunity() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <Stat label="Portfolio rate" value={`${pct(summary.currentEffectivePct)} → ${pct(summary.newEffectivePct)}`} sub="effective now → at door schedule" />
         <Stat label="At schedule" value={`+${usd(summary.addedYearly)}/yr`} sub={`${usd(summary.addedMonthly)}/mo · ${summary.ownersWithUpside} of ${rows.length} owners below`} />
-        <Stat label="First raise" value={`+${usd(summary.nextRaiseYearly)}/yr`} sub={`up to +${payload.maxRaisePts} pts each → ${pct(summary.nextRaiseEffectivePct)}`} />
+        <Stat label="First raise" value={`+${usd(summary.nextRaiseYearly)}/yr`} sub={`one step per property → ${pct(summary.nextRaiseEffectivePct)}`} />
         <Stat label="Doors" value={rows.reduce((a, r) => a + r.doors, 0).toLocaleString()} sub={`${rows.length} owners`} />
       </div>
 
@@ -255,9 +256,9 @@ export function OwnerFeeOpportunity() {
       {settingsOpen && (
         <SettingsPanel
           schedule={payload.schedule}
-          maxRaisePts={payload.maxRaisePts}
+          raiseFloor={payload.raiseFloor}
           weights={payload.weights}
-          onSaved={(schedule, maxRaisePts, weights) => setPayload((p) => p && { ...p, schedule, maxRaisePts, weights })}
+          onSaved={(schedule, raiseFloor, weights) => setPayload((p) => p && { ...p, schedule, raiseFloor, weights })}
         />
       )}
 
@@ -390,8 +391,9 @@ export function OwnerFeeOpportunity() {
         vacant doors add nothing until leased. Blended fee % is weighted by that rent (<sup>d</sup> = no occupied doors,
         weighted by door count). Schedule = the door-count rate for the owner&apos;s total doors (also the rule for new business);
         fees above schedule are never lowered. Opportunity grades the full $/yr gap to schedule on a square-root curve
-        (100 = largest in the portfolio, 0 = at schedule). Next raise = one step of at most {payload.maxRaisePts} pts per
-        property; &ldquo;1/3&rdquo; means three raises to reach schedule. Agreement ends marked &ldquo;proj.&rdquo; assume
+        (100 = largest in the portfolio, 0 = at schedule). Next raise = one step per property, capped by the band&apos;s
+        max step (smaller for bigger owners) and at least {payload.raiseFloor.minPts} pt for anything under{" "}
+        {payload.raiseFloor.belowPct}%; &ldquo;1/3&rdquo; means three raises to reach schedule. Agreement ends marked &ldquo;proj.&rdquo; assume
         a 1-year term auto-renewing on the management start anniversary; enter actual dates per property to override.
         AppFolio data as of {payload.capturedAt ? new Date(payload.capturedAt).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }) : "—"} PT.
       </p>
@@ -585,28 +587,29 @@ function AgreementRow({ pr, onSave }: { pr: OwnerRow["properties"][number]; onSa
   );
 }
 
-// ── Settings: door schedule, raise cap, priority weights ──────────────
+// ── Settings: door schedule + steps, raise floor, priority weights ──────────────
 
 function SettingsPanel({
   schedule,
-  maxRaisePts,
+  raiseFloor,
   weights,
   onSaved,
 }: {
   schedule: DoorBand[];
-  maxRaisePts: number;
+  raiseFloor: RaiseFloor;
   weights: PriorityWeights;
-  onSaved: (schedule: DoorBand[], maxRaisePts: number, weights: PriorityWeights) => void;
+  onSaved: (schedule: DoorBand[], raiseFloor: RaiseFloor, weights: PriorityWeights) => void;
 }) {
   const [bands, setBands] = useState(
     schedule.map((b) => ({
       minDoors: String(b.minDoors),
       maxDoors: b.maxDoors == null ? "" : String(b.maxDoors),
       targetPct: String(b.targetPct),
+      maxRaisePts: String(b.maxRaisePts),
       review: !!b.review,
     }))
   );
-  const [cap, setCap] = useState(String(maxRaisePts));
+  const [floor, setFloor] = useState({ belowPct: String(raiseFloor.belowPct), minPts: String(raiseFloor.minPts) });
   const [w, setW] = useState({ addedDollars: String(weights.addedDollars), renewalUrgency: String(weights.renewalUrgency), feeGap: String(weights.feeGap) });
   const [saving, setSaving] = useState(false);
 
@@ -615,15 +618,17 @@ function SettingsPanel({
       minDoors: Number(b.minDoors),
       maxDoors: b.maxDoors === "" ? null : Number(b.maxDoors),
       targetPct: Number(b.targetPct),
+      maxRaisePts: Number(b.maxRaisePts),
       review: b.review,
     }));
+    const nextFloor = { belowPct: Number(floor.belowPct), minPts: Number(floor.minPts) };
     const priorityWeights = { addedDollars: Number(w.addedDollars), renewalUrgency: Number(w.renewalUrgency), feeGap: Number(w.feeGap) };
     setSaving(true);
     try {
-      await put("/api/admin/fee-management/config", { doorSchedule, maxRaisePts: Number(cap), priorityWeights });
+      await put("/api/admin/fee-management/config", { doorSchedule, raiseFloor: nextFloor, priorityWeights });
       onSaved(
         [...doorSchedule].sort((a, b) => a.minDoors - b.minDoors).map(({ review, ...b }) => (review ? { ...b, review } : b)),
-        Number(cap),
+        nextFloor,
         priorityWeights
       );
       toast.success("Schedule and weights saved");
@@ -644,6 +649,7 @@ function SettingsPanel({
               <th className="pr-2 pb-1 font-semibold">From doors</th>
               <th className="pr-2 pb-1 font-semibold">To doors</th>
               <th className="pr-2 pb-1 font-semibold">Fee %</th>
+              <th className="pr-2 pb-1 font-semibold">Max step</th>
               <th className="pr-2 pb-1 font-semibold">Review</th>
               <th />
             </tr>
@@ -651,11 +657,11 @@ function SettingsPanel({
           <tbody>
             {bands.map((b, i) => (
               <tr key={i}>
-                {(["minDoors", "maxDoors", "targetPct"] as const).map((k) => (
+                {(["minDoors", "maxDoors", "targetPct", "maxRaisePts"] as const).map((k) => (
                   <td key={k} className="pr-2 pb-1.5">
                     <input
                       type="number"
-                      step={k === "targetPct" ? "0.25" : "1"}
+                      step={k === "targetPct" || k === "maxRaisePts" ? "0.25" : "1"}
                       value={b[k]}
                       placeholder={k === "maxDoors" ? "and up" : ""}
                       onChange={(e) => setBands(bands.map((y, j) => (j === i ? { ...y, [k]: e.target.value } : y)))}
@@ -679,18 +685,21 @@ function SettingsPanel({
           </tbody>
         </table>
         <button
-          onClick={() => setBands([...bands, { minDoors: "", maxDoors: "", targetPct: "", review: false }])}
+          onClick={() => setBands([...bands, { minDoors: "", maxDoors: "", targetPct: "", maxRaisePts: "", review: false }])}
           className="mt-1 text-[12px] font-medium text-charcoal-600 hover:text-charcoal-900"
         >
           + Add band
         </button>
-        <label className="mt-4 flex items-center gap-3 text-[12px] text-charcoal-600">
-          Max raise per step (existing clients)
-          <input type="number" step="0.25" min={0.25} value={cap} onChange={(e) => setCap(e.target.value)} className="input w-20" />
-          <span className="text-charcoal-400">pts</span>
-        </label>
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] text-charcoal-600">
+          Anything under
+          <input type="number" step="0.25" value={floor.belowPct} onChange={(e) => setFloor({ ...floor, belowPct: e.target.value })} className="input w-16" />
+          % moves at least
+          <input type="number" step="0.25" value={floor.minPts} onChange={(e) => setFloor({ ...floor, minPts: e.target.value })} className="input w-16" />
+          pts per raise
+        </div>
         <p className="mt-1 text-[11px] text-charcoal-400">
-          Bands count an owner&apos;s total doors. New business goes straight to schedule; existing clients step up by at most this much per raise.
+          Bands count an owner&apos;s total doors. New business goes straight to schedule; existing clients step up by at most the
+          band&apos;s max step per raise (never past schedule), lifted to the floor for low fees.
         </p>
       </div>
       <div>
