@@ -6,10 +6,25 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { deniedSections, parseSectionOverrides, type SectionOverrides } from './sections';
+import { deniedSections, parseSectionOverrides, type RoleDefaultOverrides, type SectionOverrides } from './sections';
 
 const TTL_MS = 60_000;
 let cache: { at: number; byEmail: Map<string, SectionOverrides> } | null = null;
+let roleCache: { at: number; value: RoleDefaultOverrides } | null = null;
+
+/** Admin-edited role defaults; empty (code defaults) if the table is missing or unreachable. */
+export async function loadRoleDefaults(): Promise<RoleDefaultOverrides> {
+  if (roleCache && Date.now() - roleCache.at < TTL_MS) return roleCache.value;
+  const { data, error } = await getSupabaseAdmin().from('role_section_defaults').select('role,overrides');
+  if (error) {
+    console.error('[access] role defaults unavailable; using code defaults', error.message);
+    return {};
+  }
+  const value: RoleDefaultOverrides = {};
+  for (const r of data ?? []) value[r.role as string] = parseSectionOverrides(r.overrides) ?? {};
+  roleCache = { at: Date.now(), value };
+  return value;
+}
 
 async function loadAll(): Promise<Map<string, SectionOverrides>> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.byEmail;
@@ -28,16 +43,18 @@ async function loadAll(): Promise<Map<string, SectionOverrides>> {
 
 export function clearSectionAccessCache(): void {
   cache = null;
+  roleCache = null;
 }
 
 /** Section keys this person may not use (empty = everything their role allows). */
 export async function getDeniedSections(email: string | null | undefined, role: string | undefined): Promise<string[]> {
-  if (!email) return deniedSections(role, {});
+  const roleDefaults = await loadRoleDefaults().catch(() => ({}));
+  if (!email) return deniedSections(role, {}, roleDefaults);
   try {
     const overrides = (await loadAll()).get(email.toLowerCase()) ?? {};
-    return deniedSections(role, overrides);
+    return deniedSections(role, overrides, roleDefaults);
   } catch (err) {
     console.error('[access] section overrides unavailable; using role defaults', err);
-    return deniedSections(role, {});
+    return deniedSections(role, {}, roleDefaults);
   }
 }

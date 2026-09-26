@@ -42,6 +42,23 @@ export interface AppSection {
   ownerOnly?: boolean;
 }
 
+/** Human names for access roles (staff.access_role). */
+export const ROLE_LABELS: Record<AccessRole, string> = {
+  admin: 'Admin',
+  manager: 'Manager',
+  pm: 'Property Manager',
+  maintenance: 'Maintenance',
+  finance: 'Finance',
+  front_desk: 'Front Desk',
+  inspector: 'Inspector',
+  field: 'Field tech',
+  staff: 'Staff (general)',
+  read_only: 'Read only',
+};
+
+// Property managers (and the generic staff fallback) get every non-admin section.
+const PM: AccessRole[] = ['manager', 'pm', 'staff'];
+
 const MAINT_APIS = ['/api/maintenance', '/api/work-orders', '/api/invoices', '/api/payments', '/api/af-bills', '/api/reconcile-selection', '/api/reconciliation-draft', '/api/turn-estimator'];
 
 export const APP_SECTIONS: AppSection[] = [
@@ -61,7 +78,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Activities',
     description: 'AppFolio activities and follow-ups.',
     group: 'main',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance', 'front_desk', 'finance'],
     pages: ['/activities'],
     apis: ['/api/activities'],
     nav: { href: '/activities', icon: 'list', order: 2 },
@@ -73,7 +90,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'MaintOS',
     description: 'Maintenance board, work orders, turnovers, vendors.',
     group: 'Maintenance',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance', 'field', 'finance'],
     pages: ['/maintenance/board', '/maintenance'],
     apis: MAINT_APIS,
     nav: { href: '/maintenance/board', icon: 'wrench', order: 10 },
@@ -83,7 +100,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Work & Billing',
     description: 'Estimates, invoices, approvals, daily billing, reconciliation.',
     group: 'Maintenance',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance', 'finance'],
     pages: ['/maintenance/invoices', '/turn-estimator/estimates', '/maintenance/workspace', '/maintenance/daily-billing', '/maintenance/estimate-followups'],
     apis: MAINT_APIS,
     nav: { href: '/maintenance/invoices', icon: 'file', order: 11 },
@@ -93,7 +110,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Field workspace',
     description: 'Technician field view of the maintenance workspace.',
     group: 'Maintenance',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance', 'field'],
     pages: ['/maintenance/field'],
     apis: MAINT_APIS,
   },
@@ -102,7 +119,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Inspections',
     description: 'Inspection queue, candidates and imports.',
     group: 'Maintenance',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance', 'inspector'],
     pages: ['/maintenance/inspections'],
     apis: ['/api/inspections'],
     nav: { href: '/maintenance/inspections', icon: 'clipboard', order: 12 },
@@ -112,7 +129,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Route Builder',
     description: 'Build, optimize and dispatch inspection routes.',
     group: 'Maintenance',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance', 'inspector'],
     pages: ['/maintenance/inspections/routes'],
     apis: ['/api/inspections'],
     nav: { href: '/maintenance/inspections/routes', icon: 'navigation', order: 13 },
@@ -122,7 +139,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Turns',
     description: 'Unit turn planning and estimates.',
     group: 'Maintenance',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance'],
     pages: ['/turn-estimator/turns'],
     apis: ['/api/turn-estimator'],
     nav: { href: '/turn-estimator/turns', icon: 'refresh', order: 14 },
@@ -132,7 +149,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Price Book',
     description: 'Labor rates, materials and services for estimates (editing is admin-only).',
     group: 'Maintenance',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance'],
     pages: ['/turn-estimator/price-book'],
     apis: ['/api/turn-estimator'],
     nav: { href: '/turn-estimator/price-book', icon: 'book', order: 15 },
@@ -144,7 +161,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Rent Comps',
     description: 'Central Oregon rent comparisons.',
     group: 'Leasing',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'front_desk'],
     pages: ['/comps'],
     apis: ['/api/comps'],
     nav: { href: '/comps', icon: 'chart', order: 20 },
@@ -154,7 +171,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Craigslist',
     description: 'Vacancy listings and AI ad copy.',
     group: 'Leasing',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'front_desk'],
     pages: ['/craigslist'],
     apis: ['/api/generate-listing', '/api/saved-listings', '/api/appfolio-vacancies'],
     nav: { href: '/craigslist', icon: 'megaphone', order: 21 },
@@ -164,7 +181,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Keys',
     description: 'Physical key registry and history.',
     group: 'Leasing',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance', 'field', 'inspector', 'front_desk'],
     pages: ['/keys'],
     apis: ['/api/keys'],
     nav: { href: '/keys', icon: 'key', order: 22 },
@@ -174,7 +191,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Haven',
     description: 'AI leasing pipeline, escalations, tours and reception metrics.',
     group: 'Leasing',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'front_desk'],
     pages: ['/haven'],
     apis: ['/api/haven'],
   },
@@ -183,7 +200,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Property Map',
     description: 'All managed properties on a map.',
     group: 'Leasing',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance', 'field', 'inspector', 'front_desk'],
     pages: ['/properties'],
     apis: ['/api/properties'],
   },
@@ -204,7 +221,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Timekeeping',
     description: 'Time clock, schedules and approvals.',
     group: 'Company',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'maintenance', 'field', 'inspector', 'front_desk', 'finance'],
     pages: ['/timekeeping'],
     apis: ['/api/timekeeping'],
     nav: { href: '/timekeeping', icon: 'clock', order: 31 },
@@ -214,7 +231,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Agents',
     description: 'Agent-OS briefs and automations.',
     group: 'Company',
-    defaultRoles: 'all',
+    defaultRoles: [...PM],
     pages: ['/agents'],
     apis: ['/api/agents'],
     nav: { href: '/agents', icon: 'bot', order: 32 },
@@ -224,7 +241,7 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Owner Reports',
     description: 'Owner-facing reports.',
     group: 'Company',
-    defaultRoles: 'all',
+    defaultRoles: [...PM, 'finance'],
     pages: ['/reports'],
     apis: ['/api/reports'],
   },
@@ -345,24 +362,49 @@ export function sectionsForApi(pathname: string): AppSection[] {
   return owners;
 }
 
-export function roleDefault(section: AppSection, role: string | undefined): boolean {
+/** Admin-edited role defaults (Admin → User settings → Roles), layered over the code defaults above. */
+export type RoleDefaultOverrides = Partial<Record<string, SectionOverrides>>;
+
+/** Code default for a role, before any admin edits. */
+export function codeRoleDefault(section: AppSection, role: string | undefined): boolean {
   if (role === 'admin') return true;
   return section.defaultRoles === 'all' || section.defaultRoles.includes(role as AccessRole);
+}
+
+export function roleDefault(section: AppSection, role: string | undefined, roleOverrides?: RoleDefaultOverrides): boolean {
+  if (role === 'admin') return true; // admin role = everything; restrict an admin per person instead
+  if (section.group === 'Admin') return false; // admin sections also need the admin role server-side
+  return roleOverrides?.[role ?? '']?.[section.key] ?? codeRoleDefault(section, role);
 }
 
 /**
  * Effective access for one section: always-on and admin-locked rules first,
  * then the person's override, then their role default.
  */
-export function sectionAllowed(section: AppSection, role: string | undefined, overrides: SectionOverrides): boolean {
+export function sectionAllowed(
+  section: AppSection,
+  role: string | undefined,
+  overrides: SectionOverrides,
+  roleOverrides?: RoleDefaultOverrides
+): boolean {
   if (section.alwaysOn) return true;
   if (section.adminLocked && role === 'admin') return true;
-  return overrides[section.key] ?? roleDefault(section, role);
+  if (section.group === 'Admin' && role !== 'admin') return false;
+  return overrides[section.key] ?? roleDefault(section, role, roleOverrides);
 }
 
 /** Keys of sections this person is denied — small list, stamped into the session token. */
-export function deniedSections(role: string | undefined, overrides: SectionOverrides): string[] {
-  return APP_SECTIONS.filter((s) => !sectionAllowed(s, role, overrides)).map((s) => s.key);
+export function deniedSections(role: string | undefined, overrides: SectionOverrides, roleOverrides?: RoleDefaultOverrides): string[] {
+  return APP_SECTIONS.filter((s) => !sectionAllowed(s, role, overrides, roleOverrides)).map((s) => s.key);
+}
+
+/** Validate a role-defaults payload: known role, known non-admin, non-always-on sections, booleans. */
+export function parseRoleDefaults(role: unknown, v: unknown): { role: AccessRole; overrides: SectionOverrides } | null {
+  if (typeof role !== 'string' || !(role in ROLE_LABELS) || role === 'admin') return null;
+  const parsed = parseSectionOverrides(v);
+  if (!parsed) return null;
+  for (const k of Object.keys(parsed)) if (BY_KEY.get(k)?.group === 'Admin') return null;
+  return { role: role as AccessRole, overrides: parsed };
 }
 
 export type AccessDecision = { allowed: true } | { allowed: false; section: AppSection };

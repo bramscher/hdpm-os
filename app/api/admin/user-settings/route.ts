@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { hiddenFromRoster } from '@/lib/access/roster';
-import { clearSectionAccessCache } from '@/lib/access/section-access';
+import { clearSectionAccessCache, loadRoleDefaults } from '@/lib/access/section-access';
 import { deniedSections, parseSectionOverrides, type SectionOverrides } from '@/lib/access/sections';
 
 async function activeAdmin(email: string) {
@@ -23,11 +23,16 @@ export async function GET() {
   if (!guard.ok) return guard.response;
   if (!(await activeAdmin(guard.email))) return NextResponse.json({ error: 'Active administrator required' }, { status: 403 });
   const db = getSupabaseAdmin();
-  const [staff, access, audit] = await Promise.all([
+  const [staff, access, audit, roleRows, roleAudit, roleChanges] = await Promise.all([
     db.from('staff').select('person,email,active,access_role,role').eq('active', true).order('person'),
     db.from('staff_section_access').select('person,overrides,version'),
     db.from('staff_section_access_audit').select('*').order('id', { ascending: false }).limit(100),
+    db.from('role_section_defaults').select('role,overrides,version'),
+    db.from('role_section_defaults_audit').select('*').order('id', { ascending: false }).limit(50),
+    db.from('staff_role_audit').select('*').order('id', { ascending: false }).limit(50),
   ]);
+  clearSectionAccessCache();
+  const roleDefaults = await loadRoleDefaults();
   if (staff.error) return NextResponse.json({ error: 'Could not load staff' }, { status: 503 });
   const tableMissing = !!access.error;
   const byPerson = new Map((access.data ?? []).map((r) => [r.person as string, r]));
@@ -45,10 +50,14 @@ export async function GET() {
           access_role: s.access_role,
           overrides,
           version: (row?.version as number | undefined) ?? 0,
-          denied: deniedSections(s.access_role, overrides),
+          denied: deniedSections(s.access_role, overrides, roleDefaults),
         };
       }),
     audit: audit.error ? [] : audit.data ?? [],
+    rolesSetupNeeded: !!roleRows.error,
+    roleDefaults: Object.fromEntries((roleRows.data ?? []).map((r) => [r.role, { overrides: parseSectionOverrides(r.overrides) ?? {}, version: r.version }])),
+    roleAudit: roleAudit.error ? [] : roleAudit.data ?? [],
+    roleChanges: roleChanges.error ? [] : roleChanges.data ?? [],
   });
 }
 

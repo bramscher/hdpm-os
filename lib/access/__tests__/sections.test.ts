@@ -5,6 +5,7 @@ import {
   APP_SECTIONS,
   checkPath,
   deniedSections,
+  parseRoleDefaults,
   parseSectionOverrides,
   sectionAllowed,
   sectionByKey,
@@ -87,7 +88,7 @@ describe('path → section', () => {
 describe('effective access', () => {
   it('follows role defaults, then overrides', () => {
     expect(sectionAllowed(S('kpis'), 'staff', {})).toBe(false);
-    expect(sectionAllowed(S('kpis'), 'staff', { kpis: true })).toBe(true);
+    expect(sectionAllowed(S('kpis'), 'staff', { kpis: true })).toBe(false); // admin-only regardless
     expect(sectionAllowed(S('keys'), 'staff', {})).toBe(true);
     expect(sectionAllowed(S('keys'), 'staff', { keys: false })).toBe(false);
   });
@@ -99,10 +100,42 @@ describe('effective access', () => {
     expect(sectionAllowed(S('home'), 'staff', { home: false })).toBe(true);
   });
 
-  it('non-admin denied set = admin sections by default', () => {
-    expect(deniedSections('staff', {}).sort()).toEqual(
-      APP_SECTIONS.filter((s) => s.defaultRoles !== 'all').map((s) => s.key).sort()
+  it('general staff and property managers get everything but admin', () => {
+    const adminKeys = APP_SECTIONS.filter((s) => s.group === 'Admin').map((s) => s.key).sort();
+    expect(deniedSections('staff', {}).sort()).toEqual(adminKeys);
+    expect(deniedSections('pm', {}).sort()).toEqual(adminKeys);
+    expect(deniedSections('manager', {}).sort()).toEqual(adminKeys);
+  });
+
+  it('role defaults follow the approved grid', () => {
+    const on = (role: string) => APP_SECTIONS.filter((s) => sectionAllowed(s, role, {})).map((s) => s.key).sort();
+    expect(on('maintenance')).toEqual(
+      ['home', 'activities', 'maintos', 'work_billing', 'field_app', 'inspections', 'route_builder', 'turns', 'price_book', 'keys', 'property_map', 'company', 'timekeeping'].sort()
     );
+    expect(on('field')).toEqual(['home', 'field_app', 'maintos', 'keys', 'property_map', 'company', 'timekeeping'].sort());
+    expect(on('inspector')).toEqual(['home', 'inspections', 'route_builder', 'keys', 'property_map', 'company', 'timekeeping'].sort());
+    expect(on('front_desk')).toEqual(['home', 'activities', 'rent_comps', 'craigslist', 'keys', 'haven', 'property_map', 'company', 'timekeeping'].sort());
+    expect(on('finance')).toEqual(['home', 'activities', 'work_billing', 'maintos', 'owner_reports', 'company', 'timekeeping'].sort());
+    expect(on('read_only')).toEqual(['home', 'company'].sort());
+    expect(on('admin')).toEqual(APP_SECTIONS.map((s) => s.key).sort());
+  });
+
+  it('admin-edited role defaults override code defaults; person overrides win over both', () => {
+    const roleOv = { maintenance: { keys: false, rent_comps: true } };
+    expect(sectionAllowed(S('keys'), 'maintenance', {}, roleOv)).toBe(false);
+    expect(sectionAllowed(S('rent_comps'), 'maintenance', {}, roleOv)).toBe(true);
+    expect(sectionAllowed(S('keys'), 'maintenance', { keys: true }, roleOv)).toBe(true);
+    // admin sections can't be granted to non-admins at any level
+    expect(sectionAllowed(S('kpis'), 'pm', { kpis: true }, { pm: { kpis: true } })).toBe(false);
+  });
+});
+
+describe('parseRoleDefaults', () => {
+  it('accepts non-admin roles and non-admin sections only', () => {
+    expect(parseRoleDefaults('maintenance', { keys: false })).toEqual({ role: 'maintenance', overrides: { keys: false } });
+    expect(parseRoleDefaults('admin', { keys: false })).toBeNull();
+    expect(parseRoleDefaults('wizard', { keys: false })).toBeNull();
+    expect(parseRoleDefaults('pm', { kpis: true })).toBeNull();
   });
 });
 
