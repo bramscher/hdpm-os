@@ -237,6 +237,16 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/agents', icon: 'bot', order: 32 },
   },
   {
+    key: 'desk_demo',
+    label: 'The Desk (demo)',
+    description: 'Clickable demo of per-person desks with circulating colored folders and paper-form tracking. Sample data only.',
+    group: 'Company',
+    // Admins by default; switch on per person or role in User settings for the team walkthrough.
+    defaultRoles: [],
+    pages: ['/desk-demo'],
+    nav: { href: '/desk-demo', icon: 'folder', order: 33 },
+  },
+  {
     key: 'owner_reports',
     label: 'Owner Reports',
     description: 'Owner-facing reports.',
