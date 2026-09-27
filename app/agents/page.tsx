@@ -4,11 +4,13 @@ import { listAgentConfig, isGloballyKilled } from '@/lib/agents/config';
 import type { AgentProposal, OutboxMessage } from '@/lib/agents/types';
 import AutonomyMatrix, { type StaffOption } from '@/components/agents/AutonomyMatrix';
 import { buildWorkload } from '@/lib/agents/workload';
+import AgentCatalog from '@/components/agents/AgentCatalog';
+import { actionLabel, agentName } from '@/lib/agents/catalog';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'HDPM-OS — Agent Team',
+  title: 'Agents · HDPM OS',
 };
 
 /**
@@ -173,6 +175,8 @@ const statusStyles: Record<string, string> = {
   skipped: 'bg-sand-200 text-charcoal-600',
 };
 
+const KIND_LABELS: Record<string, string> = { question: 'Question', routine: 'Scheduled job', subagent: 'Helper', verb: 'Action' };
+
 const kindStyles: Record<string, string> = {
   question: 'bg-blue-100 text-blue-800',
   routine: 'bg-violet-100 text-violet-800',
@@ -183,7 +187,7 @@ const kindStyles: Record<string, string> = {
 function KindPill({ kind }: { kind: string }) {
   return (
     <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${kindStyles[kind] ?? 'bg-sand-200 text-charcoal-600'}`}>
-      {kind}
+      {KIND_LABELS[kind] ?? kind}
     </span>
   );
 }
@@ -235,25 +239,27 @@ export default async function AgentsPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-1 flex items-center gap-3">
-        <h1 className="text-display text-charcoal-900">Agent Team</h1>
+        <h1 className="text-display text-charcoal-900">Agents</h1>
         {killed ? (
           <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white">
-            KILL SWITCH ON — all agents halted
+            Kill switch on: all agents paused
           </span>
         ) : (
           <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
-            agents active
+            Agents running
           </span>
         )}
       </div>
       <p className="mb-6 text-sm text-charcoal-500">
-        Supervision surface — the action surface is Slack. Autonomy changes are row updates in{' '}
-        <code className="rounded bg-sand-100 px-1">agent_config</code>.
+        What each agent does and why, what they&apos;ve been doing, and how much they&apos;re allowed to do on their own. People
+        work with agents in Slack; this page is for oversight.
       </p>
+
+      <AgentCatalog config={config} killed={killed} />
 
       {/* Talk to Dez — the one place the app explains how to use the agent */}
       <div className="mb-8 rounded-xl border border-sand-200 bg-white p-5 shadow-card">
-        <div className="text-sm font-semibold text-charcoal-900">💬 Talk to Dez</div>
+        <div className="text-sm font-semibold text-charcoal-900">💬 How to use Dez</div>
         <p className="mt-1 text-sm text-charcoal-600">
           Dez is HDPM&apos;s Slack colleague. <b>DM Dez</b> or <b>@mention it in a channel</b> to ask
           anything HDPM — Oregon landlord-tenant law, our SOPs and forms, or a live KPI
@@ -270,9 +276,9 @@ export default async function AgentsPage() {
       {dezFlags.length > 0 ? (
         <>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
-            🚩 Needs attention{' '}
+            🚩 Forms to check{' '}
             <span className="font-normal normal-case text-charcoal-400">
-              (forms Dez flagged as possibly out-of-date — confirm the current version, then it can be used)
+              (Dez answered from a form that may be out of date; confirm the current version)
             </span>
           </h2>
           <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 shadow-card">
@@ -293,9 +299,9 @@ export default async function AgentsPage() {
 
       {/* Dez activity — the "Dez now" view: every question answered + routine run */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
-        Dez activity{' '}
+        What Dez has been doing{' '}
         <span className="font-normal normal-case text-charcoal-400">
-          (last {dezActivity.length} — questions answered, routines run; live feed in #dez-activity)
+          (last {dezActivity.length}: questions answered, scheduled jobs, actions; live feed in #dez-activity)
         </span>
       </h2>
       <div className="mb-8 overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
@@ -303,8 +309,8 @@ export default async function AgentsPage() {
           <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
               <th className="px-3 py-2">When</th>
-              <th className="px-3 py-2">Kind</th>
-              <th className="px-3 py-2">Scope</th>
+              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Topic</th>
               <th className="px-3 py-2">Who</th>
               <th className="px-3 py-2">What</th>
             </tr>
@@ -334,21 +340,22 @@ export default async function AgentsPage() {
 
       {/* Sep 4 tracker */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
-        Sep 4 write-path tracker
+        Is it saving work?{' '}
+        <span className="font-normal normal-case text-charcoal-400">(the numbers behind the Sep 4 write-path decision)</span>
       </h2>
       <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat
-          label="Retype touches / 7d"
+          label="Retyping into AppFolio / week"
           value={retype7 !== null ? String(retype7) : '—'}
-          sub={`target ≥ ${target}/week to justify the Write API`}
+          sub={`${target}+ a week would justify AppFolio write access`}
         />
         <Stat
-          label="Staff actions / 7d"
+          label="Actions staff took / week"
           value={actions ? String(num(actions.last7Days) ?? '—') : '—'}
           sub="baseline was ~0"
         />
         <Stat
-          label="Open exceptions"
+          label="Open maintenance exceptions"
           value={exceptions ? String(num(exceptions.total) ?? '—') : '—'}
           sub={
             baselineExceptions !== null
@@ -357,7 +364,7 @@ export default async function AgentsPage() {
           }
         />
         <Stat
-          label="Proposal acceptance"
+          label="Agent suggestions accepted"
           value={stats.acceptanceRate !== null ? `${stats.acceptanceRate}%` : '—'}
           sub={`${stats.decided} decided · target > 80%`}
         />
@@ -365,15 +372,18 @@ export default async function AgentsPage() {
 
       {/* Autonomy matrix */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
-        Autonomy matrix
+        Controls{' '}
+        <span className="font-normal normal-case text-charcoal-400">
+          (how much each agent may do on its own, who it messages, and the kill switch)
+        </span>
       </h2>
       <AutonomyMatrix initialConfig={config} isAdmin={isAdmin} workload={workload} staffOptions={staffOptions} />
 
       {/* Proposals */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
-        Recent proposals{' '}
+        Recent agent suggestions{' '}
         <span className="font-normal normal-case text-charcoal-400">
-          (last {proposals.length} —{' '}
+          (what agents proposed and what people decided · last {proposals.length}:{' '}
           {Object.entries(stats.counts)
             .map(([s, n]) => `${n} ${s}`)
             .join(' · ') || 'none yet'}
@@ -386,8 +396,8 @@ export default async function AgentsPage() {
             <tr>
               <th className="px-3 py-2">When</th>
               <th className="px-3 py-2">Agent</th>
-              <th className="px-3 py-2">Action</th>
-              <th className="px-3 py-2">Subject</th>
+              <th className="px-3 py-2">Suggested</th>
+              <th className="px-3 py-2">About</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Decided by</th>
             </tr>
@@ -396,8 +406,8 @@ export default async function AgentsPage() {
             {proposals.slice(0, 25).map((p) => (
               <tr key={p.id}>
                 <td className="whitespace-nowrap px-3 py-2 text-charcoal-500">{fmtDate(p.created_at)}</td>
-                <td className="px-3 py-2">{p.agent}</td>
-                <td className="px-3 py-2">{p.action_type}</td>
+                <td className="whitespace-nowrap px-3 py-2">{agentName(p.agent)}</td>
+                <td className="px-3 py-2 text-charcoal-700">{actionLabel(p.agent, p.action_type)}</td>
                 <td className="max-w-[16rem] truncate px-3 py-2 text-charcoal-600">
                   {typeof (p.payload as MetricValue).item === 'string'
                     ? ((p.payload as MetricValue).item as string)
@@ -412,7 +422,7 @@ export default async function AgentsPage() {
             {proposals.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-3 py-6 text-center text-charcoal-400">
-                  No proposals yet — the first Morning Action Card creates them.
+                  No agent suggestions yet.
                 </td>
               </tr>
             ) : null}
@@ -422,16 +432,15 @@ export default async function AgentsPage() {
 
       {/* Brain clarification queue (Brief 1C) */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
-        🧠 Brain clarification queue{' '}
+        🧠 Knowledge questions{' '}
         <span className="font-normal normal-case text-charcoal-400">
-          (open questions from the nightly consolidation — answer in chat or a doc; corrections
-          supersede)
+          (things the nightly knowledge review isn&apos;t sure about; answer in chat or a doc and the correction wins)
         </span>
       </h2>
       <div className="mb-8 rounded-xl border border-sand-200 bg-white shadow-card">
         {clarifications.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-charcoal-400">
-            No open questions — the brain has nothing it is unsure about.
+            No open questions right now.
           </p>
         ) : (
           <ul className="divide-y divide-sand-100">
@@ -450,7 +459,8 @@ export default async function AgentsPage() {
 
       {/* Outbox */}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-600">
-        Outbox — last 20 messages
+        Messages agents sent{' '}
+        <span className="font-normal normal-case text-charcoal-400">(last 20)</span>
       </h2>
       <div className="overflow-x-auto rounded-xl border border-sand-200 bg-white shadow-card">
         <table className="w-full text-sm">
@@ -489,8 +499,8 @@ export default async function AgentsPage() {
       </div>
 
       <p className="mt-6 text-xs text-charcoal-400">
-        Baseline frozen: {baseline ? fmtDate(baseline.captured_at) : 'not yet — run the freeze curl before agents act'} ·
-        Metrics refresh daily at 6:30 AM PT · Data: agent_config, agent_proposal, agent_outbox, metrics_snapshot
+        Baseline frozen: {baseline ? fmtDate(baseline.captured_at) : 'not yet'} · Metrics refresh daily at 6:30 AM PT · Names and
+        descriptions: lib/agents/catalog.ts
       </p>
     </div>
   );

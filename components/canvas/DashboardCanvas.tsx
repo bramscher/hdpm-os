@@ -443,7 +443,7 @@ export function DashboardCanvas() {
             href="/agents"
             icon={Bot}
             label="Agents"
-            title="Agent-OS briefs and automations"
+            title="What each agent does, what it has been doing, and its controls"
           />
         </TileSection>
 

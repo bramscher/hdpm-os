@@ -12,6 +12,7 @@ import {
   type AutonomyTier,
 } from "@/lib/agents/tiers";
 import type { AgentWorkload } from "@/lib/agents/workload";
+import { PLANNED_KEYS, actionLabel, agentName } from "@/lib/agents/catalog";
 
 const LEVEL_LABELS = ["L0 observe", "L1 draft", "L2 act-on-tap", "L3 act+notify", "L4 silent"];
 const rowKey = (r: { agent: string; action_type: string }) => `${r.agent}:${r.action_type}`;
@@ -44,7 +45,8 @@ export default function AutonomyMatrix({
   const [error, setError] = useState<string | null>(null);
 
   const kill = rows.find((r) => r.agent === "*");
-  const agentRows = rows.filter((r) => r.agent !== "*");
+  // Planned (never-built) agents have seed rows but can't act, so they stay out of the controls.
+  const agentRows = rows.filter((r) => r.agent !== "*" && !PLANNED_KEYS.has(r.agent));
 
   const byAgent = useMemo(() => {
     const m = new Map<string, AgentConfigRow[]>();
@@ -128,7 +130,7 @@ export default function AutonomyMatrix({
           <div key={agent} className="rounded-xl border border-sand-200 bg-white shadow-card">
             <div className="flex items-start justify-between gap-3 border-b border-sand-100 px-4 py-2.5">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-charcoal-900">{agent}</p>
+                <p className="text-sm font-semibold text-charcoal-900">{agentName(agent)}</p>
                 <AgentWorkloadLine w={workload[agent]} />
               </div>
               <p className="shrink-0 text-xs text-charcoal-400">
@@ -144,7 +146,7 @@ export default function AutonomyMatrix({
                   <div key={key} className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                       <div className="min-w-[9rem] flex-1">
-                        <p className="text-sm font-medium text-charcoal-800">{row.action_type}</p>
+                        <p className="text-sm font-medium text-charcoal-800">{actionLabel(row.agent, row.action_type)}</p>
                         <p className="text-xs text-charcoal-400">
                           {row.enabled ? LEVEL_LABELS[row.autonomy_level] : "L0 observe (off)"} · ceiling{" "}
                           {LEVEL_LABELS[row.ceiling_level]}

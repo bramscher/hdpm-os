@@ -229,7 +229,7 @@ export const APP_SECTIONS: AppSection[] = [
   {
     key: 'agents',
     label: 'Agents',
-    description: 'Agent-OS briefs and automations.',
+    description: 'What each agent and scheduled report does, recent agent activity, and agent controls.',
     group: 'Company',
     defaultRoles: [...PM],
     pages: ['/agents'],
