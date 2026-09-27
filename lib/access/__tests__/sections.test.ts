@@ -101,7 +101,10 @@ describe('effective access', () => {
   });
 
   it('general staff and property managers get everything but admin', () => {
-    const adminKeys = APP_SECTIONS.filter((s) => s.group === 'Admin').map((s) => s.key).sort();
+    // Admin sections, plus opt-in demos that default to nobody (switched on per person/role).
+    const adminKeys = APP_SECTIONS.filter((s) => s.group === 'Admin' || (Array.isArray(s.defaultRoles) && s.defaultRoles.length === 0))
+      .map((s) => s.key)
+      .sort();
     expect(deniedSections('staff', {}).sort()).toEqual(adminKeys);
     expect(deniedSections('pm', {}).sort()).toEqual(adminKeys);
     expect(deniedSections('manager', {}).sort()).toEqual(adminKeys);
