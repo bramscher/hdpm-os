@@ -1,3 +1,4 @@
+import { actionableInspections, inspectionToday, loadInspectionQueue } from '@/lib/inspection-queue';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -27,66 +28,26 @@ export async function GET(request: NextRequest) {
     const dueTo = searchParams.get('due_to');
     const search = searchParams.get('search');
 
-    let query = supabase
-      .from('inspections')
-      .select('*, inspection_properties(*)', { count: 'exact' });
-
-    if (status) {
-      query = query.eq('status', status);
-    }
-
-    if (inspectionType) {
-      query = query.eq('inspection_type', inspectionType);
-    }
-
-    if (assignedTo) {
-      query = query.eq('assigned_to', assignedTo);
-    }
-
-    if (dueFrom) {
-      query = query.gte('due_date', dueFrom);
-    }
-
-    if (dueTo) {
-      query = query.lte('due_date', dueTo);
-    }
-
-    // City and search filters require joining through inspection_properties.
-    // Supabase JS client supports filtering on related tables via the
-    // `inspection_properties.column` syntax.
-    if (city) {
-      query = query.eq('inspection_properties.city', city);
-    }
-
+    const { rows, properties } = await loadInspectionQueue(supabase);
+    let inspections = searchParams.get('view') === 'all'
+      ? rows
+      : actionableInspections(rows, properties, inspectionToday(), searchParams.get('view') === 'outlook' ? 366 : 45);
+    if (status) inspections = inspections.filter(row => row.status === status);
+    if (inspectionType) inspections = inspections.filter(row => row.inspection_type === inspectionType);
+    if (assignedTo) inspections = inspections.filter(row => row.assigned_to === assignedTo);
+    if (dueFrom) inspections = inspections.filter(row => row.due_date && row.due_date >= dueFrom);
+    if (dueTo) inspections = inspections.filter(row => row.due_date && row.due_date <= dueTo);
+    if (city) inspections = inspections.filter(row => row.inspection_properties?.city === city);
     if (search) {
-      // Search across property fields — use textSearch on joined table
-      // Supabase referenced table filters don't exclude parent rows,
-      // so we filter client-side after fetching. Mark search as active.
-      query = query.or(
-        `address_1.ilike.%${search}%,address_2.ilike.%${search}%,city.ilike.%${search}%,name.ilike.%${search}%`,
-        { referencedTable: 'inspection_properties' }
-      );
+      const needle = search.toLowerCase();
+      inspections = inspections.filter(row => [row.resident_name, ...Object.values(row.inspection_properties || {})]
+        .some(value => typeof value === 'string' && value.toLowerCase().includes(needle)));
     }
+    inspections.sort((a, b) => (a.target_date || a.due_date || '9999').localeCompare(b.target_date || b.due_date || '9999') || a.id.localeCompare(b.id));
+    const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1);
+    const pageSize = Math.max(1, Math.min(Number.parseInt(searchParams.get('page_size') || '100', 10) || 100, 2000));
+    return NextResponse.json({ inspections: inspections.slice((page - 1) * pageSize, page * pageSize), total: inspections.length });
 
-    // Pagination
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const pageSize = Math.min(parseInt(searchParams.get('page_size') || '100', 10), 2000);
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-
-    query = query.order('due_date', { ascending: true }).range(from, to);
-
-    const { data, error, count } = await query;
-
-    if (error) {
-      console.error('Error fetching inspections:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({
-      inspections: data || [],
-      total: count ?? 0,
-    });
   } catch (error) {
     console.error('Inspections GET error:', error);
     const message = error instanceof Error ? error.message : 'Failed to fetch inspections';

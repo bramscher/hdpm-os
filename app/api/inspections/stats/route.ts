@@ -1,3 +1,4 @@
+import { actionableInspections, inspectionToday, shiftInspectionDate, loadInspectionQueue } from '@/lib/inspection-queue';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -15,73 +16,21 @@ export async function GET() {
     }
 
     const supabase = getSupabaseAdmin();
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-
-    // Get start of current week (Monday)
-    const dayOfWeek = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-    const mondayStr = monday.toISOString().split('T')[0];
-
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    const fridayStr = friday.toISOString().split('T')[0];
-
-    // Run all queries in parallel
-    const [totalRes, overdueRes, thisWeekRes, completedRes, unassignedRes] = await Promise.all([
-      // Total in queue (not completed or canceled)
-      supabase
-        .from('inspections')
-        .select('id', { count: 'exact', head: true })
-        .not('status', 'in', '("completed","canceled")'),
-
-      // Overdue (due_date < today, not completed/canceled)
-      supabase
-        .from('inspections')
-        .select('id', { count: 'exact', head: true })
-        .lt('due_date', today)
-        .not('status', 'in', '("completed","canceled")'),
-
-      // Scheduled this week
-      supabase
-        .from('inspections')
-        .select('id', { count: 'exact', head: true })
-        .gte('due_date', mondayStr)
-        .lte('due_date', fridayStr)
-        .not('status', 'in', '("completed","canceled")'),
-
-      // Completed this week
-      supabase
-        .from('inspections')
-        .select('id', { count: 'exact', head: true })
-        .gte('completed_at', mondayStr)
-        .eq('status', 'completed'),
-
-      // Unassigned and in queue
-      supabase
-        .from('inspections')
-        .select('id', { count: 'exact', head: true })
-        .is('assigned_to', null)
-        .in('status', ['queued', 'validated', 'imported']),
-    ]);
-
-    // Also fetch distinct assignees for filter dropdown
-    const { data: assigneeData } = await supabase
-      .from('inspections')
-      .select('assigned_to')
-      .not('assigned_to', 'is', null);
-
-    const assignees = [...new Set((assigneeData || []).map((r: { assigned_to: string }) => r.assigned_to).filter(Boolean))];
-
+    const today = inspectionToday();
+    const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+    const monday = shiftInspectionDate(today, -(weekday === 0 ? 6 : weekday - 1));
+    const nextMonday = shiftInspectionDate(monday, 7);
+    const { rows, properties } = await loadInspectionQueue(supabase);
+    const active = actionableInspections(rows, properties, today);
     return NextResponse.json({
-      total: totalRes.count ?? 0,
-      overdue: overdueRes.count ?? 0,
-      this_week: thisWeekRes.count ?? 0,
-      completed: completedRes.count ?? 0,
-      unassigned: unassignedRes.count ?? 0,
-      assignees,
+      total: active.length,
+      overdue: active.filter(row => (row.target_date || row.due_date || today) < today).length,
+      this_week: active.filter(row => { const date = row.target_date || row.due_date; return date && date >= monday && date < nextMonday; }).length,
+      completed: rows.filter(row => row.status === 'completed' && row.completed_at && inspectionToday(new Date(row.completed_at)) >= monday && inspectionToday(new Date(row.completed_at)) < nextMonday).length,
+      unassigned: active.filter(row => !row.assigned_to).length,
+      assignees: [...new Set(rows.map(row => row.assigned_to).filter(Boolean))],
     });
+
   } catch (error) {
     console.error('Inspection stats error:', error);
     const message = error instanceof Error ? error.message : 'Failed to fetch stats';
