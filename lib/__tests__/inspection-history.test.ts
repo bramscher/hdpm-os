@@ -11,6 +11,18 @@ const unit = (id: string, numericId: string, lastInspectedDate: string | null): 
 const inspection = (unit_id: number, inspected_on: string | null, status = 'DONE', marked_done_on: string | null = null): AppFolioInspectionDetail => ({ unit_id, inspected_on, status, marked_done_on });
 
 describe('completed AppFolio inspection history', () => {
+  it('merges report dates by unit ID, preserving newer dates and rejecting invalid or future values', () => {
+    const result=reconcileInspectionHistory([unit('uuid','1377','2026-03-01'),unit('neighbor','1378','2026-09-01')],[], '2026-09-28',[
+      {unit_id:1377,last_inspection_date:'2026-08-01'},
+      {unit_id:'1377',last_inspection_date:'2026-04-01'},
+      {unit_id:1377,last_inspection_date:'2026-02-30'},
+      {unit_id:1377,last_inspection_date:'3000-01-01'},
+      {unit_id:1377,last_inspection_date:null},
+      {unit_id:null,last_inspection_date:'2026-09-28'},
+      {unit_id:1378,last_inspection_date:'2026-05-01'},
+    ]);
+    expect(result.map(u=>u.lastInspectedDate)).toEqual(['2026-08-01','2026-09-01']);
+  });
   it('replaces a stale unit date with the actual visit date, not the later completion date', () => {
     const result = reconcileInspectionHistory([unit('uuid', '1377', '2022-10-25')], [inspection(1377, '2026-04-27', 'DONE', '2026-04-28')], '2026-09-28');
     expect(result[0].lastInspectedDate).toBe('2026-04-27');

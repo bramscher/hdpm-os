@@ -1,5 +1,5 @@
 import type { AppFolioUnit } from './appfolio';
-import type { AppFolioInspectionDetail } from './inspection-history';
+import { reconcileInspectionHistory, type AppFolioInspectionDetail, type AppFolioUnitInspection } from './inspection-history';
 import { computeInspectionDueDate } from './inspection-candidates';
 import { findHouseholdSource, householdAddressKey } from './inspection-route-households';
 import { inspectionWorkflow, reconcileInspectionProperties, type QueueInspection, type QueueProperty } from './inspection-queue';
@@ -32,13 +32,13 @@ function monthsBefore(today: string, months: number) {
   date.setUTCDate(Math.min(day,lastDay));
   return date.toISOString().slice(0,10);
 }
-export function buildInspectionEvidence(units: AppFolioUnit[], history: AppFolioInspectionDetail[], checkedAt: string): InspectionEvidence {
+export function buildInspectionEvidence(units: AppFolioUnit[], history: AppFolioInspectionDetail[], checkedAt: string, unitReport: AppFolioUnitInspection[] = []): InspectionEvidence {
   const today = inspectionToday(new Date(checkedAt));
   const byUnit = new Map<string, AppFolioInspectionDetail[]>();
   for (const record of history) {
     if (record.unit_id != null) byUnit.set(String(record.unit_id), [...(byUnit.get(String(record.unit_id)) || []), record]);
   }
-  return {checked_at:checkedAt,units:units.map(unit => {
+  return {checked_at:checkedAt,units:reconcileInspectionHistory(units,history,today,unitReport).map(unit => {
     const reportId = /\/units\/(\d+)(?:[/?#]|$)/.exec(unit.link || '')?.[1] || null;
     const records = reportId ? byUnit.get(reportId) || [] : [];
     return {id:unit.id,link:unit.link || null,hidden:!!unit.hidden,last_inspected:unit.lastInspectedDate,report_id:reportId,
@@ -47,7 +47,7 @@ export function buildInspectionEvidence(units: AppFolioUnit[], history: AppFolio
   })};
 }
 
-/** Review groups reflect evidence; open records never count as completed visits. */
+/** Trust the Unit Inspection report's last date without changing individual inspection statuses. */
 export function reviewInspectionCandidates(rows: QueueInspection[], input: QueueProperty[], evidence: InspectionEvidence | null, today: string): ReviewedCandidate[] {
   const properties = reconcileInspectionProperties(rows,input,today);
   const units = new Map(evidence?.units.map(unit=>[unit.id,unit]) || []);

@@ -176,7 +176,7 @@ export function CandidatesView() {
           </Link>
           <h1 className="text-2xl font-bold text-charcoal-900">Inspection Candidates</h1>
           <p className="text-sm text-charcoal-500 mt-1">
-            Next due date is six months after the later of move-in or last confirmed inspection. Only verified work due within 21 days is ready to schedule.
+            Next due date is six months after the later of move-in or last inspection. AppFolio’s Unit Inspection report date is trusted even if its inspection status is still open. Only work due within 21 days is ready to schedule.
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -18,7 +18,7 @@ import { withinInspectionHorizon, inspectionToday } from './inspection-window';
  */
 
 import { runReport } from '@/lib/appfolio-reports';
-import { reconcileInspectionHistory, type AppFolioInspectionDetail } from '@/lib/inspection-history';
+import { reconcileInspectionHistory, type AppFolioInspectionDetail, type AppFolioUnitInspection } from '@/lib/inspection-history';
 import { collectInspectionHousehold, type InspectionHousehold } from '@/lib/inspection-household';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -468,16 +468,17 @@ export async function runCandidateSync(
   const dryRun = Boolean(options.dryRun);
   const syncTimestamp = new Date().toISOString();
 
-  const [properties, units, tenants, inspectionHistory] = await Promise.all([
+  const [properties, units, tenants, inspectionHistory, unitReport] = await Promise.all([
     fetchAppFolioPropertiesWithCustomFields(),
     fetchAppFolioUnits({ includeHidden: true }),
     fetchAppFolioTenants(),
     // Fail the sync if history cannot be read rather than misclassifying units
     // using stale unit-level dates. runReport follows every report page.
     runReport<AppFolioInspectionDetail>('inspection_detail'),
+    runReport<AppFolioUnitInspection>('unit_inspection', {last_inspection_on_from:inspectionToday(today),unit_visibility:'all'}),
   ]);
 
-  const reconciledUnits = reconcileInspectionHistory(units, inspectionHistory, toISODate(today));
+  const reconciledUnits = reconcileInspectionHistory(units, inspectionHistory, inspectionToday(today), unitReport);
   const joined = joinPropertiesUnitsTenants(properties, reconciledUnits, tenants, today);
 
   // Surface any unknown custom-field names so we can adjust matching without a redeploy.

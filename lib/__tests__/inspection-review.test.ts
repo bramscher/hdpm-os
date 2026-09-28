@@ -12,6 +12,21 @@ const row=(overrides:Partial<QueueInspection>={}):QueueInspection=>({id:'i',prop
 const review=(p:QueueProperty=property,e:InspectionEvidence|null=evidence(),rows:QueueInspection[]=[])=>reviewInspectionCandidates(rows,[p],e,today);
 
 describe('inspection review groups',()=>{
+  it.each(['NEW','IN PROGRESS'])('trusts the Unit Inspection report date despite %s status',status=>{
+    const e=buildInspectionEvidence([unit],[{unit_id:123,status,inspected_on:'2026-08-01',marked_done_on:null}],checked,
+      [{unit_id:123,last_inspection_date:'2026-08-01'}]);
+    expect(review(property,e)[0]).toMatchObject({review_group:'handled',last_inspection_date:'2026-08-01',next_due_date:'2027-02-01'});
+    expect(e.units[0].completed).toBeNull();
+    expect(e.units[0].open[0].status).toBe(status);
+    expect(review({...property,move_in_date:'2026-09-01'},e)[0].next_due_date).toBe('2027-03-01');
+    expect(review(property,e,[row({status:'completed',completed_at:checked})])[0].last_inspection_date).toBe(today);
+  });
+  it('makes a reported visit due within 21 days ready while retaining newer conflicting records',()=>{
+    const history=[{unit_id:123,status:'IN PROGRESS',inspected_on:'2026-04-15',marked_done_on:null}];
+    const report=[{unit_id:123,last_inspection_date:'2026-04-15'}];
+    expect(review(property,buildInspectionEvidence([unit],history,checked,report))[0]).toMatchObject({review_group:'ready',next_due_date:'2026-10-15'});
+    expect(review(property,buildInspectionEvidence([unit],[...history,{...history[0],inspected_on:'2026-09-01'}],checked,report))[0].review_group).toBe('confirmation');
+  });
   it('adds six calendar months consistently across time zones and month ends',()=>{
     for(const [anchor,due] of [['2026-03-01','2026-09-01'],['2026-07-01','2027-01-01'],['2026-08-31','2027-02-28']]) {
       expect(computeInspectionDueDate(anchor,null)).toBe(due);
