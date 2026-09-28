@@ -1,5 +1,6 @@
-import { ROUTE_CALENDAR_EVENTS_URL, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError } from '@/lib/route-builder/calendar-destination';
+import { ROUTE_CALENDAR_EVENTS_URL, routeCalendarEventUrl, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError } from '@/lib/route-builder/calendar-destination';
 import { NextRequest, NextResponse } from 'next/server';
+import { formatInspectionOccupants, formatInspectionPets, escapeInspectionHtml } from '@/lib/inspection-household';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
@@ -11,7 +12,7 @@ const HDPM_OFFICE = {
 
 // ============================================
 // POST /api/inspections/routes/[id]/calendar
-// Create an Outlook calendar event for a route
+// Publish a route, or refresh the description of its linked Outlook event
 // ============================================
 
 export async function POST(
@@ -71,7 +72,9 @@ export async function POST(
             latitude,
             longitude,
             appfolio_property_id,
-            owner_name
+            owner_name,
+            financially_responsible_occupants,
+            pets
           )
         )
       `)
@@ -144,6 +147,8 @@ export async function POST(
         unit,
         type,
         resident,
+        occupants: formatInspectionOccupants(prop?.financially_responsible_occupants),
+        pets: formatInspectionPets(prop?.pets),
         priority,
         dueDate,
         driveMin,
@@ -208,6 +213,8 @@ export async function POST(
           <a href="${s.mapsLink}" style="color:#2563eb;text-decoration:none;font-weight:600;">${s.address}</a>${s.unit ? `<br/><span style="color:#6b7280;font-size:12px;">${s.unit}</span>` : ''}
           ${propertyMeta ? `<br/><span style="color:#6b7280;font-size:12px;">${propertyMeta}</span>` : ''}
           ${s.resident ? `<br/><span style="color:#6b7280;font-size:12px;">Tenant: ${s.resident}</span>` : ''}
+          <br/><span style="color:#6b7280;font-size:12px;"><strong>Financially responsible occupants:</strong> ${escapeInspectionHtml(s.occupants)}</span>
+          <br/><span style="color:#6b7280;font-size:12px;"><strong>Pets:</strong> ${escapeInspectionHtml(s.pets)}</span>
           <br/><span style="font-size:12px;">${s.type} ${priorityBadge(s.priority)}${dueDateStr ? ` &middot; Due: <span style="${overdue ? 'color:#dc2626;font-weight:600;' : ''}">${dueDateStr}</span>` : ''}</span>
         </td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;font-size:13px;">
@@ -261,6 +268,7 @@ export async function POST(
     const attendees = routeCalendarAttendees();
 
     // ── Microsoft Graph event payload ──
+    const existingEventId: string | null = routePlan.calendar_event_id || null;
     const event = {
       subject,
       body: {
@@ -279,37 +287,45 @@ export async function POST(
         displayName: location,
       },
       attendees,
+      transactionId: `inspection-route-${id}`,
       isReminderOn: true,
       reminderMinutesBeforeStart: 30,
     };
+
+    // Republishing refreshes route details without changing Outlook attendees or times.
+    const eventPayload = existingEventId ? { body: event.body } : event;
 
     // ── Dry-run escape hatch ──
     // Set INSPECTION_CALENDAR_DRYRUN=1 to skip the Graph POST and return the
     // generated event JSON instead. Useful for verifying body + attendees before
     // sending real invitations.
     if (process.env.INSPECTION_CALENDAR_DRYRUN === '1') {
-      return NextResponse.json({ success: true, dryRun: true, event });
+      return NextResponse.json({ success: true, dryRun: true, updated: !!existingEventId, event: eventPayload });
     }
 
     // ── Call Microsoft Graph API ──
-    const graphRes = await fetch(ROUTE_CALENDAR_EVENTS_URL, {
-      method: 'POST',
+    const graphRes = await fetch(existingEventId ? routeCalendarEventUrl(existingEventId) : ROUTE_CALENDAR_EVENTS_URL, {
+      method: existingEventId ? 'PATCH' : 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(event),
+      body: JSON.stringify(eventPayload),
     });
 
     if (!graphRes.ok) {
       const errorBody = await graphRes.text();
       console.error('Microsoft Graph error:', graphRes.status, errorBody);
 
+      if (existingEventId && graphRes.status === 404) {
+        return NextResponse.json({ error: 'The linked Outlook event could not be found. For older personal-calendar events, sign in as the original publisher and try again. No duplicate event was created.' }, { status: 404 });
+      }
+
       const accessError = routeCalendarAccessError(graphRes.status);
       if (accessError) return NextResponse.json({error: accessError}, {status: graphRes.status});
 
       return NextResponse.json(
-        { error: `Failed to create calendar event: ${graphRes.statusText}` },
+        { error: `Failed to publish calendar event: ${graphRes.statusText}` },
         { status: 502 }
       );
     }
@@ -317,13 +333,19 @@ export async function POST(
     const createdEvent = await graphRes.json();
 
     // Store the event ID on the route plan for cleanup on deletion
-    await supabase
-      .from('route_plans')
-      .update({ calendar_event_id: storeRouteCalendarEventId(createdEvent.id) })
-      .eq('id', id);
+    if (!existingEventId) {
+      const { error: saveError } = await supabase
+        .from('route_plans')
+        .update({ calendar_event_id: storeRouteCalendarEventId(createdEvent.id) })
+        .eq('id', id);
+      if (saveError) {
+        return NextResponse.json({ error: 'Outlook event was created, but its link could not be saved. Please retry publishing.' }, { status: 500 });
+      }
+    }
 
     return NextResponse.json({
       success: true,
+      updated: !!existingEventId,
       eventId: createdEvent.id,
       webLink: createdEvent.webLink,
     });

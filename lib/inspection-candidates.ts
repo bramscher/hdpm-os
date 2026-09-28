@@ -16,6 +16,9 @@
  * existing route-engine. "Skip" is local-only — we never write back to AppFolio.
  */
 
+import { runReport } from '@/lib/appfolio-reports';
+import { reconcileInspectionHistory, type AppFolioInspectionDetail } from '@/lib/inspection-history';
+import { collectInspectionHousehold, type InspectionHousehold } from '@/lib/inspection-household';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   fetchAppFolioPropertiesWithCustomFields,
@@ -161,7 +164,7 @@ function deriveRegion(city: string | null): string | null {
 // Join properties + units + tenants
 // ============================================
 
-export interface JoinedCandidateRecord {
+export interface JoinedCandidateRecord extends InspectionHousehold {
   appfolioPropertyId: string;
   appfolioUnitId: string;
   propertyName: string | null;
@@ -208,13 +211,12 @@ export function joinPropertiesUnitsTenants(
     const prop = propsById.get(u.propertyId);
     if (!prop) continue;
     if (prop.hidden) continue;
-    // Classify every active unit off LastInspectedDate (the v0 API's reliable
-    // signal). We intentionally do NOT gate on "Use Custom Inspection Date":
+    // Unit dates have been reconciled with completed Inspection Detail records.
+    // We intentionally do NOT gate on "Use Custom Inspection Date":
     // that flag is `unit[use_last_inspection_on]`, a web-app form field the v0
     // Database API does not expose, so prop.useCustomInspectionDate is ALWAYS
     // false. Gating on it skipped every unit and produced zero candidates.
-    // The custom-date caveat (LastInspectedDate goes stale when the box is
-    // checked) is reconciled separately by the web-app audit + CSV cross-check.
+    // The report reconciliation handles stale LastInspectedDate values.
 
     const address1 = u.address1 || prop.address1;
     const city = u.city || prop.city;
@@ -245,6 +247,7 @@ export function joinPropertiesUnitsTenants(
     const tenantEmail = contact?.email ?? withEmail?.email ?? null;
 
     records.push({
+      ...collectInspectionHousehold(tenantsForUnit),
       appfolioPropertyId: prop.appfolioPropertyId,
       appfolioUnitId: u.id,
       propertyName: prop.name,
@@ -391,6 +394,8 @@ export async function persistCandidates(
       move_in_date: c.moveInDate,
       next_due_date: effectiveNextDue,
       resident_name: c.residentName,
+      financially_responsible_occupants: c.financiallyResponsibleOccupants,
+      pets: c.pets,
       tenant_email: c.tenantEmail,
       candidate_status: nextStatus,
       local_skip_reason:
@@ -457,13 +462,17 @@ export async function runCandidateSync(
   const dryRun = Boolean(options.dryRun);
   const syncTimestamp = new Date().toISOString();
 
-  const [properties, units, tenants] = await Promise.all([
+  const [properties, units, tenants, inspectionHistory] = await Promise.all([
     fetchAppFolioPropertiesWithCustomFields(),
     fetchAppFolioUnits(),
     fetchAppFolioTenants(),
+    // Fail the sync if history cannot be read rather than misclassifying units
+    // using stale unit-level dates. runReport follows every report page.
+    runReport<AppFolioInspectionDetail>('inspection_detail'),
   ]);
 
-  const joined = joinPropertiesUnitsTenants(properties, units, tenants, today);
+  const reconciledUnits = reconcileInspectionHistory(units, inspectionHistory, toISODate(today));
+  const joined = joinPropertiesUnitsTenants(properties, reconciledUnits, tenants, today);
 
   // Surface any unknown custom-field names so we can adjust matching without a redeploy.
   const observedNames = new Set<string>();

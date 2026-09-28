@@ -63,7 +63,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 function formatDate(s: string | null): string {
   if (!s) return "—";
-  const d = new Date(s);
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T12:00:00` : s);
   if (Number.isNaN(d.getTime())) return s;
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
