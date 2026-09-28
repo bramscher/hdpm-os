@@ -1,3 +1,4 @@
+import { routeStartTime, routeWallTime, routeTimeLabel } from '@/lib/route-builder/inspection-time';
 import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
 import { ROUTE_CALENDAR_EVENTS_URL, findLegacyRouteCalendarEvent, routeCalendarEventUrl, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError } from '@/lib/route-builder/calendar-destination';
 import { NextRequest, NextResponse } from 'next/server';
@@ -94,9 +95,7 @@ export async function POST(
     const totalDriveMin = routePlan.total_drive_minutes || 0;
     const totalServiceMin = routePlan.total_service_minutes || 0;
     const totalMinutes = totalDriveMin + totalServiceMin;
-    const startHour = 8; // 8:00 AM
-    const endHour = startHour + Math.floor(totalMinutes / 60);
-    const endMinute = totalMinutes % 60;
+    const startTime = routeStartTime(routePlan.start_time);
 
     const cities = new Set<string>();
     for (const stop of stops || []) {
@@ -110,7 +109,7 @@ export async function POST(
     const inspectorCapitalized = inspectorName.charAt(0).toUpperCase() + inspectorName.slice(1);
 
     // ── Build per-stop data with estimated arrival times ──
-    let runningMinutes = 0; // minutes after 8:00 AM
+    let runningMinutes = 0; // minutes after route departure
     const stopDetails = (stops || []).map((stop, i) => {
       const insp = stop.inspections;
       const prop = insp?.inspection_properties;
@@ -120,7 +119,7 @@ export async function POST(
       const resident = insp?.resident_name || null;
       const priority = insp?.priority || 'normal';
       const dueDate = insp?.due_date || null;
-      const driveMin = Math.round(stop.drive_minutes_from_prev || stop.drive_minutes_from_previous || 0);
+      const driveMin = Math.round(stop.travel_minutes_from_previous ?? stop.drive_minutes_from_prev ?? stop.drive_minutes_from_previous ?? 0);
       const serviceMin = stop.service_minutes || 30;
       const lat = prop?.latitude || null;
       const lng = prop?.longitude || null;
@@ -129,14 +128,8 @@ export async function POST(
 
       // Estimated arrival = start time + cumulative drive + cumulative service so far
       runningMinutes += driveMin;
-      const arrivalHour = startHour + Math.floor(runningMinutes / 60);
-      const arrivalMin = runningMinutes % 60;
-      const arrivalTime = formatTime12(arrivalHour, arrivalMin);
-
-      const departureMinutes = runningMinutes + serviceMin;
-      const departHour = startHour + Math.floor(departureMinutes / 60);
-      const departMin = departureMinutes % 60;
-      const departTime = formatTime12(departHour, departMin);
+      const arrivalTime = routeTimeLabel(startTime, runningMinutes);
+      const departTime = routeTimeLabel(startTime, runningMinutes + serviceMin);
 
       runningMinutes += serviceMin;
 
@@ -184,10 +177,7 @@ export async function POST(
     const googleMapsUrl = `https://www.google.com/maps/dir/${HDPM_OFFICE.lat},${HDPM_OFFICE.lng}/${googleWaypoints.join('/')}`;
 
     // Estimated finish time
-    const finishTime = formatTime12(
-      startHour + Math.floor(runningMinutes / 60),
-      runningMinutes % 60
-    );
+    const finishTime = routeTimeLabel(startTime, totalMinutes);
 
     // ── Priority badge helper ──
     function priorityBadge(p: string): string {
@@ -237,7 +227,7 @@ export async function POST(
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:14px;">
           <tr>
             <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Date</strong><br/>${new Date(routeDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</td>
-            <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Start</strong><br/>8:00 AM</td>
+            <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Start</strong><br/>${routeTimeLabel(startTime)}</td>
             <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Est. Finish</strong><br/>${finishTime}</td>
             <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Total</strong><br/>${formatDuration(totalDriveMin)} drive + ${formatDuration(totalServiceMin)} service</td>
           </tr>
@@ -280,11 +270,11 @@ export async function POST(
         content: htmlBody,
       },
       start: {
-        dateTime: `${routeDate}T${String(startHour).padStart(2, '0')}:00:00`,
+        dateTime: routeWallTime(routeDate, startTime),
         timeZone: 'America/Los_Angeles',
       },
       end: {
-        dateTime: `${routeDate}T${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:00`,
+        dateTime: routeWallTime(routeDate, startTime, totalMinutes),
         timeZone: 'America/Los_Angeles',
       },
       location: {
@@ -296,8 +286,8 @@ export async function POST(
       reminderMinutesBeforeStart: 30,
     };
 
-    // Republishing refreshes route details without changing Outlook attendees or times.
-    const eventPayload = existingEventId ? { body: event.body } : event;
+    // Explicitly saved start times update the existing appointment; legacy routes keep their Outlook times.
+    const eventPayload = existingEventId ? { body: event.body, ...(routePlan.start_time ? {start: event.start, end: event.end} : {}) } : event;
 
     // ── Dry-run escape hatch ──
     // Set INSPECTION_CALENDAR_DRYRUN=1 to skip the Graph POST and return the
@@ -373,12 +363,6 @@ export async function POST(
 }
 
 // ── Helpers ──
-
-function formatTime12(hour: number, minute: number): string {
-  const h = hour % 12 || 12;
-  const ampm = hour < 12 ? 'AM' : 'PM';
-  return `${h}:${String(minute).padStart(2, '0')} ${ampm}`;
-}
 
 function formatDuration(mins: number): string {
   if (mins < 60) return `${mins}m`;

@@ -115,6 +115,7 @@ export interface RouteStop {
 
 /** Parameters for generating optimized routes */
 export interface RouteGenerationRequest {
+  start_time?: string;
   date_range_start: string;
   date_range_end: string;
   assigned_to?: string;

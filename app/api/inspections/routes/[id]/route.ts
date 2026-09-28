@@ -1,3 +1,4 @@
+import { validRouteStartTime } from '@/lib/route-builder/inspection-time';
 import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
 import { routeCalendarEventUrl } from '@/lib/route-builder/calendar-destination';
 import { NextRequest, NextResponse } from 'next/server';
@@ -133,8 +134,12 @@ export async function PATCH(
       }
     }
 
+    if ('start_time' in body && !validRouteStartTime(body.start_time)) {
+      return NextResponse.json({ error: 'Start time must be HH:mm (24-hour Pacific time).' }, { status: 400 });
+    }
+
     // Update route plan fields (whitelisted)
-    const allowedFields = ['name', 'status', 'assigned_to', 'route_date', 'notes'];
+    const allowedFields = ['name', 'status', 'assigned_to', 'route_date', 'notes', 'start_time'];
     const updates: Record<string, unknown> = {};
 
     for (const field of allowedFields) {

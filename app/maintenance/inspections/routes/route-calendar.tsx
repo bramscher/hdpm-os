@@ -1,4 +1,5 @@
 "use client";
+import { routeTimeLabel } from "@/lib/route-builder/inspection-time";
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 interface RouteForCalendar {
   id: string;
   route_date: string;
+  start_time?: string | null;
   assigned_to: string | null;
   total_stops: number;
   total_drive_minutes: number | null;
@@ -132,6 +134,7 @@ export function RouteCalendar({ routes, onCreateRoute, onDeleteRoute, onClearDay
       if (!map[key]) map[key] = [];
       map[key].push(route);
     }
+    for (const day of Object.values(map)) day.sort((a, b) => (a.start_time || "08:00").localeCompare(b.start_time || "08:00"));
     return map;
   }, [routes]);
 
@@ -404,7 +407,7 @@ export function RouteCalendar({ routes, onCreateRoute, onDeleteRoute, onClearDay
                           )}
                         />
                         <span className="text-xs font-medium truncate">
-                          {route.notes || `Route`}
+                          {routeTimeLabel(route.start_time)} · {route.notes || `Route`}
                         </span>
                       </div>
 
@@ -554,7 +557,7 @@ export function RouteCalendar({ routes, onCreateRoute, onDeleteRoute, onClearDay
                               STATUS_DOT[route.status] ?? "bg-charcoal-400"
                             )}
                           />
-                          {route.total_stops || 0} stops
+                          {routeTimeLabel(route.start_time)} · {route.total_stops || 0} stops
                           {route.assigned_to && (
                             <span className="opacity-60 truncate">
                               {" "}

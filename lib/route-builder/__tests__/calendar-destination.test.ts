@@ -2,12 +2,12 @@ import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest';
 import {NextRequest} from 'next/server';
 import {routeCalendarAttendees,routeCalendarEventUrl,storeRouteCalendarEventId,ROUTE_CALENDAR_EVENTS_URL} from '../calendar-destination';
 import {createRouteCalendarEvent,deleteRouteCalendarEvent} from '@/lib/maintenance/route-calendar';
-const state=vi.hoisted(()=>({email:'craig@highdesertpm.com',assignee:'matt@highdesertpm.com',eventId:null as string | null,writes:[] as any[]}));
+const state=vi.hoisted(()=>({email:'craig@highdesertpm.com',assignee:'matt@highdesertpm.com',startTime:null as string | null,eventId:null as string | null,writes:[] as any[]}));
 vi.mock('@/lib/auth',()=>({auth:async()=>({user:{email:state.email},accessToken:'test-token'})}));
-vi.mock('@/lib/supabase',()=>({getSupabaseAdmin:()=>({from:(table:string)=>{const q:any={};q.select=q.eq=()=>q;q.single=async()=>({data:{id:'route',calendar_event_id:state.eventId,assigned_to:state.assignee,route_date:'2026-09-22',total_drive_minutes:10,total_service_minutes:60},error:null});q.order=async()=>({data:[],error:null});q.update=(value:any)=>{state.writes.push(value);return q};return q;}})}));
+vi.mock('@/lib/supabase',()=>({getSupabaseAdmin:()=>({from:(table:string)=>{const q:any={};q.select=q.eq=()=>q;q.single=async()=>({data:{id:'route',calendar_event_id:state.eventId,assigned_to:state.assignee,route_date:'2026-09-22',start_time:state.startTime,total_drive_minutes:10,total_service_minutes:60},error:null});q.order=async()=>({data:[],error:null});q.update=(value:any)=>{state.writes.push(value);return q};return q;}})}));
 import {POST} from '@/app/api/inspections/routes/[id]/calendar/route';
 const input={routeDate:'2026-09-22',assignedTech:'Matt',totalDriveMinutes:10,totalServiceMinutes:60,stops:[]};
-beforeEach(()=>{state.eventId=null;state.writes=[];vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({id:'event/1',webLink:'https://outlook.office.com/event'}),{status:201})));vi.stubEnv('INSPECTION_CALENDAR_DRYRUN','0');vi.stubEnv('MAINT_ROUTE_CALENDAR_DRYRUN','0');});
+beforeEach(()=>{state.startTime=null;state.eventId=null;state.writes=[];vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({id:'event/1',webLink:'https://outlook.office.com/event'}),{status:201})));vi.stubEnv('INSPECTION_CALENDAR_DRYRUN','0');vi.stubEnv('MAINT_ROUTE_CALENDAR_DRYRUN','0');});
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
 describe('route publishing destinations',()=>{
  it('only lists Brody and Operations',()=>{expect(routeCalendarAttendees().map(a=>a.emailAddress.address)).toEqual(['brody@highdesertpm.com','operations@highdesertpm.com']);});
@@ -44,6 +44,17 @@ describe('route publishing destinations',()=>{
   expect(url).toBe(routeCalendarEventUrl(eventId));expect(request!.method).toBe('PATCH');
   const payload=JSON.parse(request!.body as string);expect(Object.keys(payload)).toEqual(['body']);
   expect(payload.body.content).toContain('Inspection Route');expect(state.writes).toEqual([]);
+ });
+ it('updates an existing event time only after a start time is saved', async()=>{
+  state.eventId='operations:existing'; state.startTime='13:30:00';
+  const response=await POST(new NextRequest('http://localhost/calendar',{method:'POST'}),{params:Promise.resolve({id:'route'})});
+  expect(response.status).toBe(200);
+  const payload=JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+  expect(payload.start).toEqual({dateTime:'2026-09-22T13:30:00',timeZone:'America/Los_Angeles'});
+  expect(payload.end.dateTime).toBe('2026-09-22T14:40:00');
+  expect(payload.body.content).toContain('1:30 PM');
+  expect(payload.attendees).toBeUndefined();
+  expect(vi.mocked(fetch).mock.calls[0][1]!.method).toBe('PATCH');
  });
  it('does not create another event if the linked event is missing',async()=>{
   state.eventId='operations:missing';vi.mocked(fetch).mockResolvedValue(new Response('Not found',{status:404}));

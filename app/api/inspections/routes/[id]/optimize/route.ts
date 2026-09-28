@@ -1,3 +1,4 @@
+import { routeArrival } from '@/lib/route-builder/inspection-time';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -134,7 +135,7 @@ export async function POST(
     }
 
     // Now apply the optimized order (all negatives are set, so positive values won't collide)
-    let cumulativeMinutes = 0; // minutes from 8:00 AM start
+    let cumulativeMinutes = 0; // minutes from route departure
 
     for (const optimizedStop of optimized.stops) {
       // Find the original DB stop by inspection_id
@@ -144,10 +145,7 @@ export async function POST(
       // Cumulative time: drive to this stop
       cumulativeMinutes += optimizedStop.drive_minutes_from_prev;
 
-      // Compute scheduled arrival: route_date at 8:00 AM + cumulative minutes
-      const arrivalDate = new Date(`${routeDate}T08:00:00`);
-      arrivalDate.setMinutes(arrivalDate.getMinutes() + Math.round(cumulativeMinutes));
-      const scheduledArrival = arrivalDate.toISOString();
+      const scheduledArrival = routeArrival(routeDate, routePlan.start_time, cumulativeMinutes);
 
       const { error: updateError } = await supabase
         .from('route_stops')
