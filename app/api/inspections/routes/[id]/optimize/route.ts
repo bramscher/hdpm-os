@@ -77,8 +77,10 @@ export async function POST(
       return NextResponse.json({ error: 'Route has no stops to optimize' }, { status: 400 });
     }
 
+    // Skipping records actual_arrival too, but skipped stops are excluded from
+    // the itinerary below. Their history must not block the remaining visits.
     if (!['draft', 'optimized'].includes(routePlan.status) || stops.some(stop =>
-      !['pending', 'skipped'].includes(stop.status) || stop.actual_arrival)) {
+      stop.status !== 'skipped' && (stop.status !== 'pending' || stop.actual_arrival))) {
       return NextResponse.json({ error: 'Only unstarted draft or optimized routes can be recalculated.' }, { status: 409 });
     }
 
