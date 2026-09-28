@@ -61,7 +61,11 @@ function toISODate(d: Date): string {
 
 function addMonths(d: Date, months: number): Date {
   const out = new Date(d);
-  out.setMonth(out.getMonth() + months);
+  const day = out.getUTCDate();
+  out.setUTCDate(1);
+  out.setUTCMonth(out.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(out.getUTCFullYear(), out.getUTCMonth() + 1, 0)).getUTCDate();
+  out.setUTCDate(Math.min(day, lastDay));
   return out;
 }
 

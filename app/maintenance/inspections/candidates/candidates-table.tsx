@@ -18,6 +18,14 @@ import { cn } from "@/lib/utils";
 import { StaffSelect, DEFAULT_INSPECTOR } from "@/components/StaffSelect";
 
 interface Candidate {
+  review_group: 'ready' | 'handled' | 'confirmation';
+  review_reason: string;
+  review_item_type: 'candidate' | 'completion';
+  appfolio_url: string | null;
+  evidence_date: string | null;
+  evidence_status: string | null;
+  move_in_date: string | null;
+  next_due_date: string | null;
   routine_inspections_enabled: boolean;
   id: string;
   appfolio_property_id: string | null;
@@ -40,29 +48,9 @@ interface Candidate {
   last_appfolio_sync_at: string | null;
 }
 
-interface CandidateCounts {
-  skip_recent: number;
-  defer: number;
-  eligible: number;
-  scheduled: number;
-  dismissed: number;
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  skip_recent: "Recently inspected",
-  defer: "Defer (3–6 mo)",
-  eligible: "Eligible",
-  scheduled: "Scheduled",
-  dismissed: "Dismissed",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  skip_recent: "bg-emerald-100 text-emerald-800",
-  defer: "bg-amber-100 text-amber-800",
-  eligible: "bg-blue-100 text-blue-800",
-  scheduled: "bg-violet-100 text-violet-800",
-  dismissed: "bg-charcoal-200 text-charcoal-700",
-};
+interface CandidateCounts { ready: number; handled: number; confirmation: number }
+const GROUP_LABELS: Record<string,string> = {ready:'Ready to schedule',handled:'Already handled / not due',confirmation:'Needs confirmation'};
+const GROUP_COLORS: Record<string,string> = {ready:'bg-blue-100 text-blue-800',handled:'bg-emerald-100 text-emerald-800',confirmation:'bg-amber-100 text-amber-800'};
 
 function formatDate(s: string | null): string {
   if (!s) return "—";
@@ -73,40 +61,44 @@ function formatDate(s: string | null): string {
 
 export function CandidatesView() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [counts, setCounts] = useState<CandidateCounts>({
-    skip_recent: 0,
-    defer: 0,
-    eligible: 0,
-    scheduled: 0,
-    dismissed: 0,
-  });
+  const [counts, setCounts] = useState<CandidateCounts>({ready:0,handled:0,confirmation:0});
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("eligible");
+  const [groupFilter, setGroupFilter] = useState<string>("ready");
   const [search, setSearch] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
-  const fetchCandidates = useCallback(async () => {
+  const fetchCandidates = useCallback(async (refreshEvidence = false) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (statusFilter) params.set("status", statusFilter);
+      if (groupFilter) params.set("group", groupFilter);
+      if (refreshEvidence) params.set("refresh", "1");
       if (search.trim()) params.set("search", search.trim());
       const res = await fetch(`/api/inspections/candidates?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load candidates");
       setCandidates(data.candidates || []);
-      setCounts(data.counts || counts);
+      setCounts(data.review_counts || counts);
+      setCheckedAt(data.checked_at || null);
+      setVerificationError(data.verification_error || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load candidates");
     } finally {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, search]);
+  }, [groupFilter, search]);
+
+  useEffect(() => {
+    const group = new URLSearchParams(window.location.search).get('group');
+    if (group && ['ready','handled','confirmation'].includes(group)) setGroupFilter(group);
+  }, []);
 
   useEffect(() => {
     fetchCandidates();
@@ -120,7 +112,7 @@ export function CandidatesView() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Sync failed");
       setSyncToast(
-        `Synced ${data.checked} units · ${data.skip_recent} recent · ${data.defer} defer · ${data.eligible} eligible (inserted ${data.inserted}, updated ${data.updated})`
+        `Synced ${data.checked} units. Reviewing appointments, completions, and dates before scheduling.`
       );
       await fetchCandidates();
     } catch (err) {
@@ -184,7 +176,7 @@ export function CandidatesView() {
           </Link>
           <h1 className="text-2xl font-bold text-charcoal-900">Inspection Candidates</h1>
           <p className="text-sm text-charcoal-500 mt-1">
-            Properties flagged in AppFolio with "Use Custom Inspection Date." Auto-skipped if inspected in the last 90 days.
+            Next due date is six months after the later of move-in or last confirmed inspection. Only verified work due within 21 days is ready to schedule.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -201,14 +193,14 @@ export function CandidatesView() {
           </button>
           <button
             onClick={() => setScheduleOpen(true)}
-            disabled={counts.eligible === 0}
+            disabled={loading || syncing || !!verificationError || counts.ready === 0}
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
               "bg-charcoal-900 text-white hover:bg-charcoal-800 disabled:opacity-40 disabled:cursor-not-allowed"
             )}
           >
             <CalendarPlus className="w-4 h-4" />
-            Schedule eligible ({counts.eligible})
+            Schedule ready ({counts.ready})
           </button>
         </div>
       </div>
@@ -225,49 +217,17 @@ export function CandidatesView() {
         </div>
       )}
 
-      {/* Counts */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatusTile
-          icon={<CheckCircle2 className="w-4 h-4" />}
-          label="Recent (<90d)"
-          value={counts.skip_recent}
-          color="emerald"
-          active={statusFilter === "skip_recent"}
-          onClick={() => setStatusFilter("skip_recent")}
-        />
-        <StatusTile
-          icon={<Clock className="w-4 h-4" />}
-          label="Defer (3–6 mo)"
-          value={counts.defer}
-          color="amber"
-          active={statusFilter === "defer"}
-          onClick={() => setStatusFilter("defer")}
-        />
-        <StatusTile
-          icon={<AlertTriangle className="w-4 h-4" />}
-          label="Eligible (>6 mo)"
-          value={counts.eligible}
-          color="blue"
-          active={statusFilter === "eligible"}
-          onClick={() => setStatusFilter("eligible")}
-        />
-        <StatusTile
-          icon={<CalendarPlus className="w-4 h-4" />}
-          label="Scheduled"
-          value={counts.scheduled}
-          color="violet"
-          active={statusFilter === "scheduled"}
-          onClick={() => setStatusFilter("scheduled")}
-        />
-        <StatusTile
-          icon={<XCircle className="w-4 h-4" />}
-          label="Dismissed"
-          value={counts.dismissed}
-          color="charcoal"
-          active={statusFilter === "dismissed"}
-          onClick={() => setStatusFilter("dismissed")}
-        />
+      {verificationError && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{verificationError}</div>}
+      <div className="text-sm text-charcoal-600">
+        {checkedAt ? `AppFolio history checked ${new Date(checkedAt).toLocaleString()}.` : 'Checking AppFolio unit and inspection records.'}
+        {' '}Items needing confirmation are not included in scheduling alerts or automatic routes. Correct the source record in AppFolio, then refresh this review.
       </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <StatusTile icon={<CalendarPlus className="w-4 h-4" />} label="Ready to schedule" value={counts.ready} color="blue" active={groupFilter==='ready'} onClick={()=>setGroupFilter('ready')} />
+        <StatusTile icon={<CheckCircle2 className="w-4 h-4" />} label="Already handled / not due" value={counts.handled} color="emerald" active={groupFilter==='handled'} onClick={()=>setGroupFilter('handled')} />
+        <StatusTile icon={<AlertTriangle className="w-4 h-4" />} label="Needs confirmation" value={counts.confirmation} color="amber" active={groupFilter==='confirmation'} onClick={()=>setGroupFilter('confirmation')} />
+      </div>
+      {groupFilter==='confirmation' && <p className="text-sm text-charcoal-600">This is a record-review list, not a count of missed inspections. It includes uncertain unit matches, open AppFolio records, and unmatched local completions; some items may refer to the same unit.</p>}
 
       {/* Filters */}
       <div className="flex items-center gap-3">
@@ -279,24 +239,21 @@ export function CandidatesView() {
           className="flex-1 max-w-md px-3 py-2 border border-charcoal-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-terra-500"
         />
         <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          value={groupFilter}
+          onChange={(e) => setGroupFilter(e.target.value)}
           className="px-3 py-2 border border-charcoal-300 rounded-lg text-sm bg-white"
         >
-          <option value="">All statuses</option>
-          <option value="eligible">Eligible</option>
-          <option value="defer">Defer</option>
-          <option value="skip_recent">Recently inspected</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="dismissed">Dismissed</option>
-          <option value="routine_excluded">Routine excluded</option>
+          <option value="">All groups</option>
+          <option value="ready">Ready to schedule</option>
+          <option value="handled">Already handled / not due</option>
+          <option value="confirmation">Needs confirmation</option>
         </select>
         <button
-          onClick={fetchCandidates}
+          onClick={() => fetchCandidates(true)}
           className="px-3 py-2 border border-charcoal-300 rounded-lg text-sm hover:bg-charcoal-50 flex items-center gap-2"
         >
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          Refresh
+          Refresh review
         </button>
       </div>
 
@@ -308,10 +265,10 @@ export function CandidatesView() {
               <tr className="text-left text-xs font-semibold text-charcoal-600 uppercase tracking-wide">
                 <th className="px-4 py-3">Property</th>
                 <th className="px-4 py-3">Address</th>
-                <th className="px-4 py-3">Owner</th>
+                <th className="px-4 py-3">Move-in</th>
                 <th className="px-4 py-3">Last Inspection</th>
-                <th className="px-4 py-3">Geocode</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Next due</th>
+                <th className="px-4 py-3">Review</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -341,29 +298,19 @@ export function CandidatesView() {
                       {c.city}, {c.state} {c.zip}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs">{c.owner_name || "—"}</td>
+                  <td className="px-4 py-3 text-xs">{formatDate(c.move_in_date)}</td>
                   <td className="px-4 py-3">{formatDate(c.last_inspection_date)}</td>
-                  <td className="px-4 py-3 text-xs">
-                    {c.latitude != null && c.longitude != null ? (
-                      <span className="text-emerald-700">✓</span>
-                    ) : (
-                      <span className="text-amber-700">pending</span>
-                    )}
+                  <td className="px-4 py-3 text-xs">{formatDate(c.next_due_date)}
+                    {c.review_group==='ready' && (c.latitude==null || c.longitude==null) && <div className="text-amber-700 mt-1">Geocoding needed before routing</div>}
                   </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        "inline-block px-2 py-0.5 rounded-full text-xs font-medium",
-                        STATUS_COLORS[c.candidate_status || ""] || "bg-charcoal-100 text-charcoal-700"
-                      )}
-                    >
-                      {c.routine_inspections_enabled === false ? "Routine excluded" : STATUS_LABELS[c.candidate_status || ""] || c.candidate_status || "—"}
-                    </span>
-                    {c.local_skip_reason && (
-                      <div className="text-xs text-charcoal-500 mt-1">{c.local_skip_reason}</div>
-                    )}
+                  <td className="px-4 py-3 max-w-sm">
+                    <span className={cn('inline-block px-2 py-0.5 rounded-full text-xs font-medium',GROUP_COLORS[c.review_group])}>{GROUP_LABELS[c.review_group]}</span>
+                    <div className="text-xs text-charcoal-600 mt-1">{c.review_reason}</div>
+                    {c.evidence_status && <div className="text-xs text-charcoal-500 mt-1">Record: {c.evidence_status} · {formatDate(c.evidence_date)}</div>}
                   </td>
                   <td className="px-4 py-3 text-right">
+                    {c.appfolio_url && <a href={c.appfolio_url} target="_blank" rel="noopener noreferrer" className="block mb-2 text-xs text-blue-700 hover:underline">Open AppFolio unit</a>}
+                    {c.review_item_type==='completion' ? <Link href="/maintenance/inspections" className="text-xs text-blue-700 hover:underline">Review local inspection</Link> : <>
                     <button onClick={() => handleRoutinePolicy(c.id, c.routine_inspections_enabled === false)} className="block ml-auto mb-2 text-xs text-amber-700 hover:underline">{c.routine_inspections_enabled === false ? "Enable routine inspections" : "Exclude routine inspections"}</button>
                     {c.candidate_status === "dismissed" ? (
                       <button
@@ -380,6 +327,7 @@ export function CandidatesView() {
                         Dismiss
                       </button>
                     ) : null}
+                    </>}
                   </td>
                 </tr>
               ))}
@@ -390,7 +338,7 @@ export function CandidatesView() {
 
       {scheduleOpen && (
         <ScheduleModal
-          eligibleCount={counts.eligible}
+          eligibleCount={counts.ready}
           onClose={() => setScheduleOpen(false)}
           onScheduled={async () => {
             setScheduleOpen(false);
@@ -492,9 +440,9 @@ function ScheduleModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div>
-          <h3 className="text-base font-bold text-charcoal-900">Schedule Eligible Inspections</h3>
+          <h3 className="text-base font-bold text-charcoal-900">Schedule Verified Inspections</h3>
           <p className="text-xs text-charcoal-500 mt-1">
-            Buckets {eligibleCount} eligible {eligibleCount === 1 ? "unit" : "units"} into proximity-grouped daily routes.
+            Buckets {eligibleCount} verified {eligibleCount === 1 ? "unit" : "units"} into proximity-grouped daily routes.
           </p>
         </div>
 

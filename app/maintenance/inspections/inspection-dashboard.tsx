@@ -83,6 +83,8 @@ interface DueNoticesResult {
 }
 
 interface InspectionStats {
+  review_counts?: {ready:number;handled:number;confirmation:number};
+  verification_error?: string | null;
   scheduling_alert?: { total: number; overdue: number; upcoming: number; undated: number };
   total: number;
   overdue: number;
@@ -663,6 +665,15 @@ export function InspectionDashboard() {
         </div>
       )}
 
+      {stats?.review_counts && stats.review_counts.confirmation > 0 && (
+        <div className="rounded-xl border border-charcoal-200 bg-charcoal-50 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div><p className="font-semibold text-charcoal-900">{stats.review_counts.confirmation} records need confirmation</p>
+          <p className="text-sm text-charcoal-600">These are not counted as overdue work to schedule. Review unit matches, move-in dates, and open inspection records first.</p>
+          {stats.verification_error && <p className="text-sm text-amber-800 mt-1">{stats.verification_error}</p>}</div>
+          <Link href="/maintenance/inspections/candidates?group=confirmation" className="text-sm font-medium text-blue-700 hover:underline">Review records</Link>
+        </div>
+      )}
+
       {stats?.scheduling_alert && stats.scheduling_alert.total > 0 && (
         <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex gap-3">
@@ -675,7 +686,7 @@ export function InspectionDashboard() {
                 {stats.scheduling_alert.overdue} overdue · {stats.scheduling_alert.upcoming} upcoming
                 {stats.scheduling_alert.undated > 0 && ` · ${stats.scheduling_alert.undated} need a due date reviewed`}
               </p>
-              <p className="text-xs text-charcoal-500 mt-1">Candidates exclude matched appointments and completed visits. Due dates come from recorded inspection history. Schedule routes 7–21 days ahead.</p>
+              <p className="text-xs text-charcoal-500 mt-1">Only verified candidates are included. Uncertain history is held for confirmation. Schedule routes 7–21 days ahead.</p>
             </div>
           </div>
           <Link href="/maintenance/inspections/candidates" className="shrink-0 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800">

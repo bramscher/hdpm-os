@@ -135,3 +135,12 @@ so notices go out through Realm-X, not from HDPM-OS directly.
   fixed.
 
 Scheduling and notice window: create or move routes only 7–21 calendar days ahead (Pacific time). Scheduling alerts exclude later due dates, even before the nightly sync refreshes stored eligibility. Tenant notice lists and notice cards include appointments only through day 21. Existing later appointments remain visible in route history and enter the notice window automatically.
+
+
+## Review before scheduling
+
+The Candidates page now separates **Ready to schedule**, **Already handled / not due**, and **Needs confirmation**. Only Ready candidates contribute to scheduling alerts and can be added to automatic routes. Due dates use the later of the current tenant’s move-in date or last confirmed inspection, plus six calendar months, and the 21-day scheduling window still applies.
+
+Each row shows both date anchors, the calculated due date, and its review reason. Missing current unit IDs, stale tenant records, recent open AppFolio inspection records, and unresolved local completions are held for confirmation. Open records are never treated as proof of completion. Confirmation counts are records, and multiple records can refer to the same unit.
+
+Open the AppFolio unit to check the visit and correct its status/date there. Use **Sync from AppFolio** after tenant or move-in changes, then **Refresh review** to reread inspection evidence. The app reads this evidence without changing AppFolio records. If verification is unavailable, unverified candidates remain in Needs confirmation and scheduling is blocked. Inspection evidence is cached for at most five minutes for display; route creation performs a fresh check.

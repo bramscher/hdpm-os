@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { findHouseholdSource, type HouseholdProperty } from '@/lib/inspection-route-households';
 
 export interface QueueProperty extends HouseholdProperty {
+  last_appfolio_sync_at?: string | null;
   region?: string | null;
   state?: string | null;
   owner_name?: string | null;

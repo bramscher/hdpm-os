@@ -1,3 +1,6 @@
+import { revalidateTag } from 'next/cache';
+import { INSPECTION_REVIEW_CACHE_TAG } from '@/lib/inspection-review-loader';
+export const maxDuration = 120;
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -43,6 +46,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
     const result = await runCandidateSync(supabase, { dryRun });
+    if (!dryRun) revalidateTag(INSPECTION_REVIEW_CACHE_TAG, {expire:0});
 
     let geocodeResult: { success: number; failed: number } | null = null;
     if (!dryRun && !skipGeocode && result.geocode_pending > 0) {

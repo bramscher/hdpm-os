@@ -1,4 +1,6 @@
-import { loadInspectionQueue, type QueueProperty } from '@/lib/inspection-queue';
+import { loadInspectionReview } from '@/lib/inspection-review-loader';
+import type { ReviewedCandidate } from '@/lib/inspection-review';
+export const maxDuration = 120;
 import { inspectionScheduleError } from '@/lib/inspection-window';
 import { optimizeRouteWithGoogle } from '@/lib/route-directions';
 import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
@@ -26,7 +28,7 @@ interface ScheduleRequest {
  * grouped route engine across the supplied date range, persists route_plans +
  * route_stops, and flips the candidates' candidate_status to 'scheduled'.
  *
- * Eligible = `candidate_status='eligible'` AND latitude/longitude present.
+ * Schedulable = freshly verified review_group='ready' with coordinates.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -52,13 +54,18 @@ export async function POST(request: NextRequest) {
 
     // Use the same reconciled candidates as the dashboard; legacy routes may
     // reference a separate imported property row for an already scheduled unit.
-    const { properties } = await loadInspectionQueue(supabase);
-    const candidates = properties.filter((candidate): candidate is QueueProperty & {id: string; latitude: number; longitude: number} =>
+    const review = await loadInspectionReview(supabase, {fresh:true});
+    if (review.verification_error) return NextResponse.json({error:review.verification_error}, {status:503});
+    const properties = review.candidates;
+    if (candidate_ids?.some(id => !properties.some(candidate => candidate.id === id && candidate.review_group === 'ready'))) {
+      return NextResponse.json({error:'Some selected units are not ready to schedule. Refresh the reconciliation list.'}, {status:409});
+    }
+    const candidates = properties.filter((candidate): candidate is ReviewedCandidate & {id: string; latitude: number; longitude: number} =>
       !!candidate.id && candidate.active !== false && candidate.routine_inspections_enabled !== false
-      && candidate.candidate_status === 'eligible' && candidate.latitude != null && candidate.longitude != null
+      && candidate.review_group === 'ready' && candidate.latitude != null && candidate.longitude != null
       && (!candidate_ids?.length || candidate_ids.includes(candidate.id)));
     if (!candidates || candidates.length === 0) {
-      return NextResponse.json({ routes: [], scheduled_count: 0, message: 'No eligible candidates with coordinates' });
+      return NextResponse.json({ routes: [], scheduled_count: 0, message: 'No verified ready-to-schedule candidates with coordinates' });
     }
 
     // Step 2: Create one inspections row per candidate.
