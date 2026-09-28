@@ -46,7 +46,7 @@ export function inspectionWorkflow(row: QueueInspection, today: string): QueueIn
   const workingToday = route?.route_date === today && stop?.status === 'in_progress'
     && !!stop.actual_arrival && inspectionToday(new Date(stop.actual_arrival)) === today;
   return { ...row, stored_status: row.stored_status || row.status,
-    status: workingToday ? 'in_progress' : route ? 'scheduled' : 'queued',
+    status: workingToday ? 'in_progress' : route ? (route.route_date < today ? 'needs_review' : 'scheduled') : 'queued',
     target_date: route?.route_date || null, scheduled_route_id: route?.id || null };
 }
 
@@ -60,7 +60,7 @@ export function actionableInspections(rows: QueueInspection[], properties: Queue
       : null;
     const routine = ['routine', 'biannual'].includes(row.inspection_type || '');
     const target = row.target_date;
-    const scheduled = ['scheduled', 'in_progress'].includes(row.status);
+    const scheduled = ['scheduled', 'in_progress', 'needs_review'].includes(row.status);
     // A later completed visit supersedes an old missed appointment, but never
     // hide a future appointment or an inspection currently being performed.
     if (routine && scheduled && row.status !== 'in_progress' && target && target < today && source?.last_inspection_date && source.last_inspection_date >= target) return [];
