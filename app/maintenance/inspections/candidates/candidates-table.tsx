@@ -2,7 +2,7 @@
 
 import { inspectionToday, inspectionHorizon, shiftInspectionDate } from "@/lib/inspection-window";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   RefreshCw,
@@ -59,20 +59,24 @@ function formatDate(s: string | null): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
-export function CandidatesView() {
+export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [counts, setCounts] = useState<CandidateCounts>({ready:0,handled:0,confirmation:0});
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [groupFilter, setGroupFilter] = useState<string>("ready");
+  const [groupFilter, setGroupFilter] = useState<string>(initialGroup);
+  const activeRequest = useRef<AbortController | null>(null);
   const [search, setSearch] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
   const fetchCandidates = useCallback(async (refreshEvidence = false) => {
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setLoading(true);
     setError(null);
     try {
@@ -80,28 +84,29 @@ export function CandidatesView() {
       if (groupFilter) params.set("group", groupFilter);
       if (refreshEvidence) params.set("refresh", "1");
       if (search.trim()) params.set("search", search.trim());
-      const res = await fetch(`/api/inspections/candidates?${params.toString()}`);
+      const res = await fetch(`/api/inspections/candidates?${params.toString()}`, {signal:controller.signal,cache:'no-store'});
       const data = await res.json();
+      if (controller.signal.aborted) return;
       if (!res.ok) throw new Error(data.error || "Failed to load candidates");
       setCandidates(data.candidates || []);
-      setCounts(data.review_counts || counts);
+      setCounts(data.review_counts || {ready:0,handled:0,confirmation:0});
       setCheckedAt(data.checked_at || null);
       setVerificationError(data.verification_error || null);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Failed to load candidates");
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupFilter, search]);
 
   useEffect(() => {
-    const group = new URLSearchParams(window.location.search).get('group');
-    if (group && ['ready','handled','confirmation'].includes(group)) setGroupFilter(group);
-  }, []);
+    setGroupFilter(initialGroup);
+  }, [initialGroup]);
 
   useEffect(() => {
     fetchCandidates();
+    return () => activeRequest.current?.abort();
   }, [fetchCandidates]);
 
   async function handleSync() {
@@ -287,7 +292,7 @@ export function CandidatesView() {
                   </td>
                 </tr>
               )}
-              {candidates.map((c) => (
+              {!loading && candidates.filter(c => !groupFilter || c.review_group === groupFilter).map((c) => (
                 <tr key={c.id} className="text-sm text-charcoal-800">
                   <td className="px-4 py-3 font-medium">
                     {c.name || c.appfolio_property_id || "—"}
