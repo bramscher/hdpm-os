@@ -116,3 +116,18 @@ describe('routine inspection policy',()=>{
   expect(inspectionExcluded(row('other'),[property])).toBe(false);
  });
 });
+
+describe('reused completed inspection records', () => {
+  it('shows a later pending appointment without changing its earlier completion', () => {
+    const original = row('reused', {status:'completed', completed_at:'2026-09-28T15:12:39Z', route_stops:appointment('2026-09-29')});
+    expect(actionableInspections([original], [], today)[0]).toMatchObject({status:'scheduled', stored_status:'completed', target_date:'2026-09-29'});
+    expect(original.status).toBe('completed');
+    expect(original.completed_at).toBe('2026-09-28T15:12:39Z');
+  });
+  it('does not revive same-day, past, skipped, completed, or undated completion conflicts', () => {
+    for (const [date, status] of [[today,'pending'], ['2026-09-27','pending'], ['2026-09-29','skipped'], ['2026-09-29','completed']]) {
+      expect(inspectionWorkflow(row('done',{status:'completed',completed_at:'2026-09-28T15:12:39Z',route_stops:appointment(date,status)}),today).status).toBe('completed');
+    }
+    expect(inspectionWorkflow(row('unknown',{status:'completed',route_stops:appointment('2026-09-29')}),today).status).toBe('completed');
+  });
+});
