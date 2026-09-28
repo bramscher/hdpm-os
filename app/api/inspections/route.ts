@@ -1,4 +1,4 @@
-import { actionableInspections, inspectionToday, loadInspectionQueue } from '@/lib/inspection-queue';
+import { actionableInspections, inspectionWorkflow, inspectionToday, loadInspectionQueue } from '@/lib/inspection-queue';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     const { rows, properties } = await loadInspectionQueue(supabase);
     let inspections = searchParams.get('view') === 'all'
-      ? rows
+      ? rows.map(row => inspectionWorkflow(row, inspectionToday()))
       : actionableInspections(rows, properties, inspectionToday(), searchParams.get('view') === 'outlook' ? 366 : 45);
     if (status) inspections = inspections.filter(row => row.status === status);
     if (inspectionType) inspections = inspections.filter(row => row.inspection_type === inspectionType);

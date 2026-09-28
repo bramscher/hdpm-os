@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { actionableInspections, inspectionToday, type QueueInspection, type QueueProperty } from '../inspection-queue';
+import { actionableInspections, inspectionWorkflow, inspectionToday, type QueueInspection, type QueueProperty } from '../inspection-queue';
 import { buildInspectionOutlook } from '../inspection-outlook';
 const today = '2026-09-28';
 const prop: QueueProperty = { id: 'p1', appfolio_unit_id: 'unit1', next_due_date: '2027-02-01', last_inspection_date: '2026-08-01' };
+const appointment = (date: string, status = 'pending', actual_arrival: string | null = null) => [{status, actual_arrival, route_plans:{id:'route',route_date:date,status:'optimized'}}];
 const row = (id: string, overrides: Partial<QueueInspection> = {}): QueueInspection => ({ id, property_id: id, status: 'imported', inspection_type: 'routine', due_date: '2026-10-10', target_date: null, assigned_to: null, resident_name: null, inspection_properties: null, ...overrides });
 describe('actionable inspection queue', () => {
   it('keeps overdue and next-45-day work and all appointments, excluding history and later unscheduled work', () => {
-    const rows = [row('overdue', {due_date:'2026-09-01'}), row('soon'), row('boundary',{due_date:'2026-11-12'}), row('later',{due_date:'2026-11-13'}), row('complete',{status:'completed'}), row('cancel',{status:'canceled'}), row('scheduled',{status:'scheduled',target_date:'2027-01-01'}), row('working',{status:'in_progress'}), row('undated',{due_date:null})];
+    const rows = [row('overdue', {due_date:'2026-09-01'}), row('soon'), row('boundary',{due_date:'2026-11-12'}), row('later',{due_date:'2026-11-13'}), row('complete',{status:'completed'}), row('cancel',{status:'canceled'}), row('scheduled',{status:'scheduled',target_date:'2027-01-01',route_stops:appointment('2027-01-01')}), row('working',{status:'in_progress'}), row('undated',{due_date:null})];
     expect(actionableInspections(rows, [], today).map(r=>r.id).sort()).toEqual(['boundary','overdue','scheduled','soon','undated','working']);
   });
   it('uses the current cadence to remove stale imports without mutating history', () => {
@@ -16,7 +17,7 @@ describe('actionable inspection queue', () => {
     expect(actionableInspections([stale], [prop], today,366)[0].due_date).toBe('2027-02-01');
   });
   it('keeps future appointments despite a recent completed visit, and retires past appointments superseded by that visit', () => {
-    const rows=[row('past',{status:'scheduled',target_date:'2026-07-01',inspection_properties:prop}),row('future',{status:'scheduled',target_date:'2026-10-01',inspection_properties:prop})];
+    const rows=[row('past',{status:'scheduled',target_date:'2026-07-01',route_stops:appointment('2026-07-01'),inspection_properties:prop}),row('future',{status:'scheduled',target_date:'2026-10-01',route_stops:appointment('2026-10-01'),inspection_properties:prop})];
     expect(actionableInspections(rows,[prop],today).map(r=>r.id)).toEqual(['future']);
   });
   it('honors routes attached through route_stops even when the inspection foreign key is blank', () => {
@@ -39,5 +40,31 @@ describe('12-month inspection outlook',()=>{
    expect(summary.months[0]).toMatchObject({total:1,scheduled:1,pending:0});
    expect(summary.months[1]).toMatchObject({total:1,pending:1});
    expect(summary).toMatchObject({total:4,overdue:1,undated:1});
+ });
+});
+
+describe('inspection workflow status', () => {
+ it('requires a real route, not a stored status or target date', () => {
+  for (const status of ['imported','validated','queued','scheduled','planned','dispatched','in_progress']) {
+   expect(inspectionWorkflow(row(status,{status,target_date:today}),today)).toMatchObject({status:'queued',target_date:null});
+  }
+ });
+ it('shows imported inspections on dated routes as scheduled and links the route', () => {
+  expect(inspectionWorkflow(row('i',{route_stops:appointment('2026-09-29')}),today)).toMatchObject({status:'scheduled',target_date:'2026-09-29',scheduled_route_id:'route',stored_status:'imported'});
+ });
+ it('shows in progress only for a stop actually started today on today’s route', () => {
+  expect(inspectionWorkflow(row('i',{route_stops:appointment(today,'in_progress','2026-09-28T17:00:00Z')}),today).status).toBe('in_progress');
+  expect(inspectionWorkflow(row('i',{route_stops:appointment(today)}),today).status).toBe('scheduled');
+  expect(inspectionWorkflow(row('i',{route_stops:appointment(today,'in_progress','2026-09-28T02:00:00Z')}),today).status).toBe('scheduled');
+  expect(inspectionWorkflow(row('i',{route_stops:appointment('2026-09-27','in_progress','2026-09-27T17:00:00Z')}),today).status).toBe('scheduled');
+ });
+ it('ignores skipped stops and completed or canceled routes', () => {
+  expect(inspectionWorkflow(row('i',{route_stops:appointment(today,'skipped')}),today).status).toBe('queued');
+  for(const status of ['completed','canceled']) {
+   expect(inspectionWorkflow(row('i',{route_stops:[{route_plans:{id:'r',route_date:today,status}}]}),today).status).toBe('queued');
+  }
+ });
+ it('preserves completed inspection history even if an old route still has a pending stop', () => {
+  expect(inspectionWorkflow(row('i',{status:'completed',route_stops:appointment(today)}),today).status).toBe('completed');
  });
 });
