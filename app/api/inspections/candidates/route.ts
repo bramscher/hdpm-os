@@ -1,4 +1,4 @@
-import { currentCandidateStatus, inspectionToday, inspectionHorizon } from '@/lib/inspection-window';
+import { loadInspectionQueue } from '@/lib/inspection-queue';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -21,68 +21,26 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const region = searchParams.get('region');
     const search = searchParams.get('search');
-    const today = inspectionToday();
-    const horizon = inspectionHorizon(today);
-
-    let query = supabase
-      .from('inspection_properties')
-      .select('*', { count: 'exact' })
-      // Candidate rows are the ones the sync has classified. Do NOT filter on
-      // uses_custom_inspection_date: that flag is a web-app-only form field the
-      // v0 API can't see, so the sync writes it false everywhere — filtering on
-      // it starved this page to zero rows (fixed 2026-07-23; same rule as the
-      // schedule route).
-      .not('active', 'is', false)
-      .not('candidate_status', 'is', null);
-
-    if (status === 'routine_excluded') {
-      query = query.eq('routine_inspections_enabled', false);
-    } else {
-      query = query.not('routine_inspections_enabled', 'is', false);
-    }
-
-    if (status === 'eligible') {
-      query = query.eq('candidate_status', 'eligible').or(`next_due_date.is.null,next_due_date.lte.${horizon}`);
-    } else if (status === 'defer') {
-      query = query.or(`candidate_status.eq.defer,and(candidate_status.eq.eligible,next_due_date.gt.${horizon})`);
-    } else if (status && status !== 'routine_excluded') {
-      query = query.eq('candidate_status', status);
-    }
-    if (region) {
-      query = query.eq('region', region);
-    }
-    if (search) {
-      query = query.or(
-        `address_1.ilike.%${search}%,address_2.ilike.%${search}%,city.ilike.%${search}%,name.ilike.%${search}%,owner_name.ilike.%${search}%`
-      );
-    }
-
-    query = query.order('candidate_status', { ascending: true }).order('last_inspection_date', { ascending: true, nullsFirst: true });
-
-    const { data, error, count } = await query;
-    if (error) {
-      console.error('[candidates GET] error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    // Summary counts (separate query so they aren't affected by current filters)
-    const { data: summaryRows } = await supabase
-      .from('inspection_properties')
-      .select('candidate_status,next_due_date')
-      .not('routine_inspections_enabled', 'is', false)
-      .not('active', 'is', false)
-      .not('candidate_status', 'is', null);
-
+    const { properties } = await loadInspectionQueue(supabase);
+    // Reconcile before filtering so stale stored statuses cannot hide appointments
+    // or make completed legacy imports eligible for another route.
+    const all = properties.filter(row => row.active !== false && row.candidate_status != null);
     const counts = { skip_recent: 0, defer: 0, eligible: 0, scheduled: 0, dismissed: 0 };
-    for (const row of summaryRows || []) {
-      const s = currentCandidateStatus(row.candidate_status, row.next_due_date, today) as keyof typeof counts | null;
-      if (s && s in counts) counts[s]++;
+    for (const row of all.filter(row => row.routine_inspections_enabled !== false)) {
+      const key = row.candidate_status as keyof typeof counts;
+      if (key in counts) counts[key]++;
     }
-
-    const candidates = (data || []).map(row => ({ ...row,
-      candidate_status: currentCandidateStatus(row.candidate_status, row.next_due_date, today),
-    })).filter(row => !status || status === 'routine_excluded' || row.candidate_status === status);
-    return NextResponse.json({ candidates, total: count ?? candidates.length, counts });
+    const needle = search?.toLowerCase();
+    const candidates = all.filter(row => {
+      if (status === 'routine_excluded') {
+        if (row.routine_inspections_enabled !== false) return false;
+      } else if (row.routine_inspections_enabled === false || (status && row.candidate_status !== status)) return false;
+      if (region && row.region !== region) return false;
+      return !needle || [row.address_1, row.address_2, row.city, row.name, row.owner_name]
+        .some(value => value?.toLowerCase().includes(needle));
+    }).sort((a,b) => (a.candidate_status || '').localeCompare(b.candidate_status || '')
+      || (a.last_inspection_date || '').localeCompare(b.last_inspection_date || ''));
+    return NextResponse.json({ candidates, total: candidates.length, counts });
   } catch (error) {
     console.error('[candidates GET] error:', error);
     const message = error instanceof Error ? error.message : 'Failed to fetch candidates';

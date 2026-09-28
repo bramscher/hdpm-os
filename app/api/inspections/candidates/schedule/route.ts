@@ -1,4 +1,5 @@
-import { inspectionScheduleError, inspectionHorizon } from '@/lib/inspection-window';
+import { loadInspectionQueue, type QueueProperty } from '@/lib/inspection-queue';
+import { inspectionScheduleError } from '@/lib/inspection-window';
 import { optimizeRouteWithGoogle } from '@/lib/route-directions';
 import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
 import { routeArrival } from '@/lib/route-builder/inspection-time';
@@ -49,29 +50,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Step 1: Load eligible candidates with coordinates.
-    // NB: we deliberately do NOT filter on uses_custom_inspection_date — that flag
-    // is a web-app-only field the v0 API never populates (always false), so gating
-    // on it would exclude every candidate.
-    let candQuery = supabase
-      .from('inspection_properties')
-      .select('id, address_1, address_2, city, state, zip, latitude, longitude, name, owner_name, appfolio_property_id, appfolio_unit_id, last_inspection_date, move_in_date, next_due_date, resident_name, tenant_email, candidate_status')
-      .not('routine_inspections_enabled', 'is', false)
-      .not('active', 'is', false)
-      .eq('candidate_status', 'eligible')
-      .or(`next_due_date.is.null,next_due_date.lte.${inspectionHorizon()}`)
-      .not('latitude', 'is', null)
-      .not('longitude', 'is', null);
-
-    if (candidate_ids && candidate_ids.length > 0) {
-      candQuery = candQuery.in('id', candidate_ids);
-    }
-
-    const { data: candidates, error: candErr } = await candQuery;
-    if (candErr) {
-      console.error('[candidates/schedule] load error:', candErr);
-      return NextResponse.json({ error: candErr.message }, { status: 500 });
-    }
+    // Use the same reconciled candidates as the dashboard; legacy routes may
+    // reference a separate imported property row for an already scheduled unit.
+    const { properties } = await loadInspectionQueue(supabase);
+    const candidates = properties.filter((candidate): candidate is QueueProperty & {id: string; latitude: number; longitude: number} =>
+      !!candidate.id && candidate.active !== false && candidate.routine_inspections_enabled !== false
+      && candidate.candidate_status === 'eligible' && candidate.latitude != null && candidate.longitude != null
+      && (!candidate_ids?.length || candidate_ids.includes(candidate.id)));
     if (!candidates || candidates.length === 0) {
       return NextResponse.json({ routes: [], scheduled_count: 0, message: 'No eligible candidates with coordinates' });
     }
@@ -173,8 +158,8 @@ export async function POST(request: NextRequest) {
         inspection_id: insp.id,
         property_id: insp.property_id,
         address: `${c.address_1}, ${c.city}, ${c.state} ${c.zip}`,
-        unit_name: c.address_2,
-        city: c.city,
+        unit_name: c.address_2 ?? null,
+        city: c.city || 'Unknown',
         lat: c.latitude as number,
         lng: c.longitude as number,
         due_date: insp.due_date,

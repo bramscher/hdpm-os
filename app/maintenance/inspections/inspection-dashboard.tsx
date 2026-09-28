@@ -675,7 +675,7 @@ export function InspectionDashboard() {
                 {stats.scheduling_alert.overdue} overdue · {stats.scheduling_alert.upcoming} upcoming
                 {stats.scheduling_alert.undated > 0 && ` · ${stats.scheduling_alert.undated} need a due date reviewed`}
               </p>
-              <p className="text-xs text-charcoal-500 mt-1">AppFolio candidates refresh nightly. Review eligible units and schedule routes 7–21 days ahead.</p>
+              <p className="text-xs text-charcoal-500 mt-1">Candidates exclude matched appointments and completed visits. Due dates come from recorded inspection history. Schedule routes 7–21 days ahead.</p>
             </div>
           </div>
           <Link href="/maintenance/inspections/candidates" className="shrink-0 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800">
@@ -697,9 +697,10 @@ export function InspectionDashboard() {
           <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">
               <AlertTriangle className="w-4 h-4 text-red-500" />
-              <span className="text-xs font-medium text-charcoal-500">Overdue</span>
+              <span className="text-xs font-medium text-charcoal-500">Overdue to Schedule</span>
             </div>
             <p className="text-2xl font-bold text-red-600">{stats.overdue}</p>
+            <Link href="/maintenance/inspections/candidates" className="text-xs text-red-700 hover:underline">Review unscheduled candidates</Link>
           </div>
           <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">

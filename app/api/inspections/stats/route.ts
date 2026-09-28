@@ -30,10 +30,12 @@ export async function GET() {
     if (routeResult.error) throw new Error(routeResult.error.message);
     const week = inspectionWeek(routeResult.data || [], monday, nextMonday);
     const active = actionableInspections(rows, properties, today);
+    const schedulingAlert = inspectionSchedulingAlert(properties, today);
     return NextResponse.json({
-      scheduling_alert: inspectionSchedulingAlert(properties, today),
+      scheduling_alert: schedulingAlert,
       total: active.length,
-      overdue: active.filter(row => (row.target_date || row.due_date || today) < today).length,
+      overdue: schedulingAlert.overdue,
+      appointments_needing_review: active.filter(row => row.status === 'needs_review').length,
       this_week: week.planned,
       week,
       completed: rows.filter(row => row.status === 'completed' && row.completed_at && inspectionToday(new Date(row.completed_at)) >= monday && inspectionToday(new Date(row.completed_at)) < nextMonday).length,

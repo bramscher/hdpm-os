@@ -1,9 +1,17 @@
+import { classifyCandidate, computeInspectionDueDate } from './inspection-candidates';
+import { currentCandidateStatus } from './inspection-window';
 import { inspectionToday, shiftInspectionDate, INSPECTION_HORIZON_DAYS } from './inspection-window';
 export { inspectionToday, shiftInspectionDate } from './inspection-window';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { findHouseholdSource, type HouseholdProperty } from '@/lib/inspection-route-households';
 
 export interface QueueProperty extends HouseholdProperty {
+  region?: string | null;
+  state?: string | null;
+  owner_name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  tenant_email?: string | null;
   active?: boolean | null;
   routine_inspections_enabled?: boolean | null;
   last_inspection_date?: string | null;
@@ -63,6 +71,45 @@ export function inspectionWorkflow(row: QueueInspection, today: string): QueueIn
     target_date: route?.route_date || null, scheduled_route_id: route?.id || null };
 }
 
+/** Match legacy imports to synced units without changing historical records. */
+export function reconcileInspectionProperties(rows: QueueInspection[], properties: QueueProperty[], today: string): QueueProperty[] {
+  const byProperty = new Map<string, QueueInspection[]>();
+  for (const row of rows) {
+    if (!['routine', 'biannual'].includes(row.inspection_type || '')) continue;
+    const direct = properties.find(property => property.id === row.property_id);
+    const source = direct || (row.inspection_properties
+      ? findHouseholdSource(row.inspection_properties, properties, row.resident_name) : null);
+    if (!source?.id) continue;
+    byProperty.set(source.id, [...(byProperty.get(source.id) || []), row]);
+  }
+  return properties.map(property => {
+    const matched = property.id ? byProperty.get(property.id) || [] : [];
+    const completed = matched.filter(row => row.status === 'completed' && row.completed_at)
+      .map(row => inspectionToday(new Date(row.completed_at!))).filter(date => date <= today).sort().at(-1);
+    const newerCompletion = completed && (!property.last_inspection_date || completed > property.last_inspection_date);
+    const lastInspection = newerCompletion ? completed : property.last_inspection_date;
+    const due = newerCompletion
+      ? computeInspectionDueDate(property.move_in_date || null, lastInspection || null)
+      : property.next_due_date;
+    let status = currentCandidateStatus(property.candidate_status || null, due || null, today);
+    if (property.candidate_status !== 'dismissed' && property.active !== false && property.routine_inspections_enabled !== false) {
+      if (newerCompletion) {
+        status = classifyCandidate({moveInDate: property.move_in_date || null,
+          lastInspectedDate: lastInspection || null, hasActiveTenant: property.local_skip_reason !== 'Vacant — no active tenant',
+          today: new Date(`${today}T12:00:00Z`)});
+      }
+      const hasAppointment = matched.some(row => {
+        const workflow = inspectionWorkflow(row, today);
+        if (!['scheduled', 'in_progress', 'needs_review'].includes(workflow.status)) return false;
+        // A completion after a missed visit closes that old appointment.
+        return !lastInspection || !workflow.target_date || workflow.target_date >= today || workflow.target_date > lastInspection;
+      });
+      if (hasAppointment) status = 'scheduled';
+    }
+    return {...property, last_inspection_date: lastInspection, next_due_date: due, candidate_status: status};
+  });
+}
+
 /** A read-only operational view: historical records remain available unchanged. */
 export function actionableInspections(rows: QueueInspection[], properties: QueueProperty[], today: string, horizonDays = INSPECTION_HORIZON_DAYS): QueueInspection[] {
   const horizon = shiftInspectionDate(today, horizonDays);
@@ -116,12 +163,12 @@ export async function loadInspectionQueue(supabase: SupabaseClient): Promise<{ r
     (async () => {
       const all: QueueProperty[] = [];
       for (let from = 0; ; from += 1000) {
-        const { data, error } = await supabase.from('inspection_properties').select('id,active,routine_inspections_enabled,name,address_1,address_2,city,zip,appfolio_unit_id,resident_name,financially_responsible_occupants,last_inspection_date,next_due_date,candidate_status,local_skip_reason,move_in_date').not('appfolio_unit_id', 'is', null).order('id').range(from, from + 999);
+        const { data, error } = await supabase.from('inspection_properties').select('*').not('appfolio_unit_id', 'is', null).order('id').range(from, from + 999);
         if (error) throw new Error(error.message);
         all.push(...(data || []));
         if ((data || []).length < 1000) return all;
       }
     })(),
   ]);
-  return { rows, properties };
+  return { rows, properties: reconcileInspectionProperties(rows, properties, inspectionToday()) };
 }
