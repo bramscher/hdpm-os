@@ -20,7 +20,9 @@ export interface QueueInspection {
   completed_at?: string | null;
   route_plan_id?: string | null;
   inspection_properties: QueueProperty | null;
-  route_stops?: { route_plans: { id?: string; route_date: string; status: string } | null }[];
+  stored_status?: string;
+  scheduled_route_id?: string | null;
+  route_stops?: { status?: string; actual_arrival?: string | null; route_plans: { id?: string; route_date: string; status: string } | null }[];
 }
 
 export function inspectionToday(now = new Date()): string {
@@ -32,19 +34,33 @@ export function shiftInspectionDate(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+/** Status is derived from the appointment and actual work, never an import label. */
+export function inspectionWorkflow(row: QueueInspection, today: string): QueueInspection {
+  if (['completed', 'canceled', 'cancelled', 'skipped'].includes(row.status)) return row;
+  const stops = (row.route_stops || []).filter(stop => stop.route_plans?.route_date
+    && !['completed', 'canceled', 'cancelled'].includes(stop.route_plans.status)
+    && !['completed', 'skipped'].includes(stop.status || ''));
+  const stop = stops.find(s => s.route_plans!.id === row.route_plan_id)
+    || stops.sort((a, b) => b.route_plans!.route_date.localeCompare(a.route_plans!.route_date))[0];
+  const route = stop?.route_plans;
+  const workingToday = route?.route_date === today && stop?.status === 'in_progress'
+    && !!stop.actual_arrival && inspectionToday(new Date(stop.actual_arrival)) === today;
+  return { ...row, stored_status: row.stored_status || row.status,
+    status: workingToday ? 'in_progress' : route ? 'scheduled' : 'queued',
+    target_date: route?.route_date || null, scheduled_route_id: route?.id || null };
+}
+
 /** A read-only operational view: historical records remain available unchanged. */
 export function actionableInspections(rows: QueueInspection[], properties: QueueProperty[], today: string, horizonDays = 45): QueueInspection[] {
   const horizon = shiftInspectionDate(today, horizonDays);
-  const prepared = rows.flatMap(row => {
+  const prepared = rows.map(row => inspectionWorkflow(row, today)).flatMap(row => {
     if (['completed', 'canceled', 'cancelled', 'skipped'].includes(row.status)) return [];
     const source = row.inspection_properties
       ? findHouseholdSource(row.inspection_properties, properties, row.resident_name) as QueueProperty | null
       : null;
     const routine = ['routine', 'biannual'].includes(row.inspection_type || '');
-    const routes = (row.route_stops || []).map(s => s.route_plans).filter(r => r && !['completed', 'canceled', 'cancelled'].includes(r.status));
-    const linkedRoute = routes.find(r => r!.id === row.route_plan_id);
-    const target = linkedRoute?.route_date || routes.map(r => r!.route_date).sort().at(-1) || row.target_date || null;
-    const scheduled = ['scheduled', 'planned', 'dispatched', 'in_progress'].includes(row.status) || routes.length > 0;
+    const target = row.target_date;
+    const scheduled = ['scheduled', 'in_progress'].includes(row.status);
     // A later completed visit supersedes an old missed appointment, but never
     // hide a future appointment or an inspection currently being performed.
     if (routine && scheduled && row.status !== 'in_progress' && target && target < today && source?.last_inspection_date && source.last_inspection_date >= target) return [];
@@ -77,7 +93,7 @@ export async function loadInspectionQueue(supabase: SupabaseClient): Promise<{ r
     (async () => {
       const all: QueueInspection[] = [];
       for (let from = 0; ; from += 1000) {
-        const { data, error } = await supabase.from('inspections').select('*,inspection_properties(*),route_stops(route_plans(id,route_date,status))').order('id').range(from, from + 999);
+        const { data, error } = await supabase.from('inspections').select('*,inspection_properties(*),route_stops(status,actual_arrival,route_plans(id,route_date,status))').order('id').range(from, from + 999);
         if (error) throw new Error(error.message);
         all.push(...(data || []));
         if ((data || []).length < 1000) return all;

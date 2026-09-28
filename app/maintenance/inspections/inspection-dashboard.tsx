@@ -49,6 +49,7 @@ interface Inspection {
   inspection_type: string | null;
   due_date: string | null;
   target_date: string | null;
+  scheduled_route_id?: string | null;
   move_in_date: string | null;
   priority: string | null;
   assigned_to: string | null;
@@ -102,11 +103,8 @@ type InspectionStatus =
 
 const STATUS_OPTIONS: { value: InspectionStatus | ""; label: string }[] = [
   { value: "", label: "All Statuses" },
-  { value: "imported", label: "Imported" },
-  { value: "validated", label: "Validated" },
-  { value: "queued", label: "Queued" },
+  { value: "queued", label: "Needs scheduling" },
   { value: "scheduled", label: "Scheduled" },
-  { value: "dispatched", label: "Dispatched" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
   { value: "canceled", label: "Canceled" },
@@ -169,6 +167,7 @@ function formatDate(dateStr: string | null): string {
 }
 
 function formatStatus(status: string): string {
+  if (status === "queued") return "Needs scheduling";
   return status
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -438,27 +437,7 @@ export function InspectionDashboard() {
     // Navigate to Route Builder with selected IDs pre-loaded
     const ids = Array.from(selected).join(",");
     router.push(`/maintenance/inspections/routes?ids=${ids}`);
-    return;
-    // Old code kept for reference - used to just change status
-    setBulkActioning(true);
-    try {
-      const res = await fetch("/api/inspections", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ids: Array.from(selected),
-          updates: { status: "scheduled" },
-        }),
-      });
-      if (!res.ok) throw new Error("Add to route failed");
-      await fetchInspections();
-      await fetchStats();
-      setSelected(new Set());
-    } catch (err) {
-      console.error("Add to route error:", err);
-    } finally {
-      setBulkActioning(false);
-    }
+
   };
 
   // ── Select helpers ──
@@ -756,6 +735,8 @@ export function InspectionDashboard() {
         </div>
       </div>
 
+      <p className="text-xs text-charcoal-500">Scheduled means a dated route is assigned. In progress means the inspection was started today on today’s route.</p>
+
       {/* ── Bulk Action Bar ── */}
       {selected.size > 0 && (
         <div className="bg-charcoal-900 text-white rounded-lg px-4 py-3 flex items-center justify-between">
@@ -792,7 +773,7 @@ export function InspectionDashboard() {
                 className="appearance-none bg-white/10 border border-white/20 rounded-md px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-white/40"
               >
                 <option value="">Change Status...</option>
-                {STATUS_OPTIONS.filter((o) => o.value).map((opt) => (
+                {STATUS_OPTIONS.filter((o) => ["completed", "canceled"].includes(o.value)).map((opt) => (
                   <option key={opt.value} value={opt.value} className="text-charcoal-900">
                     {opt.label}
                   </option>
@@ -954,7 +935,7 @@ export function InspectionDashboard() {
                     </td>
                     <td className="px-3 py-3">
                       <span className="text-xs whitespace-nowrap text-charcoal-600">
-                        {insp.target_date ? formatDate(insp.target_date) : "Not scheduled"}
+                        {insp.scheduled_route_id ? <Link href={`/maintenance/inspections/routes/${insp.scheduled_route_id}`} className="text-blue-600 hover:underline">{formatDate(insp.target_date)} · View route</Link> : insp.target_date ? formatDate(insp.target_date) : "Not scheduled"}
                       </span>
                     </td>
                     <td className="px-3 py-3">
