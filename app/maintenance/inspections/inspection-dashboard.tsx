@@ -42,6 +42,7 @@ const APPFOLIO_INSPECTION_LETTER_URL = `${APPFOLIO_WEB_BASE}/letter_writing/tena
 interface Inspection {
   id: string;
   property_id: string;
+  routine_inspections_enabled?: boolean;
   property_name: string | null;
   address_1: string | null;
   unit_name: string | null;
@@ -435,6 +436,18 @@ export function InspectionDashboard() {
     }
   };
 
+  const handleRoutinePolicy = async (enabled: boolean) => {
+    setBulkActioning(true);
+    try {
+      const property_ids = [...new Set(inspections.filter(i => selected.has(i.id)).map(i => i.property_id))];
+      const res = await fetch('/api/inspections/routine-policy', {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({property_ids,enabled})});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update routine inspection policy');
+      await fetchInspections(); await fetchStats();
+    } catch (err) { alert(err instanceof Error ? err.message : 'Failed to update routine inspection policy'); }
+    finally { setBulkActioning(false); }
+  };
+
   // ── Build route from selected inspections ──
   const handleAddToRoute = async () => {
     // Navigate to Route Builder with selected IDs pre-loaded
@@ -793,6 +806,8 @@ export function InspectionDashboard() {
 
             <div className="w-px h-5 bg-white/20" />
 
+            <button onClick={() => handleRoutinePolicy(false)} disabled={bulkActioning} className="px-3 py-1.5 rounded-md text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40">Exclude routine</button>
+            {activeTab === "all" && <button onClick={() => handleRoutinePolicy(true)} disabled={bulkActioning} className="px-3 py-1.5 rounded-md text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40">Enable routine</button>}
             <button
               onClick={handleAddToRoute}
               disabled={bulkActioning}
@@ -908,6 +923,7 @@ export function InspectionDashboard() {
                       <div className="font-medium text-charcoal-900 truncate max-w-[200px]">
                         {insp.property_name || insp.address_1 || "\u2014"}
                       </div>
+                      {insp.routine_inspections_enabled === false && <div className="text-xs text-amber-700">Routine inspections excluded</div>}
                       {insp.address_1 && insp.property_name && (
                         <div className="text-xs text-charcoal-400 truncate max-w-[200px]">
                           {insp.address_1}

@@ -1,4 +1,4 @@
-import { actionableInspections, inspectionWorkflow, inspectionToday, loadInspectionQueue } from '@/lib/inspection-queue';
+import { actionableInspections, routineInspectionsEnabled, inspectionWorkflow, inspectionToday, loadInspectionQueue } from '@/lib/inspection-queue';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     let inspections = searchParams.get('view') === 'all'
       ? rows.map(row => inspectionWorkflow(row, inspectionToday()))
       : actionableInspections(rows, properties, inspectionToday(), searchParams.get('view') === 'outlook' ? 366 : 45);
+    inspections = inspections.map(row => ({...row, routine_inspections_enabled: routineInspectionsEnabled(row, properties)}));
     if (status) inspections = inspections.filter(row => row.status === status);
     if (inspectionType) inspections = inspections.filter(row => row.inspection_type === inspectionType);
     if (assignedTo) inspections = inspections.filter(row => row.assigned_to === assignedTo);

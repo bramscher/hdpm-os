@@ -165,6 +165,7 @@ function deriveRegion(city: string | null): string | null {
 // ============================================
 
 export interface JoinedCandidateRecord extends InspectionHousehold {
+  active: boolean;
   appfolioPropertyId: string;
   appfolioUnitId: string;
   propertyName: string | null;
@@ -210,7 +211,7 @@ export function joinPropertiesUnitsTenants(
     if (!u.propertyId) continue;
     const prop = propsById.get(u.propertyId);
     if (!prop) continue;
-    if (prop.hidden) continue;
+    const active = !prop.hidden && !u.hidden;
     // Unit dates have been reconciled with completed Inspection Detail records.
     // We intentionally do NOT gate on "Use Custom Inspection Date":
     // that flag is `unit[use_last_inspection_on]`, a web-app form field the v0
@@ -248,6 +249,7 @@ export function joinPropertiesUnitsTenants(
 
     records.push({
       ...collectInspectionHousehold(tenantsForUnit),
+      active,
       appfolioPropertyId: prop.appfolioPropertyId,
       appfolioUnitId: u.id,
       propertyName: prop.name,
@@ -266,7 +268,7 @@ export function joinPropertiesUnitsTenants(
       residentName,
       tenantEmail,
       hasActiveTenant: tenantsForUnit.length > 0,
-      classification: classifyCandidate({
+      classification: !active ? 'defer' : classifyCandidate({
         moveInDate,
         lastInspectedDate: u.lastInspectedDate,
         hasActiveTenant: tenantsForUnit.length > 0,
@@ -293,7 +295,11 @@ export interface CandidateSyncCounts {
   unknown_custom_field_names: string[];
 }
 
+const APPFOLIO_INACTIVE_REASON = 'Inactive in AppFolio (hidden property or unit)';
+
 interface InspectionPropertyRow {
+  active?: boolean | null;
+  local_skip_reason?: string | null;
   id: string;
   address_1: string;
   address_2: string | null;
@@ -320,7 +326,7 @@ export async function persistCandidates(
   for (let from = 0; ; from += 1000) {
     const { data, error: loadErr } = await supabase
       .from('inspection_properties')
-      .select('id, address_1, address_2, city, zip, appfolio_unit_id, candidate_status, last_inspection_date')
+      .select('id, active, local_skip_reason, address_1, address_2, city, zip, appfolio_unit_id, candidate_status, last_inspection_date')
       .order('id')
       .range(from, from + 999);
     if (loadErr) {
@@ -371,12 +377,15 @@ export async function persistCandidates(
     // Preserve terminal statuses: 'scheduled' while a route is in flight
     // (completion flips it back via completeInspectionCascade), 'dismissed'
     // until manually restored — a sync must not resurrect dismissed units.
-    const nextStatus =
+    // Respect local inactive decisions; only undo an inactivity flag set by this sync.
+    const active = c.active && (match?.active !== false || match.local_skip_reason === APPFOLIO_INACTIVE_REASON);
+    const nextStatus = !active ? 'defer' :
       match?.candidate_status === 'scheduled' || match?.candidate_status === 'dismissed'
         ? match.candidate_status
         : effectiveClassification;
 
     const baseFields = {
+      active,
       appfolio_property_id: c.appfolioPropertyId,
       appfolio_unit_id: c.appfolioUnitId,
       name: c.propertyName,
@@ -399,6 +408,7 @@ export async function persistCandidates(
       tenant_email: c.tenantEmail,
       candidate_status: nextStatus,
       local_skip_reason:
+        !active ? (!c.active ? APPFOLIO_INACTIVE_REASON : match?.local_skip_reason || 'Inactive property') :
         effectiveClassification === 'skip_recent'
           ? `Inspected within ${SKIP_RECENT_DAYS} days (${effectiveInspected})`
           : !c.hasActiveTenant
@@ -425,7 +435,6 @@ export async function persistCandidates(
         .insert({
           ...baseFields,
           geocode_status: 'pending',
-          active: true,
         });
       if (insErr) {
         console.error('[candidates] insert failed:', insErr.message, c.appfolioUnitId);
@@ -464,7 +473,7 @@ export async function runCandidateSync(
 
   const [properties, units, tenants, inspectionHistory] = await Promise.all([
     fetchAppFolioPropertiesWithCustomFields(),
-    fetchAppFolioUnits(),
+    fetchAppFolioUnits({ includeHidden: true }),
     fetchAppFolioTenants(),
     // Fail the sync if history cannot be read rather than misclassifying units
     // using stale unit-level dates. runReport follows every report page.

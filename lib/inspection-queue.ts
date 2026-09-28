@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { findHouseholdSource, type HouseholdProperty } from '@/lib/inspection-route-households';
 
 export interface QueueProperty extends HouseholdProperty {
+  active?: boolean | null;
+  routine_inspections_enabled?: boolean | null;
   last_inspection_date?: string | null;
   next_due_date?: string | null;
   candidate_status?: string | null;
@@ -34,6 +36,17 @@ export function shiftInspectionDate(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+export function routineInspectionsEnabled(row: QueueInspection, properties: QueueProperty[]): boolean {
+  const source = row.inspection_properties ? findHouseholdSource(row.inspection_properties, properties, row.resident_name) as QueueProperty | null : null;
+  return row.inspection_properties?.routine_inspections_enabled !== false && source?.routine_inspections_enabled !== false;
+}
+
+export function inspectionExcluded(row: QueueInspection, properties: QueueProperty[]): boolean {
+  const source = row.inspection_properties ? findHouseholdSource(row.inspection_properties, properties, row.resident_name) as QueueProperty | null : null;
+  return row.inspection_properties?.active === false || source?.active === false ||
+    (['routine', 'biannual'].includes(row.inspection_type || '') && !routineInspectionsEnabled(row, properties));
+}
+
 /** Status is derived from the appointment and actual work, never an import label. */
 export function inspectionWorkflow(row: QueueInspection, today: string): QueueInspection {
   if (['completed', 'canceled', 'cancelled', 'skipped'].includes(row.status)) return row;
@@ -58,6 +71,7 @@ export function actionableInspections(rows: QueueInspection[], properties: Queue
     const source = row.inspection_properties
       ? findHouseholdSource(row.inspection_properties, properties, row.resident_name) as QueueProperty | null
       : null;
+    if (inspectionExcluded(row, properties)) return [];
     const routine = ['routine', 'biannual'].includes(row.inspection_type || '');
     const target = row.target_date;
     const scheduled = ['scheduled', 'in_progress', 'needs_review'].includes(row.status);
@@ -102,7 +116,7 @@ export async function loadInspectionQueue(supabase: SupabaseClient): Promise<{ r
     (async () => {
       const all: QueueProperty[] = [];
       for (let from = 0; ; from += 1000) {
-        const { data, error } = await supabase.from('inspection_properties').select('id,name,address_1,address_2,city,zip,appfolio_unit_id,resident_name,financially_responsible_occupants,last_inspection_date,next_due_date,candidate_status,local_skip_reason,move_in_date').not('appfolio_unit_id', 'is', null).order('id').range(from, from + 999);
+        const { data, error } = await supabase.from('inspection_properties').select('id,active,routine_inspections_enabled,name,address_1,address_2,city,zip,appfolio_unit_id,resident_name,financially_responsible_occupants,last_inspection_date,next_due_date,candidate_status,local_skip_reason,move_in_date').not('appfolio_unit_id', 'is', null).order('id').range(from, from + 999);
         if (error) throw new Error(error.message);
         all.push(...(data || []));
         if ((data || []).length < 1000) return all;

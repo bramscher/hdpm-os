@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { StaffSelect, DEFAULT_INSPECTOR } from "@/components/StaffSelect";
 
 interface Candidate {
+  routine_inspections_enabled: boolean;
   id: string;
   appfolio_property_id: string | null;
   appfolio_unit_id: string | null;
@@ -125,6 +126,15 @@ export function CandidatesView() {
     } finally {
       setSyncing(false);
     }
+  }
+
+  async function handleRoutinePolicy(id: string, enabled: boolean) {
+    try {
+      const res = await fetch('/api/inspections/routine-policy', {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({property_ids:[id],enabled})});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update routine policy');
+      await fetchCandidates();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Failed to update routine policy'); }
   }
 
   async function handleDismiss(id: string) {
@@ -277,6 +287,7 @@ export function CandidatesView() {
           <option value="skip_recent">Recently inspected</option>
           <option value="scheduled">Scheduled</option>
           <option value="dismissed">Dismissed</option>
+          <option value="routine_excluded">Routine excluded</option>
         </select>
         <button
           onClick={fetchCandidates}
@@ -344,13 +355,14 @@ export function CandidatesView() {
                         STATUS_COLORS[c.candidate_status || ""] || "bg-charcoal-100 text-charcoal-700"
                       )}
                     >
-                      {STATUS_LABELS[c.candidate_status || ""] || c.candidate_status || "—"}
+                      {c.routine_inspections_enabled === false ? "Routine excluded" : STATUS_LABELS[c.candidate_status || ""] || c.candidate_status || "—"}
                     </span>
                     {c.local_skip_reason && (
                       <div className="text-xs text-charcoal-500 mt-1">{c.local_skip_reason}</div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
+                    <button onClick={() => handleRoutinePolicy(c.id, c.routine_inspections_enabled === false)} className="block ml-auto mb-2 text-xs text-amber-700 hover:underline">{c.routine_inspections_enabled === false ? "Enable routine inspections" : "Exclude routine inspections"}</button>
                     {c.candidate_status === "dismissed" ? (
                       <button
                         onClick={() => handleRestore(c.id)}

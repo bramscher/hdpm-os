@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionableInspections, inspectionWorkflow, inspectionToday, type QueueInspection, type QueueProperty } from '../inspection-queue';
+import { actionableInspections, inspectionWorkflow, inspectionExcluded, inspectionToday, type QueueInspection, type QueueProperty } from '../inspection-queue';
 import { buildInspectionOutlook } from '../inspection-outlook';
 const today = '2026-09-28';
 const prop: QueueProperty = { id: 'p1', appfolio_unit_id: 'unit1', next_due_date: '2027-02-01', last_inspection_date: '2026-08-01' };
@@ -79,5 +79,40 @@ describe('past route appointments', () => {
   const outlook=buildInspectionOutlook(result,today);
   expect(outlook.overdue).toBe(1);
   expect(outlook.months[0].scheduled).toBe(2);
+ });
+});
+
+describe('inactive inspection properties',()=>{
+ it('excludes inactive properties even when scheduled, without changing their history',()=>{
+  const inactive={...prop,active:false};
+  const item=row('inactive',{inspection_properties:inactive,route_stops:appointment('2026-09-29')});
+  expect(actionableInspections([item],[inactive],today)).toEqual([]);
+  expect(item.status).toBe('imported');
+ });
+ it('excludes a legacy import uniquely matched to an inactive synced unit',()=>{
+  const source={...prop,active:false,address_1:'1 Test St',city:'Bend',zip:'97701'};
+  const legacy={id:'legacy',address_1:'1 Test Street',city:'Bend',zip:'97701'};
+  expect(actionableInspections([row('old',{inspection_properties:legacy,route_stops:appointment('2026-09-29')})],[source],today)).toEqual([]);
+ });
+ it('does not treat a missing AppFolio match as proof that management ended',()=>{
+  expect(actionableInspections([row('unknown')],[],today)).toHaveLength(1);
+ });
+});
+
+describe('routine inspection policy',()=>{
+ it('excludes routine and biannual work while allowing other inspection types',()=>{
+  const property={...prop,routine_inspections_enabled:false};
+  for(const type of ['routine','biannual']) {
+   const item=row(type,{inspection_type:type,inspection_properties:property,route_stops:appointment('2026-09-29')});
+   expect(inspectionExcluded(item,[property])).toBe(true);
+   expect(actionableInspections([item],[property],today)).toEqual([]);
+  }
+  expect(inspectionExcluded(row('moveout',{inspection_type:'move_out',inspection_properties:property}),[property])).toBe(false);
+ });
+ it('applies the policy to a uniquely matched legacy unit',()=>{
+  const property={...prop,routine_inspections_enabled:false,address_1:'1 Test St',city:'Bend',zip:'97701'};
+  const legacy={id:'legacy',address_1:'1 Test Street',city:'Bend',zip:'97701'};
+  expect(inspectionExcluded(row('old',{inspection_properties:legacy}),[property])).toBe(true);
+  expect(inspectionExcluded(row('other'),[property])).toBe(false);
  });
 });

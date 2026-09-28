@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
     let candQuery = supabase
       .from('inspection_properties')
       .select('id, address_1, address_2, city, state, zip, latitude, longitude, name, owner_name, appfolio_property_id, appfolio_unit_id, last_inspection_date, move_in_date, next_due_date, resident_name, tenant_email, candidate_status')
+      .not('routine_inspections_enabled', 'is', false)
+      .not('active', 'is', false)
       .eq('candidate_status', 'eligible')
       .not('latitude', 'is', null)
       .not('longitude', 'is', null);
