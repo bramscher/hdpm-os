@@ -1,5 +1,7 @@
 "use client";
 
+import { buildInspectionOutlook } from "@/lib/inspection-outlook";
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -91,6 +93,8 @@ type InspectionStatus =
   | "imported"
   | "validated"
   | "queued"
+  | "scheduled"
+  | "canceled"
   | "planned"
   | "dispatched"
   | "in_progress"
@@ -101,10 +105,11 @@ const STATUS_OPTIONS: { value: InspectionStatus | ""; label: string }[] = [
   { value: "imported", label: "Imported" },
   { value: "validated", label: "Validated" },
   { value: "queued", label: "Queued" },
-  { value: "planned", label: "Planned" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "dispatched", label: "Dispatched" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
+  { value: "canceled", label: "Canceled" },
 ];
 
 const CITY_OPTIONS = [
@@ -128,6 +133,7 @@ const STATUS_BADGE: Record<string, string> = {
   imported: "bg-charcoal-100 text-charcoal-700",
   validated: "bg-blue-100 text-blue-700",
   queued: "bg-amber-100 text-amber-700",
+  scheduled: "bg-indigo-100 text-indigo-700",
   planned: "bg-indigo-100 text-indigo-700",
   dispatched: "bg-purple-100 text-purple-700",
   in_progress: "bg-emerald-100 text-emerald-700",
@@ -147,8 +153,9 @@ const PRIORITY_BADGE: Record<string, string> = {
 
 function dueDateClass(due: string | null): string {
   if (!due) return "text-charcoal-400";
-  const now = new Date();
-  const d = new Date(due);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const now = new Date(`${today}T12:00:00Z`);
+  const d = new Date(`${due.slice(0, 10)}T12:00:00Z`);
   const diffDays = Math.floor((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return "text-red-600 font-medium";
   if (diffDays <= 7) return "text-amber-600 font-medium";
@@ -157,8 +164,8 @@ function dueDateClass(due: string | null): string {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "\u2014";
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const d = new Date(`${dateStr.slice(0, 10)}T12:00:00Z`);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
 function formatStatus(status: string): string {
@@ -182,7 +189,7 @@ export function InspectionDashboard() {
   const [sendingNotices, setSendingNotices] = useState(false);
   const [noticeModal, setNoticeModal] = useState<DueNoticesResult | null>(null);
   const [markingSent, setMarkingSent] = useState(false);
-  const [activeTab, setActiveTab] = useState<"queue" | "summary">("queue");
+  const [activeTab, setActiveTab] = useState<"queue" | "summary" | "all">("queue");
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkFilter, setBulkFilter] = useState({ fromStatus: "", beforeDate: "", toStatus: "" });
   const [bulkUpdating, setBulkUpdating] = useState(false);
@@ -213,13 +220,16 @@ export function InspectionDashboard() {
   // ── Fetch inspections ──
   const fetchInspections = useCallback(async () => {
     try {
+      setLoading(true);
+      setSelected(new Set());
       const params = new URLSearchParams();
+      params.set("view", activeTab === "summary" ? "outlook" : activeTab === "all" ? "all" : "active");
       if (filterStatus) params.set("status", filterStatus);
       if (filterCity) params.set("city", filterCity);
       if (filterAssignee) params.set("assigned_to", filterAssignee);
       if (searchQuery) params.set("search", searchQuery);
       // Fetch all inspections for summary view (need full dataset for 12-month chart)
-      if (activeTab === "summary") params.set("page_size", "2000");
+      params.set("page_size", "2000");
       const qs = params.toString();
       const res = await fetch(`/api/inspections${qs ? `?${qs}` : ""}`);
       if (!res.ok) throw new Error("Failed to fetch inspections");
@@ -231,24 +241,14 @@ export function InspectionDashboard() {
           ...insp,
           property_name: prop.name || prop.address_1 || null,
           address_1: prop.address_1 || null,
-          unit_name: prop.address_2 || null,
+          unit_name: insp.unit_name || prop.address_2 || null,
           city: prop.city || null,
           move_in_date: prop.move_in_date || null,
           last_inspection_date: prop.last_inspection_date || null,
         };
       });
-      // Client-side search filter as fallback (Supabase referenced table filters
-      // don't properly exclude parent rows)
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const filtered = flattened.filter((insp: Record<string, unknown>) => {
-          const fields = [insp.property_name, insp.address_1, insp.unit_name, insp.city];
-          return fields.some((f) => typeof f === "string" && f.toLowerCase().includes(q));
-        });
-        setInspections(filtered);
-      } else {
-        setInspections(flattened);
-      }
+      setInspections(flattened);
+
     } catch (err) {
       console.error("Fetch inspections error:", err);
     } finally {
@@ -505,7 +505,7 @@ export function InspectionDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-charcoal-900">Inspection Queue</h1>
           <p className="text-charcoal-500 text-sm mt-1">
-            {stats?.total ?? inspections.length} inspection{(stats?.total ?? inspections.length) !== 1 ? "s" : ""} in queue
+            {activeTab === "queue" ? "Overdue, due within 45 days, and scheduled inspections" : activeTab === "summary" ? "Upcoming work by scheduled date or next due date" : "All inspections, including completed and canceled records"}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -655,7 +655,7 @@ export function InspectionDashboard() {
       )}
 
       {/* ── Stats Bar ── */}
-      {stats && (
+      {stats && activeTab === "queue" && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">
@@ -681,7 +681,7 @@ export function InspectionDashboard() {
           <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">
               <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-xs font-medium text-charcoal-500">Completed</span>
+              <span className="text-xs font-medium text-charcoal-500">Completed This Week</span>
             </div>
             <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
           </div>
@@ -703,7 +703,7 @@ export function InspectionDashboard() {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="appearance-none bg-white border border-charcoal-300 rounded-lg px-3 py-2 pr-8 text-sm text-charcoal-700 focus:outline-none focus:ring-2 focus:ring-terra-400 focus:border-transparent"
           >
-            {STATUS_OPTIONS.map((opt) => (
+            {STATUS_OPTIONS.filter(opt => activeTab === "all" || !["completed", "canceled"].includes(opt.value)).map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
@@ -826,7 +826,7 @@ export function InspectionDashboard() {
       {/* ── Tab Bar ── */}
       <div className="flex items-center gap-1 border-b border-charcoal-200">
         <button
-          onClick={() => setActiveTab("queue")}
+          onClick={() => { setActiveTab("queue"); setFilterStatus(""); setSelected(new Set()); }}
           className={cn(
             "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
             activeTab === "queue"
@@ -838,7 +838,7 @@ export function InspectionDashboard() {
           Inspection Queue
         </button>
         <button
-          onClick={() => setActiveTab("summary")}
+          onClick={() => { setActiveTab("summary"); setFilterStatus(""); setSelected(new Set()); }}
           className={cn(
             "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
             activeTab === "summary"
@@ -847,7 +847,10 @@ export function InspectionDashboard() {
           )}
         >
           <BarChart3 className="w-4 h-4" />
-          12-Month Summary
+          12-Month Outlook
+        </button>
+        <button onClick={() => { setActiveTab("all"); setFilterStatus(""); setSelected(new Set()); }} className={cn("px-4 py-2.5 text-sm font-medium border-b-2 -mb-px", activeTab === "all" ? "border-terra-500 text-terra-600" : "border-transparent text-charcoal-500")}>
+          All Inspections
         </button>
       </div>
 
@@ -857,12 +860,12 @@ export function InspectionDashboard() {
       )}
 
       {/* ── Table ── */}
-      {activeTab === "queue" && inspections.length === 0 ? (
+      {activeTab !== "summary" && inspections.length === 0 ? (
         <div className="text-center py-16 text-charcoal-400">
           <ClipboardCheck className="w-10 h-10 mx-auto mb-3 text-charcoal-300" />
-          <p className="font-medium">No inspections yet</p>
+          <p className="font-medium">No inspections match this view</p>
           <p className="text-sm mt-1">
-            Import a spreadsheet to get started.
+            Try changing the filters or open All Inspections to review history.
           </p>
           <Link
             href="/maintenance/inspections/import"
@@ -872,7 +875,7 @@ export function InspectionDashboard() {
             Import Inspections
           </Link>
         </div>
-      ) : activeTab === "queue" ? (
+      ) : activeTab !== "summary" ? (
         <div className="bg-white rounded-xl shadow-card border border-charcoal-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -890,7 +893,7 @@ export function InspectionDashboard() {
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600 w-20">Unit</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Type</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Move In</th>
-                  <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Due Date</th>
+                  <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Scheduled / Due</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Priority</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600 hidden lg:table-cell">Assigned To</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Status</th>
@@ -944,8 +947,9 @@ export function InspectionDashboard() {
                       </span>
                     </td>
                     <td className="px-3 py-3">
-                      <span className={cn("text-xs", dueDateClass(insp.due_date))}>
-                        {formatDate(insp.due_date)}
+                      <span className={cn("text-xs", dueDateClass(insp.target_date || insp.due_date))}>
+                        {formatDate(insp.target_date || insp.due_date)}
+                        {insp.target_date && <span className="block text-charcoal-500">Scheduled</span>}
                       </span>
                     </td>
                     <td className="px-3 py-3">
@@ -1258,331 +1262,34 @@ function NoticeModal({
 // ────────────────────────────────────────────────
 
 function MonthlySummary({ inspections }: { inspections: Inspection[] }) {
-  // Tag each inspection as "first" or "second" for its property
-  // Group by property_id (unique per unit)
-  const byProperty = new Map<string, Inspection[]>();
-  for (const insp of inspections) {
-    const propKey = insp.property_id || insp.id;
-    if (!byProperty.has(propKey)) byProperty.set(propKey, []);
-    byProperty.get(propKey)!.push(insp);
-  }
-
-  // For each property, sort by due date and tag 1st/2nd
-  const inspectionRound = new Map<string, 1 | 2>();
-  for (const [, group] of byProperty) {
-    group.sort((a, b) => {
-      const da = a.due_date || "9999";
-      const db = b.due_date || "9999";
-      return da.localeCompare(db);
-    });
-    group.forEach((insp, idx) => {
-      inspectionRound.set(insp.id, idx === 0 ? 1 : 2);
-    });
-  }
-
-  // Build 12-month buckets starting from current month
-  const now = new Date();
-  const months: { key: string; label: string; start: Date; end: Date }[] = [];
-
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0); // last day of month
-    months.push({
-      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-      start: d,
-      end,
-    });
-  }
-
-  // Also track "overdue" bucket (due before current month)
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  // Count inspections per month, per city, and by status
-  const monthData = months.map((m) => {
-    const inMonth = inspections.filter((insp) => {
-      if (!insp.due_date) return false;
-      const d = new Date(insp.due_date + "T12:00:00");
-      return d >= m.start && d <= m.end;
-    });
-
-    // Split by round
-    const firstRound = inMonth.filter((i) => inspectionRound.get(i.id) === 1).length;
-    const secondRound = inMonth.filter((i) => inspectionRound.get(i.id) === 2).length;
-
-    // By city
-    const byCityMap: Record<string, number> = {};
-    inMonth.forEach((insp) => {
-      const city = insp.city || "Unknown";
-      byCityMap[city] = (byCityMap[city] || 0) + 1;
-    });
-
-    // By status
-    const byStatus = {
-      imported: inMonth.filter((i) => i.status === "imported").length,
-      scheduled: inMonth.filter((i) => i.status === "scheduled").length,
-      completed: inMonth.filter((i) => i.status === "completed").length,
-      other: inMonth.filter((i) => !["imported", "scheduled", "completed"].includes(i.status)).length,
-    };
-
-    return {
-      ...m,
-      total: inMonth.length,
-      firstRound,
-      secondRound,
-      byCity: byCityMap,
-      byStatus,
-      inspections: inMonth,
-    };
-  });
-
-  const overdue = inspections.filter((insp) => {
-    if (!insp.due_date) return false;
-    const d = new Date(insp.due_date + "T12:00:00");
-    return d < currentMonthStart;
-  });
-
-  // Collect all unique cities
-  const allCities = [...new Set(inspections.map((i) => i.city || "Unknown"))].sort();
-
-  // Max for bar chart scaling
-  const maxCount = Math.max(...monthData.map((m) => m.total), overdue.length, 1);
-
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const { months, overdue, undated, total } = buildInspectionOutlook(inspections, today);
+  const maximum = Math.max(1, ...months.map(month => month.total));
   return (
     <div className="space-y-6">
-      {/* ── Overview Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
-          <span className="text-xs font-medium text-charcoal-500">Total Inspections</span>
-          <p className="text-2xl font-bold text-charcoal-900 mt-1">{inspections.length}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-card border border-red-200 p-4">
-          <span className="text-xs font-medium text-red-500">Overdue</span>
-          <p className="text-2xl font-bold text-red-600 mt-1">{overdue.length}</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
-          <span className="text-xs font-medium text-charcoal-500">Avg / Month</span>
-          <p className="text-2xl font-bold text-charcoal-900 mt-1">
-            {Math.round(inspections.length / 12)}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
-          <span className="text-xs font-medium text-charcoal-500">Cities</span>
-          <p className="text-2xl font-bold text-charcoal-900 mt-1">{allCities.length}</p>
+      <p className="text-sm text-charcoal-500">Uses the filters above. Scheduled visits appear on their appointment date; unscheduled work uses its current due date.</p>
+      <div className="grid grid-cols-3 gap-4">
+        {[['Inspections in this outlook', total], ['Overdue', overdue], ['Date needed', undated]].map(([label, value]) => (
+          <div key={label} className="bg-white rounded-xl border border-charcoal-200 p-4"><p className="text-sm text-charcoal-500">{label}</p><p className="text-2xl font-bold">{value}</p></div>
+        ))}
+      </div>
+      {total === 0 && <p className="rounded-lg bg-charcoal-50 p-4 text-charcoal-600">No upcoming inspections match these filters. Choose All Statuses or clear the other filters.</p>}
+      <div className="bg-white rounded-xl border border-charcoal-200 p-5">
+        <h3 className="font-semibold mb-4">Upcoming inspections by month</h3>
+        <div className="flex items-end gap-3 h-56" role="img" aria-label="Upcoming inspections by month; exact counts appear in the table below">
+          {months.map(month => <div key={month.key} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
+            <span className="text-xs text-charcoal-600 mb-1">{month.total || ''}</span>
+            <div className="w-full bg-blue-400 rounded-t" style={{height: `${month.total / maximum * 170}px`}} />
+            <span className="text-xs text-charcoal-500 mt-2">{month.label.split(' ')[0]}</span>
+          </div>)}
         </div>
       </div>
-
-      {/* ── Bar Chart ── */}
-      <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-charcoal-700">Inspections Due by Month</h3>
-          <div className="flex items-center gap-4 text-xs">
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-blue-400" />
-              1st Inspection
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-amber-400" />
-              2nd Inspection
-            </span>
-            {overdue.length > 0 && (
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm bg-red-400" />
-                Overdue
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-end gap-2" style={{ height: 220 }}>
-          {/* Overdue bar */}
-          {overdue.length > 0 && (
-            <div className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-xs font-bold text-red-600">{overdue.length}</span>
-              <div
-                className="w-full bg-red-400 rounded-t-md transition-all"
-                style={{ height: `${(overdue.length / maxCount) * 170}px`, minHeight: 4 }}
-              />
-              <span className="text-[10px] text-red-500 font-medium mt-1">Overdue</span>
-            </div>
-          )}
-          {monthData.map((m) => {
-            const isCurrentMonth = m.key === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-            const firstH = m.firstRound > 0 ? (m.firstRound / maxCount) * 170 : 0;
-            const secondH = m.secondRound > 0 ? (m.secondRound / maxCount) * 170 : 0;
-            const totalH = firstH + secondH;
-            return (
-              <div key={m.key} className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-xs font-bold text-charcoal-600">{m.total || ""}</span>
-                <div
-                  className="w-full flex flex-col justify-end"
-                  style={{ height: totalH > 0 ? `${totalH}px` : "2px", minHeight: 2 }}
-                >
-                  {/* 2nd inspection (top) */}
-                  {m.secondRound > 0 && (
-                    <div
-                      className="w-full bg-amber-400 rounded-t-md"
-                      style={{ height: `${secondH}px` }}
-                    />
-                  )}
-                  {/* 1st inspection (bottom) */}
-                  {m.firstRound > 0 && (
-                    <div
-                      className={cn(
-                        "w-full bg-blue-400",
-                        m.secondRound === 0 && "rounded-t-md"
-                      )}
-                      style={{ height: `${firstH}px` }}
-                    />
-                  )}
-                </div>
-                <span
-                  className={cn(
-                    "text-[10px] font-medium mt-1",
-                    isCurrentMonth ? "text-terra-600" : "text-charcoal-400"
-                  )}
-                >
-                  {m.label.split(" ")[0]}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Monthly Breakdown Table ── */}
-      <div className="bg-white rounded-xl shadow-card border border-charcoal-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-charcoal-50 border-b border-charcoal-200">
-                <th className="text-left px-4 py-3 font-semibold text-charcoal-600">Month</th>
-                <th className="text-right px-4 py-3 font-semibold text-charcoal-600">Total</th>
-                <th className="text-right px-4 py-3 font-semibold text-blue-600">1st</th>
-                <th className="text-right px-4 py-3 font-semibold text-amber-600">2nd</th>
-                <th className="text-right px-4 py-3 font-semibold text-charcoal-600">Pending</th>
-                <th className="text-right px-4 py-3 font-semibold text-charcoal-600">Scheduled</th>
-                <th className="text-right px-4 py-3 font-semibold text-charcoal-600">Completed</th>
-                {allCities.map((city) => (
-                  <th key={city} className="text-right px-3 py-3 font-semibold text-charcoal-600 hidden lg:table-cell">
-                    {city}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* Overdue row */}
-              {overdue.length > 0 && (
-                <tr className="bg-red-50 border-b border-red-100">
-                  <td className="px-4 py-3 font-medium text-red-700">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      Overdue
-                    </div>
-                  </td>
-                  <td className="text-right px-4 py-3 font-bold text-red-700">{overdue.length}</td>
-                  <td className="text-right px-4 py-3 text-red-600">
-                    {overdue.filter((i) => inspectionRound.get(i.id) === 1).length || "\u2014"}
-                  </td>
-                  <td className="text-right px-4 py-3 text-red-600">
-                    {overdue.filter((i) => inspectionRound.get(i.id) === 2).length || "\u2014"}
-                  </td>
-                  <td className="text-right px-4 py-3 text-red-600">
-                    {overdue.filter((i) => i.status === "imported").length || "\u2014"}
-                  </td>
-                  <td className="text-right px-4 py-3 text-red-600">
-                    {overdue.filter((i) => i.status === "scheduled").length || "\u2014"}
-                  </td>
-                  <td className="text-right px-4 py-3 text-red-600">
-                    {overdue.filter((i) => i.status === "completed").length || "\u2014"}
-                  </td>
-                  {allCities.map((city) => {
-                    const count = overdue.filter((i) => (i.city || "Unknown") === city).length;
-                    return (
-                      <td key={city} className="text-right px-3 py-3 text-red-600 hidden lg:table-cell">
-                        {count || "\u2014"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              )}
-              {/* Monthly rows */}
-              {monthData.map((m, idx) => {
-                const isCurrentMonth = m.key === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-                return (
-                  <tr
-                    key={m.key}
-                    className={cn(
-                      "border-b border-charcoal-100 transition-colors hover:bg-charcoal-50",
-                      isCurrentMonth && "bg-terra-50/50"
-                    )}
-                  >
-                    <td className="px-4 py-3">
-                      <span className={cn("font-medium", isCurrentMonth ? "text-terra-700" : "text-charcoal-800")}>
-                        {m.label}
-                        {isCurrentMonth && (
-                          <span className="ml-2 text-[10px] bg-terra-100 text-terra-600 px-1.5 py-0.5 rounded-full">
-                            Current
-                          </span>
-                        )}
-                      </span>
-                    </td>
-                    <td className="text-right px-4 py-3 font-bold text-charcoal-800">{m.total}</td>
-                    <td className="text-right px-4 py-3 text-blue-600">
-                      {m.firstRound || "\u2014"}
-                    </td>
-                    <td className="text-right px-4 py-3 text-amber-600">
-                      {m.secondRound || "\u2014"}
-                    </td>
-                    <td className="text-right px-4 py-3 text-charcoal-500">
-                      {m.byStatus.imported || "\u2014"}
-                    </td>
-                    <td className="text-right px-4 py-3 text-charcoal-500">
-                      {m.byStatus.scheduled || "\u2014"}
-                    </td>
-                    <td className="text-right px-4 py-3 text-green-600">
-                      {m.byStatus.completed || "\u2014"}
-                    </td>
-                    {allCities.map((city) => (
-                      <td key={city} className="text-right px-3 py-3 text-charcoal-500 hidden lg:table-cell">
-                        {m.byCity[city] || "\u2014"}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-              {/* Totals row */}
-              <tr className="bg-charcoal-50 border-t-2 border-charcoal-300">
-                <td className="px-4 py-3 font-bold text-charcoal-800">12-Month Total</td>
-                <td className="text-right px-4 py-3 font-bold text-charcoal-800">
-                  {monthData.reduce((s, m) => s + m.total, 0)}
-                </td>
-                <td className="text-right px-4 py-3 font-bold text-blue-600">
-                  {monthData.reduce((s, m) => s + m.firstRound, 0)}
-                </td>
-                <td className="text-right px-4 py-3 font-bold text-amber-600">
-                  {monthData.reduce((s, m) => s + m.secondRound, 0)}
-                </td>
-                <td className="text-right px-4 py-3 font-bold text-charcoal-600">
-                  {monthData.reduce((s, m) => s + m.byStatus.imported, 0)}
-                </td>
-                <td className="text-right px-4 py-3 font-bold text-charcoal-600">
-                  {monthData.reduce((s, m) => s + m.byStatus.scheduled, 0)}
-                </td>
-                <td className="text-right px-4 py-3 font-bold text-green-600">
-                  {monthData.reduce((s, m) => s + m.byStatus.completed, 0)}
-                </td>
-                {allCities.map((city) => {
-                  const total = monthData.reduce((s, m) => s + (m.byCity[city] || 0), 0);
-                  return (
-                    <td key={city} className="text-right px-3 py-3 font-bold text-charcoal-600 hidden lg:table-cell">
-                      {total || "\u2014"}
-                    </td>
-                  );
-                })}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div className="bg-white rounded-xl border border-charcoal-200 overflow-x-auto">
+        <table className="w-full text-sm"><thead className="bg-charcoal-50"><tr>
+          <th className="p-4 text-left">Month</th><th className="p-4 text-right">Total</th><th className="p-4 text-right">Needs scheduling</th><th className="p-4 text-right">Scheduled / in progress</th>
+        </tr></thead><tbody>
+          {months.map(month => <tr key={month.key} className="border-t border-charcoal-100"><td className="p-4">{month.label}</td><td className="p-4 text-right font-semibold">{month.total}</td><td className="p-4 text-right">{month.pending}</td><td className="p-4 text-right">{month.scheduled}</td></tr>)}
+        </tbody></table>
       </div>
     </div>
   );
