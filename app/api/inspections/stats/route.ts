@@ -1,3 +1,4 @@
+import { inspectionSchedulingAlert } from '@/lib/inspection-scheduling-alert';
 import { inspectionWeek } from '@/lib/inspection-week';
 import { actionableInspections, inspectionToday, shiftInspectionDate, loadInspectionQueue } from '@/lib/inspection-queue';
 import { NextResponse } from 'next/server';
@@ -30,6 +31,7 @@ export async function GET() {
     const week = inspectionWeek(routeResult.data || [], monday, nextMonday);
     const active = actionableInspections(rows, properties, today);
     return NextResponse.json({
+      scheduling_alert: inspectionSchedulingAlert(properties, today),
       total: active.length,
       overdue: active.filter(row => (row.target_date || row.due_date || today) < today).length,
       this_week: week.planned,

@@ -83,6 +83,7 @@ interface DueNoticesResult {
 }
 
 interface InspectionStats {
+  scheduling_alert?: { total: number; overdue: number; upcoming: number; undated: number };
   total: number;
   overdue: number;
   this_week: number;
@@ -276,6 +277,18 @@ export function InspectionDashboard() {
     fetchInspections();
     fetchStats();
   }, [fetchInspections, fetchStats]);
+
+  useEffect(() => {
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") void fetchStats();
+    };
+    window.addEventListener("focus", refreshOnReturn);
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    return () => {
+      window.removeEventListener("focus", refreshOnReturn);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+    };
+  }, [fetchStats]);
 
   // ── Batch geocode with SSE progress ──
   const handleBatchGeocode = async () => {
@@ -647,6 +660,27 @@ export function InspectionDashboard() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {stats?.scheduling_alert && stats.scheduling_alert.total > 0 && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex gap-3">
+            <Bell className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
+            <div>
+              <p className="font-semibold text-charcoal-900">
+                {stats.scheduling_alert.total} {stats.scheduling_alert.total === 1 ? "inspection needs" : "inspections need"} scheduling
+              </p>
+              <p className="text-sm text-charcoal-700">
+                {stats.scheduling_alert.overdue} overdue · {stats.scheduling_alert.upcoming} upcoming
+                {stats.scheduling_alert.undated > 0 && ` · ${stats.scheduling_alert.undated} need a due date reviewed`}
+              </p>
+              <p className="text-xs text-charcoal-500 mt-1">AppFolio candidates refresh nightly. Review eligible units and schedule routes at least 7 days ahead.</p>
+            </div>
+          </div>
+          <Link href="/maintenance/inspections/candidates" className="shrink-0 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800">
+            Review &amp; schedule
+          </Link>
         </div>
       )}
 
