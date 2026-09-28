@@ -1,4 +1,6 @@
 "use client";
+
+import { inspectionToday, inspectionHorizon, shiftInspectionDate } from "@/lib/inspection-window";
 import { routeTimeLabel } from "@/lib/route-builder/inspection-time";
 
 import { useState, useEffect, useCallback } from "react";
@@ -68,9 +70,7 @@ const ROUTE_STATUS_BADGE: Record<string, string> = {
 
 /** Earliest date a route can be scheduled (7 days from today) */
 function getMinRouteDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 7);
-  return d.toISOString().split("T")[0];
+  return shiftInspectionDate(inspectionToday(), 7);
 }
 
 /** Default route date: next Monday that is at least 7 days out */
@@ -569,12 +569,13 @@ export function RouteBuilder() {
                       type="date"
                       value={routeDate}
                       min={getMinRouteDate()}
+                      max={inspectionHorizon()}
                       onChange={(e) => setRouteDate(e.target.value)}
                       className="w-full bg-white border border-charcoal-300 rounded-lg pl-9 pr-3 py-2 text-sm text-charcoal-700 focus:outline-none focus:ring-2 focus:ring-terra-400 focus:border-transparent"
                     />
                   </div>
                   <p className="text-xs text-charcoal-400 mt-1">
-                    Must be at least 7 days from today for tenant notification.
+                    Schedule 7–21 days ahead for tenant notices.
                   </p>
                 </div>
 

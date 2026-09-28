@@ -1,3 +1,5 @@
+import { inspectionToday, shiftInspectionDate, INSPECTION_HORIZON_DAYS } from './inspection-window';
+export { inspectionToday, shiftInspectionDate } from './inspection-window';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { findHouseholdSource, type HouseholdProperty } from '@/lib/inspection-route-households';
 
@@ -25,15 +27,6 @@ export interface QueueInspection {
   stored_status?: string;
   scheduled_route_id?: string | null;
   route_stops?: { status?: string; actual_arrival?: string | null; route_plans: { id?: string; route_date: string; status: string } | null }[];
-}
-
-export function inspectionToday(now = new Date()): string {
-  return now.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-}
-export function shiftInspectionDate(date: string, days: number): string {
-  const value = new Date(`${date}T12:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
 }
 
 export function routineInspectionsEnabled(row: QueueInspection, properties: QueueProperty[]): boolean {
@@ -71,7 +64,7 @@ export function inspectionWorkflow(row: QueueInspection, today: string): QueueIn
 }
 
 /** A read-only operational view: historical records remain available unchanged. */
-export function actionableInspections(rows: QueueInspection[], properties: QueueProperty[], today: string, horizonDays = 45): QueueInspection[] {
+export function actionableInspections(rows: QueueInspection[], properties: QueueProperty[], today: string, horizonDays = INSPECTION_HORIZON_DAYS): QueueInspection[] {
   const horizon = shiftInspectionDate(today, horizonDays);
   const prepared = rows.map(row => inspectionWorkflow(row, today)).flatMap(row => {
     if (['completed', 'canceled', 'cancelled', 'skipped'].includes(row.status)) return [];

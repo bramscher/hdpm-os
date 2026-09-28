@@ -1,5 +1,7 @@
 "use client";
 
+import { inspectionToday, inspectionHorizon, shiftInspectionDate } from "@/lib/inspection-window";
+
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -449,14 +451,10 @@ function ScheduleModal({
   onClose: () => void;
   onScheduled: () => Promise<void>;
 }) {
-  const today = new Date();
-  const sevenDaysOut = new Date(today);
-  sevenDaysOut.setDate(today.getDate() + 7);
-  const thirtyDaysOut = new Date(today);
-  thirtyDaysOut.setDate(today.getDate() + 30);
-
-  const [startDate, setStartDate] = useState(sevenDaysOut.toISOString().split("T")[0]);
-  const [endDate, setEndDate] = useState(thirtyDaysOut.toISOString().split("T")[0]);
+  const minDate = shiftInspectionDate(inspectionToday(), 7);
+  const maxDate = inspectionHorizon();
+  const [startDate, setStartDate] = useState(minDate);
+  const [endDate, setEndDate] = useState(maxDate);
   const [assignedTo, setAssignedTo] = useState(DEFAULT_INSPECTOR);
   const [maxStops, setMaxStops] = useState(10);
   const [scheduling, setScheduling] = useState(false);
@@ -507,16 +505,19 @@ function ScheduleModal({
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              min={sevenDaysOut.toISOString().split("T")[0]}
+              min={minDate}
+              max={maxDate}
               className="w-full px-3 py-2 border border-charcoal-300 rounded-lg text-sm"
             />
-            <p className="text-xs text-charcoal-500 mt-1">Must be at least 7 days out for tenant notices.</p>
+            <p className="text-xs text-charcoal-500 mt-1">Schedule 7–21 days ahead for tenant notices.</p>
           </div>
           <div>
             <label className="block text-xs font-medium text-charcoal-700 mb-1">End date</label>
             <input
               type="date"
               value={endDate}
+              min={startDate}
+              max={maxDate}
               onChange={(e) => setEndDate(e.target.value)}
               className="w-full px-3 py-2 border border-charcoal-300 rounded-lg text-sm"
             />

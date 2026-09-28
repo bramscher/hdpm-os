@@ -15,7 +15,7 @@ completing an inspection automatically queues the next one.
 ## The cadence rules (what the system does for you)
 
 - **Next due date** = the later of (tenant move-in, last inspection) **+ 6 months**.
-- A unit becomes **Eligible** when its due date is within **45 days** (or overdue,
+- A unit becomes **Eligible** when its due date is within **21 days** (or overdue,
   or it has no move-in/inspection history at all).
 - **Vacant units are deferred** — no tenant, no routine inspection.
 - Units inspected within the last **90 days** show as "Recently inspected."
@@ -32,7 +32,7 @@ completing an inspection automatically queues the next one.
 ### 1. Review the candidate list
 
 1. Go to **Maintenance → Inspections → Candidates**.
-2. The **Eligible** tab is the work queue — these units are due within 45 days
+2. The **Eligible** tab is the work queue — these units are due within 21 days
    or overdue.
 3. If the data looks stale, click **Sync from AppFolio** (otherwise the nightly
    sync already ran).
@@ -106,7 +106,7 @@ so notices go out through Realm-X, not from HDPM-OS directly.
      6 months (unit shows "Recently inspected").
    - **Pre-creates the next routine inspection** 6 months out, carrying the
      tenant contact forward. You never have to remember to re-add a unit — it
-     reappears as Eligible ~45 days before it's due.
+     reappears as Eligible ~21 days before it's due.
 
 > **Note:** completions are **not** written back to AppFolio (write API not
 > purchased). HDPM-OS is the source of truth for inspection cadence; AppFolio's
@@ -133,3 +133,5 @@ so notices go out through Realm-X, not from HDPM-OS directly.
   perpetually "due."
 - Units that fail geocoding silently sit out of routing until the address is
   fixed.
+
+Scheduling and notice window: create or move routes only 7–21 calendar days ahead (Pacific time). Scheduling alerts exclude later due dates, even before the nightly sync refreshes stored eligibility. Tenant notice lists and notice cards include appointments only through day 21. Existing later appointments remain visible in route history and enter the notice window automatically.

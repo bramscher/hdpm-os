@@ -1,3 +1,4 @@
+import { withinInspectionHorizon, inspectionToday } from './inspection-window';
 /**
  * Inspection candidate pipeline — pure logic + Supabase persistence.
  *
@@ -35,13 +36,6 @@ import {
 
 /** Routine inspections run twice a year — every 6 months. */
 export const INSPECTION_INTERVAL_MONTHS = 6;
-
-/**
- * How far ahead of the due date a unit becomes "eligible" (i.e. ready to put on
- * a route). Wide enough to schedule and still give the tenant the required
- * advance notice before the route date.
- */
-const DUE_HORIZON_DAYS = 45;
 
 /** A just-inspected unit (within this window) is surfaced as skip_recent, not defer. */
 const SKIP_RECENT_DAYS = 90;
@@ -123,8 +117,7 @@ export function classifyCandidate({
   // Occupied but no anchor at all (no move-in, never inspected) — inspect now.
   if (!due) return 'eligible';
 
-  const dueDays = Math.floor((new Date(due).getTime() - today.getTime()) / MS_PER_DAY);
-  if (dueDays <= DUE_HORIZON_DAYS) return 'eligible'; // due soon or overdue
+  if (withinInspectionHorizon(due, inspectionToday(today))) return 'eligible'; // due soon or overdue
 
   // Not due yet. Flag freshly-inspected units distinctly from merely-deferred ones.
   const inspected = parseDate(lastInspectedDate);

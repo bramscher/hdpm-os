@@ -1,3 +1,4 @@
+import { inspectionScheduleError } from '@/lib/inspection-window';
 import { validRouteStartTime } from '@/lib/route-builder/inspection-time';
 import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
 import { routeCalendarEventUrl } from '@/lib/route-builder/calendar-destination';
@@ -120,18 +121,9 @@ export async function PATCH(
       return NextResponse.json({ error: 'Route plan not found' }, { status: 404 });
     }
 
-    // Enforce 7-day minimum lead time if route_date is being changed
     if (body.route_date) {
-      const minRouteDate = new Date();
-      minRouteDate.setDate(minRouteDate.getDate() + 7);
-      const minDateStr = minRouteDate.toISOString().split('T')[0];
-
-      if (body.route_date < minDateStr) {
-        return NextResponse.json(
-          { error: 'Routes must be scheduled at least 7 days in advance to allow time for tenant notices.' },
-          { status: 400 }
-        );
-      }
+      const scheduleError = inspectionScheduleError(body.route_date, body.route_date);
+      if (scheduleError) return NextResponse.json({ error: scheduleError }, { status: 400 });
     }
 
     if ('start_time' in body && !validRouteStartTime(body.start_time)) {

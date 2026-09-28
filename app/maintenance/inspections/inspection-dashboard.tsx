@@ -514,7 +514,7 @@ export function InspectionDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-charcoal-900">Inspection Queue</h1>
           <p className="text-charcoal-500 text-sm mt-1">
-            {activeTab === "queue" ? "Overdue, due within 45 days, and scheduled inspections" : activeTab === "summary" ? "Upcoming work by scheduled date or next due date" : "All inspections, including completed and canceled records"}
+            {activeTab === "queue" ? "Overdue, due within 21 days, and scheduled inspections" : activeTab === "summary" ? "Upcoming work by scheduled date or next due date" : "All inspections, including completed and canceled records"}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -675,7 +675,7 @@ export function InspectionDashboard() {
                 {stats.scheduling_alert.overdue} overdue · {stats.scheduling_alert.upcoming} upcoming
                 {stats.scheduling_alert.undated > 0 && ` · ${stats.scheduling_alert.undated} need a due date reviewed`}
               </p>
-              <p className="text-xs text-charcoal-500 mt-1">AppFolio candidates refresh nightly. Review eligible units and schedule routes at least 7 days ahead.</p>
+              <p className="text-xs text-charcoal-500 mt-1">AppFolio candidates refresh nightly. Review eligible units and schedule routes 7–21 days ahead.</p>
             </div>
           </div>
           <Link href="/maintenance/inspections/candidates" className="shrink-0 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800">

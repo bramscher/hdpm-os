@@ -1,3 +1,4 @@
+import { INSPECTION_HORIZON_DAYS } from '@/lib/inspection-window';
 import { actionableInspections, routineInspectionsEnabled, inspectionWorkflow, inspectionToday, loadInspectionQueue } from '@/lib/inspection-queue';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     const { rows, properties } = await loadInspectionQueue(supabase);
     let inspections = searchParams.get('view') === 'all'
       ? rows.map(row => inspectionWorkflow(row, inspectionToday()))
-      : actionableInspections(rows, properties, inspectionToday(), searchParams.get('view') === 'outlook' ? 366 : 45);
+      : actionableInspections(rows, properties, inspectionToday(), searchParams.get('view') === 'outlook' ? 366 : INSPECTION_HORIZON_DAYS);
     inspections = inspections.map(row => ({...row, routine_inspections_enabled: routineInspectionsEnabled(row, properties)}));
     if (status) inspections = inspections.filter(row => row.status === status);
     if (inspectionType) inspections = inspections.filter(row => row.inspection_type === inspectionType);

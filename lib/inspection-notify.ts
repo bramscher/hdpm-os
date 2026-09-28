@@ -1,3 +1,4 @@
+import { inspectionToday, inspectionHorizon } from './inspection-window';
 /**
  * Inspection tenant notices — AppFolio bulk-send bridge.
  *
@@ -114,7 +115,7 @@ export function buildNoticeContent(insp: NoticeInspectionRow): { subject: string
 }
 
 /**
- * Scheduled inspections that still need a tenant notice: future target date,
+ * Scheduled inspections that still need a tenant notice: today through day 21,
  * not yet marked sent. Returns ready-to-send content + recipient email.
  */
 /** Postgres "column does not exist" — the dispatch migration isn't applied yet. */
@@ -139,7 +140,7 @@ export async function getDueNotices(
   options: { today?: Date; limit?: number; dispatchableOnly?: boolean } = {}
 ): Promise<DueNoticesResult> {
   const today = options.today ?? new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = inspectionToday(today);
   const limit = options.limit ?? 1000;
 
   const runQuery = (cols: string) => {
@@ -150,6 +151,7 @@ export async function getDueNotices(
       .is('notice_sent_at', null)
       .not('target_date', 'is', null)
       .gte('target_date', todayStr)
+      .lte('target_date', inspectionHorizon(todayStr))
       .order('target_date', { ascending: true })
       .limit(limit);
     // A machine sender (Realm-X routine) only wants notices it can actually send:

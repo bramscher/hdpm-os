@@ -1,3 +1,4 @@
+import { inspectionScheduleError, inspectionHorizon } from '@/lib/inspection-window';
 import { optimizeRouteWithGoogle } from '@/lib/route-directions';
 import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
 import { routeArrival } from '@/lib/route-builder/inspection-time';
@@ -43,16 +44,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Enforce 7-day lead time for tenant notice (matches /api/inspections/routes)
-    const minRouteDate = new Date();
-    minRouteDate.setDate(minRouteDate.getDate() + 7);
-    const minDateStr = minRouteDate.toISOString().split('T')[0];
-    if (date_range_start < minDateStr) {
-      return NextResponse.json(
-        { error: 'Routes must be scheduled at least 7 days in advance to allow time for tenant notices.' },
-        { status: 400 }
-      );
-    }
+    const scheduleError = inspectionScheduleError(date_range_start, date_range_end);
+    if (scheduleError) return NextResponse.json({ error: scheduleError }, { status: 400 });
 
     const supabase = getSupabaseAdmin();
 
@@ -66,6 +59,7 @@ export async function POST(request: NextRequest) {
       .not('routine_inspections_enabled', 'is', false)
       .not('active', 'is', false)
       .eq('candidate_status', 'eligible')
+      .or(`next_due_date.is.null,next_due_date.lte.${inspectionHorizon()}`)
       .not('latitude', 'is', null)
       .not('longitude', 'is', null);
 

@@ -6,8 +6,8 @@ const prop: QueueProperty = { id: 'p1', appfolio_unit_id: 'unit1', next_due_date
 const appointment = (date: string, status = 'pending', actual_arrival: string | null = null) => [{status, actual_arrival, route_plans:{id:'route',route_date:date,status:'optimized'}}];
 const row = (id: string, overrides: Partial<QueueInspection> = {}): QueueInspection => ({ id, property_id: id, status: 'imported', inspection_type: 'routine', due_date: '2026-10-10', target_date: null, assigned_to: null, resident_name: null, inspection_properties: null, ...overrides });
 describe('actionable inspection queue', () => {
-  it('keeps overdue and next-45-day work and all appointments, excluding history and later unscheduled work', () => {
-    const rows = [row('overdue', {due_date:'2026-09-01'}), row('soon'), row('boundary',{due_date:'2026-11-12'}), row('later',{due_date:'2026-11-13'}), row('complete',{status:'completed'}), row('cancel',{status:'canceled'}), row('scheduled',{status:'scheduled',target_date:'2027-01-01',route_stops:appointment('2027-01-01')}), row('working',{status:'in_progress'}), row('undated',{due_date:null})];
+  it('keeps overdue and next-21-day work and all appointments, excluding history and later unscheduled work', () => {
+    const rows = [row('overdue', {due_date:'2026-09-01'}), row('soon'), row('boundary',{due_date:'2026-10-19'}), row('later',{due_date:'2026-10-20'}), row('complete',{status:'completed'}), row('cancel',{status:'canceled'}), row('scheduled',{status:'scheduled',target_date:'2027-01-01',route_stops:appointment('2027-01-01')}), row('working',{status:'in_progress'}), row('undated',{due_date:null})];
     expect(actionableInspections(rows, [], today).map(r=>r.id).sort()).toEqual(['boundary','overdue','scheduled','soon','undated','working']);
   });
   it('uses the current cadence to remove stale imports without mutating history', () => {

@@ -1,3 +1,4 @@
+import { currentCandidateStatus, inspectionToday, inspectionHorizon } from '@/lib/inspection-window';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const region = searchParams.get('region');
     const search = searchParams.get('search');
+    const today = inspectionToday();
+    const horizon = inspectionHorizon(today);
 
     let query = supabase
       .from('inspection_properties')
@@ -37,7 +40,12 @@ export async function GET(request: NextRequest) {
     } else {
       query = query.not('routine_inspections_enabled', 'is', false);
     }
-    if (status && status !== 'routine_excluded') {
+
+    if (status === 'eligible') {
+      query = query.eq('candidate_status', 'eligible').or(`next_due_date.is.null,next_due_date.lte.${horizon}`);
+    } else if (status === 'defer') {
+      query = query.or(`candidate_status.eq.defer,and(candidate_status.eq.eligible,next_due_date.gt.${horizon})`);
+    } else if (status && status !== 'routine_excluded') {
       query = query.eq('candidate_status', status);
     }
     if (region) {
@@ -60,18 +68,21 @@ export async function GET(request: NextRequest) {
     // Summary counts (separate query so they aren't affected by current filters)
     const { data: summaryRows } = await supabase
       .from('inspection_properties')
-      .select('candidate_status')
+      .select('candidate_status,next_due_date')
       .not('routine_inspections_enabled', 'is', false)
       .not('active', 'is', false)
       .not('candidate_status', 'is', null);
 
     const counts = { skip_recent: 0, defer: 0, eligible: 0, scheduled: 0, dismissed: 0 };
     for (const row of summaryRows || []) {
-      const s = row.candidate_status as keyof typeof counts | null;
+      const s = currentCandidateStatus(row.candidate_status, row.next_due_date, today) as keyof typeof counts | null;
       if (s && s in counts) counts[s]++;
     }
 
-    return NextResponse.json({ candidates: data || [], total: count ?? 0, counts });
+    const candidates = (data || []).map(row => ({ ...row,
+      candidate_status: currentCandidateStatus(row.candidate_status, row.next_due_date, today),
+    })).filter(row => !status || status === 'routine_excluded' || row.candidate_status === status);
+    return NextResponse.json({ candidates, total: count ?? candidates.length, counts });
   } catch (error) {
     console.error('[candidates GET] error:', error);
     const message = error instanceof Error ? error.message : 'Failed to fetch candidates';

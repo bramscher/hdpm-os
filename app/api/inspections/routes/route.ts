@@ -1,3 +1,4 @@
+import { inspectionScheduleError, inspectionHorizon } from '@/lib/inspection-window';
 import { optimizeRouteWithGoogle } from '@/lib/route-directions';
 import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
 import { routeArrival } from '@/lib/route-builder/inspection-time';
@@ -95,17 +96,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Start time must be HH:mm (24-hour Pacific time).' }, { status: 400 });
     }
 
-    // Enforce 7-day minimum lead time for tenant notification
-    const minRouteDate = new Date();
-    minRouteDate.setDate(minRouteDate.getDate() + 7);
-    const minDateStr = minRouteDate.toISOString().split('T')[0];
-
-    if (date_range_start < minDateStr) {
-      return NextResponse.json(
-        { error: 'Routes must be scheduled at least 7 days in advance to allow time for tenant notices.' },
-        { status: 400 }
-      );
-    }
+    const scheduleError = inspectionScheduleError(date_range_start, date_range_end);
+    if (scheduleError) return NextResponse.json({ error: scheduleError }, { status: 400 });
 
     const supabase = getSupabaseAdmin();
 
@@ -119,7 +111,8 @@ export async function POST(request: NextRequest) {
     // Step 1: Fetch inspections — either manually picked or auto-selected
     let query = supabase
       .from('inspections')
-      .select('id, property_id, status, due_date, priority, inspection_type, unit_name, inspection_properties(id, address_1, city, state, zip, latitude, longitude)');
+      .select('id, property_id, status, due_date, priority, inspection_type, unit_name, inspection_properties(id, address_1, city, state, zip, latitude, longitude)')
+      .or(`due_date.is.null,due_date.lte.${inspectionHorizon()}`);
 
     if (inspection_ids && inspection_ids.length > 0) {
       // Manual pick mode — fetch specific inspections by ID
