@@ -97,6 +97,7 @@ interface V0Property {
 }
 
 interface V0Unit {
+  HiddenAt?: string | null;
   Id: string;
   PropertyId?: string;
   Bedrooms?: number | string;
@@ -1234,6 +1235,7 @@ export async function fetchAppFolioTenants(): Promise<AppFolioTenant[]> {
 // ============================================
 
 export interface AppFolioUnit {
+  hidden?: boolean;
   link?: string | null;
   id: string;
   propertyId: string | null;
@@ -1247,7 +1249,7 @@ export interface AppFolioUnit {
   lastInspectedDate: string | null;
 }
 
-export async function fetchAppFolioUnits(): Promise<AppFolioUnit[]> {
+export async function fetchAppFolioUnits(options: { includeHidden?: boolean } = {}): Promise<AppFolioUnit[]> {
   const config = getConfig();
   if (!config) return [];
 
@@ -1277,7 +1279,7 @@ export async function fetchAppFolioUnits(): Promise<AppFolioUnit[]> {
     console.log(`[AppFolio] Page ${pageNumber}: ${units.length} units`);
 
     for (const u of units) {
-      if ((u as unknown as Record<string, unknown>).HiddenAt) continue;
+      if (u.HiddenAt && !options.includeHidden) continue;
 
       allUnits.push({
         id: u.Id,
@@ -1289,6 +1291,7 @@ export async function fetchAppFolioUnits(): Promise<AppFolioUnit[]> {
         zip: u.Zip || null,
         name: u.Name || null,
         status: u.Status || null,
+        hidden: Boolean(u.HiddenAt),
         lastInspectedDate: u.LastInspectedDate || null,
         link: u.Link || null,
       });

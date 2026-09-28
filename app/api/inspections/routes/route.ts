@@ -1,3 +1,4 @@
+import { loadInspectionQueue, inspectionExcluded } from '@/lib/inspection-queue';
 import { validRouteStartTime } from '@/lib/route-builder/inspection-time';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
@@ -105,6 +106,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
+    // Reject inactive legacy imports as well as directly linked AppFolio units.
+    const { rows: queueRows, properties: queueProperties } = await loadInspectionQueue(supabase);
+    const inactiveIds = new Set(queueRows.filter(row => inspectionExcluded(row, queueProperties)).map(row => row.id));
+    if (inspection_ids?.some(id => inactiveIds.has(id))) {
+      return NextResponse.json({ error: 'Some selected inspections are inactive or excluded from routine inspections. Refresh the queue and update your selection.' }, { status: 400 });
+    }
+
     // Step 1: Fetch inspections — either manually picked or auto-selected
     let query = supabase
       .from('inspections')
@@ -155,6 +163,7 @@ export async function POST(request: NextRequest) {
     const geoInspections: GeoInspection[] = [];
 
     for (const insp of rawInspections) {
+      if (inactiveIds.has(insp.id)) continue;
       const prop = insp.inspection_properties as unknown as {
         id: string;
         address_1: string;
