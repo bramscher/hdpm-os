@@ -86,6 +86,7 @@ interface InspectionStats {
   total: number;
   overdue: number;
   this_week: number;
+  week?: { routes: number; planned: number; pending: number; skipped: number; completed: number };
   completed: number;
   unassigned: number;
   assignees: string[];
@@ -669,9 +670,13 @@ export function InspectionDashboard() {
           <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">
               <Calendar className="w-4 h-4 text-amber-500" />
-              <span className="text-xs font-medium text-charcoal-500">This Week</span>
+              <span className="text-xs font-medium text-charcoal-500">Route Visits This Week</span>
             </div>
             <p className="text-2xl font-bold text-amber-600">{stats.this_week}</p>
+            {stats.week && <p className="text-xs text-charcoal-500 mt-1">
+              {stats.week.routes} routes · {stats.week.pending} pending · {stats.week.skipped} skipped
+              {stats.week.completed > 0 && ` · ${stats.week.completed} completed`}
+            </p>}
           </div>
           <div className="bg-white rounded-xl shadow-card border border-charcoal-200 p-4">
             <div className="flex items-center gap-2 mb-1">

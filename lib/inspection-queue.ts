@@ -49,10 +49,17 @@ export function inspectionExcluded(row: QueueInspection, properties: QueueProper
 
 /** Status is derived from the appointment and actual work, never an import label. */
 export function inspectionWorkflow(row: QueueInspection, today: string): QueueInspection {
-  if (['completed', 'canceled', 'cancelled', 'skipped'].includes(row.status)) return row;
+  if (['canceled', 'cancelled', 'skipped'].includes(row.status)) return row;
+  const completedDate = row.completed_at ? inspectionToday(new Date(row.completed_at)) : null;
   const stops = (row.route_stops || []).filter(stop => stop.route_plans?.route_date
     && !['completed', 'canceled', 'cancelled'].includes(stop.route_plans.status)
-    && !['completed', 'skipped'].includes(stop.status || ''));
+    && !['completed', 'skipped'].includes(stop.status || '')
+    // A reused record may contain an earlier completion. Only an explicitly
+    // unfinished appointment after that completion represents new work.
+    && (row.status !== 'completed' || (completedDate
+      && stop.route_plans.route_date >= today && stop.route_plans.route_date > completedDate
+      && ['pending', 'in_progress'].includes(stop.status || ''))));
+  if (row.status === 'completed' && !stops.length) return row;
   const stop = stops.find(s => s.route_plans!.id === row.route_plan_id)
     || stops.sort((a, b) => b.route_plans!.route_date.localeCompare(a.route_plans!.route_date))[0];
   const route = stop?.route_plans;
