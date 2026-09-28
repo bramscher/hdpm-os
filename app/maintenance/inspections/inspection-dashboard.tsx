@@ -893,7 +893,8 @@ export function InspectionDashboard() {
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600 w-20">Unit</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Type</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Move In</th>
-                  <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Scheduled / Due</th>
+                  <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Due Date</th>
+                  <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Scheduled Date</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Priority</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600 hidden lg:table-cell">Assigned To</th>
                   <th className="text-left px-3 py-3 font-semibold text-charcoal-600">Status</th>
@@ -947,9 +948,13 @@ export function InspectionDashboard() {
                       </span>
                     </td>
                     <td className="px-3 py-3">
-                      <span className={cn("text-xs", dueDateClass(insp.target_date || insp.due_date))}>
-                        {formatDate(insp.target_date || insp.due_date)}
-                        {insp.target_date && <span className="block text-charcoal-500">Scheduled</span>}
+                      <span className={cn("text-xs whitespace-nowrap", dueDateClass(insp.due_date))}>
+                        {formatDate(insp.due_date)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="text-xs whitespace-nowrap text-charcoal-600">
+                        {insp.target_date ? formatDate(insp.target_date) : "Not scheduled"}
                       </span>
                     </td>
                     <td className="px-3 py-3">
