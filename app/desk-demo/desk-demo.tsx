@@ -314,8 +314,8 @@ export default function DeskDemo() {
 
       <p className="mt-6 text-[11.5px] leading-relaxed text-charcoal-400">
         Demo only: sample people, properties, amounts and folders. Gold and green routing follows the vacancy and new-tenant set-up
-        sheets already modeled in HDPM-OS, with the transcribed HDPM form names. Blue owner onboarding is a draft routing for the team to
-        correct.
+        sheets already modeled in HDPM-OS, with the transcribed HDPM form names. Blue owner onboarding uses the Owner Information Packet
+        (02); its routing is a draft for the team to correct.
         Plan: docs/habu-desk-plan.md.
       </p>
     </div>
@@ -631,7 +631,7 @@ function FolderPanel({
             <p className="mb-2 text-[12px] text-charcoal-500">How this folder moves ({tmpl.title} routing, assigned to people):</p>
             {tmpl.draft && (
               <p className="mb-2 rounded-md bg-sand-50 px-2 py-1.5 text-[11.5px] text-charcoal-500">
-                Draft: owner onboarding isn’t modeled from a paper sheet yet. Steps and owners are for the team to correct.
+                Draft: documents follow the Owner Information Packet (02), section 09. The steps and who owns each are for the team to correct.
               </p>
             )}
             <ol className="space-y-1.5">
@@ -668,7 +668,7 @@ function FolderPanel({
           <div>
             {(story.key === "gold" || state.workOrders.length > 0) && (
               <>
-                <p className="mb-2 text-[12px] font-semibold text-charcoal-700">{story.key === "gold" ? "Turn work orders" : "Work orders & owner recommendations"}</p>
+                <p className="mb-2 text-[12px] font-semibold text-charcoal-700">{story.key === "gold" ? "Turn work orders" : "Owner Inspection: items to complete before advertising"}</p>
                 {state.workOrders.length === 0 ? (
                   <p className="mb-4 text-[12px] text-charcoal-400">None yet. They come from the scanned move-out inspection.</p>
                 ) : (
@@ -690,7 +690,7 @@ function FolderPanel({
               {story.details(state).map(([k, v]) => (
                 <div key={k} className="contents">
                   <dt className="text-charcoal-400">{k}</dt>
-                  <dd className="text-charcoal-800">{v}</dd>
+                  <dd className={v === "missing" ? "font-semibold text-red-600" : "text-charcoal-800"}>{v}</dd>
                 </div>
               ))}
             </dl>
