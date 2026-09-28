@@ -5,7 +5,7 @@
  * properties and amounts only.
  */
 
-import type { FormKind } from "@/lib/habu-paper/model";
+import { TEMPLATES, type Assignment } from "@/lib/habu-paper/model";
 
 export type Person = "Ashley" | "Kennedy" | "Cheryl" | "Penny";
 export type DocStage = "none" | "prefilled" | "printed" | "scanned" | "filed";
@@ -14,7 +14,7 @@ export type ModalKind = "print" | "scan" | "file";
 export interface Doc {
   id: string;
   title: string;
-  record: "Tenant" | "Property";
+  record: "Tenant" | "Property" | "Owner";
   stage: DocStage;
   note?: string;
 }
@@ -58,10 +58,11 @@ export interface PaperDef {
 }
 
 export interface StoryDef {
-  key: "gold" | "green";
+  key: "gold" | "green" | "blue";
   label: string;
-  template: FormKind;
-  folder: { id: string; color: "gold" | "green"; kindLabel: string; address: string; city: string; tenant: string };
+  /** "How this folder moves": the modeled HABU routing, or a draft for folders not modeled yet. */
+  routing: { title: string; assignments: Assignment[]; draft?: boolean };
+  folder: { id: string; color: "gold" | "green" | "blue"; kindLabel: string; address: string; city: string; tenant?: string; owner?: string };
   initial: State;
   steps: StoryStep[];
   paper: Record<string, PaperDef>;
@@ -83,12 +84,12 @@ export const pass = (s: State, from: Person, to: Person, what: string, stepLabel
   passed: [{ from, to, what }, ...s.passed],
   history: note(s, from, `Passed the folder to ${to}: ${what}.`),
 });
-const fileAll = (s: State, who: Person, id: string, n: number): State => ({
+const fileAll = (s: State, who: Person, id: string, n: number, records = "tenant and property"): State => ({
   ...s,
   holder: "Filed",
   docs: s.docs.map((d) => ({ ...d, stage: "filed" })),
   passed: [{ from: who, to: "Filed", what: "all documents filed in AppFolio" }, ...s.passed],
-  history: note(s, who, `Filed ${n} documents to the tenant and property records in AppFolio. Folder ${id} closed.`),
+  history: note(s, who, `Filed ${n} documents to the ${records} records in AppFolio. Folder ${id} closed.`),
 });
 
 // ── Gold: vacancy ─────────────────────────────────────────
@@ -96,7 +97,7 @@ const fileAll = (s: State, who: Person, id: string, n: number): State => ({
 const GOLD: StoryDef = {
   key: "gold",
   label: "Gold folder · Vacancy",
-  template: "vacancy",
+  routing: TEMPLATES.vacancy,
   folder: { id: "VT-118", color: "gold", kindLabel: "Vacancy", address: "1420 NW Elm Ave #B", city: "Bend", tenant: "J. Rivera" },
   initial: {
     holder: "Ashley",
@@ -280,7 +281,7 @@ const GOLD: StoryDef = {
 const GREEN: StoryDef = {
   key: "green",
   label: "Green folder · New tenant setup",
-  template: "setup",
+  routing: TEMPLATES.setup,
   folder: { id: "NT-219", color: "green", kindLabel: "New tenant setup", address: "88 NW Hill St #2", city: "Bend", tenant: "M. Chen" },
   initial: {
     holder: "Ashley",
@@ -464,4 +465,257 @@ const GREEN: StoryDef = {
   closing: "Folder NT-219 is closed: tenant moved in, every step signed off, all eight documents filed.",
 };
 
-export const STORIES: StoryDef[] = [GOLD, GREEN];
+// ── Blue: owner onboarding ────────────────────────────────
+// Follows HDPM's New Owner Information Packet (OneDrive › Owner Forms): the
+// New Owner Email, Owner Information Packet (02) with its section 09 list,
+// New Owner Inspection Sheet and Utility Landlord Agreements page. The
+// routing (who does which step) is not modeled in lib/habu-paper yet and is a
+// draft for the team to correct.
+
+/** New Owner Email + Owner Information Packet §09: what must be in before the home is advertised. */
+const REQUIRED: [string, string][] = [
+  ["ownerinfo", "Owner Information Form (complete)"],
+  ["agreement", "Agency Agreement"],
+  ["w9", "Form W-9"],
+  ["ach", "Direct deposit + voided check"],
+  ["license", "Photo ID, all owners"],
+  ["keys", "Keys to the property"],
+  ["insurance", "Insurance certificate (HDPM additional insured)"],
+  ["inspection", "Owner Inspection items confirmed"],
+];
+
+const BLUE: StoryDef = {
+  key: "blue",
+  label: "Blue folder · Owner onboarding",
+  routing: {
+    title: "Owner Onboarding (draft)",
+    draft: true,
+    assignments: [
+      { id: "packet", label: "Send the New Owner Email & packet", section: "owner", owner: "property-manager", needs: [] },
+      { id: "signed", label: "Collect the packet, keys & insurance", section: "owner", owner: "front-desk", needs: ["packet"] },
+      { id: "appfolio", label: "Set up owner & property in AppFolio", section: "setup", owner: "front-desk", needs: ["signed"] },
+      { id: "banking", label: "Set up direct deposit, W-9 & reserve", section: "setup", owner: "accounting", needs: ["signed"] },
+      { id: "walkthrough", label: "New owner inspection", section: "property", owner: "property-manager", needs: ["appfolio"] },
+      { id: "maint", label: "Complete inspection items & confirm", section: "property", owner: "maintenance", needs: ["walkthrough"] },
+      { id: "welcome", label: "Confirm required documents · release to advertise", section: "close", owner: "property-manager", needs: ["banking", "maint"] },
+    ],
+  },
+  folder: { id: "OW-14", color: "blue", kindLabel: "Owner onboarding", address: "2715 NE Rainier Dr", city: "Bend", owner: "D. & L. Morgan" },
+  initial: {
+    holder: "Kennedy",
+    tray: "in",
+    stepLabel: "Send the New Owner Email & packet",
+    daysOnDesk: 0,
+    done: [],
+    docs: [
+      { id: "ownerinfo", title: "Owner Information Packet (02)", record: "Owner", stage: "none", note: "Master sheet that rides in the folder · incomplete forms are returned" },
+      { id: "agreement", title: "Agency Agreement", record: "Owner", stage: "none" },
+      { id: "w9", title: "Form W-9", record: "Owner", stage: "none", note: "For tax reporting and 1099s · owner supplies" },
+      { id: "ach", title: "Direct Deposit Authorization + voided check", record: "Owner", stage: "none" },
+      { id: "license", title: "Photo ID, all owners (copies)", record: "Owner", stage: "none" },
+      { id: "insurance", title: "Certificate of Insurance (HDPM additional insured)", record: "Owner", stage: "none", note: "Management does not start without it · owner’s agent sends" },
+      { id: "utility", title: "Utility landlord agreements (copies)", record: "Property", stage: "none", note: "Optional · owner sets up with each utility and sends copies" },
+      { id: "keys", title: "Key receipt", record: "Property", stage: "none" },
+      { id: "inspection", title: "New Owner Inspection Sheet", record: "Property", stage: "none", note: "Completed items must be confirmed before advertising" },
+    ],
+    workOrders: [],
+    history: [{ who: "Kennedy", text: "D. & L. Morgan chose HDPM for 2715 NE Rainier Dr. Blue folder OW-14 started." }],
+    passed: [],
+  },
+  steps: [
+    {
+      action: "print-packet",
+      who: "Kennedy",
+      title: "A new owner signs on",
+      realWorld: "Kennedy sends the New Owner Email with blank forms attached. The owner fills in four pages by hand, and incomplete forms get sent back.",
+      inApp: "One click sends the New Owner Email with the Owner Information Packet prefilled from what the owner already told us, plus the Agency Agreement, direct deposit form and utility landlord page. The same prefilled packet prints with a QR code for owners who prefer paper.",
+      button: "Send email & print the owner packet",
+      modal: { kind: "print", docId: "ownerinfo" },
+      apply: (s) => ({
+        ...s,
+        docs: setDocs(s, ["ownerinfo", "agreement", "ach"], "printed"),
+        history: note(s, "Kennedy", "Sent the New Owner Email. Prefilled and printed the Owner Information Packet, Agency Agreement and direct deposit form (QR stamped)."),
+      }),
+    },
+    {
+      action: "pass-ashley",
+      who: "Kennedy",
+      title: "The packet goes to the owner",
+      realWorld: "The folder goes in a pile until something comes back.",
+      inApp: "Kennedy signs off his step and passes the folder to Ashley, who owns collecting the packet, keys and insurance certificate.",
+      button: "Packet sent: pass to Ashley",
+      apply: (s) => ({ ...pass(s, "Kennedy", "Ashley", "collect the packet, keys & insurance", "Collect the packet, keys & insurance"), done: [...s.done, "packet"] }),
+    },
+    {
+      action: "wait-owner",
+      who: "Ashley",
+      title: "Waiting on the owner",
+      realWorld: "Nobody is sure which of the required items came back until someone asks to list the home.",
+      inApp: "The folder moves to Ashley’s Waiting on tray with a follow-up date. The back of the folder lists every required item, so what’s missing is named.",
+      button: "Waiting on the owner",
+      apply: (s) => ({ ...s, tray: "waiting", waitingOn: "Packet, W-9, voided check, photo IDs, keys, insurance · follow up Mon", history: note(s, "Ashley", "Waiting on the signed packet, W-9, voided check, photo IDs, keys and insurance certificate. Follow up Monday.") }),
+    },
+    {
+      action: "scan-packet",
+      who: "Ashley",
+      title: "The owner drops off the packet and keys",
+      realWorld: "The pages get scanned; a blank field is noticed weeks later when the form has to go back.",
+      inApp: "Ashley scans the packet with the W-9, voided check, both photo IDs and utility landlord copies, and receipts the keys. The QR codes match OW-14, and the Desk checks the form for blank fields so an incomplete one goes back the same day.",
+      button: "Scan back packet & receipt keys",
+      modal: { kind: "scan", docId: "ownerinfo" },
+      apply: (s) => ({
+        ...s,
+        tray: "waiting",
+        waitingOn: "Insurance certificate from the owner’s agent · management can’t start without it",
+        docs: setDocs(s, ["ownerinfo", "agreement", "ach", "w9", "license", "utility", "keys"], "scanned"),
+        history: note(s, "Ashley", "Scanned the Owner Information Packet, Agency Agreement, W-9, direct deposit + voided check, photo IDs and utility landlord copies (QR matched OW-14). 3 keys + 1 garage remote receipted. Still waiting on the insurance certificate."),
+      }),
+    },
+    {
+      action: "insurance-in",
+      who: "Ashley",
+      title: "The insurance certificate arrives",
+      realWorld: "The certificate lands in someone’s inbox; nobody checks whether HDPM is actually listed.",
+      inApp: "The agent’s certificate is dropped on the folder. Ashley checks it lists High Desert Property Management, Inc. at 1515 SW Reindeer Ave as additionally insured, and the folder comes back to her In tray: management can start.",
+      button: "Certificate checked: back to In",
+      apply: (s) => ({
+        ...s,
+        tray: "in",
+        waitingOn: undefined,
+        stepLabel: "Set up owner & property in AppFolio",
+        docs: setDoc(s, "insurance", "scanned"),
+        done: [...s.done, "signed"],
+        history: note(s, "Ashley", "Certificate of Insurance received from the owner’s agent; HDPM listed as additionally insured. Management can start."),
+      }),
+    },
+    {
+      action: "appfolio",
+      who: "Ashley",
+      title: "Set up the owner and property in AppFolio",
+      realWorld: "Ashley retypes four pages of handwriting into AppFolio.",
+      inApp: "The packet’s answers (owners, HOA, utility providers, features, pets, lease term) sit beside the AppFolio setup screens. The utility providers carry into future rental agreements, as the form requires.",
+      button: "Owner & property set up",
+      apply: (s) => ({ ...s, done: [...s.done, "appfolio"], history: note(s, "Ashley", "Owner and property created in AppFolio. HOA, utility providers, pet and lease-term preferences entered from the packet.") }),
+    },
+    {
+      action: "pass-penny",
+      who: "Ashley",
+      title: "Accounting sets up distributions",
+      realWorld: "Ashley emails the direct deposit form to Penny and hopes the voided check is attached.",
+      inApp: "“Pass to Penny” sends the folder with the signed direct deposit form, voided check and W-9 already inside.",
+      button: "Pass to Penny",
+      apply: (s) => pass(s, "Ashley", "Penny", "set up direct deposit, W-9 & reserve", "Set up direct deposit, W-9 & reserve"),
+    },
+    {
+      action: "banking-pass-kennedy",
+      who: "Penny",
+      title: "Distributions ready: on to the inspection",
+      realWorld: "Penny initials the form and sets the folder on Kennedy’s desk.",
+      inApp: "Penny enters direct deposit from the voided check, records the W-9 for 1099s and sets the $500 property reserve. Monthly owner statements and ACH distributions start from here. She passes the folder to Kennedy.",
+      button: "Direct deposit set: pass to Kennedy",
+      apply: (s) => ({ ...pass(s, "Penny", "Kennedy", "new owner inspection", "New owner inspection"), done: [...s.done, "banking"] }),
+    },
+    {
+      action: "print-walk",
+      who: "Kennedy",
+      title: "New owner inspection",
+      realWorld: "Kennedy takes a clipboard and a blank inspection sheet to the house.",
+      inApp: "The New Owner Inspection Sheet prints prefilled from the packet: bedrooms, baths, heat source, water heater, fireplace, Ring camera.",
+      button: "Prefill & print the inspection sheet",
+      modal: { kind: "print", docId: "inspection" },
+      apply: (s) => ({ ...s, docs: setDoc(s, "inspection", "printed"), history: note(s, "Kennedy", "Printed the New Owner Inspection Sheet (QR stamped).") }),
+    },
+    {
+      action: "scan-walk",
+      who: "Kennedy",
+      title: "Back from the property",
+      realWorld: "The marked-up sheet sits in the truck; the items rated 2 or 3 are easy to forget.",
+      inApp: "Kennedy scans the sheet. The QR code matches OW-14, and every item rated “needs attention”, plus the re-key, goes on the back of the folder. Advertising stays blocked until they’re confirmed.",
+      button: "Scan back the inspection sheet",
+      modal: { kind: "scan", docId: "inspection" },
+      apply: (s) => ({
+        ...s,
+        docs: setDoc(s, "inspection", "scanned"),
+        done: [...s.done, "walkthrough"],
+        workOrders: [
+          { text: "Re-key all locks", done: false },
+          { text: "Replace furnace filter (rated 3)", done: false },
+          { text: "Service wood-burning fireplace (required every year)", done: false },
+          { text: "Reset Ring camera before rent ready", done: false },
+        ],
+        history: note(s, "Kennedy", "New owner inspection done (QR matched OW-14). 4 items to complete before advertising."),
+      }),
+    },
+    {
+      action: "pass-cheryl",
+      who: "Kennedy",
+      title: "Maintenance completes the items",
+      realWorld: "Cheryl hears about the new property the first time something breaks.",
+      inApp: "“Pass to Cheryl” sends the folder with the inspection sheet and the four items on the back.",
+      button: "Pass to Cheryl",
+      apply: (s) => pass(s, "Kennedy", "Cheryl", "complete inspection items & confirm", "Complete inspection items & confirm"),
+    },
+    {
+      action: "maint-pass-kennedy",
+      who: "Cheryl",
+      title: "Items complete and confirmed",
+      realWorld: "Someone mentions in the hallway that the locksmith came.",
+      inApp: "Cheryl checks off each item as vendors finish, which is the “confirmation of completed items from Owner Inspection” the packet requires, and passes the folder back to Kennedy.",
+      button: "Items confirmed: pass to Kennedy",
+      apply: (s) => ({
+        ...pass(s, "Cheryl", "Kennedy", "confirm required documents & release to advertise", "Confirm required documents · release to advertise"),
+        done: [...s.done, "maint"],
+        workOrders: s.workOrders.map((w) => ({ ...w, done: true })),
+      }),
+    },
+    {
+      action: "file",
+      who: "Kennedy",
+      title: "Everything in: file and release to advertise",
+      realWorld: "The home gets listed, and someone later notices a W-9 or insurance certificate never came.",
+      inApp: "Every required item shows as in. Kennedy files all nine documents to the owner and property records, the folder closes, and the home is cleared to advertise.",
+      button: "File all to AppFolio & release",
+      modal: { kind: "file" },
+      apply: (s) => ({ ...fileAll(s, "Kennedy", "OW-14", 9, "owner and property"), done: [...s.done, "welcome"] }),
+    },
+  ],
+  paper: {
+    ownerinfo: {
+      title: "Owner Information Packet (02)",
+      code: "OWN02",
+      typed: [["Owner #1", "Dana Morgan"], ["Owner #2", "Lee Morgan"], ["Owner email", "morgan@example.com"], ["Mailing address", "PO Box 118, Sisters OR"], ["Rental property", "2715 NE Rainier Dr, Bend 97701"], ["Rental rate", "$2,150"]],
+      blanks: ["DOB / driver’s license", "HOA · CC&Rs", "Utility providers", "Pets · lease term", "Disclosures (initials)", "Owner signatures"],
+      hand: {
+        "DOB / driver’s license": "both on file (ID copies attached)",
+        "HOA · CC&Rs": "Rainier Ridge HOA · CC&Rs yes",
+        "Utility providers": "City of Bend water/sewer, Pacific Power, Cascade Nat Gas",
+        "Pets · lease term": "pets yes, no breed limits · 12 mo",
+        "Disclosures (initials)": "DM LM  no lead / no drug info",
+        "Owner signatures": "Dana Morgan · Lee Morgan",
+      },
+      with: "The New Owner Email goes out with it, listing what’s required: direct deposit authorization with a voided check, W-9, photo ID for all owners, keys, and a Certificate of Insurance listing HDPM as additionally insured. The Utility Landlord Agreements page is included for owners who want HDPM to receive utility bills during vacancies.",
+      scanNote: "Every required field is filled in, so nothing goes back. The Agency Agreement, W-9, direct deposit form with voided check, both photo IDs and the Pacific Power and Cascade Natural Gas landlord agreements were in the same batch and matched too. Still missing: the insurance certificate.",
+    },
+    inspection: {
+      title: "New Owner Inspection Sheet",
+      code: "OWNINSP",
+      typed: [["Property", "2715 NE Rainier Dr, Bend"], ["Owner", "D. & L. Morgan"], ["From the packet", "3 bd / 2 ba · gas furnace · gas water heater"], ["Flagged by packet", "Wood fireplace · Ring camera"], ["Date", "Oct 24, 2026"]],
+      blanks: ["Smoke / CO detectors", "Furnace filter", "Knobs / locks", "Fireplace", "Overall condition"],
+      hand: { "Smoke / CO detectors": "Y / Y  good", "Furnace filter": "3: replace", "Knobs / locks": "** Re-Key **", Fireplace: "wood · 2: service due", "Overall condition": "1" },
+      scanNote: "Rating scale: 1 good · 2 fair, needs attention · 3 poor, needs attention. 4 items to complete (including the re-key). Confirm and they go on the back of the folder; advertising waits until they’re done.",
+    },
+  },
+  details: (s) => [
+    ["Owners", "Dana & Lee Morgan (sample)"],
+    ["Property", "3 bd / 2 ba · $2,150"],
+    ["Property reserve", "$500"],
+    ...REQUIRED.map(([id, label]): [string, string] => {
+      const doc = s.docs.find((d) => d.id === id);
+      const ok = id === "inspection" ? s.done.includes("maint") : doc?.stage === "scanned" || doc?.stage === "filed";
+      return [label, ok ? "✓ in" : "missing"];
+    }),
+  ],
+  closing: "Folder OW-14 is closed: every required item is in, all nine documents are filed, and the home is cleared to advertise.",
+};
+
+export const STORIES: StoryDef[] = [GOLD, GREEN, BLUE];
