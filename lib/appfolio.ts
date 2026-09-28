@@ -1095,6 +1095,8 @@ export async function fetchPropertyById(
 // ============================================
 
 interface V0Tenant {
+  TenantType?: string;
+  Pets?: Array<{ Name?: string; Type?: string; Age?: number | null; Weight?: number | null }>;
   Id: string;
   FirstName?: string;
   LastName?: string;
@@ -1121,7 +1123,16 @@ interface V0Tenant {
   }>;
 }
 
+export interface AppFolioPet {
+  name: string;
+  type: string;
+  age: number | null;
+  weight: number | null;
+}
+
 export interface AppFolioTenant {
+  tenantType?: string | null;
+  pets?: AppFolioPet[] | null;
   id: string;
   firstName: string;
   lastName: string;
@@ -1197,6 +1208,11 @@ export async function fetchAppFolioTenants(): Promise<AppFolioTenant[]> {
         city: primaryAddr?.City || null,
         currentRent: t.CurrentRent ? parseFloat(t.CurrentRent) : null,
         isPrimary: t.PrimaryTenant || false,
+        tenantType: t.TenantType || null,
+        pets: Array.isArray(t.Pets) ? t.Pets.map(p => ({
+          name: p.Name || '', type: p.Type || '',
+          age: p.Age ?? null, weight: p.Weight ?? null,
+        })) : null,
       });
     }
 
@@ -1218,6 +1234,7 @@ export async function fetchAppFolioTenants(): Promise<AppFolioTenant[]> {
 // ============================================
 
 export interface AppFolioUnit {
+  link?: string | null;
   id: string;
   propertyId: string | null;
   address1: string | null;
@@ -1273,6 +1290,7 @@ export async function fetchAppFolioUnits(): Promise<AppFolioUnit[]> {
         name: u.Name || null,
         status: u.Status || null,
         lastInspectedDate: u.LastInspectedDate || null,
+        link: u.Link || null,
       });
     }
 

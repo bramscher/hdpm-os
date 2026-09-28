@@ -1,5 +1,8 @@
 "use client";
 
+import { formatInspectionOccupants, formatInspectionPets } from '@/lib/inspection-household';
+import type { AppFolioPet } from '@/lib/appfolio';
+
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -40,6 +43,8 @@ interface RouteStop {
   city: string | null;
   unit_name: string | null;
   resident_name: string | null;
+  financially_responsible_occupants: string[] | null;
+  pets: AppFolioPet[] | null;
   property_name: string | null;
   inspection_type: string | null;
   due_date: string | null;
@@ -58,6 +63,7 @@ interface InspectionRoute {
   date: string;
   status: "draft" | "optimized" | "dispatched" | "in_progress" | "completed";
   assigned_to: string | null;
+  calendar_event_id: string | null;
   stop_count: number;
   total_drive_minutes: number | null;
   total_service_minutes: number | null;
@@ -189,6 +195,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
         date: raw.route_date,
         status: raw.status,
         assigned_to: raw.assigned_to,
+        calendar_event_id: raw.calendar_event_id || null,
         stop_count: raw.total_stops || 0,
         total_drive_minutes: raw.total_drive_minutes,
         total_service_minutes: raw.total_service_minutes,
@@ -205,6 +212,8 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
             city: prop.city || null,
             unit_name: insp.unit_name || null,
             resident_name: (insp.resident_name as string) || (prop.resident_name as string) || null,
+            financially_responsible_occupants: (prop.financially_responsible_occupants as string[] | null) ?? null,
+            pets: (prop.pets as AppFolioPet[] | null) ?? null,
             property_name: null,
             inspection_type: insp.inspection_type || null,
             due_date: insp.due_date || null,
@@ -307,7 +316,8 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
         return;
       }
       setCalendarLink(data.webLink || null);
-      alert("Route published to the Operations calendar for Brody and Operations.");
+      await fetchRoute();
+      alert(data.updated ? "Outlook event updated with the latest inspection details." : "Route published to the Operations calendar for Brody and Operations.");
     } catch (err) {
       console.error("Calendar error:", err);
       alert(`Calendar error: ${err instanceof Error ? err.message : err}`);
@@ -479,18 +489,19 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
               )}
             </button>
           )}
-          {(route.status === "optimized" || route.status === "dispatched") && (
-            calendarLink ? (
-              <a
-                href={calendarLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-green-300 text-green-700 hover:bg-green-50"
-              >
-                <ExternalLink className="w-4 h-4" />
-                View in Outlook
-              </a>
-            ) : (
+          {(route.calendar_event_id || route.status === "optimized" || route.status === "dispatched") && (
+            <>
+              {calendarLink && (
+                <a
+                  href={calendarLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-green-300 text-green-700 hover:bg-green-50"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  View in Outlook
+                </a>
+              )}
               <button
                 onClick={handleAddToCalendar}
                 disabled={addingToCalendar}
@@ -502,16 +513,16 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
                 {addingToCalendar ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    Adding...
+                    Publishing...
                   </>
                 ) : (
                   <>
                     <CalendarPlus className="w-4 h-4" />
-                    Publish to Operations
+                    {route.calendar_event_id ? "Republish to Outlook" : "Publish to Operations"}
                   </>
                 )}
               </button>
-            )
+            </>
           )}
           {route.status !== "completed" && (
             <button
@@ -698,6 +709,14 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
                           {stop.resident_name}
                         </p>
                       )}
+                      <p className="text-sm text-charcoal-700">
+                        <span className="font-medium">Financially responsible occupants:</span>{" "}
+                        {formatInspectionOccupants(stop.financially_responsible_occupants)}
+                      </p>
+                      <p className="text-sm text-charcoal-700">
+                        <span className="font-medium">Pets:</span>{" "}
+                        {formatInspectionPets(stop.pets)}
+                      </p>
                       {stop.city && (
                         <p className="text-sm text-charcoal-500">{stop.city}</p>
                       )}

@@ -2,7 +2,7 @@
 
 **Applies to:** HDPM-OS `/maintenance/inspections`
 **Owner:** Maintenance coordinator
-**Last updated:** 2026-07-24
+**Last updated:** 2026-09-28
 
 ## Purpose
 
@@ -20,7 +20,11 @@ completing an inspection automatically queues the next one.
 - **Vacant units are deferred** — no tenant, no routine inspection.
 - Units inspected within the last **90 days** show as "Recently inspected."
 - Data syncs from AppFolio **automatically every morning** (~2:30 AM Pacific):
-  properties, units (last-inspected date), and active tenants (move-in + email).
+  properties, units, completed Inspection Detail records, and active tenants.
+  The last inspection date is the newest completed visit date, unit-level date,
+  or locally recorded completion. Draft/in-progress inspections do not count.
+  Reports API credentials are required; a report failure stops the sync before
+  candidate changes are written.
   Completions recorded in HDPM-OS never get overwritten by stale AppFolio dates.
 
 ## Weekly procedure
@@ -57,12 +61,27 @@ completing an inspection automatically queues the next one.
      (`Inspections → Routes` to view, reorder, optimize, or push to calendar).
    - **Push each route to calendar** (Routes page). This emails the inspector an
      Outlook invite that doubles as the route sheet: stop-by-stop ETAs, tenant
-     names, an Apple Maps link per stop, and one-tap "Open Full Route in Apple
+     names, all financially responsible occupants, recorded pets, an Apple Maps link per stop, and one-tap "Open Full Route in Apple
      Maps / Google Maps" buttons (multi-stop directions starting from the
      office). Craig is cc'd on every route.
    - Marks each unit **Scheduled** so it drops out of the Eligible tab.
 4. Check the result message for **excluded** units (usually geocoding) and
    resolve or reschedule them.
+
+The route detail schedule and newly created calendar events include household
+details from the last candidate sync. Financial responsibility comes from
+AppFolio's `TenantType`, independently of the primary notice contact. Pets are
+collected from active occupants, with identical records shown once. “None
+recorded” means AppFolio returned an empty list; “Not available” means the data
+has not been synced or was not provided. After syncing, open each previously published route and choose **Republish to
+Outlook** to refresh its event description with the latest occupants and pets.
+This updates the linked event without creating a duplicate or changing its
+attendees or start/end times. Older personal-calendar events must be republished
+by their original publisher.
+
+Deployment prerequisite: apply `20260928_inspection_household.sql` before
+deploying the household display, then run **Sync from AppFolio** to populate
+existing inspection properties (including already scheduled candidates).
 
 ### 3. Send tenant notices (required, logged in AppFolio)
 
