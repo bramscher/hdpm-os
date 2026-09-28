@@ -1,4 +1,5 @@
 "use client";
+import { routeTimeLabel } from "@/lib/route-builder/inspection-time";
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -34,6 +35,7 @@ import { RouteCalendar } from "./route-calendar";
 interface InspectionRoute {
   id: string;
   route_date: string;
+  start_time?: string | null;
   assigned_to: string | null;
   total_stops: number;
   total_drive_minutes: number | null;
@@ -117,6 +119,7 @@ export function RouteBuilder() {
   const [generating, setGenerating] = useState(false);
   const [genSuccess, setGenSuccess] = useState<number | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
+  const [startTime, setStartTime] = useState("08:00");
   const [routeDate, setRouteDate] = useState(getDefaultRouteDate);
   const [assignee, setAssignee] = useState(DEFAULT_INSPECTOR);
   const [maxStops, setMaxStops] = useState(10);
@@ -216,6 +219,7 @@ export function RouteBuilder() {
     try {
       const payload: Record<string, unknown> = {
         date_range_start: routeDate,
+        start_time: startTime,
         date_range_end: routeDate,
         assigned_to: assignee || undefined,
       };
@@ -250,6 +254,7 @@ export function RouteBuilder() {
     setGenSuccess(null);
     setGenError(null);
     setRouteDate(getDefaultRouteDate());
+    setStartTime("08:00");
     setAssignee(DEFAULT_INSPECTOR);
     setMaxStops(10);
     setPickMode("auto");
@@ -477,7 +482,7 @@ export function RouteBuilder() {
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center gap-2 text-charcoal-600">
                       <Calendar className="w-3.5 h-3.5 text-charcoal-400" />
-                      <span>{formatRouteDate(route.route_date)}</span>
+                      <span>{formatRouteDate(route.route_date)} · {routeTimeLabel(route.start_time)}</span>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -571,6 +576,12 @@ export function RouteBuilder() {
                   <p className="text-xs text-charcoal-400 mt-1">
                     Must be at least 7 days from today for tenant notification.
                   </p>
+                </div>
+
+                <div>
+                  <label htmlFor="route-start-time" className="block text-xs font-medium text-charcoal-600 mb-1">Start time (Pacific)</label>
+                  <input id="route-start-time" type="time" required value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full border border-charcoal-300 rounded-lg px-3 py-2 text-sm" />
+                  <p className="text-xs text-charcoal-500 mt-1">Departure from the office. Each route can have its own start time.</p>
                 </div>
 
                 {/* Assignee */}
@@ -772,7 +783,7 @@ export function RouteBuilder() {
                   </button>
                   <button
                     onClick={handleGenerate}
-                    disabled={generating || !routeDate || (pickMode === "pick" && selectedIds.size === 0)}
+                    disabled={generating || !routeDate || !startTime || (pickMode === "pick" && selectedIds.size === 0)}
                     className={cn(
                       "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
                       "bg-terra-500 text-white hover:bg-terra-600 disabled:opacity-60"

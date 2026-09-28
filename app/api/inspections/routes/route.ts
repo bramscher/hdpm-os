@@ -1,3 +1,4 @@
+import { validRouteStartTime } from '@/lib/route-builder/inspection-time';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -84,6 +85,10 @@ export async function POST(request: NextRequest) {
         { error: 'date_range_start and date_range_end are required' },
         { status: 400 }
       );
+    }
+
+    if (body.start_time !== undefined && !validRouteStartTime(body.start_time)) {
+      return NextResponse.json({ error: 'Start time must be HH:mm (24-hour Pacific time).' }, { status: 400 });
     }
 
     // Enforce 7-day minimum lead time for tenant notification
@@ -291,6 +296,7 @@ export async function POST(request: NextRequest) {
         .from('route_plans')
         .insert({
           route_date: proposed.route_date,
+          start_time: body.start_time || '08:00',
           assigned_to: proposed.assigned_to || session.user?.email || 'unassigned',
           status: 'draft',
           total_drive_minutes: Math.round(proposed.total_drive_minutes || 0),

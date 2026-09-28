@@ -1,4 +1,5 @@
 "use client";
+import { routeStartTime, routeTimeLabel } from "@/lib/route-builder/inspection-time";
 
 import { formatInspectionOccupants, formatInspectionPets } from '@/lib/inspection-household';
 import type { AppFolioPet } from '@/lib/appfolio';
@@ -61,6 +62,7 @@ interface InspectionRoute {
   id: string;
   name: string;
   date: string;
+  start_time: string;
   status: "draft" | "optimized" | "dispatched" | "in_progress" | "completed";
   assigned_to: string | null;
   calendar_event_id: string | null;
@@ -140,23 +142,6 @@ function formatTime(timeStr: string | null): string {
   });
 }
 
-function computeEstimatedFinish(
-  totalDrive: number | null,
-  totalService: number | null
-): string {
-  const startHour = 8; // 8:00 AM
-  const totalMinutes =
-    (totalDrive ?? 0) + (totalService ?? 0);
-  const finishDate = new Date();
-  finishDate.setHours(startHour, 0, 0, 0);
-  finishDate.setMinutes(finishDate.getMinutes() + totalMinutes);
-  return finishDate.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
 // ────────────────────────────────────────────────
 // Component
 // ────────────────────────────────────────────────
@@ -181,6 +166,10 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
   const [addingToCalendar, setAddingToCalendar] = useState(false);
   const [calendarLink, setCalendarLink] = useState<string | null>(null);
 
+  const [startTime, setStartTime] = useState("08:00");
+  const [savingTime, setSavingTime] = useState(false);
+  const [timeMessage, setTimeMessage] = useState<string | null>(null);
+
   // ── Fetch route ──
   const fetchRoute = useCallback(async () => {
     try {
@@ -189,10 +178,12 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
       const data = await res.json();
       // Transform API shape to component shape
       const raw = data.route || data;
+      let arrivalMinutes = 0;
       const transformed: InspectionRoute = {
         id: raw.id,
         name: raw.notes || `Route ${raw.route_date}`,
         date: raw.route_date,
+        start_time: routeStartTime(raw.start_time),
         status: raw.status,
         assigned_to: raw.assigned_to,
         calendar_event_id: raw.calendar_event_id || null,
@@ -204,6 +195,9 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
         stops: (raw.stops || []).map((s: Record<string, unknown>) => {
           const insp = (s.inspections || {}) as Record<string, unknown>;
           const prop = (insp.inspection_properties || {}) as Record<string, unknown>;
+          arrivalMinutes += Number(s.travel_minutes_from_previous || 0);
+          const arrival = routeTimeLabel(raw.start_time, arrivalMinutes);
+          arrivalMinutes += Number(s.service_minutes ?? 30);
           return {
             id: s.id,
             stop_order: s.stop_order,
@@ -221,13 +215,14 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
             drive_minutes: s.travel_minutes_from_previous as number | null,
             drive_miles: null,
             service_minutes: s.service_minutes as number | null,
-            estimated_arrival: s.estimated_arrival as string | null,
+            estimated_arrival: arrival,
             lat: (prop.latitude as number) || null,
             lng: (prop.longitude as number) || null,
           };
         }),
       };
       setRoute(transformed);
+      setStartTime(transformed.start_time);
       if (raw.polyline) setPolyline(raw.polyline);
     } catch (err) {
       console.error("Fetch route error:", err);
@@ -408,7 +403,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
   const totalService = route.total_service_minutes ?? stops.reduce((sum, s) => sum + (s.service_minutes ?? 0), 0);
   const estimatedFinish = route.estimated_finish_time
     ? formatTime(route.estimated_finish_time)
-    : computeEstimatedFinish(totalDrive, totalService);
+    : routeTimeLabel(route.start_time, totalDrive + totalService);
 
   return (
     <div className="space-y-6">
@@ -504,7 +499,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
               )}
               <button
                 onClick={handleAddToCalendar}
-                disabled={addingToCalendar}
+                disabled={addingToCalendar || savingTime || startTime !== route.start_time}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
                   "border border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-60"
@@ -547,6 +542,29 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
             </button>
           )}
         </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-charcoal-200 p-4">
+        <form onSubmit={async e => {
+          e.preventDefault();
+          setSavingTime(true); setTimeMessage(null);
+          try {
+            const res = await fetch(`/api/inspections/routes/${routeId}`, {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({start_time:startTime})});
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to save start time");
+            await fetchRoute();
+            setTimeMessage(route.calendar_event_id ? "Start time saved. Republish to Outlook to update the calendar event." : "Start time saved.");
+          } catch (err) { setTimeMessage(err instanceof Error ? err.message : "Failed to save start time"); }
+          finally { setSavingTime(false); }
+        }} className="flex flex-wrap items-end gap-3">
+          <div>
+            <label htmlFor="route-start-time" className="block text-xs font-medium text-charcoal-600 mb-1">Start time (Pacific)</label>
+            <input id="route-start-time" type="time" required value={startTime} onChange={e => setStartTime(e.target.value)} disabled={savingTime || route.status === "completed"} className="border border-charcoal-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <button type="submit" disabled={savingTime || !startTime || route.status === "completed"} className="rounded-lg bg-terra-500 text-white px-4 py-2 text-sm disabled:opacity-50">{savingTime ? "Saving…" : "Save start time"}</button>
+          <p className="text-xs text-charcoal-500">Departure from the office; arrival and finish estimates adjust automatically.</p>
+        </form>
+        {timeMessage && <p role="status" className="mt-2 text-sm text-charcoal-700">{timeMessage}</p>}
       </div>
 
       {/* ── Stats Bar ── */}
@@ -646,7 +664,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
               <p className="text-sm text-charcoal-500">
                 1515 SW Reindeer Ave, Redmond
               </p>
-              <p className="text-xs text-charcoal-400 mt-0.5">8:00 AM</p>
+              <p className="text-xs text-charcoal-400 mt-0.5">{routeTimeLabel(route.start_time)}</p>
             </div>
           </div>
 
