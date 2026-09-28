@@ -5,7 +5,7 @@
  * properties and amounts only.
  */
 
-import type { FormKind } from "@/lib/habu-paper/model";
+import { TEMPLATES, type Assignment } from "@/lib/habu-paper/model";
 
 export type Person = "Ashley" | "Kennedy" | "Cheryl" | "Penny";
 export type DocStage = "none" | "prefilled" | "printed" | "scanned" | "filed";
@@ -14,7 +14,7 @@ export type ModalKind = "print" | "scan" | "file";
 export interface Doc {
   id: string;
   title: string;
-  record: "Tenant" | "Property";
+  record: "Tenant" | "Property" | "Owner";
   stage: DocStage;
   note?: string;
 }
@@ -58,10 +58,11 @@ export interface PaperDef {
 }
 
 export interface StoryDef {
-  key: "gold" | "green";
+  key: "gold" | "green" | "blue";
   label: string;
-  template: FormKind;
-  folder: { id: string; color: "gold" | "green"; kindLabel: string; address: string; city: string; tenant: string };
+  /** "How this folder moves": the modeled HABU routing, or a draft for folders not modeled yet. */
+  routing: { title: string; assignments: Assignment[]; draft?: boolean };
+  folder: { id: string; color: "gold" | "green" | "blue"; kindLabel: string; address: string; city: string; tenant?: string; owner?: string };
   initial: State;
   steps: StoryStep[];
   paper: Record<string, PaperDef>;
@@ -83,12 +84,12 @@ export const pass = (s: State, from: Person, to: Person, what: string, stepLabel
   passed: [{ from, to, what }, ...s.passed],
   history: note(s, from, `Passed the folder to ${to}: ${what}.`),
 });
-const fileAll = (s: State, who: Person, id: string, n: number): State => ({
+const fileAll = (s: State, who: Person, id: string, n: number, records = "tenant and property"): State => ({
   ...s,
   holder: "Filed",
   docs: s.docs.map((d) => ({ ...d, stage: "filed" })),
   passed: [{ from: who, to: "Filed", what: "all documents filed in AppFolio" }, ...s.passed],
-  history: note(s, who, `Filed ${n} documents to the tenant and property records in AppFolio. Folder ${id} closed.`),
+  history: note(s, who, `Filed ${n} documents to the ${records} records in AppFolio. Folder ${id} closed.`),
 });
 
 // ── Gold: vacancy ─────────────────────────────────────────
@@ -96,7 +97,7 @@ const fileAll = (s: State, who: Person, id: string, n: number): State => ({
 const GOLD: StoryDef = {
   key: "gold",
   label: "Gold folder · Vacancy",
-  template: "vacancy",
+  routing: TEMPLATES.vacancy,
   folder: { id: "VT-118", color: "gold", kindLabel: "Vacancy", address: "1420 NW Elm Ave #B", city: "Bend", tenant: "J. Rivera" },
   initial: {
     holder: "Ashley",
@@ -280,7 +281,7 @@ const GOLD: StoryDef = {
 const GREEN: StoryDef = {
   key: "green",
   label: "Green folder · New tenant setup",
-  template: "setup",
+  routing: TEMPLATES.setup,
   folder: { id: "NT-219", color: "green", kindLabel: "New tenant setup", address: "88 NW Hill St #2", city: "Bend", tenant: "M. Chen" },
   initial: {
     holder: "Ashley",
@@ -464,4 +465,215 @@ const GREEN: StoryDef = {
   closing: "Folder NT-219 is closed: tenant moved in, every step signed off, all eight documents filed.",
 };
 
-export const STORIES: StoryDef[] = [GOLD, GREEN];
+// ── Blue: owner onboarding ────────────────────────────────
+// Not yet modeled in lib/habu-paper: routing and forms below are a draft for
+// the team to correct (see docs/habu-desk-plan.md open questions).
+
+const BLUE: StoryDef = {
+  key: "blue",
+  label: "Blue folder · Owner onboarding",
+  routing: {
+    title: "Owner Onboarding (draft)",
+    draft: true,
+    assignments: [
+      { id: "packet", label: "Prepare & send the owner packet", section: "owner", owner: "property-manager", needs: [] },
+      { id: "signed", label: "Collect signed agreement, W-9 & owner info", section: "owner", owner: "front-desk", needs: ["packet"] },
+      { id: "appfolio", label: "Set up owner & property in AppFolio", section: "setup", owner: "front-desk", needs: ["signed"] },
+      { id: "banking", label: "Set up owner ACH & reserve", section: "setup", owner: "accounting", needs: ["signed"] },
+      { id: "walkthrough", label: "Baseline walkthrough, keys & photos", section: "property", owner: "property-manager", needs: ["appfolio"] },
+      { id: "maint", label: "Set up vendors, warranties & utilities", section: "property", owner: "maintenance", needs: ["walkthrough"] },
+      { id: "welcome", label: "Welcome call & close out", section: "close", owner: "property-manager", needs: ["banking", "maint"] },
+    ],
+  },
+  folder: { id: "OW-14", color: "blue", kindLabel: "Owner onboarding", address: "2715 NE Rainier Dr", city: "Bend", owner: "D. & L. Morgan" },
+  initial: {
+    holder: "Kennedy",
+    tray: "in",
+    stepLabel: "Prepare & send the owner packet",
+    daysOnDesk: 0,
+    done: [],
+    docs: [
+      { id: "agreement", title: "Property Management Agreement", record: "Owner", stage: "none", note: "1-year term, renews automatically" },
+      { id: "ownerinfo", title: "Owner Information Form", record: "Owner", stage: "none" },
+      { id: "w9", title: "Owner W-9", record: "Owner", stage: "none", note: "Owner supplies; needed before the first distribution" },
+      { id: "ach", title: "Owner ACH / Direct Deposit Authorization", record: "Owner", stage: "none" },
+      { id: "propinfo", title: "Property Information Sheet (blue sheet)", record: "Property", stage: "none", note: "Master sheet that rides in the folder" },
+      { id: "keys", title: "Key & Remote Receipt", record: "Property", stage: "none" },
+      { id: "baseline", title: "Baseline Condition Report", record: "Property", stage: "none", note: "Photos attached" },
+      { id: "welcome", title: "Owner Welcome Letter", record: "Owner", stage: "none" },
+    ],
+    workOrders: [],
+    history: [{ who: "Kennedy", text: "D. & L. Morgan agreed to sign on 2715 NE Rainier Dr. Blue folder OW-14 started." }],
+    passed: [],
+  },
+  steps: [
+    {
+      action: "print-packet",
+      who: "Kennedy",
+      title: "A new owner signs on",
+      realWorld: "Kennedy fills in the management agreement, owner information form and ACH form by hand, writing the owner’s name and address on each one.",
+      inApp: "The blue folder is on his desk. One click prefills the agreement (fee, term, reserve), owner information form, ACH form and the blue property sheet, so the details are typed once.",
+      button: "Prefill & print the owner packet",
+      modal: { kind: "print", docId: "agreement" },
+      apply: (s) => ({
+        ...s,
+        docs: setDocs(s, ["agreement", "ownerinfo", "ach", "propinfo"], "printed"),
+        history: note(s, "Kennedy", "Prefilled and printed the management agreement, owner information form, ACH form and blue property sheet (QR stamped)."),
+      }),
+    },
+    {
+      action: "pass-ashley",
+      who: "Kennedy",
+      title: "The packet goes to the owner",
+      realWorld: "The packet is mailed or handed over; the folder goes in a pile until it comes back.",
+      inApp: "Kennedy signs off his step and passes the folder to Ashley, who owns collecting the signed packet.",
+      button: "Packet sent: pass to Ashley",
+      apply: (s) => ({ ...pass(s, "Kennedy", "Ashley", "collect the signed owner packet", "Collect signed agreement, W-9 & owner info"), done: [...s.done, "packet"] }),
+    },
+    {
+      action: "wait-w9",
+      who: "Ashley",
+      title: "Waiting on the owner",
+      realWorld: "Nobody is sure whether the W-9 came back until year-end 1099s.",
+      inApp: "The folder moves to Ashley’s Waiting on tray with a follow-up date, and the missing W-9 is named on the folder.",
+      button: "Waiting on the signed packet",
+      apply: (s) => ({ ...s, tray: "waiting", waitingOn: "Signed agreement + W-9 · follow up Mon", history: note(s, "Ashley", "Waiting on the signed agreement and W-9 from the owner. Follow up Monday.") }),
+    },
+    {
+      action: "scan-packet",
+      who: "Ashley",
+      title: "The signed packet comes back",
+      realWorld: "The signed pages get scanned and someone guesses which owner folder in AppFolio they go in.",
+      inApp: "Ashley scans the signed agreement, owner information and ACH forms plus the W-9. The QR codes match them to OW-14, and the folder returns to her In tray.",
+      button: "Scan back the signed packet",
+      modal: { kind: "scan", docId: "agreement" },
+      apply: (s) => ({
+        ...s,
+        tray: "in",
+        waitingOn: undefined,
+        docs: setDocs(s, ["agreement", "ownerinfo", "ach", "w9"], "scanned"),
+        done: [...s.done, "signed"],
+        history: note(s, "Ashley", "Scanned the signed agreement, owner information form, ACH authorization and W-9 (QR matched OW-14)."),
+      }),
+    },
+    {
+      action: "appfolio",
+      who: "Ashley",
+      title: "Set up the owner and property in AppFolio",
+      realWorld: "Ashley retypes everything from the paper forms into AppFolio.",
+      inApp: "The values from the owner information form and the blue sheet appear side by side for the AppFolio setup. Ashley checks them off and signs off her step.",
+      button: "Owner & property set up",
+      apply: (s) => ({ ...s, done: [...s.done, "appfolio"], stepLabel: "Set up owner & property in AppFolio", history: note(s, "Ashley", "Owner and property created in AppFolio: 8% management fee, $300 reserve, start Nov 1.") }),
+    },
+    {
+      action: "pass-penny",
+      who: "Ashley",
+      title: "Accounting sets up distributions",
+      realWorld: "Ashley emails the ACH form to Penny and hopes it’s the right version.",
+      inApp: "“Pass to Penny” sends the folder with the signed ACH form and W-9 already inside.",
+      button: "Pass to Penny",
+      apply: (s) => pass(s, "Ashley", "Penny", "set up owner ACH & reserve", "Set up owner ACH & reserve"),
+    },
+    {
+      action: "banking-pass-kennedy",
+      who: "Penny",
+      title: "Distributions ready: on to the walkthrough",
+      realWorld: "Penny initials the form and sets the folder on Kennedy’s desk.",
+      inApp: "Penny enters the ACH details, records the W-9 for 1099s and the $300 reserve, signs off, and passes the folder to Kennedy.",
+      button: "ACH set up: pass to Kennedy",
+      apply: (s) => ({ ...pass(s, "Penny", "Kennedy", "baseline walkthrough, keys & photos", "Baseline walkthrough, keys & photos"), done: [...s.done, "banking"] }),
+    },
+    {
+      action: "print-walk",
+      who: "Kennedy",
+      title: "Baseline walkthrough",
+      realWorld: "Kennedy takes a clipboard and a blank condition form to the house.",
+      inApp: "The baseline condition report and key receipt print prefilled with the property, owner and rooms from the blue sheet.",
+      button: "Prefill & print walkthrough forms",
+      modal: { kind: "print", docId: "baseline" },
+      apply: (s) => ({ ...s, docs: setDocs(s, ["baseline", "keys"], "printed"), history: note(s, "Kennedy", "Printed the baseline condition report and key receipt (QR stamped).") }),
+    },
+    {
+      action: "scan-walk",
+      who: "Kennedy",
+      title: "Back from the property",
+      realWorld: "The marked-up form sits in the truck; the repairs noted on it are easy to forget.",
+      inApp: "Kennedy scans the report, key receipt and blue sheet. The QR codes match them to OW-14, and the noted items go on the back of the folder as owner recommendations.",
+      button: "Scan back walkthrough forms",
+      modal: { kind: "scan", docId: "baseline" },
+      apply: (s) => ({
+        ...s,
+        docs: setDocs(s, ["baseline", "keys", "propinfo"], "scanned"),
+        done: [...s.done, "walkthrough"],
+        workOrders: [
+          { text: "Gutter repair, north side (owner approved)", done: false },
+          { text: "Water heater is 2009: recommend replacement budget", done: false },
+        ],
+        history: note(s, "Kennedy", "Walkthrough done: 3 keys, 1 garage remote received. Scanned the baseline report (QR matched OW-14). 2 items noted."),
+      }),
+    },
+    {
+      action: "pass-cheryl",
+      who: "Kennedy",
+      title: "Maintenance learns the property",
+      realWorld: "Cheryl hears about the new property the first time something breaks.",
+      inApp: "“Pass to Cheryl” sends the folder with the baseline report, appliance list and the noted items on the back.",
+      button: "Pass to Cheryl",
+      apply: (s) => pass(s, "Kennedy", "Cheryl", "set up vendors, warranties & utilities", "Set up vendors, warranties & utilities"),
+    },
+    {
+      action: "maint-pass-kennedy",
+      who: "Cheryl",
+      title: "Vendors and warranties on file",
+      realWorld: "Cheryl keeps the warranty details in her own notes.",
+      inApp: "Cheryl records the appliance warranties and utility providers, schedules the gutter repair, signs off, and passes the folder back to Kennedy.",
+      button: "Set up: pass to Kennedy",
+      apply: (s) => ({
+        ...pass(s, "Cheryl", "Kennedy", "welcome call & close out", "Welcome call & close out"),
+        done: [...s.done, "maint"],
+        workOrders: s.workOrders.map((w, i) => (i === 0 ? { ...w, done: true } : w)),
+      }),
+    },
+    {
+      action: "file",
+      who: "Kennedy",
+      title: "Welcome call, file everything and close the folder",
+      realWorld: "The signed agreement lives in a filing cabinet; the rest may or may not reach AppFolio.",
+      inApp: "Kennedy makes the welcome call and the welcome letter goes out. All eight documents file to the owner and property records with standard names, and the folder closes.",
+      button: "File all to AppFolio & close",
+      modal: { kind: "file" },
+      apply: (s) => ({ ...fileAll(s, "Kennedy", "OW-14", 8, "owner and property"), done: [...s.done, "welcome"] }),
+    },
+  ],
+  paper: {
+    agreement: {
+      title: "Property Management Agreement",
+      code: "PMA",
+      typed: [["Owner", "D. & L. Morgan"], ["Property", "2715 NE Rainier Dr, Bend"], ["Management fee", "8% of rent collected"], ["Reserve", "$300"], ["Term", "Nov 1, 2026 · 1 year, auto-renews"]],
+      blanks: ["Owner signature", "Owner signature (2)", "Date", "Management signature"],
+      hand: { "Owner signature": "Dana Morgan", "Owner signature (2)": "Lee Morgan", Date: "10/21/26", "Management signature": "K. —" },
+      with: "The Owner Information Form, ACH authorization and blue Property Information Sheet print with it. The owner is asked for a W-9.",
+      scanNote: "The owner information form, ACH authorization and W-9 were in the same batch and matched too.",
+    },
+    baseline: {
+      title: "Baseline Condition Report",
+      code: "BASE",
+      typed: [["Property", "2715 NE Rainier Dr, Bend"], ["Owner", "D. & L. Morgan"], ["Type", "3 bd / 2 ba single family"], ["Walkthrough", "Oct 24, 2026"]],
+      blanks: ["Exterior & roof", "Kitchen & appliances", "Water heater / HVAC", "Keys & remotes", "Inspector signature"],
+      hand: { "Exterior & roof": "gutter loose, north side", "Kitchen & appliances": "all working", "Water heater / HVAC": "WH 2009: old; furnace ok", "Keys & remotes": "3 keys + 1 garage remote", "Inspector signature": "K. —" },
+      with: "The Key & Remote Receipt prints with it.",
+      scanNote: "2 items noted on the page. Confirm and they go on the back of the folder as owner recommendations.",
+    },
+  },
+  details: (s) => [
+    ["Owner", "D. & L. Morgan (sample)"],
+    ["Property", "3 bd / 2 ba SFR"],
+    ["Management fee", "8%"],
+    ["Reserve", "$300"],
+    ["Start", "Nov 1, 2026"],
+    ["W-9", s.done.includes("signed") ? "Received" : "(waiting)"],
+  ],
+  closing: "Folder OW-14 is closed: owner set up, every step signed off, all eight documents filed.",
+};
+
+export const STORIES: StoryDef[] = [GOLD, GREEN, BLUE];

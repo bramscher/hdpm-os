@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { ArrowRight, Check, ChevronRight, FileText, Inbox, Printer, RotateCcw, ScanLine, Send, Upload, X } from "lucide-react";
-import { TEMPLATES } from "@/lib/habu-paper/model";
 import { STORIES, type DocStage, type Doc, type PaperDef, type Person, type State, type StoryDef, type StoryStep } from "./stories";
 
 /**
@@ -30,7 +29,7 @@ type Color = "gold" | "green" | "blue";
 const FOLDER: Record<Color, { label: string; fill: string; edge: string; ink: string }> = {
   gold: { label: "Gold · Vacancy", fill: "#fbf1d2", edge: "#d4a017", ink: "#7a5a00" },
   green: { label: "Green · New tenant setup", fill: "#e3f1e4", edge: "#3f8f4f", ink: "#245c30" },
-  blue: { label: "Blue · Owner onboarding (example)", fill: "#e2ebf7", edge: "#3b6fb6", ink: "#1f4478" },
+  blue: { label: "Blue · Owner onboarding", fill: "#e2ebf7", edge: "#3b6fb6", ink: "#1f4478" },
 };
 
 const STAGES: { key: DocStage; label: string }[] = [
@@ -81,6 +80,7 @@ export default function DeskDemo() {
 
   const current = story.steps[stepIdx] as StoryStep | undefined;
   const finished = stepIdx >= story.steps.length;
+  const nextStory = STORIES[(STORIES.indexOf(story) + 1) % STORIES.length];
 
   const start = (key: StoryDef["key"]) => {
     const next = STORIES.find((s) => s.key === key)!;
@@ -176,15 +176,15 @@ export default function DeskDemo() {
             <div>
               <p className="text-[15px] font-semibold text-charcoal-900">{story.closing}</p>
               <p className="text-[12.5px] text-charcoal-500">
-                Open the Office view to see it filed, or follow the {storyKey === "gold" ? "green" : "gold"} folder next.
+                Open the Office view to see it filed, or follow the {nextStory.folder.color} folder next.
               </p>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setDesk("Office")} className="rounded-lg border border-sand-200 px-3 py-2 text-[13px] font-medium text-charcoal-700">
                 Office view
               </button>
-              <button onClick={() => start(storyKey === "gold" ? "green" : "gold")} className="rounded-lg bg-charcoal-900 px-3 py-2 text-[13px] font-medium text-white">
-                Follow the {storyKey === "gold" ? "green" : "gold"} folder
+              <button onClick={() => start(nextStory.key)} className="rounded-lg bg-charcoal-900 px-3 py-2 text-[13px] font-medium text-white">
+                Follow the {nextStory.folder.color} folder
               </button>
             </div>
           </div>
@@ -313,8 +313,9 @@ export default function DeskDemo() {
       )}
 
       <p className="mt-6 text-[11.5px] leading-relaxed text-charcoal-400">
-        Demo only: sample people, properties, amounts and folders. Routing follows the gold vacancy and green new-tenant set-up sheets
-        already modeled in HDPM-OS; form names are the transcribed HDPM forms. Folder colors other than gold and green are placeholders.
+        Demo only: sample people, properties, amounts and folders. Gold and green routing follows the vacancy and new-tenant set-up
+        sheets already modeled in HDPM-OS, with the transcribed HDPM form names. Blue owner onboarding is a draft routing for the team to
+        correct.
         Plan: docs/habu-desk-plan.md.
       </p>
     </div>
@@ -540,7 +541,7 @@ function FolderPanel({
     );
   }
 
-  const tmpl = TEMPLATES[story.template];
+  const tmpl = story.routing;
   const canAct = current && viewer === current.who && state.holder === current.who;
   return (
     <div className="h-fit overflow-hidden rounded-xl border-2 bg-white" style={{ borderColor: c.edge }}>
@@ -628,8 +629,13 @@ function FolderPanel({
         {tab === "route" && (
           <div>
             <p className="mb-2 text-[12px] text-charcoal-500">How this folder moves ({tmpl.title} routing, assigned to people):</p>
+            {tmpl.draft && (
+              <p className="mb-2 rounded-md bg-sand-50 px-2 py-1.5 text-[11.5px] text-charcoal-500">
+                Draft: owner onboarding isn’t modeled from a paper sheet yet. Steps and owners are for the team to correct.
+              </p>
+            )}
             <ol className="space-y-1.5">
-              {tmpl.assignments.map((a) => {
+              {tmpl.assignments.map((a, i) => {
                 const done = state.done.includes(a.id);
                 const ready = !done && a.needs.every((n) => state.done.includes(n));
                 const who = ROLE_PERSON[a.owner];
@@ -641,11 +647,14 @@ function FolderPanel({
                     >
                       {done ? <Check className="h-3 w-3" /> : ""}
                     </span>
-                    <span className={`flex-1 ${done ? "text-charcoal-400 line-through" : "text-charcoal-800"}`}>{a.label}</span>
+                    <span className={`flex-1 ${done ? "text-charcoal-400 line-through" : "text-charcoal-800"}`}>
+                      <span className="mr-1 text-charcoal-400">{i + 1}.</span>
+                      {a.label}
+                    </span>
                     <span className="text-[11.5px] font-medium text-charcoal-600">{who}</span>
                     {a.needs.length > 0 && !done && (
                       <span className="text-[10.5px] text-charcoal-400">
-                        after {a.needs.map((n) => tmpl.assignments.find((x) => x.id === n)?.label.split(" ")[0]).join(" + ")}
+                        after step {a.needs.map((n) => tmpl.assignments.findIndex((x) => x.id === n) + 1).join(" + ")}
                       </span>
                     )}
                   </li>
@@ -657,9 +666,9 @@ function FolderPanel({
 
         {tab === "back" && (
           <div>
-            {story.key === "gold" && (
+            {(story.key === "gold" || state.workOrders.length > 0) && (
               <>
-                <p className="mb-2 text-[12px] font-semibold text-charcoal-700">Turn work orders</p>
+                <p className="mb-2 text-[12px] font-semibold text-charcoal-700">{story.key === "gold" ? "Turn work orders" : "Work orders & owner recommendations"}</p>
                 {state.workOrders.length === 0 ? (
                   <p className="mb-4 text-[12px] text-charcoal-400">None yet. They come from the scanned move-out inspection.</p>
                 ) : (
@@ -832,6 +841,13 @@ function ScanBack({ paper, folderId, onConfirm }: { paper: PaperDef; folderId: s
   );
 }
 
+/** Standard file-name stem: no parentheticals or punctuation, cut at a word boundary. */
+function fileTitle(title: string) {
+  const clean = title.replace(/\s*\(.*?\)/g, "").replace(/[’'/]/g, "").replace(/\s+/g, " ").trim();
+  if (clean.length <= 36) return clean;
+  return clean.slice(0, 36).replace(/\s+\S*$/, "");
+}
+
 function FileToAppFolio({ docs, story, onConfirm }: { docs: Doc[]; story: StoryDef; onConfirm: () => void }) {
   return (
     <div>
@@ -850,10 +866,14 @@ function FileToAppFolio({ docs, story, onConfirm }: { docs: Doc[]; story: StoryD
             <tr key={d.id} className="border-b border-sand-100">
               <td className="py-1.5 pr-3 text-charcoal-900">{d.title}</td>
               <td className="py-1.5 pr-3 text-charcoal-600">
-                {d.record === "Tenant" ? `Tenant · ${story.folder.tenant} (sample)` : `Property · ${story.folder.address}`}
+                {d.record === "Tenant"
+                  ? `Tenant · ${story.folder.tenant} (sample)`
+                  : d.record === "Owner"
+                    ? `Owner · ${story.folder.owner} (sample)`
+                    : `Property · ${story.folder.address}`}
               </td>
               <td className="py-1.5 font-mono text-[11px] text-charcoal-500">
-                2026-10-20 {story.folder.id} {d.title.replace(/[’'()]/g, "").slice(0, 28)}.pdf
+                2026-10-20 {story.folder.id} {fileTitle(d.title)}.pdf
               </td>
             </tr>
           ))}
