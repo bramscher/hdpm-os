@@ -1,3 +1,4 @@
+import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
 import { routeCalendarEventUrl } from '@/lib/route-builder/calendar-destination';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
@@ -52,6 +53,9 @@ export async function GET(
           resident_name,
           inspection_properties (
             id,
+            name,
+            appfolio_unit_id,
+            address_2,
             address_1,
             city,
             state,
@@ -71,6 +75,8 @@ export async function GET(
       console.error('Error fetching route stops:', stopsError);
       return NextResponse.json({ error: stopsError.message }, { status: 500 });
     }
+
+    await hydrateRouteHouseholds(supabase, stops || []);
 
     return NextResponse.json({
       ...routePlan,
@@ -196,6 +202,9 @@ export async function PATCH(
           resident_name,
           inspection_properties (
             id,
+            name,
+            appfolio_unit_id,
+            address_2,
             address_1,
             city,
             state,
@@ -214,6 +223,8 @@ export async function PATCH(
     if (stopsError) {
       console.error('Error fetching updated stops:', stopsError);
     }
+
+    await hydrateRouteHouseholds(supabase, updatedStops || []);
 
     return NextResponse.json({
       ...updatedPlan,

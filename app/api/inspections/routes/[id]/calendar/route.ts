@@ -1,4 +1,5 @@
-import { ROUTE_CALENDAR_EVENTS_URL, routeCalendarEventUrl, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError } from '@/lib/route-builder/calendar-destination';
+import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
+import { ROUTE_CALENDAR_EVENTS_URL, findLegacyRouteCalendarEvent, routeCalendarEventUrl, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError } from '@/lib/route-builder/calendar-destination';
 import { NextRequest, NextResponse } from 'next/server';
 import { formatInspectionOccupants, formatInspectionPets, escapeInspectionHtml } from '@/lib/inspection-household';
 import { auth } from '@/lib/auth';
@@ -72,6 +73,7 @@ export async function POST(
             latitude,
             longitude,
             appfolio_property_id,
+            appfolio_unit_id,
             owner_name,
             financially_responsible_occupants,
             pets
@@ -84,6 +86,8 @@ export async function POST(
     if (stopsError) {
       return NextResponse.json({ error: stopsError.message }, { status: 500 });
     }
+
+    await hydrateRouteHouseholds(supabase, stops || []);
 
     // ── Build event metadata ──
     const routeDate = routePlan.route_date; // "YYYY-MM-DD"
@@ -304,7 +308,8 @@ export async function POST(
     }
 
     // ── Call Microsoft Graph API ──
-    const graphRes = await fetch(existingEventId ? routeCalendarEventUrl(existingEventId) : ROUTE_CALENDAR_EVENTS_URL, {
+    let recoveredEventId: string | null = null;
+    let graphRes = await fetch(existingEventId ? routeCalendarEventUrl(existingEventId) : ROUTE_CALENDAR_EVENTS_URL, {
       method: existingEventId ? 'PATCH' : 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -313,12 +318,23 @@ export async function POST(
       body: JSON.stringify(eventPayload),
     });
 
+    if (existingEventId && graphRes.status === 404) {
+      recoveredEventId = await findLegacyRouteCalendarEvent(existingEventId, routePlan.assigned_to, accessToken);
+      if (recoveredEventId) {
+        graphRes = await fetch(routeCalendarEventUrl(recoveredEventId), {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventPayload),
+        });
+      }
+    }
+
     if (!graphRes.ok) {
       const errorBody = await graphRes.text();
       console.error('Microsoft Graph error:', graphRes.status, errorBody);
 
       if (existingEventId && graphRes.status === 404) {
-        return NextResponse.json({ error: 'The linked Outlook event could not be found. For older personal-calendar events, sign in as the original publisher and try again. No duplicate event was created.' }, { status: 404 });
+        return NextResponse.json({ error: 'The linked Outlook event could not be found. It was not accessible in your calendar, Operations, or the assigned inspector’s shared calendar. Sign in as the original publisher, or check whether the event was deleted. No duplicate event was created.' }, { status: 404 });
       }
 
       const accessError = routeCalendarAccessError(graphRes.status);
@@ -333,13 +349,13 @@ export async function POST(
     const createdEvent = await graphRes.json();
 
     // Store the event ID on the route plan for cleanup on deletion
-    if (!existingEventId) {
+    if (!existingEventId || recoveredEventId) {
       const { error: saveError } = await supabase
         .from('route_plans')
-        .update({ calendar_event_id: storeRouteCalendarEventId(createdEvent.id) })
+        .update({ calendar_event_id: recoveredEventId || storeRouteCalendarEventId(createdEvent.id) })
         .eq('id', id);
       if (saveError) {
-        return NextResponse.json({ error: 'Outlook event was created, but its link could not be saved. Please retry publishing.' }, { status: 500 });
+        return NextResponse.json({ error: 'Outlook event was published, but its link could not be saved. Please retry publishing.' }, { status: 500 });
       }
     }
 
