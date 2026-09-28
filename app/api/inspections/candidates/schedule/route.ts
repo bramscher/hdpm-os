@@ -1,3 +1,6 @@
+import { optimizeRouteWithGoogle } from '@/lib/route-directions';
+import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
+import { routeArrival } from '@/lib/route-builder/inspection-time';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -126,7 +129,7 @@ export async function POST(request: NextRequest) {
         status: 'queued',
         priority: 'normal',
         priority_score: 50,
-        estimated_duration_minutes: 30,
+        estimated_duration_minutes: 15,
         occupancy_status: 'occupied',
         due_date: dueDate,
         last_inspection_date: c.last_inspection_date ?? null,
@@ -182,7 +185,7 @@ export async function POST(request: NextRequest) {
         lng: c.longitude as number,
         due_date: insp.due_date,
         priority: 'normal',
-        service_minutes: 30,
+        service_minutes: 15,
         days_overdue: daysOverdue,
       };
     });
@@ -224,12 +227,17 @@ export async function POST(request: NextRequest) {
     const scheduledPropertyIds = new Set<string>();
 
     for (const proposed of result.routes) {
+      const optimized = await optimizeRouteWithGoogle(proposed.stops);
+      proposed.stops = optimized.stops;
+      proposed.total_drive_minutes = optimized.total_drive_minutes;
+      const timing = inspectionSchedule(proposed.stops);
       const { data: routePlan, error: planErr } = await supabase
         .from('route_plans')
         .insert({
           route_date: proposed.route_date,
           assigned_to: proposed.assigned_to || session.user?.email || 'unassigned',
-          status: 'draft',
+          status: 'optimized',
+          optimization_method: optimized.source,
           total_drive_minutes: Math.round(proposed.total_drive_minutes || 0),
           total_service_minutes: Math.round(proposed.total_service_minutes || 0),
           total_stops: Math.round(proposed.stop_count || 0),
@@ -243,12 +251,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: planErr?.message || 'Failed to save route plan' }, { status: 500 });
       }
 
-      const stopsToInsert = proposed.stops.map((stop) => ({
+      const stopsToInsert = proposed.stops.map((stop, index) => ({
         route_plan_id: routePlan.id,
         inspection_id: stop.inspection_id,
         stop_order: stop.stop_order,
+        estimated_arrival: routeArrival(proposed.route_date, '08:00', timing.visits[index].arrivalMinutes),
         travel_minutes_from_previous: Math.round(stop.drive_minutes_from_prev || 0),
-        service_minutes: Math.round(stop.service_minutes || 30),
+        service_minutes: Math.round(stop.service_minutes || 15),
       }));
 
       const { error: stopsErr } = await supabase.from('route_stops').insert(stopsToInsert);

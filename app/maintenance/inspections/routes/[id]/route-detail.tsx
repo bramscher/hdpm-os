@@ -1,4 +1,6 @@
 "use client";
+
+import { inspectionSchedule } from "@/lib/route-builder/inspection-schedule";
 import { routeStartTime, routeTimeLabel } from "@/lib/route-builder/inspection-time";
 
 import { formatInspectionOccupants, formatInspectionPets } from '@/lib/inspection-household';
@@ -63,6 +65,7 @@ interface InspectionRoute {
   name: string;
   date: string;
   start_time: string;
+  optimization_method?: string;
   status: "draft" | "optimized" | "dispatched" | "in_progress" | "completed";
   assigned_to: string | null;
   calendar_event_id: string | null;
@@ -178,12 +181,13 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
       const data = await res.json();
       // Transform API shape to component shape
       const raw = data.route || data;
-      let arrivalMinutes = 0;
+      const timing = inspectionSchedule(raw.stops || []);
       const transformed: InspectionRoute = {
         id: raw.id,
         name: raw.notes || `Route ${raw.route_date}`,
         date: raw.route_date,
         start_time: routeStartTime(raw.start_time),
+        optimization_method: raw.optimization_method,
         status: raw.status,
         assigned_to: raw.assigned_to,
         calendar_event_id: raw.calendar_event_id || null,
@@ -192,12 +196,10 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
         total_service_minutes: raw.total_service_minutes,
         estimated_finish_time: null,
         return_drive_minutes: null,
-        stops: (raw.stops || []).map((s: Record<string, unknown>) => {
+        stops: (raw.stops || []).map((s: Record<string, unknown>, index: number) => {
           const insp = (s.inspections || {}) as Record<string, unknown>;
           const prop = (insp.inspection_properties || {}) as Record<string, unknown>;
-          arrivalMinutes += Number(s.travel_minutes_from_previous || 0);
-          const arrival = routeTimeLabel(raw.start_time, arrivalMinutes);
-          arrivalMinutes += Number(s.service_minutes ?? 30);
+          const arrival = routeTimeLabel(raw.start_time, timing.visits[index].arrivalMinutes);
           return {
             id: s.id,
             stop_order: s.stop_order,
@@ -399,14 +401,16 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
   }
 
   const stops = route.stops || [];
-  const totalDrive = route.total_drive_minutes ?? stops.reduce((sum, s) => sum + (s.drive_minutes ?? 0), 0);
-  const totalService = route.total_service_minutes ?? stops.reduce((sum, s) => sum + (s.service_minutes ?? 0), 0);
+  const timing = inspectionSchedule(stops.map(stop => ({...stop, travel_minutes_from_previous:stop.drive_minutes})));
+  const totalDrive = timing.driveMinutes;
+  const totalService = timing.serviceMinutes;
   const estimatedFinish = route.estimated_finish_time
     ? formatTime(route.estimated_finish_time)
-    : routeTimeLabel(route.start_time, totalDrive + totalService);
+    : routeTimeLabel(route.start_time, timing.totalMinutes);
 
   return (
     <div className="space-y-6">
+      <p className="text-sm text-charcoal-500">New and recalculated routes use 15 minutes per inspection. Arrival estimates include driving time and a 5-minute parking/access buffer between inspections. {route.optimization_method === "google" ? "Driving times use Google road estimates." : "Driving times are approximate distance estimates."} After recalculating, republish to Outlook to update the itinerary.</p>
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
@@ -440,7 +444,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
         </div>
 
         <div className="flex items-center gap-3">
-          {route.status === "draft" && (
+          {(route.status === "draft" || route.status === "optimized") && (
             <button
               onClick={handleOptimize}
               disabled={optimizing}
@@ -457,7 +461,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
               ) : (
                 <>
                   <Navigation className="w-4 h-4" />
-                  Optimize Route
+                  Recalculate Route & Times
                 </>
               )}
             </button>

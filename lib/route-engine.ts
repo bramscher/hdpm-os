@@ -35,7 +35,7 @@ const PRIORITY_WEIGHT: Record<InspectionPriority, number> = {
 };
 
 /** Default service time per stop in minutes */
-const DEFAULT_SERVICE_MINUTES = 30;
+const DEFAULT_SERVICE_MINUTES = 15;
 
 /** Default max stops per route */
 const DEFAULT_MAX_STOPS = 10;
@@ -187,11 +187,11 @@ interface TSPNode {
  * @param startLng - starting longitude (default: HDPM office)
  * @returns reordered array of inspections
  */
-export function solveNearestNeighborTSP(
-  stops: GeoInspection[],
+export function solveNearestNeighborTSP<T extends { lat: number; lng: number }>(
+  stops: T[],
   startLat: number = HDPM_OFFICE_LAT,
   startLng: number = HDPM_OFFICE_LNG
-): GeoInspection[] {
+): T[] {
   if (stops.length <= 1) return [...stops];
 
   const unvisited: TSPNode[] = stops.map((s, i) => ({
@@ -200,7 +200,7 @@ export function solveNearestNeighborTSP(
     lng: s.lng,
   }));
 
-  const ordered: GeoInspection[] = [];
+  const ordered: T[] = [];
   let currentLat = startLat;
   let currentLng = startLng;
 
@@ -227,6 +227,25 @@ export function solveNearestNeighborTSP(
     currentLng = chosen.lng;
   }
 
+  // Remove crossing/backtracking segments while keeping departure fixed.
+  // Open route: no assumed return trip to the office.
+  const distance = (a: {lat:number;lng:number}, b: {lat:number;lng:number}) => haversineDistance(a.lat,a.lng,b.lat,b.lng);
+  for (let pass = 0; pass < 20; pass++) {
+    let improved = false;
+    for (let i = 0; i < ordered.length - 1; i++) {
+      for (let j = i + 1; j < ordered.length; j++) {
+        const before = i === 0 ? {lat:startLat,lng:startLng} : ordered[i-1];
+        const after = ordered[j+1];
+        const oldLength = distance(before,ordered[i]) + (after ? distance(ordered[j],after) : 0);
+        const newLength = distance(before,ordered[j]) + (after ? distance(ordered[i],after) : 0);
+        if (newLength + 0.01 < oldLength) {
+          ordered.splice(i,j-i+1,...ordered.slice(i,j+1).reverse());
+          improved = true;
+        }
+      }
+    }
+    if (!improved) break;
+  }
   return ordered;
 }
 
@@ -259,7 +278,7 @@ export function buildRoutePlans(
   inspections: GeoInspection[],
   options: BuildRouteOptions
 ): RouteGenerationResult {
-  const maxStops = options.max_stops_per_route ?? DEFAULT_MAX_STOPS;
+  const maxStops = Math.max(1, Math.floor(options.max_stops_per_route || DEFAULT_MAX_STOPS));
   const startLat = options.start_lat ?? HDPM_OFFICE_LAT;
   const startLng = options.start_lng ?? HDPM_OFFICE_LNG;
 
@@ -301,9 +320,16 @@ export function buildRoutePlans(
   const subRoutes: SubRoute[] = [];
 
   for (const cluster of clusters) {
-    const members = cluster.inspections;
-    for (let i = 0; i < members.length; i += maxStops) {
-      const chunk = members.slice(i, i + maxStops);
+    const remaining = [...cluster.inspections];
+    while (remaining.length > 0) {
+      // Start with the most urgent remaining inspection, then fill this route
+      // with its nearest neighbors instead of splitting by import/due-date order.
+      const seed = remaining.shift()!;
+      const nearby = [...remaining].sort((a,b) =>
+        haversineDistance(seed.lat,seed.lng,a.lat,a.lng) - haversineDistance(seed.lat,seed.lng,b.lat,b.lng));
+      const chunk = [seed, ...nearby.slice(0,maxStops-1)];
+      const chosen = new Set(chunk);
+      for (let i = remaining.length-1; i >= 0; i--) if (chosen.has(remaining[i])) remaining.splice(i,1);
       subRoutes.push({
         city: cluster.city,
         inspections: chunk,

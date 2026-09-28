@@ -1,3 +1,6 @@
+import { optimizeRouteWithGoogle } from '@/lib/route-directions';
+import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
+import { routeArrival } from '@/lib/route-builder/inspection-time';
 import { loadInspectionQueue, inspectionExcluded } from '@/lib/inspection-queue';
 import { validRouteStartTime } from '@/lib/route-builder/inspection-time';
 import { NextRequest, NextResponse } from 'next/server';
@@ -194,7 +197,7 @@ export async function POST(request: NextRequest) {
         lng: prop.longitude,
         due_date: insp.due_date,
         priority: insp.priority || 'normal',
-        service_minutes: 30,
+        service_minutes: 15,
         days_overdue: daysOverdue,
       });
     }
@@ -300,6 +303,10 @@ export async function POST(request: NextRequest) {
     const routesToCreate = result.routes.slice(0, 1);
 
     for (const proposed of routesToCreate) {
+      const optimized = await optimizeRouteWithGoogle(proposed.stops);
+      proposed.stops = optimized.stops;
+      proposed.total_drive_minutes = optimized.total_drive_minutes;
+      const timing = inspectionSchedule(proposed.stops);
       // Insert route plan
       const { data: routePlan, error: planError } = await supabase
         .from('route_plans')
@@ -307,7 +314,8 @@ export async function POST(request: NextRequest) {
           route_date: proposed.route_date,
           start_time: body.start_time || '08:00',
           assigned_to: proposed.assigned_to || session.user?.email || 'unassigned',
-          status: 'draft',
+          status: 'optimized',
+          optimization_method: optimized.source,
           total_drive_minutes: Math.round(proposed.total_drive_minutes || 0),
           total_service_minutes: Math.round(proposed.total_service_minutes || 0),
           total_stops: Math.round(proposed.stop_count || 0),
@@ -322,12 +330,13 @@ export async function POST(request: NextRequest) {
       }
 
       // Insert route stops
-      const stopsToInsert = proposed.stops.map((stop) => ({
+      const stopsToInsert = proposed.stops.map((stop, index) => ({
         route_plan_id: routePlan.id,
         inspection_id: stop.inspection_id,
         stop_order: stop.stop_order,
+        estimated_arrival: routeArrival(proposed.route_date, body.start_time || '08:00', timing.visits[index].arrivalMinutes),
         travel_minutes_from_previous: Math.round(stop.drive_minutes_from_prev || 0),
-        service_minutes: Math.round(stop.service_minutes || 30),
+        service_minutes: Math.round(stop.service_minutes || 15),
       }));
 
       const { error: stopsError } = await supabase

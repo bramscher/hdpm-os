@@ -9,7 +9,7 @@
 
 import type { ProposedStop } from '@/types/routes';
 import { HDPM_OFFICE_LAT, HDPM_OFFICE_LNG } from '@/types/routes';
-import { haversineDistance, estimateDriveMinutes } from '@/lib/route-engine';
+import { haversineDistance, estimateDriveMinutes, solveNearestNeighborTSP } from '@/lib/route-engine';
 
 // ============================================
 // Google Directions API Types
@@ -62,7 +62,7 @@ export interface OptimizedRouteResult {
  * each consecutive pair.
  *
  * Graceful degradation: if the API call fails for any reason, falls back
- * to Haversine-based estimates with the original stop order preserved.
+ * to Haversine-based estimates with proximity-optimized stop order.
  *
  * @param stops - proposed stops (must have lat/lng)
  * @param startLat - starting latitude (default: HDPM office)
@@ -84,9 +84,7 @@ export async function optimizeRouteWithGoogle(
     };
   }
 
-  if (stops.length === 1) {
-    return buildHaversineFallback(stops, startLat, startLng);
-  }
+  stops = solveNearestNeighborTSP(stops, startLat, startLng);
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
@@ -119,7 +117,7 @@ export async function optimizeRouteWithGoogle(
     }
 
     const url = `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     const data: GoogleDirectionsResponse = await res.json();
 
     if (data.status !== 'OK' || data.routes.length === 0) {
@@ -133,6 +131,13 @@ export async function optimizeRouteWithGoogle(
 
     const route = data.routes[0];
     const waypointOrder = route.waypoint_order || [];
+    if (route.legs.length !== stops.length || waypointOrder.length !== waypointStops.length
+      || new Set(waypointOrder).size !== waypointStops.length
+      || waypointOrder.some(i => !Number.isInteger(i) || i < 0 || i >= waypointStops.length)
+      || route.legs.some(leg => !Number.isFinite(leg.duration?.value) || leg.duration.value < 0
+        || !Number.isFinite(leg.distance?.value) || leg.distance.value < 0)) {
+      return buildHaversineFallback(stops, startLat, startLng);
+    }
 
     // Rebuild the stop order based on Google's optimization
     // waypoint_order maps to the intermediate waypoints (all except last)
@@ -152,7 +157,7 @@ export async function optimizeRouteWithGoogle(
     for (let i = 0; i < reordered.length; i++) {
       const leg = route.legs[i];
       if (leg) {
-        const driveMin = Math.round((leg.duration.value / 60) * 10) / 10;
+        const driveMin = Math.ceil(leg.duration.value / 60);
         const driveMeters = leg.distance.value;
 
         reordered[i] = {
@@ -234,7 +239,7 @@ export async function getRoutePolyline(
     }
 
     const url = `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     const data: GoogleDirectionsResponse = await res.json();
 
     if (data.status !== 'OK' || data.routes.length === 0) {
@@ -260,7 +265,7 @@ export async function getRoutePolyline(
 
 /**
  * Build a fallback route result using Haversine distance estimates.
- * Preserves the existing stop order and computes approximate drive
+ * Uses the proximity-optimized stop order and computes approximate drive
  * times using the 50 km/h average with a 1.3x winding factor.
  */
 function buildHaversineFallback(
@@ -287,7 +292,7 @@ function buildHaversineFallback(
   for (let i = 0; i < stops.length; i++) {
     const stop = stops[i];
     const distMeters = haversineDistance(prevLat, prevLng, stop.lat, stop.lng);
-    const driveMin = estimateDriveMinutes(distMeters);
+    const driveMin = Math.ceil(estimateDriveMinutes(distMeters));
 
     result.push({
       ...stop,
