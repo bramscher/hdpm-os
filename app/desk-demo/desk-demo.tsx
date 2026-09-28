@@ -3,21 +3,22 @@
 import { useMemo, useState } from "react";
 import { ArrowRight, Check, ChevronRight, FileText, Inbox, Printer, RotateCcw, ScanLine, Send, Upload, X } from "lucide-react";
 import { TEMPLATES } from "@/lib/habu-paper/model";
+import { STORIES, type DocStage, type Doc, type PaperDef, type Person, type State, type StoryDef, type StoryStep } from "./stories";
 
 /**
- * The Desk — Stage 0 demo (docs/habu-desk-plan.md). Follows one gold
- * vacancy folder across four desks. All data is sample data held in page
- * state; nothing is saved, printed, uploaded or sent.
+ * The Desk — Stage 0 demo (docs/habu-desk-plan.md). Follow one folder across
+ * the desks: the gold vacancy folder or the green new-tenant-setup folder
+ * (stories.ts). All data is sample data held in page state; nothing is saved,
+ * printed, uploaded or sent.
  */
 
-type Person = "Ashley" | "Kennedy" | "Cheryl" | "Penny";
 const PEOPLE: { name: Person; role: string }[] = [
   { name: "Ashley", role: "Front Desk" },
   { name: "Kennedy", role: "Property Manager" },
   { name: "Cheryl", role: "Maintenance" },
   { name: "Penny", role: "Accounting" },
 ];
-// The vacancy template's roles, mapped to the people who hold them.
+// The routing templates' roles, mapped to the people who hold them.
 const ROLE_PERSON: Record<string, Person> = {
   "front-desk": "Ashley",
   "property-manager": "Kennedy",
@@ -32,20 +33,12 @@ const FOLDER: Record<Color, { label: string; fill: string; edge: string; ink: st
   blue: { label: "Blue · Owner onboarding (example)", fill: "#e2ebf7", edge: "#3b6fb6", ink: "#1f4478" },
 };
 
-type DocStage = "none" | "prefilled" | "printed" | "scanned" | "filed";
 const STAGES: { key: DocStage; label: string }[] = [
   { key: "prefilled", label: "Prefilled" },
   { key: "printed", label: "On paper" },
   { key: "scanned", label: "Scanned back" },
   { key: "filed", label: "Filed in AppFolio" },
 ];
-interface Doc {
-  id: string;
-  title: string;
-  record: string; // AppFolio record it files to
-  stage: DocStage;
-  note?: string;
-}
 
 interface Folder {
   id: string;
@@ -76,271 +69,53 @@ const BACKGROUND: Folder[] = [
   { id: "VT-102", color: "gold", title: "Vacancy", address: "2980 SW Obsidian Ave", holder: "Penny", tray: "in", step: "Complete tenant accounting", days: 3, due: "Thu" },
 ];
 
-interface State {
-  holder: Person | "Filed";
-  tray: "in" | "waiting";
-  waitingOn?: string;
-  stepLabel: string;
-  daysOnDesk: number;
-  done: string[]; // vacancy assignment ids signed off
-  docs: Doc[];
-  workOrders: { text: string; done: boolean }[];
-  history: { who: string; text: string }[];
-  passed: { from: Person; to: Person | "Filed"; what: string }[];
-}
-
-const INITIAL: State = {
-  holder: "Ashley",
-  tray: "in",
-  stepLabel: "Prepare and submit notice",
-  daysOnDesk: 0,
-  done: [],
-  docs: [
-    { id: "notice", title: "Tenant’s notice to vacate", record: "Tenant record", stage: "scanned", note: "Arrived by email: already a scan" },
-    { id: "confirm", title: "Confirmation of notice to vacate", record: "Tenant record", stage: "none" },
-    { id: "tracking", title: "Gold vacancy tracking sheet", record: "Property record", stage: "none", note: "Master sheet that rides in the folder" },
-    { id: "inspection", title: "Move-out inspection", record: "Tenant record", stage: "none" },
-    { id: "accounting", title: "Final accounting & deposit statement", record: "Tenant record", stage: "none" },
-  ],
-  workOrders: [],
-  history: [{ who: "Ashley", text: "Notice to vacate received for 1420 NW Elm Ave #B. Gold folder VT-118 started." }],
-  passed: [],
-};
-
-type ActionId =
-  | "print-front"
-  | "pass-kennedy"
-  | "email-owner"
-  | "owner-replied"
-  | "print-inspection"
-  | "scan-inspection"
-  | "pass-cheryl"
-  | "complete-wos"
-  | "pass-verify"
-  | "verify-pass-penny"
-  | "closeout"
-  | "file";
-
-interface StoryStep {
-  action: ActionId;
-  who: Person;
-  title: string;
-  realWorld: string;
-  inApp: string;
-  button: string;
-  apply: (s: State) => State;
-}
-
-const setDoc = (s: State, id: string, stage: DocStage): Doc[] => s.docs.map((d) => (d.id === id ? { ...d, stage } : d));
-const pass = (s: State, from: Person, to: Person, what: string, stepLabel: string): State => ({
-  ...s,
-  holder: to,
-  tray: "in",
-  waitingOn: undefined,
-  stepLabel,
-  daysOnDesk: 0,
-  passed: [{ from, to, what }, ...s.passed],
-  history: [...s.history, { who: from, text: `Passed the folder to ${to}: ${what}.` }],
-});
-
-const STORY: StoryStep[] = [
-  {
-    action: "print-front",
-    who: "Ashley",
-    title: "A notice to vacate arrives",
-    realWorld: "Ashley pulls a gold folder, fills in the tracking sheet by hand and types a confirmation letter.",
-    inApp: "The gold folder is already on her desk. One click prefills the tracking sheet and the confirmation letter with the tenant, unit, owner and dates, then prints them with a QR code in the corner.",
-    button: "Prefill & print both forms",
-    apply: (s) => ({
-      ...s,
-      docs: setDoc({ ...s, docs: setDoc(s, "tracking", "printed") }, "confirm", "printed"),
-      history: [...s.history, { who: "Ashley", text: "Prefilled and printed the tracking sheet and confirmation letter (QR stamped)." }],
-    }),
-  },
-  {
-    action: "pass-kennedy",
-    who: "Ashley",
-    title: "Hand the folder to the property manager",
-    realWorld: "The folder goes on Kennedy’s desk. Nobody else knows where it is.",
-    inApp: "“Pass to Kennedy” signs off Ashley’s step. The folder lands on top of Kennedy’s In tray, and Ashley can see it in Passed on.",
-    button: "Pass to Kennedy",
-    apply: (s) => ({ ...pass(s, "Ashley", "Kennedy", "confirm owner and listing", "Confirm owner and listing details"), done: [...s.done, "notice"] }),
-  },
-  {
-    action: "email-owner",
-    who: "Kennedy",
-    title: "Waiting on the owner",
-    realWorld: "Kennedy emails the owner and the folder sits in a pile until they reply.",
-    inApp: "The folder moves to Kennedy’s Waiting on tray with a follow-up date, so it can’t get buried.",
-    button: "Emailed owner: wait for reply",
-    apply: (s) => ({
-      ...s,
-      tray: "waiting",
-      waitingOn: "Owner approval · follow up Thu",
-      history: [...s.history, { who: "Kennedy", text: "Emailed the owner for approval to list. Follow up Thursday." }],
-    }),
-  },
-  {
-    action: "owner-replied",
-    who: "Kennedy",
-    title: "The owner replies",
-    realWorld: "Kennedy digs the folder back out of the stack.",
-    inApp: "One click puts it back in the In tray. Owner and listing are signed off, and the keys come back.",
-    button: "Owner approved: back to In",
-    apply: (s) => ({
-      ...s,
-      tray: "in",
-      waitingOn: undefined,
-      stepLabel: "Inspect the unit",
-      done: [...s.done, "owner", "advertising", "keys"],
-      history: [...s.history, { who: "Kennedy", text: "Owner approved listing at $1,895. Keys returned and receipted." }],
-    }),
-  },
-  {
-    action: "print-inspection",
-    who: "Kennedy",
-    title: "Print the move-out inspection",
-    realWorld: "Kennedy prints a blank inspection form and writes the address and names by hand.",
-    inApp: "The inspection form prints already filled in with the unit, tenant, move-out date and the move-in condition notes. Kennedy only writes what she finds.",
-    button: "Prefill & print inspection",
-    apply: (s) => ({
-      ...s,
-      docs: setDoc(s, "inspection", "printed"),
-      history: [...s.history, { who: "Kennedy", text: "Printed the prefilled move-out inspection (QR stamped)." }],
-    }),
-  },
-  {
-    action: "scan-inspection",
-    who: "Kennedy",
-    title: "Scan the hand-written inspection back",
-    realWorld: "The written form goes back in the folder and might get scanned weeks later, into the wrong record.",
-    inApp: "Kennedy scans it. The QR code tells the app which folder and form it is, and the three repairs she wrote down become work orders on the back of the folder.",
-    button: "Scan back inspection",
-    apply: (s) => ({
-      ...s,
-      docs: setDoc(s, "inspection", "scanned"),
-      done: [...s.done, "inspection"],
-      workOrders: [
-        { text: "Patch and paint hallway wall", done: false },
-        { text: "Replace bathroom fan cover", done: false },
-        { text: "Deep clean carpet, back bedroom", done: false },
-      ],
-      history: [...s.history, { who: "Kennedy", text: "Scanned the inspection back (QR matched VT-118 · Move-out inspection v1). 3 turn work orders added." }],
-    }),
-  },
-  {
-    action: "pass-cheryl",
-    who: "Kennedy",
-    title: "Send it to maintenance",
-    realWorld: "The folder is walked over to Cheryl.",
-    inApp: "“Pass to Cheryl” puts it on her desk with the work orders on the back.",
-    button: "Pass to Cheryl",
-    apply: (s) => pass(s, "Kennedy", "Cheryl", "complete turn work orders", "Complete turn work orders"),
-  },
-  {
-    action: "complete-wos",
-    who: "Cheryl",
-    title: "Turn work gets done",
-    realWorld: "Cheryl ticks the work orders on the paper as the crew finishes.",
-    inApp: "She checks them off on the folder. The app won’t let the folder move on while any are open.",
-    button: "Complete all 3 work orders",
-    apply: (s) => ({
-      ...s,
-      workOrders: s.workOrders.map((w) => ({ ...w, done: true })),
-      done: [...s.done, "turn-work"],
-      history: [...s.history, { who: "Cheryl", text: "Completed all 3 turn work orders." }],
-    }),
-  },
-  {
-    action: "pass-verify",
-    who: "Cheryl",
-    title: "Back to the property manager to verify",
-    realWorld: "Cheryl tells Kennedy the unit is ready, or forgets to.",
-    inApp: "“Pass to Kennedy” returns it for the final walk-through.",
-    button: "Pass to Kennedy",
-    apply: (s) => pass(s, "Cheryl", "Kennedy", "verify unit readiness", "Verify unit readiness"),
-  },
-  {
-    action: "verify-pass-penny",
-    who: "Kennedy",
-    title: "Verified: on to accounting",
-    realWorld: "Kennedy signs the sheet and drops the folder in Penny’s basket.",
-    inApp: "Kennedy signs off the unit as ready and passes the folder to Penny for the final accounting.",
-    button: "Verify & pass to Penny",
-    apply: (s) => ({ ...pass(s, "Kennedy", "Penny", "complete tenant accounting", "Complete tenant accounting"), done: [...s.done, "verify"] }),
-  },
-  {
-    action: "closeout",
-    who: "Penny",
-    title: "Close out the tenant",
-    realWorld: "Penny writes up the deposit statement and scans the stack when she has time.",
-    inApp: "The deposit statement is generated from the ledger. Penny scans the tracking sheet and confirmation letter back, and the QR codes match them to this folder.",
-    button: "Finish accounting & scan back",
-    apply: (s) => ({
-      ...s,
-      done: [...s.done, "closeout"],
-      docs: s.docs.map((d) =>
-        d.id === "accounting" ? { ...d, stage: "prefilled" } : d.id === "tracking" || d.id === "confirm" ? { ...d, stage: "scanned" } : d
-      ),
-      history: [...s.history, { who: "Penny", text: "Deposit statement generated. Tracking sheet and confirmation scanned back (QR matched)." }],
-    }),
-  },
-  {
-    action: "file",
-    who: "Penny",
-    title: "File everything in AppFolio and close the folder",
-    realWorld: "Someone eventually uploads the scans, if they remember and pick the right record.",
-    inApp: "Every document files to the right AppFolio record with a standard file name. The folder closes only when all of them show as filed.",
-    button: "File all to AppFolio & close",
-    apply: (s) => ({
-      ...s,
-      holder: "Filed",
-      docs: s.docs.map((d) => ({ ...d, stage: "filed" })),
-      passed: [{ from: "Penny", to: "Filed", what: "all documents filed in AppFolio" }, ...s.passed],
-      history: [...s.history, { who: "Penny", text: "Filed 5 documents to the tenant and property records in AppFolio. Folder VT-118 closed." }],
-    }),
-  },
-];
-
 export default function DeskDemo() {
-  const [state, setState] = useState<State>(INITIAL);
+  const [storyKey, setStoryKey] = useState<StoryDef["key"]>("gold");
+  const story = STORIES.find((s) => s.key === storyKey)!;
+  const [state, setState] = useState<State>(story.initial);
   const [stepIdx, setStepIdx] = useState(0);
   const [desk, setDesk] = useState<Person | "Office">("Ashley");
   const [open, setOpen] = useState<string | null>(null);
   const [tab, setTab] = useState<"route" | "contents" | "back" | "history">("contents");
-  const [modal, setModal] = useState<null | { kind: "print" | "scan" | "file"; docId?: string }>(null);
+  const [modal, setModal] = useState<StoryStep["modal"] | null>(null);
 
-  const current = STORY[stepIdx] as StoryStep | undefined;
-  const finished = stepIdx >= STORY.length;
+  const current = story.steps[stepIdx] as StoryStep | undefined;
+  const finished = stepIdx >= story.steps.length;
 
-  const act = (action: ActionId) => {
-    if (!current || current.action !== action) return;
-    setState((s) => current.apply(s));
-    setStepIdx((i) => i + 1);
-    const next = STORY[stepIdx + 1];
-    if (next && next.who !== current.who) {
-      setDesk(next.who);
-    }
+  const start = (key: StoryDef["key"]) => {
+    const next = STORIES.find((s) => s.key === key)!;
+    setStoryKey(key);
+    setState(next.initial);
+    setStepIdx(0);
+    setDesk(next.steps[0].who);
+    setOpen(null);
+    setModal(null);
+    setTab("contents");
   };
 
-  // Show the right preview for print/scan/file steps, otherwise act directly.
+  // Apply the current step (after any preview was confirmed) and follow the folder to the next desk.
+  const act = () => {
+    if (!current) return;
+    setState((s) => current.apply(s));
+    setStepIdx((i) => i + 1);
+    const next = story.steps[stepIdx + 1];
+    if (next && next.who !== current.who) setDesk(next.who);
+    if (current.modal?.kind === "file") setDesk("Office");
+  };
+
   const runStep = () => {
     if (!current) return;
     if (desk !== current.who) setDesk(current.who);
-    setOpen("VT-118");
-    if (current.action === "print-front") setModal({ kind: "print", docId: "tracking" });
-    else if (current.action === "print-inspection") setModal({ kind: "print", docId: "inspection" });
-    else if (current.action === "scan-inspection") setModal({ kind: "scan", docId: "inspection" });
-    else if (current.action === "closeout") setModal({ kind: "scan", docId: "tracking" });
-    else if (current.action === "file") setModal({ kind: "file" });
-    else act(current.action);
+    setOpen(story.folder.id);
+    if (current.modal) setModal(current.modal);
+    else act();
   };
 
   const main: Folder = {
-    id: "VT-118",
-    color: "gold",
-    title: "Vacancy",
-    address: "1420 NW Elm Ave #B",
+    id: story.folder.id,
+    color: story.folder.color,
+    title: story.folder.kindLabel,
+    address: story.folder.address,
     holder: state.holder,
     tray: state.tray,
     step: state.stepLabel,
@@ -349,15 +124,7 @@ export default function DeskDemo() {
     waitingOn: state.waitingOn,
     main: true,
   };
-  const folders = useMemo(() => [main, ...BACKGROUND], [state]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const reset = () => {
-    setState(INITIAL);
-    setStepIdx(0);
-    setDesk("Ashley");
-    setOpen(null);
-    setModal(null);
-  };
+  const folders = useMemo(() => [main, ...BACKGROUND.filter((b) => b.id !== main.id)], [state, story]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="mx-auto max-w-[1400px] px-6 py-6">
@@ -370,40 +137,63 @@ export default function DeskDemo() {
             printout to AppFolio.
           </p>
         </div>
-        <button onClick={reset} className="flex items-center gap-1.5 rounded-lg border border-sand-200 px-3 py-1.5 text-[12.5px] text-charcoal-600 hover:bg-sand-50">
-          <RotateCcw className="h-3.5 w-3.5" /> Start over
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] text-charcoal-500">Follow:</span>
+          {STORIES.map((s) => {
+            const c = FOLDER[s.folder.color];
+            const active = s.key === storyKey;
+            return (
+              <button
+                key={s.key}
+                onClick={() => start(s.key)}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12.5px] font-medium ${active ? "border-charcoal-900 bg-charcoal-900 text-white" : "border-sand-200 bg-white text-charcoal-700 hover:bg-sand-50"}`}
+              >
+                <span className="h-3 w-3 rounded-sm" style={{ background: c.edge }} />
+                {s.label}
+              </button>
+            );
+          })}
+          <button onClick={() => start(storyKey)} className="flex items-center gap-1.5 rounded-lg border border-sand-200 px-3 py-1.5 text-[12.5px] text-charcoal-600 hover:bg-sand-50">
+            <RotateCcw className="h-3.5 w-3.5" /> Start over
+          </button>
+        </div>
       </div>
 
       {/* Guided story */}
       <div className="mb-5 rounded-xl border border-sand-200 bg-white p-4">
         <div className="mb-3 flex items-center gap-1">
-          {STORY.map((s, i) => (
+          {story.steps.map((s, i) => (
             <div
               key={s.action}
               title={`${i + 1}. ${s.title} (${s.who})`}
-              className={`h-1.5 flex-1 rounded-full ${i < stepIdx ? "bg-charcoal-900" : i === stepIdx ? "bg-[#d4a017]" : "bg-sand-200"}`}
+              className="h-1.5 flex-1 rounded-full"
+              style={{ background: i < stepIdx ? "#111" : i === stepIdx ? FOLDER[story.folder.color].edge : "#eaeaea" }}
             />
           ))}
         </div>
         {finished ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[15px] font-semibold text-charcoal-900">Folder VT-118 is closed: every step signed off, every document filed.</p>
+              <p className="text-[15px] font-semibold text-charcoal-900">{story.closing}</p>
               <p className="text-[12.5px] text-charcoal-500">
-                Open the Office view to see it filed, or click any desk to see what&apos;s still on it.
+                Open the Office view to see it filed, or follow the {storyKey === "gold" ? "green" : "gold"} folder next.
               </p>
             </div>
-            <button onClick={() => setDesk("Office")} className="rounded-lg bg-charcoal-900 px-3 py-2 text-[13px] font-medium text-white">
-              Office view
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setDesk("Office")} className="rounded-lg border border-sand-200 px-3 py-2 text-[13px] font-medium text-charcoal-700">
+                Office view
+              </button>
+              <button onClick={() => start(storyKey === "gold" ? "green" : "gold")} className="rounded-lg bg-charcoal-900 px-3 py-2 text-[13px] font-medium text-white">
+                Follow the {storyKey === "gold" ? "green" : "gold"} folder
+              </button>
+            </div>
           </div>
         ) : (
           current && (
             <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
               <div>
                 <p className="text-[11px] font-medium text-charcoal-400">
-                  Step {stepIdx + 1} of {STORY.length} · {current.who}&apos;s desk
+                  {story.label} · step {stepIdx + 1} of {story.steps.length} · {current.who}&apos;s desk
                 </p>
                 <p className="text-[15px] font-semibold text-charcoal-900">{current.title}</p>
                 <p className="mt-1 text-[12px] text-charcoal-500">
@@ -440,7 +230,13 @@ export default function DeskDemo() {
               <span className="font-semibold">{p.name}</span>
               <span className={desk === p.name ? "text-white/60" : "text-charcoal-400"}> · {p.role}</span>
               <span className={`ml-2 rounded-full px-1.5 text-[10.5px] font-semibold ${desk === p.name ? "bg-white/20" : "bg-sand-100"}`}>{count}</span>
-              {hasMain && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#d4a017] ring-2 ring-white" title="VT-118 is here" />}
+              {hasMain && (
+                <span
+                  className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white"
+                  style={{ background: FOLDER[story.folder.color].edge }}
+                  title={`${story.folder.id} is here`}
+                />
+              )}
             </button>
           );
         })}
@@ -454,48 +250,51 @@ export default function DeskDemo() {
 
       <div className={`grid gap-5 ${open ? "xl:grid-cols-[1fr_560px]" : ""}`}>
         {desk === "Office" ? (
-          <OfficeView folders={folders} onOpen={(id) => setOpen(id)} filed={state.holder === "Filed"} />
+          <OfficeView folders={folders} onOpen={(id) => setOpen(id)} story={story} filed={state.holder === "Filed"} />
         ) : (
-          <DeskView person={desk} folders={folders} passed={state.passed.filter((p) => p.from === desk)} onOpen={(id) => setOpen(id)} highlight={current?.who === desk} />
+          <DeskView
+            person={desk}
+            folders={folders}
+            story={story}
+            passed={state.passed.filter((p) => p.from === desk)}
+            onOpen={(id) => setOpen(id)}
+            highlight={current?.who === desk}
+          />
         )}
 
         {open && (
           <FolderPanel
             folder={folders.find((f) => f.id === open)!}
+            story={story}
             state={state}
             tab={tab}
             setTab={setTab}
             onClose={() => setOpen(null)}
             current={current}
             viewer={desk}
-            onAct={(a) => {
-              if (a === "print-front") setModal({ kind: "print", docId: "tracking" });
-              else if (a === "print-inspection") setModal({ kind: "print", docId: "inspection" });
-              else if (a === "scan-inspection") setModal({ kind: "scan", docId: "inspection" });
-              else if (a === "closeout") setModal({ kind: "scan", docId: "tracking" });
-              else if (a === "file") setModal({ kind: "file" });
-              else act(a);
-            }}
+            onAct={() => (current?.modal ? setModal(current.modal) : act())}
           />
         )}
       </div>
 
       {modal && (
         <Modal onClose={() => setModal(null)}>
-          {modal.kind === "print" && (
+          {modal.kind === "print" && modal.docId && (
             <PrintPreview
-              docId={modal.docId!}
+              paper={story.paper[modal.docId]}
+              folderId={story.folder.id}
               onConfirm={() => {
-                act(modal.docId === "inspection" ? "print-inspection" : "print-front");
+                act();
                 setModal(null);
               }}
             />
           )}
-          {modal.kind === "scan" && (
+          {modal.kind === "scan" && modal.docId && (
             <ScanBack
-              docId={modal.docId!}
+              paper={story.paper[modal.docId]}
+              folderId={story.folder.id}
               onConfirm={() => {
-                act(modal.docId === "inspection" ? "scan-inspection" : "closeout");
+                act();
                 setModal(null);
               }}
             />
@@ -503,10 +302,10 @@ export default function DeskDemo() {
           {modal.kind === "file" && (
             <FileToAppFolio
               docs={state.docs}
+              story={story}
               onConfirm={() => {
-                act("file");
+                act();
                 setModal(null);
-                setDesk("Office");
               }}
             />
           )}
@@ -514,8 +313,8 @@ export default function DeskDemo() {
       )}
 
       <p className="mt-6 text-[11.5px] leading-relaxed text-charcoal-400">
-        Demo only: sample people, properties and folders. The routing follows the gold vacancy sheet already modeled in HDPM-OS (notice →
-        owner & keys → inspection → turn work → verify, plus accounting closeout). Folder colors other than gold and green are placeholders.
+        Demo only: sample people, properties, amounts and folders. Routing follows the gold vacancy and green new-tenant set-up sheets
+        already modeled in HDPM-OS; form names are the transcribed HDPM forms. Folder colors other than gold and green are placeholders.
         Plan: docs/habu-desk-plan.md.
       </p>
     </div>
@@ -532,7 +331,6 @@ function FolderTab({ f, onOpen, pulse }: { f: Folder; onOpen: () => void; pulse?
       className={`group relative w-full text-left transition-transform hover:-translate-y-0.5 ${pulse ? "animate-pulse" : ""}`}
       title={`${c.label} · ${f.id}`}
     >
-      {/* folder tab */}
       <span className="ml-3 inline-block rounded-t-md px-2 py-0.5 text-[10px] font-bold tracking-wide" style={{ background: c.edge, color: "#fff" }}>
         {f.id}
       </span>
@@ -574,23 +372,26 @@ function Tray({ title, hint, icon, children, empty }: { title: string; hint: str
 function DeskView({
   person,
   folders,
+  story,
   passed,
   onOpen,
   highlight,
 }: {
   person: Person;
   folders: Folder[];
-  passed: { from: Person; to: Person | "Filed"; what: string }[];
+  story: StoryDef;
+  passed: State["passed"];
   onOpen: (id: string) => void;
   highlight: boolean;
 }) {
   const mine = folders.filter((f) => f.holder === person);
-  // Work order: overdue first, then the demo folder, then longest on desk.
+  // Work order: overdue first, then longest on desk.
   const order = (a: Folder, b: Folder) => Number(!!b.overdue) - Number(!!a.overdue) || b.days - a.days;
   const inTray = mine.filter((f) => f.tray === "in").sort(order);
   const waiting = mine.filter((f) => f.tray === "waiting");
   const role = PEOPLE.find((p) => p.name === person)!.role;
   const overdue = inTray.filter((f) => f.overdue).length;
+  const edge = FOLDER[story.folder.color].edge;
 
   return (
     <div>
@@ -614,10 +415,12 @@ function DeskView({
         </Tray>
         <Tray title="Passed on" hint="where your folders went" icon={<Send className="h-4 w-4 text-charcoal-500" />} empty="Nothing passed on yet today.">
           {passed.map((p, i) => (
-            <button key={i} onClick={() => onOpen("VT-118")} className="flex items-center gap-2 rounded-lg border border-sand-200 bg-white px-3 py-2 text-left text-[12px]">
-              <span className="h-6 w-1.5 rounded" style={{ background: FOLDER.gold.edge }} />
+            <button key={i} onClick={() => onOpen(story.folder.id)} className="flex items-center gap-2 rounded-lg border border-sand-200 bg-white px-3 py-2 text-left text-[12px]">
+              <span className="h-6 w-1.5 rounded" style={{ background: edge }} />
               <span className="min-w-0">
-                <span className="font-semibold text-charcoal-900">VT-118 → {p.to === "Filed" ? "Filed in AppFolio" : p.to}</span>
+                <span className="font-semibold text-charcoal-900">
+                  {story.folder.id} → {p.to === "Filed" ? "Filed in AppFolio" : p.to}
+                </span>
                 <span className="block truncate text-charcoal-500">{p.what}</span>
               </span>
             </button>
@@ -628,7 +431,7 @@ function DeskView({
   );
 }
 
-function OfficeView({ folders, onOpen, filed }: { folders: Folder[]; onOpen: (id: string) => void; filed: boolean }) {
+function OfficeView({ folders, onOpen, story, filed }: { folders: Folder[]; onOpen: (id: string) => void; story: StoryDef; filed: boolean }) {
   return (
     <div>
       <p className="mb-3 text-[17px] font-semibold text-charcoal-950">Where is every folder?</p>
@@ -664,8 +467,14 @@ function OfficeView({ folders, onOpen, filed }: { folders: Folder[]; onOpen: (id
           <p className="text-[13px] font-semibold text-charcoal-900">Filed &amp; closed</p>
           <p className="mb-2 text-[11px] text-charcoal-400">everything in AppFolio</p>
           {filed ? (
-            <button onClick={() => onOpen("VT-118")} className="flex w-full items-center gap-2 rounded-md border border-green-300 bg-green-50 px-2 py-1.5 text-left text-[11.5px] text-green-800">
-              <Check className="h-3.5 w-3.5" /> <b>VT-118</b> · 1420 NW Elm Ave #B
+            <button
+              onClick={() => onOpen(story.folder.id)}
+              className="flex w-full items-center gap-2 rounded-md border border-green-300 bg-green-50 px-2 py-1.5 text-left text-[11.5px] text-green-800"
+            >
+              <Check className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">
+                <b>{story.folder.id}</b> · filed
+              </span>
             </button>
           ) : (
             <p className="text-[11.5px] text-charcoal-400">Nothing closed yet today.</p>
@@ -687,6 +496,7 @@ function OfficeView({ folders, onOpen, filed }: { folders: Folder[]; onOpen: (id
 
 function FolderPanel({
   folder,
+  story,
   state,
   tab,
   setTab,
@@ -696,13 +506,14 @@ function FolderPanel({
   onAct,
 }: {
   folder: Folder;
+  story: StoryDef;
   state: State;
   tab: "route" | "contents" | "back" | "history";
   setTab: (t: "route" | "contents" | "back" | "history") => void;
   onClose: () => void;
   current: StoryStep | undefined;
   viewer: Person | "Office";
-  onAct: (a: ActionId) => void;
+  onAct: () => void;
 }) {
   const c = FOLDER[folder.color];
   if (!folder.main) {
@@ -722,12 +533,14 @@ function FolderPanel({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <p className="mt-3 text-[12px] text-charcoal-600">Background folder for the demo. Follow the gold folder VT-118 to see the full story.</p>
+        <p className="mt-3 text-[12px] text-charcoal-600">
+          Background folder for the demo. Follow {story.folder.id} to see the full story.
+        </p>
       </div>
     );
   }
 
-  const tmpl = TEMPLATES.vacancy;
+  const tmpl = TEMPLATES[story.template];
   const canAct = current && viewer === current.who && state.holder === current.who;
   return (
     <div className="h-fit overflow-hidden rounded-xl border-2 bg-white" style={{ borderColor: c.edge }}>
@@ -735,9 +548,11 @@ function FolderPanel({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold tracking-wide" style={{ color: c.ink }}>
-              GOLD FOLDER · VACANCY · VT-118
+              {story.folder.color.toUpperCase()} FOLDER · {story.folder.kindLabel.toUpperCase()} · {story.folder.id}
             </p>
-            <p className="text-[16px] font-semibold text-charcoal-900">1420 NW Elm Ave #B, Bend</p>
+            <p className="text-[16px] font-semibold text-charcoal-900">
+              {story.folder.address}, {story.folder.city}
+            </p>
             <p className="text-[12.5px] text-charcoal-600">
               {state.holder === "Filed" ? "Closed · all documents filed" : `On ${state.holder}’s desk · ${state.waitingOn ?? state.stepLabel}`}
             </p>
@@ -748,7 +563,7 @@ function FolderPanel({
         </div>
         {canAct && current && (
           <button
-            onClick={() => onAct(current.action)}
+            onClick={onAct}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-charcoal-900 px-3 py-2 text-[13px] font-medium text-white hover:bg-charcoal-800"
           >
             {current.button} <ArrowRight className="h-4 w-4" />
@@ -783,10 +598,10 @@ function FolderPanel({
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4 text-charcoal-400" />
                   <p className="flex-1 text-[13px] font-medium text-charcoal-900">{d.title}</p>
-                  <span className="text-[10.5px] text-charcoal-400">→ {d.record}</span>
+                  <span className="text-[10.5px] text-charcoal-400">→ {d.record} record</span>
                 </div>
                 {d.note && <p className="ml-6 text-[11px] text-charcoal-400">{d.note}</p>}
-                <div className="ml-6 mt-1.5 flex items-center gap-1">
+                <div className="ml-6 mt-1.5 flex flex-wrap items-center gap-1">
                   {STAGES.map((st, i) => {
                     const reached = STAGES.findIndex((x) => x.key === d.stage) >= i;
                     return (
@@ -812,7 +627,7 @@ function FolderPanel({
 
         {tab === "route" && (
           <div>
-            <p className="mb-2 text-[12px] text-charcoal-500">How this folder moves (the gold vacancy sheet&apos;s routing, assigned to people):</p>
+            <p className="mb-2 text-[12px] text-charcoal-500">How this folder moves ({tmpl.title} routing, assigned to people):</p>
             <ol className="space-y-1.5">
               {tmpl.assignments.map((a) => {
                 const done = state.done.includes(a.id);
@@ -821,14 +636,17 @@ function FolderPanel({
                 return (
                   <li key={a.id} className="flex items-center gap-2 text-[12.5px]">
                     <span
-                      className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${done ? "bg-charcoal-900 text-white" : ready ? "bg-[#d4a017] text-white" : "bg-sand-100 text-charcoal-400"}`}
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                      style={{ background: done ? "#111" : ready ? FOLDER[story.folder.color].edge : "#f4f4f4" }}
                     >
                       {done ? <Check className="h-3 w-3" /> : ""}
                     </span>
                     <span className={`flex-1 ${done ? "text-charcoal-400 line-through" : "text-charcoal-800"}`}>{a.label}</span>
                     <span className="text-[11.5px] font-medium text-charcoal-600">{who}</span>
                     {a.needs.length > 0 && !done && (
-                      <span className="text-[10.5px] text-charcoal-400">after {a.needs.map((n) => tmpl.assignments.find((x) => x.id === n)?.label.split(" ")[0]).join(" + ")}</span>
+                      <span className="text-[10.5px] text-charcoal-400">
+                        after {a.needs.map((n) => tmpl.assignments.find((x) => x.id === n)?.label.split(" ")[0]).join(" + ")}
+                      </span>
                     )}
                   </li>
                 );
@@ -839,31 +657,28 @@ function FolderPanel({
 
         {tab === "back" && (
           <div>
-            <p className="mb-2 text-[12px] font-semibold text-charcoal-700">Turn work orders</p>
-            {state.workOrders.length === 0 ? (
-              <p className="text-[12px] text-charcoal-400">None yet. They come from the scanned move-out inspection.</p>
-            ) : (
-              <ul className="space-y-1">
-                {state.workOrders.map((w) => (
-                  <li key={w.text} className="flex items-center gap-2 text-[12.5px]">
-                    <span className={`flex h-4 w-4 items-center justify-center rounded border ${w.done ? "border-charcoal-900 bg-charcoal-900 text-white" : "border-sand-300"}`}>
-                      {w.done && <Check className="h-3 w-3" />}
-                    </span>
-                    <span className={w.done ? "text-charcoal-400 line-through" : "text-charcoal-800"}>{w.text}</span>
-                  </li>
-                ))}
-              </ul>
+            {story.key === "gold" && (
+              <>
+                <p className="mb-2 text-[12px] font-semibold text-charcoal-700">Turn work orders</p>
+                {state.workOrders.length === 0 ? (
+                  <p className="mb-4 text-[12px] text-charcoal-400">None yet. They come from the scanned move-out inspection.</p>
+                ) : (
+                  <ul className="mb-4 space-y-1">
+                    {state.workOrders.map((w) => (
+                      <li key={w.text} className="flex items-center gap-2 text-[12.5px]">
+                        <span className={`flex h-4 w-4 items-center justify-center rounded border ${w.done ? "border-charcoal-900 bg-charcoal-900 text-white" : "border-sand-300"}`}>
+                          {w.done && <Check className="h-3 w-3" />}
+                        </span>
+                        <span className={w.done ? "text-charcoal-400 line-through" : "text-charcoal-800"}>{w.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
-            <p className="mb-1 mt-4 text-[12px] font-semibold text-charcoal-700">Key details (front of sheet)</p>
+            <p className="mb-1 text-[12px] font-semibold text-charcoal-700">Key details (front of sheet)</p>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
-              {[
-                ["Tenant", "J. Rivera (sample)"],
-                ["Move-out", "Oct 15"],
-                ["Owner", "Pine Ridge Holdings LLC (sample)"],
-                ["Listing rent", state.done.includes("owner") ? "$1,895" : "(pending owner)"],
-                ["Keys", state.done.includes("keys") ? "2 keys, 1 fob: receipted" : "(not returned)"],
-                ["Deposit", "$1,800"],
-              ].map(([k, v]) => (
+              {story.details(state).map(([k, v]) => (
                 <div key={k} className="contents">
                   <dt className="text-charcoal-400">{k}</dt>
                   <dd className="text-charcoal-800">{v}</dd>
@@ -917,94 +732,59 @@ function QrStamp({ seed, size = 64 }: { seed: string; size?: number }) {
       <rect width={size} height={size} fill="#fff" />
       {Array.from({ length: n * n }, (_, i) => {
         const x = i % n, y = Math.floor(i / n);
-        const f = finder(x, y);
-        const on = f ?? cells[i];
+        const on = finder(x, y) ?? cells[i];
         return on ? <rect key={i} x={x * s} y={y * s} width={s} height={s} fill="#111" /> : null;
       })}
     </svg>
   );
 }
 
-const DOC_TITLES: Record<string, string> = {
-  tracking: "Gold Vacancy Tracking Sheet",
-  inspection: "Move-out Inspection",
-};
-
-function PaperPage({ docId, handwritten }: { docId: string; handwritten?: boolean }) {
-  const typed = "font-mono text-[11px] text-[#1b3a8a]";
+function PaperPage({ paper, folderId, handwritten }: { paper: PaperDef; folderId: string; handwritten?: boolean }) {
   const hand = { fontFamily: "'Bradley Hand','Segoe Print','Comic Sans MS',cursive", color: "#1f2a44" } as const;
-  const rows =
-    docId === "inspection"
-      ? [
-          ["Property", "1420 NW Elm Ave #B, Bend"],
-          ["Tenant", "J. Rivera"],
-          ["Move-out date", "Oct 15, 2026"],
-          ["Move-in notes", "Minor wear, living room carpet (2023)"],
-        ]
-      : [
-          ["Property", "1420 NW Elm Ave #B, Bend"],
-          ["Tenant", "J. Rivera"],
-          ["Notice received", "Sep 29, 2026"],
-          ["Move-out date", "Oct 15, 2026"],
-          ["Owner", "Pine Ridge Holdings LLC"],
-        ];
-  const blanks =
-    docId === "inspection"
-      ? ["Walls & paint", "Bathroom", "Carpet / flooring", "Appliances", "Inspector signature"]
-      : ["Keys returned", "Listing rent", "Inspection date", "Notes"];
-  const handValues: Record<string, string> = {
-    "Walls & paint": "hallway wall gouge: patch + paint",
-    Bathroom: "fan cover cracked",
-    "Carpet / flooring": "back bedroom stains: deep clean",
-    Appliances: "ok",
-    "Inspector signature": "K. —",
-    "Keys returned": "2 keys + fob  ✓",
-    "Listing rent": "$1,895",
-    "Inspection date": "10/16",
-    Notes: "owner ok'd paint",
-  };
   return (
     <div className="relative mx-auto aspect-[8.5/11] w-full max-w-[380px] border border-sand-300 bg-white p-5 shadow-md">
       <div className="absolute right-3 top-3 text-right">
-        <QrStamp seed={`VT-118-${docId}`} size={56} />
-        <p className="mt-0.5 font-mono text-[7.5px] text-charcoal-500">VT-118 · {docId === "inspection" ? "INSP" : "TRACK"} · v1</p>
+        <QrStamp seed={`${folderId}-${paper.code}`} size={56} />
+        <p className="mt-0.5 font-mono text-[7.5px] text-charcoal-500">
+          {folderId} · {paper.code} · v1
+        </p>
       </div>
       <p className="text-[9px] font-semibold uppercase tracking-widest text-charcoal-400">High Desert Property Management</p>
-      <p className="mb-3 pr-16 text-[14px] font-bold text-charcoal-900">{DOC_TITLES[docId]}</p>
+      <p className="mb-3 pr-16 text-[14px] font-bold text-charcoal-900">{paper.title}</p>
       <div className="mt-6 space-y-1.5">
-        {rows.map(([k, v]) => (
+        {paper.typed.map(([k, v]) => (
           <div key={k} className="flex gap-2 border-b border-sand-200 pb-0.5 text-[10px]">
             <span className="w-24 shrink-0 text-charcoal-500">{k}</span>
-            <span className={typed}>{v}</span>
+            <span className="font-mono text-[11px] text-[#1b3a8a]">{v}</span>
           </div>
         ))}
-        {blanks.map((k) => (
+        {paper.blanks.map((k) => (
           <div key={k} className="flex gap-2 border-b border-sand-300 pb-0.5 pt-2 text-[10px]">
             <span className="w-24 shrink-0 text-charcoal-500">{k}</span>
             <span className="text-[12px]" style={handwritten ? hand : { color: "transparent" }}>
-              {handwritten ? handValues[k] ?? "" : "·"}
+              {handwritten ? paper.hand[k] ?? "" : "·"}
             </span>
           </div>
         ))}
       </div>
       <p className="absolute bottom-2 left-5 right-5 border-t border-sand-200 pt-1 font-mono text-[7.5px] text-charcoal-400">
-        Printed from HDPM-OS · folder VT-118 · scan back to file automatically
+        Printed from HDPM-OS · folder {folderId} · scan back to file automatically
       </p>
     </div>
   );
 }
 
-function PrintPreview({ docId, onConfirm }: { docId: string; onConfirm: () => void }) {
+function PrintPreview({ paper, folderId, onConfirm }: { paper: PaperDef; folderId: string; onConfirm: () => void }) {
   return (
     <div className="grid gap-5 md:grid-cols-[1fr_260px]">
-      <PaperPage docId={docId} />
+      <PaperPage paper={paper} folderId={folderId} />
       <div>
         <p className="text-[15px] font-semibold text-charcoal-900">Prefilled &amp; ready to print</p>
         <p className="mt-1 text-[12.5px] text-charcoal-600">
           <span className="font-mono text-[#1b3a8a]">Blue typed fields</span> came from AppFolio and the folder. The blank lines are for the
           pen. The QR code in the corner is how the scan finds this folder later.
         </p>
-        {docId === "tracking" && <p className="mt-2 text-[12px] text-charcoal-500">The confirmation-of-notice letter prints with it.</p>}
+        {paper.with && <p className="mt-2 text-[12px] text-charcoal-500">{paper.with}</p>}
         <button onClick={onConfirm} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-charcoal-900 px-3 py-2 text-[13px] font-medium text-white">
           <Printer className="h-4 w-4" /> Print (demo)
         </button>
@@ -1014,12 +794,12 @@ function PrintPreview({ docId, onConfirm }: { docId: string; onConfirm: () => vo
   );
 }
 
-function ScanBack({ docId, onConfirm }: { docId: string; onConfirm: () => void }) {
+function ScanBack({ paper, folderId, onConfirm }: { paper: PaperDef; folderId: string; onConfirm: () => void }) {
   const [scanned, setScanned] = useState(false);
   return (
     <div className="grid gap-5 md:grid-cols-[1fr_260px]">
       {scanned ? (
-        <PaperPage docId={docId} handwritten />
+        <PaperPage paper={paper} folderId={folderId} handwritten />
       ) : (
         <button
           onClick={() => setScanned(true)}
@@ -1034,19 +814,14 @@ function ScanBack({ docId, onConfirm }: { docId: string; onConfirm: () => void }
         <p className="text-[15px] font-semibold text-charcoal-900">Scan back</p>
         {!scanned ? (
           <p className="mt-1 text-[12.5px] text-charcoal-600">
-            Scan the hand-written page from the office scanner or take a photo. No need to say which folder it belongs to.
+            Scan the hand-written or signed pages from the office scanner or take a photo. No need to say which folder they belong to.
           </p>
         ) : (
           <>
             <p className="mt-2 flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-[12.5px] font-medium text-green-800">
-              <ScanLine className="h-4 w-4" /> QR matched: VT-118 · {DOC_TITLES[docId]} · v1
+              <ScanLine className="h-4 w-4" /> QR matched: {folderId} · {paper.title} · v1
             </p>
-            {docId === "inspection" && (
-              <p className="mt-2 text-[12px] text-charcoal-600">3 repairs noted on the page. Confirm and they become work orders on the back of the folder.</p>
-            )}
-            {docId === "tracking" && (
-              <p className="mt-2 text-[12px] text-charcoal-600">The confirmation letter was scanned in the same batch and matched too.</p>
-            )}
+            {paper.scanNote && <p className="mt-2 text-[12px] text-charcoal-600">{paper.scanNote}</p>}
             <button onClick={onConfirm} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-charcoal-900 px-3 py-2 text-[13px] font-medium text-white">
               <Check className="h-4 w-4" /> Looks right: attach to folder
             </button>
@@ -1057,7 +832,7 @@ function ScanBack({ docId, onConfirm }: { docId: string; onConfirm: () => void }
   );
 }
 
-function FileToAppFolio({ docs, onConfirm }: { docs: Doc[]; onConfirm: () => void }) {
+function FileToAppFolio({ docs, story, onConfirm }: { docs: Doc[]; story: StoryDef; onConfirm: () => void }) {
   return (
     <div>
       <p className="text-[15px] font-semibold text-charcoal-900">File to AppFolio</p>
@@ -1075,10 +850,10 @@ function FileToAppFolio({ docs, onConfirm }: { docs: Doc[]; onConfirm: () => voi
             <tr key={d.id} className="border-b border-sand-100">
               <td className="py-1.5 pr-3 text-charcoal-900">{d.title}</td>
               <td className="py-1.5 pr-3 text-charcoal-600">
-                {d.record === "Tenant record" ? "Tenant · J. Rivera (sample)" : "Property · 1420 NW Elm Ave #B"}
+                {d.record === "Tenant" ? `Tenant · ${story.folder.tenant} (sample)` : `Property · ${story.folder.address}`}
               </td>
               <td className="py-1.5 font-mono text-[11px] text-charcoal-500">
-                2026-10-17 VT-118 {d.title.replace(/[’']/g, "").slice(0, 28)}.pdf
+                2026-10-20 {story.folder.id} {d.title.replace(/[’'()]/g, "").slice(0, 28)}.pdf
               </td>
             </tr>
           ))}
