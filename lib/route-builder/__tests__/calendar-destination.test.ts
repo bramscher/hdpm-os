@@ -51,4 +51,26 @@ describe('route publishing destinations',()=>{
   expect(response.status).toBe(404);expect(fetch).toHaveBeenCalledTimes(1);expect(state.writes).toEqual([]);
  });
 
+ it('recovers an exact legacy event from the assigned inspector calendar and saves its mailbox',async()=>{
+  state.eventId='legacy/event';state.assignee='brody@highdesertpm.com';
+  vi.mocked(fetch).mockReset()
+    .mockResolvedValueOnce(new Response('Not found',{status:404}))
+    .mockResolvedValueOnce(new Response('Not found',{status:404}))
+    .mockResolvedValueOnce(new Response(JSON.stringify({id:'legacy/event'}),{status:200}))
+    .mockResolvedValueOnce(new Response(JSON.stringify({id:'legacy/event',webLink:'https://outlook.office.com/event'}),{status:200}));
+  const response=await POST(new NextRequest('http://localhost/calendar',{method:'POST'}),{params:Promise.resolve({id:'route'})});
+  expect(response.status).toBe(200);
+  const calls=vi.mocked(fetch).mock.calls;
+  expect(calls[1][0]).toContain('operations@highdesertpm.com/events/legacy%2Fevent');
+  expect(calls[2][0]).toContain('brody%40highdesertpm.com/events/legacy%2Fevent');
+  expect(calls[3][1]?.method).toBe('PATCH');
+  expect(state.writes).toEqual([{calendar_event_id:'mailbox:brody@highdesertpm.com:legacy/event'}]);
+  expect(calls.every(([,request])=>request?.method!=='POST')).toBe(true);
+ });
+ it('does not create an event when all legacy calendar lookups fail',async()=>{
+  state.eventId='legacy/event';vi.mocked(fetch).mockResolvedValue(new Response('Not found',{status:404}));
+  const response=await POST(new NextRequest('http://localhost/calendar',{method:'POST'}),{params:Promise.resolve({id:'route'})});
+  expect(response.status).toBe(404);expect(fetch).toHaveBeenCalledTimes(3);expect(state.writes).toEqual([]);
+ });
+
 });
