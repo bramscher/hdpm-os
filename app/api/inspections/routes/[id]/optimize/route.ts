@@ -1,3 +1,4 @@
+import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
 import { routeArrival } from '@/lib/route-builder/inspection-time';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
@@ -76,22 +77,13 @@ export async function POST(
       return NextResponse.json({ error: 'Route has no stops to optimize' }, { status: 400 });
     }
 
-    // Safety: if any stops have negative stop_order from a failed previous optimize,
-    // reset them to sequential positive values first
-    const hasNegative = stops.some((s) => s.stop_order < 0);
-    if (hasNegative) {
-      console.warn('Found negative stop_order values — resetting before optimize');
-      for (let i = 0; i < stops.length; i++) {
-        await supabase
-          .from('route_stops')
-          .update({ stop_order: i + 1 })
-          .eq('id', stops[i].id);
-        stops[i].stop_order = i + 1;
-      }
+    if (!['draft', 'optimized'].includes(routePlan.status) || stops.some(stop =>
+      !['pending', 'skipped'].includes(stop.status) || stop.actual_arrival)) {
+      return NextResponse.json({ error: 'Only unstarted draft or optimized routes can be recalculated.' }, { status: 409 });
     }
 
     // Step 2: Map stops to ProposedStop format for the optimizer
-    const proposedStops: ProposedStop[] = stops.map((stop) => {
+    const proposedStops: ProposedStop[] = stops.filter(stop => stop.status !== 'skipped').map((stop) => {
       const insp = stop.inspections as Record<string, unknown> | null;
       const prop = (insp?.inspection_properties || {}) as Record<string, unknown>;
 
@@ -101,7 +93,7 @@ export async function POST(
         stop_order: stop.stop_order,
         drive_minutes_from_prev: stop.travel_minutes_from_previous || 0,
         drive_meters_from_prev: 0,
-        service_minutes: stop.service_minutes || 30,
+        service_minutes: 15,
         lat: (prop.latitude as number) ?? 0,
         lng: (prop.longitude as number) ?? 0,
         address: prop.address_1 ? `${prop.address_1}, ${prop.city}, ${prop.state} ${prop.zip}` : '',
@@ -110,6 +102,13 @@ export async function POST(
       };
     });
 
+    if (proposedStops.some(stop => !Number.isFinite(stop.lat) || !Number.isFinite(stop.lng)
+      || (stop.lat === 0 && stop.lng === 0))) {
+      return NextResponse.json({ error: 'Geocode all route stops before optimizing.' }, { status: 400 });
+    }
+
+    if (!proposedStops.length) return NextResponse.json({ error: 'Route has no pending stops to recalculate.' }, { status: 400 });
+
     const startLat = routePlan.start_lat ?? 44.256798;
     const startLng = routePlan.start_lng ?? -121.184346;
 
@@ -117,16 +116,17 @@ export async function POST(
     const optimized = await optimizeRouteWithGoogle(proposedStops, startLat, startLng);
 
     // Step 4: Update each route_stop with new ordering and drive data
-    // Use a single bulk approach: delete all stops and re-insert to avoid unique constraint issues
+    // Preserve stop IDs and history while updating order and estimated arrivals.
     const routeDate = routePlan.route_date;
 
     // First, clear all stop_orders to avoid unique constraint violations during reorder
     // Set to large negative numbers that won't collide — must be sequential
     // because parallel updates could race and temporarily violate the unique constraint
+    const temporaryOrderBase = Math.min(0, ...stops.map(stop => stop.stop_order)) - stops.length - 1;
     for (let i = 0; i < stops.length; i++) {
       const { error: clearErr } = await supabase
         .from('route_stops')
-        .update({ stop_order: -(1000 + i) })
+        .update({ stop_order: temporaryOrderBase - i })
         .eq('id', stops[i].id);
       if (clearErr) {
         console.error(`Error clearing stop_order for stop ${stops[i].id}:`, clearErr);
@@ -134,18 +134,26 @@ export async function POST(
       }
     }
 
-    // Now apply the optimized order (all negatives are set, so positive values won't collide)
-    let cumulativeMinutes = 0; // minutes from route departure
+    // Keep skipped records for history, after the active itinerary.
+    const skippedStops = stops.filter(stop => stop.status === 'skipped');
+    for (const [index, stop] of skippedStops.entries()) {
+      const { error } = await supabase.from('route_stops').update({
+        stop_order: optimized.stops.length + index + 1,
+        travel_minutes_from_previous: 0,
+        estimated_arrival: null,
+      }).eq('id', stop.id);
+      if (error) throw new Error(error.message);
+    }
 
-    for (const optimizedStop of optimized.stops) {
+    // Now apply the optimized order (all negatives are set, so positive values won't collide)
+    const timing = inspectionSchedule(optimized.stops);
+
+    for (const [index, optimizedStop] of optimized.stops.entries()) {
       // Find the original DB stop by inspection_id
       const originalStop = stops.find((s) => s.inspection_id === optimizedStop.inspection_id);
       if (!originalStop) continue;
 
-      // Cumulative time: drive to this stop
-      cumulativeMinutes += optimizedStop.drive_minutes_from_prev;
-
-      const scheduledArrival = routeArrival(routeDate, routePlan.start_time, cumulativeMinutes);
+      const scheduledArrival = routeArrival(routeDate, routePlan.start_time, timing.visits[index].arrivalMinutes);
 
       const { error: updateError } = await supabase
         .from('route_stops')
@@ -153,6 +161,7 @@ export async function POST(
           stop_order: optimizedStop.stop_order,
           travel_minutes_from_previous: Math.round(optimizedStop.drive_minutes_from_prev || 0),
           estimated_arrival: scheduledArrival,
+          service_minutes: optimizedStop.service_minutes,
         })
         .eq('id', originalStop.id);
 
@@ -160,15 +169,14 @@ export async function POST(
         console.error('Error updating optimized stop:', updateError);
         return NextResponse.json({ error: `Failed to update stop: ${updateError.message}` }, { status: 500 });
       }
-
-      // Add service time for the next stop's arrival calculation
-      cumulativeMinutes += optimizedStop.service_minutes;
     }
 
     // Step 5: Update route_plan totals and status
     // Build update payload — only include polyline if column exists
     const planUpdate: Record<string, unknown> = {
-      total_drive_minutes: Math.round(optimized.total_drive_minutes || 0),
+      total_drive_minutes: timing.driveMinutes,
+      total_service_minutes: timing.serviceMinutes,
+      start_time: routePlan.start_time || '08:00',
       status: 'optimized',
       optimization_method: optimized.source,
       updated_at: new Date().toISOString(),

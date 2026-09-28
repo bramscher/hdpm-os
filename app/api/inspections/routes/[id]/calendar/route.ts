@@ -1,3 +1,4 @@
+import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
 import { routeStartTime, routeWallTime, routeTimeLabel } from '@/lib/route-builder/inspection-time';
 import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
 import { ROUTE_CALENDAR_EVENTS_URL, findLegacyRouteCalendarEvent, routeCalendarEventUrl, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError } from '@/lib/route-builder/calendar-destination';
@@ -92,9 +93,10 @@ export async function POST(
 
     // ── Build event metadata ──
     const routeDate = routePlan.route_date; // "YYYY-MM-DD"
-    const totalDriveMin = routePlan.total_drive_minutes || 0;
-    const totalServiceMin = routePlan.total_service_minutes || 0;
-    const totalMinutes = totalDriveMin + totalServiceMin;
+    const timing = inspectionSchedule(stops || []);
+    const totalDriveMin = stops?.length ? timing.driveMinutes : (routePlan.total_drive_minutes || 0);
+    const totalServiceMin = stops?.length ? timing.serviceMinutes : (routePlan.total_service_minutes || 0);
+    const totalMinutes = totalDriveMin + totalServiceMin + timing.bufferMinutes;
     const startTime = routeStartTime(routePlan.start_time);
 
     const cities = new Set<string>();
@@ -109,29 +111,25 @@ export async function POST(
     const inspectorCapitalized = inspectorName.charAt(0).toUpperCase() + inspectorName.slice(1);
 
     // ── Build per-stop data with estimated arrival times ──
-    let runningMinutes = 0; // minutes after route departure
     const stopDetails = (stops || []).map((stop, i) => {
       const insp = stop.inspections;
       const prop = insp?.inspection_properties;
       const address = prop ? `${prop.address_1}, ${prop.city}, ${prop.state} ${prop.zip}` : 'Unknown';
       const unit = insp?.unit_name ? ` - ${insp.unit_name}` : prop?.address_2 ? ` - ${prop.address_2}` : '';
-      const type = insp?.inspection_type || 'Inspection';
+      const type = stop.status === 'skipped' ? 'Skipped — not included in route timing' : (insp?.inspection_type || 'Inspection');
       const resident = insp?.resident_name || null;
       const priority = insp?.priority || 'normal';
       const dueDate = insp?.due_date || null;
-      const driveMin = Math.round(stop.travel_minutes_from_previous ?? stop.drive_minutes_from_prev ?? stop.drive_minutes_from_previous ?? 0);
-      const serviceMin = stop.service_minutes || 30;
+      const driveMin = timing.visits[i].driveMinutes;
+      const serviceMin = timing.visits[i].serviceMinutes;
       const lat = prop?.latitude || null;
       const lng = prop?.longitude || null;
       const propertyCode = prop?.appfolio_property_id || prop?.name || null;
       const ownerName = prop?.owner_name || null;
 
       // Estimated arrival = start time + cumulative drive + cumulative service so far
-      runningMinutes += driveMin;
-      const arrivalTime = routeTimeLabel(startTime, runningMinutes);
-      const departTime = routeTimeLabel(startTime, runningMinutes + serviceMin);
-
-      runningMinutes += serviceMin;
+      const arrivalTime = routeTimeLabel(startTime, timing.visits[i].arrivalMinutes);
+      const departTime = routeTimeLabel(startTime, timing.visits[i].departureMinutes);
 
       // Individual Apple Maps link for this stop
       const mapsLink = lat && lng
@@ -229,7 +227,7 @@ export async function POST(
             <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Date</strong><br/>${new Date(routeDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</td>
             <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Start</strong><br/>${routeTimeLabel(startTime)}</td>
             <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Est. Finish</strong><br/>${finishTime}</td>
-            <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Total</strong><br/>${formatDuration(totalDriveMin)} drive + ${formatDuration(totalServiceMin)} service</td>
+            <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Total</strong><br/>${formatDuration(totalDriveMin)} drive + ${formatDuration(totalServiceMin)} service + ${timing.bufferMinutes}m parking/access buffer</td>
           </tr>
         </table>
 
