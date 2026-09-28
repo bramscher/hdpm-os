@@ -56,7 +56,7 @@ describe('inspection workflow status', () => {
   expect(inspectionWorkflow(row('i',{route_stops:appointment(today,'in_progress','2026-09-28T17:00:00Z')}),today).status).toBe('in_progress');
   expect(inspectionWorkflow(row('i',{route_stops:appointment(today)}),today).status).toBe('scheduled');
   expect(inspectionWorkflow(row('i',{route_stops:appointment(today,'in_progress','2026-09-28T02:00:00Z')}),today).status).toBe('scheduled');
-  expect(inspectionWorkflow(row('i',{route_stops:appointment('2026-09-27','in_progress','2026-09-27T17:00:00Z')}),today).status).toBe('scheduled');
+  expect(inspectionWorkflow(row('i',{route_stops:appointment('2026-09-27','in_progress','2026-09-27T17:00:00Z')}),today).status).toBe('needs_review');
  });
  it('ignores skipped stops and completed or canceled routes', () => {
   expect(inspectionWorkflow(row('i',{route_stops:appointment(today,'skipped')}),today).status).toBe('queued');
@@ -66,5 +66,18 @@ describe('inspection workflow status', () => {
  });
  it('preserves completed inspection history even if an old route still has a pending stop', () => {
   expect(inspectionWorkflow(row('i',{status:'completed',route_stops:appointment(today)}),today).status).toBe('completed');
+ });
+});
+
+describe('past route appointments', () => {
+ it('keeps past unfinished appointments for review without presenting them as upcoming', () => {
+  const original = row('past',{status:'scheduled',due_date:'2026-09-01',route_stops:appointment('2026-09-09')});
+  const result = actionableInspections([original,row('today',{route_stops:appointment(today)}),row('future',{route_stops:appointment('2026-09-29')})],[],today);
+  expect(result.find(r=>r.id==='past')).toMatchObject({status:'needs_review',target_date:'2026-09-09',scheduled_route_id:'route',due_date:'2026-09-01'});
+  expect(result.filter(r=>r.status==='scheduled').map(r=>r.id).sort()).toEqual(['future','today']);
+  expect(original.status).toBe('scheduled');
+  const outlook=buildInspectionOutlook(result,today);
+  expect(outlook.overdue).toBe(1);
+  expect(outlook.months[0].scheduled).toBe(2);
  });
 });

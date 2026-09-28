@@ -98,6 +98,7 @@ type InspectionStatus =
   | "canceled"
   | "planned"
   | "dispatched"
+  | "needs_review"
   | "in_progress"
   | "completed";
 
@@ -105,6 +106,7 @@ const STATUS_OPTIONS: { value: InspectionStatus | ""; label: string }[] = [
   { value: "", label: "All Statuses" },
   { value: "queued", label: "Needs scheduling" },
   { value: "scheduled", label: "Scheduled" },
+  { value: "needs_review", label: "Needs review" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
   { value: "canceled", label: "Canceled" },
@@ -134,6 +136,7 @@ const STATUS_BADGE: Record<string, string> = {
   scheduled: "bg-indigo-100 text-indigo-700",
   planned: "bg-indigo-100 text-indigo-700",
   dispatched: "bg-purple-100 text-purple-700",
+  needs_review: "bg-amber-100 text-amber-800",
   in_progress: "bg-emerald-100 text-emerald-700",
   completed: "bg-green-100 text-green-700",
 };
@@ -735,7 +738,7 @@ export function InspectionDashboard() {
         </div>
       </div>
 
-      <p className="text-xs text-charcoal-500">Scheduled means a dated route is assigned. In progress means the inspection was started today on today’s route.</p>
+      <p className="text-xs text-charcoal-500">Scheduled means a route appointment today or later. Past unfinished appointments need review. In progress means the inspection was started today on today’s route.</p>
 
       {/* ── Bulk Action Bar ── */}
       {selected.size > 0 && (
@@ -935,6 +938,7 @@ export function InspectionDashboard() {
                     </td>
                     <td className="px-3 py-3">
                       <span className="text-xs whitespace-nowrap text-charcoal-600">
+                        {insp.status === "needs_review" && <span className="block text-amber-700">Past appointment</span>}
                         {insp.scheduled_route_id ? <Link href={`/maintenance/inspections/routes/${insp.scheduled_route_id}`} className="text-blue-600 hover:underline">{formatDate(insp.target_date)} · View route</Link> : insp.target_date ? formatDate(insp.target_date) : "Not scheduled"}
                       </span>
                     </td>
