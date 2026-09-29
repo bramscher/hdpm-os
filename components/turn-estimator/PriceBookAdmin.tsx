@@ -90,6 +90,14 @@ export default function PriceBookAdmin({
       {error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
       {notice && <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">{notice}</div>}
 
+      <section className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <h2 className="font-semibold">Hourly maintenance while flat prices are being finalized</h2>
+        <p className="mt-1 text-sm">Use maintenance labor for any repair without a confirmed flat price. Enter hours and describe the work, location and materials used. One hour is 1; 30 minutes is 0.5. Add a separate labor line for each technician and charge materials separately.</p>
+        <ul className="mt-2 space-y-1 text-sm">{items.filter(i => i.pricing_method === 'hourly' && !needsPriceReview(i)).map(i => <li key={i.id}><strong>{priceBookName(i)}</strong> · {priceBookRate(i)}</li>)}</ul>
+        <p className="mt-2 text-sm">Example detail: Repaired leaking kitchen sink drain, replaced washer and tested for leaks.</p>
+        <a className="mt-3 inline-block text-sm underline" href="/maintenance/invoices">Open Work &amp; Billing →</a>
+      </section>
+
       {isAdmin && (
         <div className="mb-4">
           <button

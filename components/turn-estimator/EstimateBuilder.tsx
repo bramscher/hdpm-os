@@ -360,7 +360,7 @@ export default function EstimateBuilder({
             <tr>
               <th className="px-3 py-2">Item</th>
               <th className="w-16 px-3 py-2">Qty</th>
-              <th className="w-20 px-3 py-2">Minutes</th>
+              <th className="w-20 px-3 py-2">Hours / minutes</th>
               <th className="w-24 px-3 py-2">Material $</th>
               <th className="w-40 px-3 py-2">Room / note</th>
               <th className="w-8 px-2 py-2"></th>
@@ -374,7 +374,10 @@ export default function EstimateBuilder({
                 <tr key={r.key}>
                   <td className="px-3 py-2">
                     <label className="flex gap-2 mb-2 text-xs"><input type="checkbox" checked={r.included!==false} onChange={e=>setRow(r.key,{included:e.target.checked})}/>Include in charge</label>
-                    <select className={`${input} w-full min-w-0`} value={r.item_code} onChange={(e) => setRow(r.key, { item_code: e.target.value })}>
+                    <select className={`${input} w-full min-w-0`} value={r.item_code} onChange={(e) => {
+                      const next = itemByCode.get(e.target.value);
+                      setRow(r.key, { item_code: e.target.value, ...(next?.pricing_method === 'hourly' ? {qty: '1', minutes: r.minutes || '60'} : {}) });
+                    }}>
                       <option value="">— select —</option>
                       {items.map((it) => (
                         <option key={it.id} value={it.item_code} disabled={needsPriceReview(it)}>
@@ -382,19 +385,22 @@ export default function EstimateBuilder({
                         </option>
                       ))}
                     </select>
-                    <input aria-label="Scope description" className={`${input} w-full mt-2`} placeholder="Scope / checklist description" value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
+                    <input aria-label="Scope description" className={`${input} w-full mt-2`} placeholder={method === "hourly" ? "Describe the repair, location and work included" : "Scope / checklist description"} value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
                   </td>
                   <td className="px-3 py-2">
-                    <input className={`${input} w-full min-w-0`} value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} />
+                    <input aria-label={method === "hourly" ? "Quantity (use labor hours)" : "Quantity"} disabled={method === "hourly"} className={`${input} w-full min-w-0`} value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} />
                   </td>
                   <td className="px-3 py-2">
                     <input
                       className={`${input} w-full min-w-0`}
-                      value={r.minutes}
-                      onChange={(e) => setRow(r.key, { minutes: e.target.value })}
-                      placeholder={method === "service_min" || method === "hourly" ? "min" : "—"}
+                      type="number" min="0" step={method === "hourly" ? "0.01" : "1"}
+                      aria-label={method === "hourly" ? "Labor hours" : "Minutes"}
+                      value={method === "hourly" && r.minutes !== "" ? String(Number(r.minutes) / 60) : method === "hourly" ? r.qty : r.minutes}
+                      onChange={(e) => setRow(r.key, { minutes: method === "hourly" && e.target.value !== "" ? String(Number(e.target.value) * 60) : e.target.value })}
+                      placeholder={method === "hourly" ? "hours" : method === "service_min" ? "min" : "—"}
                       disabled={!(method === "service_min" || method === "hourly")}
                     />
+                    {(method === "hourly" || method === "service_min") && <span className="text-xs text-charcoal-500">{method === "hourly" ? "hours" : "minutes"}</span>}
                   </td>
                   <td className="px-3 py-2">
                     <input
@@ -424,6 +430,7 @@ export default function EstimateBuilder({
           className="rounded-lg border border-sand-200 px-3 py-1.5 text-xs font-medium text-charcoal-700 hover:bg-sand-50">
           + Add line
         </button>
+        {items.filter(i => i.pricing_method === 'hourly' && !needsPriceReview(i)).map(i => <button key={i.id} type="button" className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs text-blue-800" onClick={() => setRows(rs => [...rs, {...newRow(), item_code: i.item_code, minutes: '60'}])}>+ {priceBookName(i)} · {money(i.base_price)}/hr</button>)}
 
         <div className="flex flex-wrap items-center gap-4">
           {preview && (

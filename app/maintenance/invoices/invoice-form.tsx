@@ -16,6 +16,9 @@ import {
   chargedFromCost,
 } from "@/lib/invoices";
 
+import type { PriceBookItem } from "@/lib/turn-estimator/types";
+import { needsPriceReview, priceBookName, priceBookRate } from "@/lib/turn-estimator/price-book-display";
+
 interface InvoiceFormProps {
   initialLineType?: "labor" | "appliance";
   workOrder: WorkOrderRow | null;
@@ -136,6 +139,21 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
   }>({});
 
   const [taskItems, setTaskItems] = useState<string[]>([]);
+  const [hourlyItem, setHourlyItem] = useState<PriceBookItem | null>(null);
+  const [priceBookError, setPriceBookError] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/turn-estimator/price-book', {signal: controller.signal})
+      .then(async res => { if (!res.ok) throw new Error('Price book unavailable'); return res.json(); })
+      .then(data => {
+        const item = (data.items as PriceBookItem[]).find(i => i.item_code === 'LABOR_STD' && i.pricing_method === 'hourly' && !needsPriceReview(i));
+        setHourlyItem(item ?? null);
+        if (!item) setPriceBookError('No approved standard hourly labor item is available. Use + Labor to enter an approved rate manually.');
+      })
+      .catch(err => { if (err.name !== 'AbortError') setPriceBookError('Price book unavailable. Use + Labor to enter an approved rate manually.'); });
+    return () => controller.abort();
+  }, []);
+
 
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1132,6 +1150,19 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
                 + Appliance
               </Button>
             </div>
+          </div>
+
+          <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
+            <strong>Hourly maintenance / manual work</strong>
+            <p className="mt-1">For work without a flat price, add labor, select Al (Alberto) or Brody, enter hours and describe the repair and location. Use a separate line for each technician. Add parts with + Materials.</p>
+            {hourlyItem && <button type="button" disabled={isLoading} className="mt-2 font-medium text-blue-800 underline" onClick={() => {
+              userHasEdited.current = true;
+              const technician = normalizeTechnician(workOrder?.assigned_to || workOrder?.technician);
+              const line = {...blankLineItem('labor', technician), qty: '1', rate: hourlyItem.base_price.toFixed(2), amount: hourlyItem.base_price.toFixed(2)};
+              setLineItems(prev => [...prev, line]);
+            }}>+ 1 hour {priceBookName(hourlyItem)} · {priceBookRate(hourlyItem)}</button>}
+            {priceBookError && <p className="mt-2 text-amber-800">{priceBookError}</p>}
+            <p className="mt-1 text-xs">Edit Qty/Hrs after adding: 0.5 = 30 minutes, 1.5 = 1 hour 30 minutes. Describe the work before saving.</p>
           </div>
 
           <div className="rounded-xl border border-sand-200 bg-white overflow-x-auto">
