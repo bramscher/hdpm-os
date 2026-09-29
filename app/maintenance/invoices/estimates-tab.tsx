@@ -51,6 +51,7 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
       <Link className={`${button} mt-3`} href="/company/issues#maintenance-followups">Maintenance follow-ups →</Link>
       {canCreate && <div className="mt-4 flex flex-wrap gap-3">
         <button className={`${button} bg-green-700 text-white`} onClick={onChooseWorkOrder}><Wrench className="h-4 w-4"/>Create from work order</button>
+        <Link className={button} href="/turn-estimator/estimates/new?scratch=1"><FileText className="h-4 w-4"/>Create estimate from scratch</Link>
         <Link className={button} href="/turn-estimator/estimates/new?template=1"><FileText className="h-4 w-4"/>Start from template / price book</Link>
       </div>}
       <div className="mt-3 flex flex-wrap gap-4 text-sm"><Link className="text-green-800 underline" href="/turn-estimator/price-book">Open price book</Link><Link className="text-green-800 underline" href="/maintenance/workspace?view=schedule">Availability & planned revenue</Link></div>
@@ -63,7 +64,7 @@ export function EstimatesTab({ onChooseWorkOrder }: { onChooseWorkOrder: () => v
     {error && <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">{error} <button className="underline" onClick={load}>Retry</button></p>}
     {deleteError && <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">{deleteError}</p>}
     {loading ? <p role="status" className="p-6 text-sm text-charcoal-500">Loading estimates…</p> : !error && <div className="space-y-3">
-      {!shown.length && <p className="rounded-xl border border-dashed border-sand-200 p-8 text-center text-sm text-charcoal-500">{rows.length ? 'No estimates match these filters.' : 'No estimates yet. Choose a work order or a template to prepare the first one.'}</p>}
+      {!shown.length && <p className="rounded-xl border border-dashed border-sand-200 p-8 text-center text-sm text-charcoal-500">{rows.length ? 'No estimates match these filters.' : 'No estimates yet. Create an estimate from a work order, from scratch, or from a template.'}</p>}
       {shown.map(row => <article key={row.id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-sand-200 bg-white p-5">
         <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-charcoal-900">{row.property}{row.unit && ` · ${row.unit}`}</h3><span className="rounded-full bg-sand-100 px-2.5 py-1 text-xs text-charcoal-600">{labels[row.stage]}</span></div>
           <p className="mt-1 text-sm text-charcoal-500">{row.workOrder ? `WO ${row.workOrder} · ` : ''}{new Date(row.updatedAt).toLocaleDateString()}{row.stage === 'closed' ? ` · ${row.status.replaceAll('_', ' ')}` : ''}</p>

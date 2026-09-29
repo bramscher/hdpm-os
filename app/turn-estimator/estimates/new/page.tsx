@@ -19,10 +19,10 @@ export const metadata = { title: 'HDPM-OS — New Estimate' };
 export default async function NewEstimatePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from_wo?: string; turn?: string; draft?: string; resume?: string }>;
+  searchParams: Promise<{ from_wo?: string; turn?: string; draft?: string; resume?: string; scratch?: string }>;
 }) {
   const guard=await requireEstimateAuthor();if(!guard.ok)redirect('/maintenance/field');
-  const { from_wo, turn, draft, resume } = await searchParams;
+  const { from_wo, turn, resume, scratch } = await searchParams;
   const items = await listPriceBookItems();
 
   let seed: BuilderSeed = {};
@@ -72,8 +72,9 @@ export default async function NewEstimatePage({
           : ''}
         Scope and price the work, get approval when needed, then schedule and bill completed work.
       </p>
-      {!seed.work_order_id && !resume && <EstimateWorkOrderPicker/>}
-      <EstimateBuilder canArchiveTemplates={["admin","maintenance","pm","manager"].includes(guard.role)} canManageTemplates={guard.capabilities['estimate.template']} canIssue={canIssueEstimates(guard.role, guard.capabilities)} key={resume || from_wo || turn || "new"} items={items} seed={seed} autoDraft={draft === '1' && !!seed.work_order_id} />
+      {!seed.work_order_id && !resume && scratch !== "1" && <EstimateWorkOrderPicker/>}
+      {scratch === "1" && !seed.work_order_id && !resume && <p className="mb-5 text-sm text-charcoal-600">Enter the property and unit, then add labor, materials or a template. No work order is required.</p>}
+      <EstimateBuilder canArchiveTemplates={["admin","maintenance","pm","manager"].includes(guard.role)} canManageTemplates={guard.capabilities['estimate.template']} canIssue={canIssueEstimates(guard.role, guard.capabilities)} key={resume || from_wo || turn || "new"} items={items} seed={seed} autoDraft={!!seed.work_order_id && !resume} />
     </div>
   );
 }

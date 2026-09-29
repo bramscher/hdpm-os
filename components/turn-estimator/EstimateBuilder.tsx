@@ -159,7 +159,7 @@ export default function EstimateBuilder({
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
-  // On load with ?draft=1, run the estimate-drafter agent and pre-populate rows.
+  // New work-order estimates automatically reuse invoice-style extraction.
   // The result is advisory — staff review/edit before Save & Issue.
   useEffect(() => {
     if (!draftRequested || !seed.work_order_id || seed.resume_id) return;
@@ -236,6 +236,11 @@ export default function EstimateBuilder({
     if(rows.some(r=>r.included!==false&&(!itemByCode.has(r.item_code)||/placeholder/i.test(itemByCode.get(r.item_code)?.name||"")))) return setError("Included scope needs an approved price-book item. Exclude checklist-only items before issuing.");
     if (!propertyName.trim()) return setError("Property name is required");
     if (specs.length === 0) return setError("Add at least one line item");
+    for (const row of rows.filter(r => r.included !== false)) {
+      const method = itemByCode.get(row.item_code)?.pricing_method;
+      if (method === 'hourly' && !(Number(row.minutes || Number(row.qty) * 60) > 0)) return setError('Enter estimated labor hours before issuing.');
+      if (method === 'cost_plus' && row.material_cost.trim() === '') return setError('Enter material costs before issuing (enter 0 only if no cost applies).');
+    }
     setBusy("issue");
     try {
       const draftId=await saveDraft();
@@ -292,7 +297,7 @@ export default function EstimateBuilder({
 
   // ── Build view ──
   return (
-    <div className="space-y-4">
+    <fieldset disabled={drafting} className="min-w-0 space-y-4">
       {seed.work_order_id && !seed.resume_id && !draftRequested && <div className="rounded-xl border border-green-200 bg-green-50 p-4"><p className="text-sm text-green-900">Choose a template below, add price-book items, or suggest scope from this work order. Review suggested scope and prices before issuing.</p><button type="button" disabled={busy != null} className="mt-3 min-h-11 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" onClick={()=>setDraftRequested(true)}>Auto-create draft from work order</button></div>}
       <div className="flex flex-wrap gap-4 text-sm"><a href="/turn-estimator/price-book" target="_blank" rel="noopener noreferrer" className="text-green-800 underline">Open price book ↗</a><a href="/maintenance/workspace?view=schedule" target="_blank" rel="noopener noreferrer" className="text-green-800 underline">View availability & planned revenue ↗</a>{seed.work_order_id&&<a className="text-green-800 underline" href={`/maintenance/workspace?work_order=${seed.work_order_id}&schedule=1`} target="_blank" rel="noopener noreferrer">Plan a visit for this work order ↗</a>}</div>
       {error && <Banner>{error}</Banner>}
@@ -305,7 +310,7 @@ export default function EstimateBuilder({
 
       {drafting && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-          ✨ Drafting line items from the work order… (~15s). You can edit everything before issuing.
+          Separating work-order labor and materials… You can edit the draft when it is ready.
         </div>
       )}
       {draftError && (
@@ -395,8 +400,8 @@ export default function EstimateBuilder({
                       className={`${input} w-full min-w-0`}
                       type="number" min="0" step={method === "hourly" ? "0.01" : "1"}
                       aria-label={method === "hourly" ? "Labor hours" : "Minutes"}
-                      value={method === "hourly" && r.minutes !== "" ? String(Number(r.minutes) / 60) : method === "hourly" ? r.qty : r.minutes}
-                      onChange={(e) => setRow(r.key, { minutes: method === "hourly" && e.target.value !== "" ? String(Number(e.target.value) * 60) : e.target.value })}
+                      value={method === "hourly" && r.minutes === "0" ? "" : method === "hourly" && r.minutes !== "" ? String(Number(r.minutes) / 60) : method === "hourly" ? r.qty : r.minutes}
+                      onChange={(e) => setRow(r.key, { minutes: method === "hourly" ? String(Number(e.target.value) * 60) : e.target.value })}
                       placeholder={method === "hourly" ? "hours" : method === "service_min" ? "min" : "—"}
                       disabled={!(method === "service_min" || method === "hourly")}
                     />
@@ -450,7 +455,7 @@ export default function EstimateBuilder({
           {!canIssue && <span className="text-xs text-charcoal-500">Save your draft for office review and issue.</span>}
         </div>
       </div>
-    </div>
+    </fieldset>
   );
 }
 

@@ -53,6 +53,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       if(item.pricing_method==='allowance'||item.pricing_method==='package')throw new Error('Itemize package/allowance scope before issuing; component overlap is not yet defined');
       for(const value of [s.qty,s.minutes,s.est_labor_hours,s.est_material_cost,s.tenant_alloc_proposed,s.tax_amount])if(value!=null&&(!Number.isFinite(value)||value<0))throw new Error('Invalid line quantity, time, cost or allocation');
       if(s.qty!=null&&s.qty<=0)throw new Error('Quantity must be positive');
+      if(item.pricing_method==='hourly' && !((s.est_labor_hours ?? (s.minutes != null ? s.minutes / 60 : s.qty ?? 1)) > 0)) throw new Error('Enter estimated labor hours before issuing');
+      if(item.pricing_method==='cost_plus' && s.est_material_cost==null) throw new Error('Enter material costs before issuing');
       inputs.push({
         item,
         qty: s.qty,
