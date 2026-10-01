@@ -8,6 +8,7 @@ export const maxDuration = 60;
 /**
  * POST /api/brain/viz/ask { question } — answer with askRAG (same as Dez) and
  * return the snapshot doc keys of the cited sources so /brain can light them.
+ * Gated like /api/brain/viz: staff session + the `brain` section, via the proxy.
  */
 export async function POST(request: NextRequest) {
   if (!(await requireStaffOrService(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
