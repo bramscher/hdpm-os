@@ -1,82 +1,100 @@
 'use client';
-import {useCallback,useEffect,useState} from 'react';
+import {useCallback,useEffect,useMemo,useState} from 'react';
 import Link from 'next/link';
 import {useSession} from 'next-auth/react';
 import {useRouter} from 'next/navigation';
 import type {FollowupCandidate,FollowupReview} from '@/lib/agents/estimate-followups';
+import {LANES,GATE,bucketFor,laneFor,focusQueue,chaseCounts,weeklySends,clearedToday,daysUntil,daysStuck,groupByVendor,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
+import ChaseCard from './ChaseCard';
+import ChaseDrawer,{button,field,date} from './ChaseDrawer';
+import FocusStrip from './FocusStrip';
+import VendorView from './VendorView';
 
-type Event={id:number;work_order_id:string;actor:string;action:string;created_at:string;details:FollowupReview};
-type Data={staff:string[];candidates:FollowupCandidate[];reviews:FollowupReview[];events:Event[];legacy:{subject_id:string;created_at:string;action_type:string;status:string}[];senders:{email:string;sms:string};available:{email:boolean;sms:boolean};messagingStatus:string;loadedAt:string};
-const button='inline-flex min-h-11 items-center justify-center rounded-lg border border-sand-200 px-4 py-2 text-sm font-medium disabled:opacity-50';
-const field='w-full rounded-lg border border-sand-200 bg-white p-3 text-sm';
-const date=(value?:string|null)=>value?new Date(value).toLocaleString('en-US',{timeZone:'America/Los_Angeles'}):'Not recorded';
-const due=(r?:FollowupReview)=>!r||r.status==='review'||(['snoozed','sent'].includes(r.status)&&!!r.next_review_at&&new Date(r.next_review_at)<=new Date());
+type Data={staff:string[];candidates:FollowupCandidate[];reviews:FollowupReview[];events:ChaseEvent[];legacy:LegacyChase[];senders:{email:string;sms:string};available:{email:boolean;sms:boolean};messagingStatus:string;loadedAt:string};
+const LANE_PREVIEW=8;
+const laneLabel=Object.fromEntries(LANES.map(l=>[l.key,l.label]));
+
 export default function Followups({embedded=false}:{embedded?:boolean}) {
  const {data:session}=useSession();const router=useRouter();
  const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[filter,setFilter]=useState('review'),[scope,setScope]=useState('all'),[search,setSearch]=useState('');
- const [selected,setSelected]=useState<string|null>(null),[version,setVersion]=useState(0),[contextVersion,setContextVersion]=useState(''),[sender,setSender]=useState('');
- const [channel,setChannel]=useState<'email'|'sms_zoom'>('email'),[recipient,setRecipient]=useState(''),[subject,setSubject]=useState(''),[body,setBody]=useState(''),[note,setNote]=useState(''),[nextDate,setNextDate]=useState(''),[confirmed,setConfirmed]=useState(false),[owner,setOwner]=useState('');
+ const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[view,setView]=useState<'lanes'|'vendors'>('lanes'),[scope,setScope]=useState('all'),[search,setSearch]=useState('');
+ const [selected,setSelected]=useState<string|null>(null),[expanded,setExpanded]=useState<Record<string,boolean>>({});
  const load=useCallback(async()=>{setLoading(true);try{const response=await fetch('/api/maintenance/estimate-followups');const result=await response.json();if(!response.ok)throw new Error(result.error);setData(result);setError('');}catch(e){setError((e as Error).message);}finally{setLoading(false);}},[]);
  useEffect(()=>{void load();},[load]);
  useEffect(()=>{if(selected||busy)return;const timer=setInterval(()=>void load(),30000);return()=>clearInterval(timer);},[load,selected,busy]);
- const open=useCallback((c:FollowupCandidate,mode:'email'|'sms_zoom'='email')=>{
-  setSelected(c.id);setChannel(mode);setVersion(data?.reviews.find(r=>r.work_order_id===c.id)?.version||0);setContextVersion(c.contextVersion||'');setSender(mode==='email'?data?.senders.email||'':data?.senders.sms||'');
-  setRecipient(mode==='email'?c.email:c.phone);setSubject(c.subject);setBody(mode==='email'?c.emailBody:c.smsBody);setNote('');setOwner('');setNextDate('');setConfirmed(false);setNotice('');
- },[data]);
- useEffect(()=>{if(!data)return;const id=new URLSearchParams(window.location.search).get('followup');const c=data.candidates.find(c=>c.id===id);if(c){setFilter('all');open(c);}},[!!data]); // Apply the deep link only on initial load.
- async function act(c:FollowupCandidate,op:string) {
+ useEffect(()=>{if(!data)return;const id=new URLSearchParams(window.location.search).get('followup');if(id&&data.candidates.some(c=>c.id===id))setSelected(id);},[!!data]); // Apply the deep link only on initial load.
+
+ async function post(payload:Record<string,unknown>,success:string) {
   setBusy(true);setError('');setNotice('');
   try {
-   const response=await fetch('/api/maintenance/estimate-followups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:c.id,version,contextVersion,sender,op,note,owner_person:owner,next_review_date:nextDate||null,channel,recipient,subject,body,confirmed})});
+   const response=await fetch('/api/maintenance/estimate-followups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
    const result=await response.json();if(!response.ok)throw new Error(result.error);
-   setSelected(null);await load();router.refresh();setNotice(op==='send'?'Follow-up sent. Waiting for a reply; next review in 3 business days.':'Shared review updated.');
-  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+   setSelected(null);await load();router.refresh();setNotice(success);return true;
+  }catch(e){setError((e as Error).message);return false;}finally{setBusy(false);}
  }
- const candidates=data?.candidates||[];
- const shown=candidates.filter(c=>{
-  const r=data?.reviews.find(r=>r.work_order_id===c.id);
-  const owned=scope==='all'||c.owner?.toLowerCase()===session?.user?.name?.split(' ')[0]?.toLowerCase();
-  return owned&&(filter==='all'||(filter==='review'?c.eligible!==false&&(c.newEpisode||due(r)):filter==='help'?r&&['help','uncertain','sending'].includes(r.status):filter==='waiting'?c.eligible!==false&&r&&!due(r)&&['sent','snoozed'].includes(r.status):r?.status==='dismissed'||c.eligible===false))&&`${c.property} ${c.unit} ${c.woNumber} ${c.vendor} ${c.owner} ${c.description}`.toLowerCase().includes(search.toLowerCase());
- });
- return <section id="maintenance-followups" className={embedded?'mb-8 space-y-4 rounded-xl border border-sand-200 bg-white p-5':'mx-auto max-w-5xl space-y-5 p-6'}>
-  <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-semibold">Maintenance follow-ups</h2><p className="mt-1 text-sm text-charcoal-500">Penny and Craig review estimates and work needing a scheduling date.</p></div><button className={button} disabled={busy||loading} onClick={()=>void load()}>{loading?'Refreshing…':'Refresh'}</button></div>
-  <p className="text-sm">{data?.messagingStatus||'Checking trial setup…'} · Source checked {date(data?.loadedAt)} PT</p>
-  <div className="flex flex-wrap gap-2">{[['review','Needs action'],['waiting','Waiting'],['help','Needs help / delivery check'],['closed','No longer chasing'],['all','All']].map(([value,label])=><button key={value} className={`${button} ${filter===value?'bg-charcoal-900 text-white':''}`} aria-pressed={filter===value} onClick={()=>{setFilter(value);setSelected(null);}}>{label}</button>)}</div>
-  <div className="flex flex-wrap gap-3"><input className={`${field} flex-1`} placeholder="Find property, work order, vendor, or owner" aria-label="Search maintenance follow-ups" value={search} onChange={e=>setSearch(e.target.value)}/><select aria-label="Follow-up owner filter" className="rounded-lg border p-3 text-sm" value={scope} onChange={e=>setScope(e.target.value)}><option value="all">All team</option><option value="mine">My work orders</option></select></div>
-  <p className="text-sm text-charcoal-500">{shown.length} shown · {candidates.filter(c=>c.eligible!==false).length} currently eligible · Saving a review does not close a work order.</p>
-  {error&&<p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">{error}</p>}{notice&&<p role="status" className="rounded-lg bg-green-50 p-4 text-sm">{notice}</p>}
-  {!loading&&!shown.length&&<p className="p-5 text-center text-sm">No follow-ups in this view.</p>}
-  {shown.map(c=>{
-   const r=data?.reviews.find(r=>r.work_order_id===c.id),editing=selected===c.id,locked=!!r&&['sending','uncertain'].includes(r.status);
-   const legacy=data?.legacy.find(p=>p.subject_id===c.id);
-   const canSend=c.eligible!==false&&c.kind!=='decision'&&due(r)&&!locked;
-   return <article key={c.id} className="rounded-xl border border-sand-200 p-4">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">WO {c.woNumber||'—'} · {c.property}{c.unit&&` · ${c.unit}`}</h3><p className="mt-1 text-sm">{c.description.slice(0,180)}{c.description.length>180?'…':''}</p></div><span className="rounded-full bg-sand-100 px-3 py-1 text-xs">{c.newEpisode?'New episode — reopen review':r?.status||'Needs review'}</span></div>
-    <p className="mt-3 text-sm font-medium">{c.reason}</p><p className="mt-1 text-sm text-charcoal-500">HDPM owner: {c.owner||'Unassigned'} · Vendor: {c.vendor||'Unassigned'} · {c.sourceStatus||'Unknown source status'}</p>
-    <p className="mt-1 text-xs text-charcoal-500">Next work action: {c.nextActionDate||'Not set'} · Follow-up review: {date(r?.next_review_at)} · Source synced: {date(c.sourceUpdatedAt)} PT</p>
-    {r&&<p className="mt-2 text-sm">Last activity: {r.updated_by} · {date(r.updated_at)} PT · {r.note||r.status}</p>}
-    {c.estimate&&<p className="mt-2 text-sm"><Link className="text-green-800 underline" href={`/turn-estimator/estimates/${c.estimate.id}`}>Estimate</Link>: {c.estimate.total===null?'Amount unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c.estimate.total)} · {c.estimate.status} · version {c.estimate.version??'draft'}</p>}
-    <div className="mt-3 flex flex-wrap gap-2"><button className={button} disabled={busy} onClick={()=>editing?setSelected(null):open(c)}>{editing?'Close review':'Review / update'}</button><Link className={button} href={`/maintenance/board/wo/${c.id}`}>Work order & owner</Link>{c.appfolioLink&&<a className={button} href={c.appfolioLink} target="_blank" rel="noreferrer">AppFolio</a>}</div>
-    {editing&&<div className="mt-4 space-y-4 border-t pt-4">
-     <p className="whitespace-pre-wrap text-sm">{c.description}</p><p className="text-sm">Total work-order age: {c.totalAge??'Unknown'} calendar days · Assigned to: {c.assignedTo||'Unassigned'}</p>{c.decisionMaker&&<p className="text-sm">Decision requested of: {c.decisionMaker} · {date(c.approvalRequestedAt)} PT</p>}
-     {legacy&&<p className="rounded bg-amber-50 p-3 text-sm">Earlier chaser activity: {date(legacy.created_at)} PT ({legacy.action_type}). A prepared draft is not proof of sending. Check the current conversation.</p>}
-     {locked?<p role="status" className="rounded bg-amber-50 p-3 text-sm">{r?.error||'Delivery has not been confirmed.'} Check the sending account before any retry.</p>:canSend?<>
-      <div className="flex gap-2"><button className={button} aria-pressed={channel==='email'} onClick={()=>open(c,'email')}>Email</button><button className={button} aria-pressed={channel==='sms_zoom'} onClick={()=>open(c,'sms_zoom')}>Text</button></div>
-      <p className="text-sm">From: {sender} · {data?.available[channel==='email'?'email':'sms']?'Ready for your review':'Sending unavailable'}</p>
-      <label className="block text-sm">{channel==='email'?'Recipient email':'Recipient phone, including country code'}<input className={field} value={recipient} disabled={busy} onChange={e=>{setRecipient(e.target.value);setConfirmed(false);}}/></label>
-      {channel==='email'&&<label className="block text-sm">Subject<input className={field} value={subject} disabled={busy} onChange={e=>{setSubject(e.target.value);setConfirmed(false);}}/></label>}
-      <label className="block text-sm">Message<textarea className={field} rows={7} value={body} disabled={busy} onChange={e=>{setBody(e.target.value);setConfirmed(false);}}/></label>
-      <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>I checked the conversation, recipient, and message. Send this follow-up.</label>
-      <button className={`${button} bg-green-700 text-white`} disabled={busy||!confirmed||!recipient.trim()||!body.trim()||!data?.available[channel==='email'?'email':'sms']} onClick={()=>void act(c,'send')}>{channel==='email'?'Send email':'Send text'}</button>
-     </>:<p className="text-sm">{c.kind==='decision'?'Confirm who needs to decide in the work order before sending a follow-up.':c.eligible===false?'This work is no longer overdue. Its history remains available.':'Waiting for the next review. Reopen with a note if a new follow-up is needed now.'}</p>}
-     <label className="block text-sm">Team note / call or reply outcome<textarea className={field} rows={2} value={note} disabled={busy} maxLength={2000} onChange={e=>setNote(e.target.value)}/></label>
-     {!locked&&<label className="block text-sm">Next review date (8 AM Pacific; defaults to 3 business days)<input type="date" className={field} value={nextDate} disabled={busy} onChange={e=>setNextDate(e.target.value)}/></label>}
-     {!locked&&<label className="block text-sm">Reassign HDPM owner<select className={field} value={owner} onChange={e=>setOwner(e.target.value)}><option value="">Choose owner</option>{data?.staff.map(person=><option key={person} value={person}>{person}</option>)}</select><button className={button} disabled={busy||!owner||!note.trim()} onClick={()=>void act(c,'reassign')}>Save owner and next-action date</button></label>}
-     <div className="flex flex-wrap gap-2">{(locked?[['verified_sent','Checked: sent'],['verified_unsent','Checked: not sent']]:[['note','Record call / reply'],['snooze','Snooze'],['help','Request help'],['dismiss','No follow-up needed'],...(r&&!due(r)?[['reopen','Reopen review']]:[])]).map(([op,label])=><button key={op} className={button} disabled={busy||!note.trim()} onClick={()=>void act(c,op)}>{label}</button>)}</div>
-     <details><summary className="cursor-pointer text-sm font-medium">Message and review history</summary><ul className="mt-2 space-y-2">{data?.events.filter(e=>e.work_order_id===c.id).map(e=><li key={e.id} className="rounded bg-sand-50 p-3 text-sm"><p>{date(e.created_at)} PT · {e.actor} · {e.action==='delivery'?e.details.status==='sent'?'Sent':'Delivery uncertain':e.action}</p><p>{e.details.note}</p>{['send','delivery'].includes(e.action)&&<><p>{e.details.channel} to {e.details.recipient}</p><p>{e.details.subject}</p><p className="whitespace-pre-wrap">{e.details.body}</p></>}</li>)}</ul></details>
-    </div>}
-   </article>;
-  })}
+ const act=(id:string)=>(op:string,payload:Record<string,unknown>)=>post({id,op,...payload},op==='send'?'Follow-up sent. Waiting for a reply; next review in 3 business days.':'Shared review updated.');
+ const batch=(payload:Record<string,unknown>)=>post({op:'send_vendor_batch',...payload},'Vendor email sent. Each work order comes back for review in 3 business days.');
+
+ const model=useMemo(()=>{
+  const now=new Date(),candidates=data?.candidates||[],events=data?.events||[];
+  const reviews=new Map((data?.reviews||[]).map(r=>[r.work_order_id,r]));
+  const me=session?.user?.name?.split(' ')[0]?.toLowerCase();
+  const q=search.trim().toLowerCase();
+  const shown=candidates.filter(c=>(scope==='all'||c.owner?.toLowerCase()===me)&&(!q||`${c.property} ${c.unit} ${c.woNumber} ${c.vendor} ${c.owner} ${c.description}`.toLowerCase().includes(q)));
+  const bucket=(c:FollowupCandidate)=>bucketFor(c,reviews.get(c.id),now);
+  const active=shown.filter(c=>bucket(c)==='active');
+  const focus=focusQueue(active,reviews,now),inFocus=new Set(focus.map(c=>c.id));
+  const lanes=LANES.map(l=>{const all=active.filter(c=>laneFor(c,reviews.get(c.id))===l.key).sort((a,b)=>daysStuck(b,now)-daysStuck(a,now));return {...l,all,rest:all.filter(c=>!inFocus.has(c.id)),oldest:all[0]?daysStuck(all[0],now):0};});
+  return {reviews,focus,lanes,active,
+   parked:shown.filter(c=>bucket(c)==='parked').sort((a,b)=>(reviews.get(a.id)?.next_review_at||'').localeCompare(reviews.get(b.id)?.next_review_at||'')),
+   closed:shown.filter(c=>bucket(c)==='closed'),
+   chases:chaseCounts(events,data?.legacy||[]),weeks:weeklySends(events,8,now),cleared:clearedToday(events,now),daysToGate:daysUntil(GATE.date,now),
+   vendors:groupByVendor(shown,reviews,now)};
+ },[data,search,scope,session?.user?.name]);
+
+ const current=data?.candidates.find(c=>c.id===selected);
+ const drawer=current&&data&&<ChaseDrawer key={current.id} c={current} r={model.reviews.get(current.id)} legacy={data.legacy.find(p=>p.subject_id===current.id)} events={data.events.filter(e=>e.work_order_id===current.id)} chases={model.chases.get(current.id)||0}
+  staff={data.staff} senders={data.senders} available={data.available} busy={busy} onAct={act(current.id)} onClose={()=>setSelected(null)}/>;
+ const card=(c:FollowupCandidate,showLane=false)=><ChaseCard key={c.id} c={c} r={model.reviews.get(c.id)} chases={model.chases.get(c.id)||0} onOpen={()=>setSelected(c.id)} showLane={showLane?laneLabel[laneFor(c,model.reviews.get(c.id))]:undefined}/>;
+ const alerts=<>{error&&<p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">{error}</p>}{notice&&<p role="status" className="rounded-lg bg-green-50 p-4 text-sm">{notice}</p>}</>;
+ const focusList=<section aria-labelledby="focus-heading" className="space-y-2">
+  <h3 id="focus-heading" className="text-sm font-semibold">Do these first</h3>
+  {model.focus.length?<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">{model.focus.map(c=>card(c,true))}</div>
+   :<p className="rounded-xl border border-dashed border-sand-200 p-6 text-center text-sm text-charcoal-500">{loading&&!data?'Loading…':'Nothing needs a follow-up right now.'}</p>}
+ </section>;
+
+ if(embedded)return <section id="maintenance-followups" className="mb-8 space-y-4 rounded-xl border border-sand-200 bg-white p-5">
+  <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-semibold">Maintenance follow-ups</h2><Link className={button} href="/maintenance/estimate-followups">Open the chase board</Link></div>
+  <FocusStrip cleared={model.cleared} remaining={model.focus.length} weeks={model.weeks} daysToGate={model.daysToGate}/>{alerts}{focusList}{drawer}
+ </section>;
+
+ return <section id="maintenance-followups" className="mx-auto max-w-[1400px] space-y-5 p-4 sm:p-6">
+  <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-semibold">Chase board</h2><p className="mt-1 text-sm text-charcoal-500">{data?.messagingStatus||'Checking trial setup…'} · Source checked {date(data?.loadedAt)} PT</p></div><button className={button} disabled={busy||loading} onClick={()=>void load()}>{loading?'Refreshing…':'Refresh'}</button></div>
+  <FocusStrip cleared={model.cleared} remaining={model.focus.length} weeks={model.weeks} daysToGate={model.daysToGate}/>
+  {alerts}{focusList}
+  <div className="flex flex-wrap items-center gap-3 border-t border-sand-200 pt-4">
+   <div className="inline-flex rounded-lg border border-sand-200 p-1" role="group" aria-label="Board view">{([['lanes','By stage'],['vendors','By vendor']] as const).map(([v,label])=><button key={v} aria-pressed={view===v} className={`rounded-md px-3 py-1.5 text-sm font-medium ${view===v?'bg-charcoal-900 text-white':''}`} onClick={()=>setView(v)}>{label}</button>)}</div>
+   <input className={`${field} min-w-[200px] flex-1`} placeholder="Find property, work order, vendor, or owner" aria-label="Search maintenance follow-ups" value={search} onChange={e=>setSearch(e.target.value)}/>
+   <select aria-label="Follow-up owner filter" className="rounded-lg border border-sand-200 p-3 text-sm" value={scope} onChange={e=>setScope(e.target.value)}><option value="all">All team</option><option value="mine">My work orders</option></select>
+  </div>
+  {view==='lanes'?<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{model.lanes.map(l=>{
+   const more=expanded[l.key],list=more?l.rest:l.rest.slice(0,LANE_PREVIEW);
+   return <section key={l.key} aria-labelledby={`lane-${l.key}`} className="flex flex-col rounded-xl bg-sand-50 p-3">
+    <header className="mb-2 flex items-baseline justify-between gap-2"><div><h3 id={`lane-${l.key}`} className="text-sm font-semibold">{l.label}</h3><p className="text-xs text-charcoal-500">{l.hint}{l.all.length?` · oldest ${l.oldest}d`:''}</p></div><span className="text-2xl font-semibold tabular-nums">{l.all.length}</span></header>
+    {l.all.length>l.rest.length&&<p className="mb-2 text-xs text-charcoal-500">{l.all.length-l.rest.length} in today’s focus above</p>}
+    <div className="space-y-2">{list.map(c=>card(c))}</div>
+    {l.rest.length>LANE_PREVIEW&&<button className="mt-2 text-sm font-medium text-green-800 underline" onClick={()=>setExpanded(x=>({...x,[l.key]:!more}))}>{more?'Show fewer':`Show ${l.rest.length-LANE_PREVIEW} more`}</button>}
+    {!l.all.length&&<p className="py-4 text-center text-xs text-charcoal-400">Clear</p>}
+   </section>;
+  })}</div>
+  :<VendorView groups={model.vendors} reviews={model.reviews} chases={model.chases} sender={data?.senders.email||''} available={!!data?.available.email} busy={busy} onOpen={setSelected} onBatch={batch}/>}
+  <details className="rounded-xl border border-sand-200 bg-white p-4"><summary className="cursor-pointer text-sm font-semibold">Waiting on replies ({model.parked.length})</summary>
+   <ul className="mt-3 divide-y divide-sand-100">{model.parked.map(c=>{const r=model.reviews.get(c.id);return <li key={c.id}><button className="flex w-full flex-wrap items-baseline justify-between gap-2 py-2 text-left text-sm hover:bg-sand-50" onClick={()=>setSelected(c.id)}><span>WO {c.woNumber||'—'} · {c.property}{c.unit&&` · ${c.unit}`} · {c.vendor||'No vendor'}</span><span className="text-xs text-charcoal-500">{r?.status==='sent'?'Sent':'Snoozed'} · back {date(r?.next_review_at)}</span></button></li>;})}</ul>
+  </details>
+  <details className="rounded-xl border border-sand-200 bg-white p-4"><summary className="cursor-pointer text-sm font-semibold">No longer chasing ({model.closed.length})</summary>
+   <ul className="mt-3 divide-y divide-sand-100">{model.closed.map(c=><li key={c.id}><button className="w-full py-2 text-left text-sm hover:bg-sand-50" onClick={()=>setSelected(c.id)}>WO {c.woNumber||'—'} · {c.property}{c.unit&&` · ${c.unit}`} <span className="text-xs text-charcoal-500">· {model.reviews.get(c.id)?.status==='dismissed'?'Dismissed':'No longer overdue'}</span></button></li>)}</ul>
+  </details>
+  <p className="text-xs text-charcoal-500">Saving a review does not close a work order. {model.active.length} active · {model.parked.length} waiting · {model.closed.length} closed.</p>
+  {drawer}
  </section>;
 }

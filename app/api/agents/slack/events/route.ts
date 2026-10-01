@@ -196,6 +196,8 @@ async function handleQuestion(event: SlackEvent): Promise<void> {
       detail: {
         question,
         sources: sources.length,
+        // Cited chunk ids feed the brain map's usage heat.
+        cited: sources.map(s => ({ id: s.id, type: s.type })),
         needs_attention: flag?.needsAttention ?? false,
         flag_reason: flag?.reason ?? null,
         flagged_title: flag?.flaggedTitle ?? null,
