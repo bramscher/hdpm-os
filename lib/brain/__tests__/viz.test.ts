@@ -96,3 +96,14 @@ describe('countCitedChunks / brainMatchDocKey', () => {
     expect(brainMatchDocKey({ id: 'c', node_id: null, source_url: null })).toBe('b:c');
   });
 });
+
+describe('knnPageSize', () => {
+  it('keeps each call to ~200k comparisons, within bounds', async () => {
+    const { knnPageSize } = await import('../viz-server');
+    expect(knnPageSize(2000)).toBe(100);
+    expect(knnPageSize(5000)).toBe(40);
+    expect(knnPageSize(100)).toBe(1000);
+    expect(knnPageSize(1_000_000)).toBe(5);
+    expect(knnPageSize(0)).toBe(1000);
+  });
+});

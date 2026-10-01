@@ -12,7 +12,7 @@ export const VIZ_PATH = 'snapshot.json';
 const CITATION_DAYS = 90;
 
 /** True when the error means the brain_viz migration hasn't been applied. */
-export const isMissingVizSql = (msg: string) => /brain_viz_bundle|brain_viz_chunk_docs|schema cache|does not exist|Could not find the function/i.test(msg);
+export const isMissingVizSql = (msg: string) => /schema cache|does not exist|Could not find the function/i.test(msg);
 
 async function loadCites(): Promise<Record<string, number>> {
   const supabase = getSupabaseAdmin();
@@ -59,12 +59,61 @@ async function loadRoutineStatus(): Promise<Record<string, string>> {
   return out;
 }
 
-export async function loadVizInput(): Promise<VizInput> {
-  const { data, error } = await getSupabaseAdmin().rpc('brain_viz_bundle', { k: 3 });
-  if (error) throw new Error(error.message);
-  const bundle = (data ?? {}) as { docs?: VizDocRow[]; knn?: VizInput['knn']; edges?: VizInput['edges'] };
+/** Each kNN call does about this many vector comparisons, so it stays well under the statement timeout. */
+const COMPARISONS_PER_CALL = 200_000;
+/** Stop paging neighbours after this long and ship what we have (route maxDuration is 300s). */
+const KNN_BUDGET_MS = 200_000;
+
+/** Documents per kNN call for a corpus of `docCount` documents. */
+export function knnPageSize(docCount: number): number {
+  return Math.min(1000, Math.max(5, Math.floor(COMPARISONS_PER_CALL / Math.max(docCount, 1))));
+}
+
+export interface VizLoadTimings {
+  refreshMs: number;
+  docsMs: number;
+  knnMs: number;
+  knnCalls: number;
+  knnComplete: boolean;
+}
+
+export async function loadVizInput(): Promise<{ input: VizInput; timings: VizLoadTimings }> {
+  const supabase = getSupabaseAdmin();
+  const rpc = async <T>(fn: string, args: Record<string, unknown> = {}): Promise<T> => {
+    const { data, error } = await supabase.rpc(fn, args);
+    if (error) throw new Error(`${fn}: ${error.message}`);
+    return data as T;
+  };
+
+  let t = Date.now();
+  const docCount = await rpc<number>('brain_viz_refresh_doc_emb');
+  const refreshMs = Date.now() - t;
+
+  t = Date.now();
+  const bundle = await rpc<{ docs?: VizDocRow[]; edges?: VizInput['edges'] }>('brain_viz_docs_edges');
+  const docsMs = Date.now() - t;
+
+  t = Date.now();
+  const knn: VizInput['knn'] = [];
+  const size = knnPageSize(docCount);
+  let calls = 0;
+  let knnComplete = true;
+  for (let offset = 0; offset < docCount; offset += size) {
+    if (Date.now() - t > KNN_BUDGET_MS) {
+      knnComplete = false;
+      console.warn(`[brain-viz] neighbour paging stopped at ${offset}/${docCount} docs (time budget)`);
+      break;
+    }
+    knn.push(...((await rpc<VizInput['knn']>('brain_viz_knn_page', { k: 3, p_offset: offset, p_limit: size })) ?? []));
+    calls++;
+  }
+  const knnMs = Date.now() - t;
+
   const [cites, routineStatus] = await Promise.all([loadCites(), loadRoutineStatus()]);
-  return { docs: bundle.docs ?? [], knn: bundle.knn ?? [], edges: bundle.edges ?? [], cites, routineStatus };
+  return {
+    input: { docs: bundle?.docs ?? [], knn, edges: bundle?.edges ?? [], cites, routineStatus },
+    timings: { refreshMs, docsMs, knnMs, knnCalls: calls, knnComplete },
+  };
 }
 
 export async function writeSnapshot(snapshot: VizSnapshot): Promise<number> {
@@ -86,18 +135,30 @@ export async function readSnapshot(): Promise<VizSnapshot | null> {
   }
 }
 
-export async function runSnapshot(): Promise<{ ok: true; documents: number; nodes: number; edges: number; bytes: number } | { skipped: string }> {
-  let input: VizInput;
+export async function runSnapshot(): Promise<
+  | { ok: true; documents: number; nodes: number; edges: number; bytes: number; knnComplete: boolean; timings: VizLoadTimings }
+  | { skipped: string }
+> {
+  let loaded: Awaited<ReturnType<typeof loadVizInput>>;
   try {
-    input = await loadVizInput();
+    loaded = await loadVizInput();
   } catch (e) {
     const msg = (e as Error).message;
-    if (isMissingVizSql(msg)) return { skipped: 'brain_viz migration not applied' };
+    if (isMissingVizSql(msg)) return { skipped: `brain_viz migration not applied (${msg})` };
     throw e;
   }
-  const snapshot = buildSnapshot(input);
+  const snapshot = buildSnapshot(loaded.input);
   const bytes = await writeSnapshot(snapshot);
-  return { ok: true, documents: snapshot.stats.documents, nodes: snapshot.nodes.length, edges: snapshot.edges.length, bytes };
+  console.log('[brain-viz] snapshot written', JSON.stringify({ documents: snapshot.stats.documents, bytes, ...loaded.timings }));
+  return {
+    ok: true,
+    documents: snapshot.stats.documents,
+    nodes: snapshot.nodes.length,
+    edges: snapshot.edges.length,
+    bytes,
+    knnComplete: loaded.timings.knnComplete,
+    timings: loaded.timings,
+  };
 }
 
 /** Map RAG source chunk ids to snapshot doc keys (for lighting up an answer). */
