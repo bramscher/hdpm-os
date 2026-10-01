@@ -56,6 +56,7 @@ export const ROUTINES: Routine[] = [
   { id: 'knowledge_notion', path: '/api/sync/knowledge', schedule: '0 10 * * 0', name: 'Knowledge sync (Notion)', category: 'brain', owner: 'Craig' },
   { id: 'knowledge_onedrive', path: '/api/sync/knowledge?target=onedrive', schedule: '0 11 * * 0', name: 'Knowledge sync (OneDrive)', category: 'brain', owner: 'Craig' },
   { id: 'brain_evolve', path: '/api/brain/cron/evolve', schedule: '0 10 * * *', name: 'Knowledge Nightly Review', category: 'brain', owner: 'Craig' },
+  { id: 'brain_snapshot', path: '/api/brain/cron/snapshot', schedule: '30 10 * * *', name: 'Brain map snapshot', category: 'brain', owner: 'Craig' },
   { id: 'ors_watch', path: '/api/sync/ors-watch', schedule: '0 12 1 * *', name: 'Oregon Law Watch', category: 'brain', owner: 'Craig', recipients: ['Craig'] },
   { id: 'ors_session_review', path: '/api/sync/ors-watch?sessionReview=1', schedule: '0 13 5 4,8 *', name: 'Oregon Law session review', category: 'brain', owner: 'Craig', recipients: ['Craig'] },
 
