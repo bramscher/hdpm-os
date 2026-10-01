@@ -4,6 +4,8 @@ import { reportsApiConfigured } from '@/lib/appfolio-reports';
 import { todayPacific } from '@/lib/eos/escalation';
 import { activitiesForStaff, activityPeople, bucketActivities, staffForAssignee, type Activity, type ActivityPerson } from '@/lib/activities';
 import { fetchActivities, loadActiveStaff } from '@/lib/activities-server';
+import { getDeniedSections } from '@/lib/access/section-access';
+import { hiddenFromRoster } from '@/lib/access/roster';
 
 export const maxDuration = 60;
 
@@ -50,7 +52,18 @@ export async function GET(request: NextRequest) {
     const buckets = bucketActivities(mine, today);
     const counts = Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, v.length]));
 
-    const people: ActivityPerson[] | undefined = isAdmin ? activityPeople(rows, staff) : undefined;
+    // Same roster as Admin → User settings (hidden identities such as Bryce stay out),
+    // minus anyone with the Activities section switched off there.
+    let people: ActivityPerson[] | undefined;
+    if (isAdmin) {
+      const rostered = staff.filter((s) => !hiddenFromRoster(s.person) && !hiddenFromRoster(s.email) && !hiddenFromRoster(s.name));
+      const listed = (
+        await Promise.all(
+          rostered.map(async (s) => ((await getDeniedSections(s.email, s.access_role ?? undefined)).includes('activities') ? null : s))
+        )
+      ).filter((s): s is (typeof staff)[number] => s !== null);
+      people = activityPeople(rows, listed);
+    }
 
     return NextResponse.json({
       viewing,

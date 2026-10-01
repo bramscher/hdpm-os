@@ -168,3 +168,23 @@ describe('activityPeople (admin dropdown)', () => {
     expect(activityPeople([row('Brody')], staff).find((p) => p.name === 'Brody Bramscher')?.count).toBe(1);
   });
 });
+
+describe('activityPeople groups', () => {
+  const row = (assignee: string | null, hidden = false) =>
+    ({ date: '2026-10-01', activity: 'x', activityFor: null, label: null, assignee, assigneeHidden: hidden, propertyName: null, unitAddress: null, createdBy: null, createdOn: null, link: null });
+  const staff = [{ person: 'Penny', name: 'Penny Free' }];
+
+  it('puts departed and deactivated assignees under former staff, with in-house names', () => {
+    const people = activityPeople([row('Jennifer Bertran'), row('Jennifer Bertran'), row('Bianca Nyseth', true), row('Ann Other'), row(null), row('Penny Free')], staff);
+    const by = (n: string) => people.find((p) => p.name === n)!;
+    expect(by('Jennifer Bertran')).toMatchObject({ label: 'Jen Bertran', group: 'former', count: 2 });
+    expect(by('Bianca Nyseth')).toMatchObject({ label: 'Bianca Nyseth', group: 'former', count: 1 });
+    expect(by('Ann Other').group).toBe('unmatched');
+    expect(by('(unassigned)').group).toBe('unmatched');
+    expect(by('Penny Free')).toMatchObject({ group: 'staff', count: 1 });
+  });
+
+  it('leaves out staff not passed in (e.g. Activities switched off)', () => {
+    expect(activityPeople([], []).length).toBe(0);
+  });
+});

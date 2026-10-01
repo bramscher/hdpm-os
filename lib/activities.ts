@@ -8,6 +8,8 @@
  * owner/unit-less activities fall back to the property page.
  */
 
+import { departedDisplayName, isDepartedStaff } from '@/lib/staff-lifecycle';
+
 export const APPFOLIO_WEB_BASE = 'https://highdesertpm.appfolio.com';
 export const ACTIVITIES_PAGE_URL = 'https://os.highdesertpm.com/activities';
 
@@ -141,11 +143,18 @@ export function activitiesForStaff(rows: Activity[], staff: { person: string; na
   return rows.filter((r) => names.has(key(r.assignee)));
 }
 
+export type ActivityPersonGroup = 'staff' | 'former' | 'unmatched';
+
 export interface ActivityPerson {
+  /** Value sent back as ?person= (the staff name, or the AppFolio assignee name). */
   name: string;
+  /** What the dropdown shows (departed staff use their in-house name). */
+  label: string;
   count: number;
   hidden: boolean;
   staff: boolean;
+  /** staff = current; former = departed/deactivated, still holding work to reassign. */
+  group: ActivityPersonGroup;
 }
 
 /**
@@ -158,16 +167,24 @@ export function activityPeople(rows: Activity[], staff: { person: string; name: 
   const byKey = new Map<string, ActivityPerson>();
   for (const s of staff) {
     const name = (s.name ?? '').trim() || s.person;
-    byKey.set(key(name), { name, count: activitiesForStaff(rows, s).length, hidden: false, staff: true });
+    byKey.set(key(name), { name, label: name, count: activitiesForStaff(rows, s).length, hidden: false, staff: true, group: 'staff' });
   }
   for (const a of rows) {
     if (staffForAssignee(a.assignee, staff)) continue; // counted under the staff entry
     const name = a.assignee ?? '(unassigned)';
-    const entry = byKey.get(key(name)) ?? { name, count: 0, hidden: a.assigneeHidden, staff: false };
+    const former = a.assigneeHidden || isDepartedStaff(name);
+    const entry = byKey.get(key(name)) ?? {
+      name,
+      label: former ? departedDisplayName(name) : name,
+      count: 0,
+      hidden: a.assigneeHidden,
+      staff: false,
+      group: former ? 'former' : 'unmatched',
+    };
     entry.count += 1;
     byKey.set(key(name), entry);
   }
-  return [...byKey.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  return [...byKey.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 // ============================================

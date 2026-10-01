@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { BUCKET_LABEL, BUCKET_ORDER, type Activity, type Bucket } from "@/lib/activities";
+import { BUCKET_LABEL, BUCKET_ORDER, type Activity, type ActivityPerson, type Bucket } from "@/lib/activities";
 
 interface ActivitiesResponse {
   viewing: string;
@@ -18,7 +18,7 @@ interface ActivitiesResponse {
   counts: Record<Bucket, number>;
   buckets: Record<Bucket, Activity[]>;
   isAdmin: boolean;
-  people?: Array<{ name: string; count: number; hidden: boolean; staff: boolean }>;
+  people?: ActivityPerson[];
 }
 
 const TILE_TONE: Record<Bucket, string> = {
@@ -35,6 +35,12 @@ function formatDate(ymd: string): string {
 function daysLate(ymd: string, today: string): number {
   return Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${ymd}T00:00:00Z`)) / 86_400_000);
 }
+
+const PEOPLE_GROUPS: { group: ActivityPerson["group"]; label: string }[] = [
+  { group: "staff", label: "Staff" },
+  { group: "former", label: "Former staff — reassign in AppFolio" },
+  { group: "unmatched", label: "Not matched to staff" },
+];
 
 export function ActivitiesView() {
   const [person, setPerson] = useState<string>("");
@@ -85,12 +91,19 @@ export function ActivitiesView() {
                 aria-label="View activities for"
               >
                 <option value="">My activities</option>
-                {data.people.map((p) => (
-                  <option key={p.name} value={p.name}>
-                    {p.name}
-                    {p.hidden ? " (deactivated)" : !p.staff && p.name !== "(unassigned)" ? " (no staff match)" : ""} — {p.count}
-                  </option>
-                ))}
+                {PEOPLE_GROUPS.map(({ group, label }) => {
+                  const members = data.people!.filter((p) => p.group === group);
+                  if (members.length === 0) return null;
+                  return (
+                    <optgroup key={group} label={label}>
+                      {members.map((p) => (
+                        <option key={p.name} value={p.name}>
+                          {p.label} — {p.count}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </select>
             )}
             <Button variant="outline" size="sm" onClick={() => load(true)} disabled={loading}>
