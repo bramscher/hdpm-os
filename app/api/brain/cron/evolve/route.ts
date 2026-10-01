@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { evolve } from '@/lib/brain/evolve';
+import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 300;
 
@@ -32,6 +33,8 @@ export async function POST(request: NextRequest) {
 }
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
+
+export const GET = withCronRun(handleGET);

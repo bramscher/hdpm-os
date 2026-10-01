@@ -22,6 +22,7 @@ import {
   fetchDoorRoster,
   fetchDoorMovementKpi,
 } from '@/lib/appfolio-kpi';
+import { withCronRun } from '@/lib/cron/run';
 
 /**
  * POST /api/kpi/cron
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -101,3 +102,5 @@ async function runSnapshot() {
 }
 
 export const maxDuration = 300;
+
+export const GET = withCronRun(handleGET);

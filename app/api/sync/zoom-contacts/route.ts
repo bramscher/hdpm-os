@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runZoomSync, previewZoomSync, ALL_CONTACT_TYPES } from '@/lib/zoom-sync';
+import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 300;
 
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -41,3 +42,5 @@ async function handleSync(request: NextRequest) {
   );
   return NextResponse.json(result, { status: result.status === 'failed' ? 502 : 200 });
 }
+
+export const GET = withCronRun(handleGET);

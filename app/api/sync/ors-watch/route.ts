@@ -4,11 +4,12 @@ import { buildOrsDigestActionId } from '@/lib/agents/ors-digest';
 import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
 import { sendSlackMessage } from '@/lib/agents/channels/slack';
 import { logDezActivity } from '@/lib/agents/dez/activity';
+import { withCronRun } from '@/lib/cron/run';
 
 // Probes ~200 candidate URLs against a public service — needs the long budget.
 export const maxDuration = 300;
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -111,3 +112,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'ors-watch failed' }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);

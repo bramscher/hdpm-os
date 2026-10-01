@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { previewActivitiesDm, runActivitiesDm } from '@/lib/agents/activities-dm';
 import type { DmKind } from '@/lib/activities';
+import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 300;
 
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
 }
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
+
+export const GET = withCronRun(handleGET);

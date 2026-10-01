@@ -3,11 +3,12 @@ import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { havenConfigured, syncHavenConversations } from '@/lib/haven';
 import { matchConversationsToAppFolioLeads } from '@/lib/haven-af-match';
+import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 300;
 
 // Vercel Cron sends GET; expose both verbs.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -62,3 +63,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);

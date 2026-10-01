@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { syncKeyAssignments } from '@/lib/keys-sync';
+import { withCronRun } from '@/lib/cron/run';
 
 // AppFolio v0 API is slow; give the sync the full Vercel Pro window.
 export const maxDuration = 300;
@@ -8,7 +9,7 @@ export const maxDuration = 300;
 /**
  * GET /api/sync/keys — Vercel Cron sends GET; delegates to POST (same auth).
  */
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -45,3 +46,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);

@@ -3,11 +3,12 @@ import { loadTripwireSnapshot } from '@/lib/maintenance/tripwire-engine';
 import { tripwire8 } from '@/lib/maintenance/tripwires';
 import { buildDigest } from '@/lib/maintenance/digest';
 import { sendDigestEmail } from '@/lib/maintenance/email';
+import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 300;
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -54,3 +55,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);

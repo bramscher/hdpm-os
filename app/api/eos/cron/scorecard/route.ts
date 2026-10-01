@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runScorecardWeek } from '@/lib/eos/scorecard-run';
 import { runRockWeek } from '@/lib/eos/rock-run';
+import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 120;
 
@@ -35,6 +36,8 @@ export async function POST(request: NextRequest) {
 }
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
+
+export const GET = withCronRun(handleGET);

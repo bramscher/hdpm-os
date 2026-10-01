@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAppFolioListings } from '@/lib/appfolio';
 import { bulkUpsertComps } from '@/lib/comps';
+import { withCronRun } from '@/lib/cron/run';
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -45,3 +46,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);

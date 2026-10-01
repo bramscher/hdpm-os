@@ -9,6 +9,7 @@ import {
 import { bulkUpsertWorkOrders } from '@/lib/work-orders';
 import { syncVendors } from '@/lib/maintenance/vendors';
 import { syncUnitTurnsFromMirror } from '@/lib/maintenance/unit-turns';
+import { withCronRun } from '@/lib/cron/run';
 
 // Allow up to 300 seconds for the sync function (Vercel Pro supports up to 300s).
 // AppFolio v0 API is slow (~20s per page of 200 work orders), so we need headroom.
@@ -20,7 +21,7 @@ export const maxDuration = 300;
  * Vercel Cron sends GET, so GET delegates to POST (same auth: CRON_SECRET
  * bearer or staff session). Pass ?test=1 for the old connectivity check.
  */
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   const url = new URL(request.url);
   if (url.searchParams.get('test') === '1') {
     try {
@@ -140,3 +141,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);
