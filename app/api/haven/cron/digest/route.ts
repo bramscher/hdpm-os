@@ -4,13 +4,14 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { buildHavenDigest } from '@/lib/haven-digest';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
 import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
+import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 60;
 
 // Same recipients as the other agent flags (rerouted from Craig 2026-07-23).
 const RECIPIENTS = ['Brody', 'Matt'] as const;
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -77,3 +78,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);

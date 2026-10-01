@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAgentConfig, isGloballyKilled } from '@/lib/agents/config';
 import { publishFollowupQueue } from '@/lib/agents/followup-slack';
+import { withCronRun } from '@/lib/cron/run';
 export const maxDuration=120;
-export async function GET(request:NextRequest) {
+async function handleGET(request:NextRequest) {
   const secret=process.env.CRON_SECRET;
   if(!secret || request.headers.get('authorization')!==`Bearer ${secret}`)return NextResponse.json({error:'Unauthorized'},{status:401});
   const preview=request.nextUrl.searchParams.get('preview')==='1';
@@ -15,3 +16,5 @@ export async function GET(request:NextRequest) {
   }
   catch(e){return NextResponse.json({error:(e as Error).message},{status:503});}
 }
+
+export const GET = withCronRun(handleGET);

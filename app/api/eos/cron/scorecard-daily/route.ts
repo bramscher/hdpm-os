@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runScorecardWeek } from '@/lib/eos/scorecard-run';
+import { withCronRun } from '@/lib/cron/run';
 export const maxDuration = 120;
 /** After the daily 13:30 UTC metrics capture. Friday communications stay on the weekly cron. */
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   if (!process.env.CRON_SECRET || request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({error: 'Unauthorized'}, {status:401});
   }
@@ -13,3 +14,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(await runScorecardWeek({now, weeklyActions:false, dryRun:request.nextUrl.searchParams.get('dryRun') === '1'}));
   } catch (e) { return NextResponse.json({error:(e as Error).message}, {status:500}); }
 }
+
+export const GET = withCronRun(handleGET);

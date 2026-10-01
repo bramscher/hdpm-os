@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { commitKeysReconcile, fetchAfKeysDetailRows } from '@/lib/keys-reconcile';
 import { trueUpUnitTurnsFromReport } from '@/lib/maintenance/unit-turns';
 import { reportsApiConfigured } from '@/lib/appfolio-reports';
+import { withCronRun } from '@/lib/cron/run';
 
 // Reports API + v0 units bridge — give it the full Vercel Pro window.
 export const maxDuration = 300;
@@ -10,7 +11,7 @@ export const maxDuration = 300;
 /**
  * GET /api/sync/af-reports — Vercel Cron sends GET; delegates to POST.
  */
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -77,3 +78,5 @@ export async function POST(request: NextRequest) {
     { status: failed === 2 ? 500 : 200 }
   );
 }
+
+export const GET = withCronRun(handleGET);

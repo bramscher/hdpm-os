@@ -6,9 +6,10 @@ import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { runCandidateSync } from '@/lib/inspection-candidates';
 import { batchGeocodeProperties } from '@/lib/inspection-geocode';
+import { withCronRun } from '@/lib/cron/run';
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -68,3 +69,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);

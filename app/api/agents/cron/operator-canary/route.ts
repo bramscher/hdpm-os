@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { callOperator } from '@/lib/agents/dez/operator';
 import { alertOperatorFailure } from '@/lib/agents/dez/operator-alert';
 import { logDezActivity } from '@/lib/agents/dez/activity';
+import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 120;
 
@@ -73,6 +74,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 }
 
 // Vercel Cron sends GET.
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGET(request: NextRequest): Promise<NextResponse> {
   return POST(request);
 }
+
+export const GET = withCronRun(handleGET);

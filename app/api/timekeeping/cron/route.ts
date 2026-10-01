@@ -1,7 +1,8 @@
 import { employees, ensureSheets } from "@/lib/timekeeping/server";
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-export async function GET(request: Request) {
+import { withCronRun } from '@/lib/cron/run';
+async function handleGET(request: Request) {
   const expected = process.env.CRON_SECRET
     ? Buffer.from(`Bearer ${process.env.CRON_SECRET}`)
     : null;
@@ -22,3 +23,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withCronRun(handleGET);

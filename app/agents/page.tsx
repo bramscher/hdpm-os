@@ -6,6 +6,26 @@ import AutonomyMatrix, { type StaffOption } from '@/components/agents/AutonomyMa
 import { buildWorkload } from '@/lib/agents/workload';
 import AgentCatalog from '@/components/agents/AgentCatalog';
 import { actionLabel, agentName } from '@/lib/agents/catalog';
+import AgentsHero from '@/components/agents/AgentsHero';
+import { loadActivityFeed } from '@/lib/agents/activity-feed';
+import { buildPulses } from '@/lib/agents/pulse';
+import { loadRoutineViews } from '@/lib/routines/status';
+
+/** Loop 1 gate (restart plan §8, extended 2026-09-30). */
+const GATE_DATE = '2026-10-15';
+
+/** Motion now vs. the week before, from staff_actions snapshots (last7Days). */
+async function loadMotionPrev(): Promise<number | null> {
+  const { data } = await getSupabaseAdmin()
+    .from('metrics_snapshot')
+    .select('value, captured_at')
+    .eq('metric', 'staff_actions')
+    .lte('captured_at', new Date(Date.now() - 7 * 86_400_000).toISOString())
+    .order('captured_at', { ascending: false })
+    .limit(1);
+  const v = (data?.[0]?.value as { last7Days?: unknown } | undefined)?.last7Days;
+  return typeof v === 'number' ? v : null;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -213,7 +233,10 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 export default async function AgentsPage() {
-  const { config, killed, proposals, outbox, latest, baseline, clarifications, dezActivity, dezFlags, staffOptions } = await loadData();
+  const now = new Date();
+  const [{ config, killed, proposals, outbox, latest, baseline, clarifications, dezActivity, dezFlags, staffOptions }, routineData, initialFeed, motionPrev] =
+    await Promise.all([loadData(), loadRoutineViews(now), loadActivityFeed(new Date(now.getTime() - 86_400_000)), loadMotionPrev()]);
+  const pulses = buildPulses(routineData.routines, config, killed);
   const session = await auth();
   const isAdmin = session?.user?.isAdmin === true;
   const stats = proposalStats(proposals);
@@ -254,6 +277,15 @@ export default async function AgentsPage() {
         What each agent does and why, what they&apos;ve been doing, and how much they&apos;re allowed to do on their own. People
         work with agents in Slack; this page is for oversight.
       </p>
+
+      <AgentsHero
+        motion={num(latest.get('staff_actions')?.value?.last7Days)}
+        motionPrev={motionPrev}
+        gateDate={GATE_DATE}
+        agents={pulses}
+        initialFeed={initialFeed}
+        initialNow={now.toISOString()}
+      />
 
       <AgentCatalog config={config} killed={killed} />
 

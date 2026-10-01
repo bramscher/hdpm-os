@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { fetchBillById, fetchJournalEntryById } from '@/lib/appfolio';
+import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 120;
 
@@ -12,7 +13,7 @@ export const maxDuration = 120;
  *
  * Auth: CRON_SECRET bearer (Vercel cron), or an admin session for manual runs.
  */
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
   if (!isCron) {
@@ -79,3 +80,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);

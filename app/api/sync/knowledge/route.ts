@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncOrs90, syncNotionSops } from '@/lib/knowledge-sync';
 import { syncOneDriveDocs } from '@/lib/onedrive-sync';
+import { withCronRun } from '@/lib/cron/run';
 
 // Weekly refresh does ~160 statute fetches + embeddings — needs the long budget.
 export const maxDuration = 300;
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
@@ -51,3 +52,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = withCronRun(handleGET);
