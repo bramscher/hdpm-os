@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { gatherFollowups, validateFollowupMessage, type FollowupCandidate, type FollowupReview } from './estimate-followups';
+import { BATCH_MAX } from './chase-board';
 import { getAdapter } from './channels';
 import { getAgentConfig, isGloballyKilled } from './config';
 import { getPilotConfig } from './pilot';
@@ -57,24 +58,10 @@ export async function decideFollowup(actor: string,input: Record<string,any>) {
   if(input.op==='send') {
     if(input.confirmed!==true)throw new Error('Confirm the recipient and message before sending');
     message=validateFollowupMessage(input);
-    const sender=message.channel==='email'?followupSenders().email:followupSenders().sms;
-    if(input.sender!==sender)throw new Error('Sending account changed. Reopen the review before sending.');
-    if(!(await getAgentConfig('estimate_chaser','team_review'))?.enabled)throw new Error('The shared trial is not activated');
-    if(await isGloballyKilled())throw new Error('Messaging is paused');
-    if(getPilotConfig().shadow || process.env.AGENT_GRAPH_DRYRUN==='1' || (message.channel==='sms_zoom' && process.env.AGENT_ZOOM_SMS_DRYRUN==='1'))throw new Error('Preview mode: no message sent');
-    if(message.channel==='email' ? !process.env.RESEND_API_KEY : !isZoomSmsConfigured())throw new Error('Sending channel is not configured');
+    await assertSendingOpen(message.channel,input.sender);
     candidate=(await gatherFollowups()).find(c=>c.id===input.id && c.eligible!==false);
-    if(!candidate)throw new Error('This work order no longer needs this follow-up. Refresh the queue.');
-    if(input.contextVersion!==candidate.contextVersion)throw new Error('Work-order context changed. Reopen the review.');
-    if(candidate.kind==='decision')throw new Error('Confirm the decision-maker in the work order before sending a follow-up.');
-    if(!candidate.sourceUpdatedAt || !Number.isFinite(Date.parse(candidate.sourceUpdatedAt)) || Date.now()-Date.parse(candidate.sourceUpdatedAt)>2*3600_000)throw new Error('Work-order data is more than two hours old or missing. Sync AppFolio before sending.');
-    const {data:prior,error:priorError}=await db.from('agent_proposal').select('id').eq('agent','estimate_chaser').eq('subject_id',input.id).in('action_type',['vendor_chase','vendor_chase_sms','owner_approval']).gte('created_at',new Date(Date.now()-8*86400_000).toISOString());
-    if(priorError)throw new Error(priorError.message);
-    if(prior?.length){
-      const {data:sent,error:sentError}=await db.from('agent_outbox').select('sent_at,status').in('proposal_id',prior.map(p=>p.id)).in('channel',['email','sms_zoom']).in('status',['sent','queued','failed']);
-      if(sentError)throw new Error(sentError.message);
-      if(sent?.some(s=>s.status!=='sent'||!s.sent_at||businessDaysBetween(new Date(s.sent_at),new Date())<3))throw new Error('A recent or unresolved legacy send exists. Check delivery history before another follow-up.');
-    }
+    assertSendable(candidate,input.contextVersion);
+    await assertNoRecentLegacySend(db,input.id);
     // Outlook draft creation is not counted as a confirmed send.
   }
   if(!candidate)candidate=(await gatherFollowups()).find(c=>c.id===input.id);
@@ -89,6 +76,62 @@ export async function decideFollowup(actor: string,input: Record<string,any>) {
   if(finished.error)throw new Error('Delivery was attempted but could not be recorded. Check the sending account before retrying.');
   if(outcome.status!=='sent')throw new Error(outcome.error||'Delivery could not be confirmed. Check message history.');
   return {sent:true};
+}
+async function assertSendingOpen(channel:'email'|'sms_zoom',sender:unknown) {
+  if(sender!==(channel==='email'?followupSenders().email:followupSenders().sms))throw new Error('Sending account changed. Reopen the review before sending.');
+  if(!(await getAgentConfig('estimate_chaser','team_review'))?.enabled)throw new Error('The shared trial is not activated');
+  if(await isGloballyKilled())throw new Error('Messaging is paused');
+  if(getPilotConfig().shadow || process.env.AGENT_GRAPH_DRYRUN==='1' || (channel==='sms_zoom' && process.env.AGENT_ZOOM_SMS_DRYRUN==='1'))throw new Error('Preview mode: no message sent');
+  if(channel==='email' ? !process.env.RESEND_API_KEY : !isZoomSmsConfigured())throw new Error('Sending channel is not configured');
+}
+function assertSendable(candidate:FollowupCandidate|undefined,contextVersion:unknown):asserts candidate is FollowupCandidate {
+  if(!candidate)throw new Error('This work order no longer needs this follow-up. Refresh the queue.');
+  if(contextVersion!==candidate.contextVersion)throw new Error('Work-order context changed. Reopen the review.');
+  if(candidate.kind==='decision')throw new Error('Confirm the decision-maker in the work order before sending a follow-up.');
+  if(!candidate.sourceUpdatedAt || !Number.isFinite(Date.parse(candidate.sourceUpdatedAt)) || Date.now()-Date.parse(candidate.sourceUpdatedAt)>2*3600_000)throw new Error('Work-order data is more than two hours old or missing. Sync AppFolio before sending.');
+}
+async function assertNoRecentLegacySend(db:ReturnType<typeof getSupabaseAdmin>,id:string) {
+  const {data:prior,error:priorError}=await db.from('agent_proposal').select('id').eq('agent','estimate_chaser').eq('subject_id',id).in('action_type',['vendor_chase','vendor_chase_sms','owner_approval']).gte('created_at',new Date(Date.now()-8*86400_000).toISOString());
+  if(priorError)throw new Error(priorError.message);
+  if(!prior?.length)return;
+  const {data:sent,error:sentError}=await db.from('agent_outbox').select('sent_at,status').in('proposal_id',prior.map(p=>p.id)).in('channel',['email','sms_zoom']).in('status',['sent','queued','failed']);
+  if(sentError)throw new Error(sentError.message);
+  if(sent?.some(s=>s.status!=='sent'||!s.sent_at||businessDaysBetween(new Date(s.sent_at),new Date())<3))throw new Error('A recent or unresolved legacy send exists. Check delivery history before another follow-up.');
+}
+/**
+ * One email to a vendor covering several overdue bids. Every work order passes the
+ * same checks as a single send and gets its own claim, so history stays per WO; the
+ * message goes out once. A failed claim releases the ones already taken.
+ */
+export async function decideVendorBatch(actor:string,input:Record<string,any>) {
+  if(!await canReviewFollowups(actor)) throw new Error('This trial is reviewed by Penny and Craig.');
+  if(input.confirmed!==true)throw new Error('Confirm the recipient and message before sending');
+  const items:{id:string;version:number;contextVersion:string}[]=Array.isArray(input.items)?input.items:[];
+  if(items.length<2||items.length>BATCH_MAX||new Set(items.map(i=>i.id)).size!==items.length||items.some(i=>!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(i?.id||'')||!Number.isInteger(i.version)||i.version<0))throw new Error(`Choose 2 to ${BATCH_MAX} work orders for one vendor`);
+  const message=validateFollowupMessage({...input,channel:'email'});
+  await assertSendingOpen('email',input.sender);
+  const db=getSupabaseAdmin(); const all=await gatherFollowups();
+  const candidates=items.map(i=>{const c=all.find(c=>c.id===i.id&&c.eligible!==false);assertSendable(c,i.contextVersion);if(c.kind!=='vendor')throw new Error(`WO ${c.woNumber} is not waiting on a vendor estimate`);return c;});
+  if(new Set(candidates.map(c=>c.vendor)).size!==1)throw new Error('All work orders in one email must belong to the same vendor');
+  for(const c of candidates)await assertNoRecentLegacySend(db,c.id);
+  const batchId=crypto.randomUUID(); const note=`${typeof input.note==='string'&&input.note.trim()?input.note.trim().slice(0,1500)+' · ':''}Vendor batch ${batchId.slice(0,8)} (${items.length} WOs)`;
+  const claimed:{id:string;attempt_id:string}[]=[];
+  for(const [n,i] of items.entries()) {
+    const {data:review,error}=await db.rpc('estimate_followup_decide',{actor,request:{id:i.id,version:i.version,op:'send',note,episode_key:candidates[n].episodeKey||null,...message}});
+    if(error){
+      for(const c of claimed)await db.rpc('estimate_followup_finish',{request:{...c,status:'skipped',error:'Batch cancelled before sending'}});
+      throw new Error(`WO ${candidates[n].woNumber}: ${error.message} Nothing was sent.`);
+    }
+    claimed.push({id:i.id,attempt_id:review.attempt_id});
+  }
+  let outcome;
+  try {outcome=await getAdapter('email').send({recipient_address:message.recipient,subject:message.subject,body:message.body,payload:{}} as OutboxMessage);}
+  catch(e){outcome={status:'failed',error:(e as Error).message};}
+  const unrecorded=[];
+  for(const c of claimed){const finished=await db.rpc('estimate_followup_finish',{request:{...c,...outcome}});if(finished.error)unrecorded.push(c.id);}
+  if(unrecorded.length)throw new Error('Delivery was attempted but could not be recorded for every work order. Check the sending account before retrying.');
+  if(outcome.status!=='sent')throw new Error(outcome.error||'Delivery could not be confirmed. Check message history.');
+  return {sent:true,count:claimed.length};
 }
 export async function fileFollowupHelp(id:string,actor:string,note:string) {
   const db=getSupabaseAdmin();const source=`wo:${id}:escalation`;

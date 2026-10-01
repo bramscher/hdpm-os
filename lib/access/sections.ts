@@ -96,12 +96,24 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/maintenance/board', icon: 'wrench', order: 10 },
   },
   {
+    key: 'chase_board',
+    label: 'Chase board',
+    description: 'Stuck estimates, approvals and unscheduled work: aging snapshot, next steps, vendor follow-ups.',
+    group: 'Maintenance',
+    // The page itself is limited to the follow-up reviewers (lib/agents/followup-access.ts);
+    // admins see it by default, turn it on for others in User settings.
+    defaultRoles: [],
+    pages: ['/maintenance/estimate-followups'],
+    apis: ['/api/maintenance/estimate-followups'],
+    nav: { href: '/maintenance/estimate-followups', icon: 'target', order: 10.5 },
+  },
+  {
     key: 'work_billing',
     label: 'Work & Billing',
     description: 'Estimates, invoices, approvals, daily billing, reconciliation.',
     group: 'Maintenance',
     defaultRoles: [...PM, 'maintenance', 'finance'],
-    pages: ['/maintenance/invoices', '/turn-estimator/estimates', '/maintenance/workspace', '/maintenance/daily-billing', '/maintenance/estimate-followups'],
+    pages: ['/maintenance/invoices', '/turn-estimator/estimates', '/maintenance/workspace', '/maintenance/daily-billing'],
     apis: MAINT_APIS,
     nav: { href: '/maintenance/invoices', icon: 'file', order: 11 },
   },

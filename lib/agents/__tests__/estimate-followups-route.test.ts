@@ -38,3 +38,27 @@ describe('shared reviewed send',()=>{
  it('does not equate a legacy draft with a sent follow-up',async()=>{m.prior=[{id:'p1'}];m.outbox=[];expect((await invoke()).status).toBe(200);});
  it('keeps waiting separate from due and uncertain',()=>{expect(followupDue({status:'sent',next_review_at:'2099-01-01'} as any)).toBe(false);expect(followupDue({status:'uncertain'} as any)).toBe(false);expect(followupDue({status:'snoozed',next_review_at:'2000-01-01'} as any)).toBe(true);});
 });
+describe('vendor batch send',()=>{
+ const id2='00000000-0000-4000-8000-000000000002';
+ const two=()=>[{...candidate(),vendor:'Firkus',woNumber:'1'},{...candidate(),id:id2,vendor:'Firkus',woNumber:'2'}];
+ const batch=(overrides:Record<string,unknown>={})=>POST(new NextRequest('http://localhost/api/maintenance/estimate-followups',{method:'POST',body:JSON.stringify({op:'send_vendor_batch',items:[{id,version:0,contextVersion:'source-v1'},{id:id2,version:0,contextVersion:'source-v1'}],sender:followupSenders().email,confirmed:true,recipient:'bids@firkus.test',subject:'Outstanding estimates',body:'Please send the bids',...overrides})}));
+ it('claims every work order, sends one email, and records each',async()=>{
+  m.gather.mockResolvedValue(two());m.rpc.mockImplementation(async(fn:string,args:any)=>({data:fn==='estimate_followup_decide'?{attempt_id:`a-${args.request.id.slice(-1)}`}:null,error:null}));
+  const res=await batch();expect(res.status).toBe(200);expect(await res.json()).toEqual({sent:true,count:2});
+  expect(m.send).toHaveBeenCalledTimes(1);
+  const finishes=m.rpc.mock.calls.filter(c=>c[0]==='estimate_followup_finish').map(c=>c[1].request);
+  expect(finishes).toEqual([{id,attempt_id:'a-1',status:'sent',message_id:'msg-1'},{id:id2,attempt_id:'a-2',status:'sent',message_id:'msg-1'}]);
+ });
+ it('rejects work orders from different vendors',async()=>{m.gather.mockResolvedValue([two()[0],{...two()[1],vendor:'Bend Radiant'}]);expect((await batch()).status).toBe(409);expect(m.rpc).not.toHaveBeenCalled();expect(m.send).not.toHaveBeenCalled();});
+ it('rejects a single work order or non-vendor work',async()=>{
+  m.gather.mockResolvedValue(two());expect((await batch({items:[{id,version:0,contextVersion:'source-v1'}]})).status).toBe(409);
+  m.gather.mockResolvedValue([two()[0],{...two()[1],kind:'schedule'}]);expect((await batch()).status).toBe(409);expect(m.send).not.toHaveBeenCalled();
+ });
+ it('releases earlier claims and sends nothing when a later claim fails',async()=>{
+  m.gather.mockResolvedValue(two());let calls=0;
+  m.rpc.mockImplementation(async(fn:string)=>fn==='estimate_followup_decide'?(++calls===1?{data:{attempt_id:'a-1'},error:null}:{data:null,error:{message:'Another teammate updated this item.'}}):{data:null,error:null});
+  expect((await batch()).status).toBe(409);expect(m.send).not.toHaveBeenCalled();
+  expect(m.rpc).toHaveBeenLastCalledWith('estimate_followup_finish',{request:{id,attempt_id:'a-1',status:'skipped',error:'Batch cancelled before sending'}});
+ });
+ it('respects preview mode',async()=>{m.gather.mockResolvedValue(two());m.shadow=true;expect((await batch()).status).toBe(409);expect(m.rpc).not.toHaveBeenCalled();});
+});
