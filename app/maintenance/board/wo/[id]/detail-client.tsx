@@ -16,6 +16,7 @@ import { fmtDate, woWhere } from '../../board-types';
 import { WaitBadge } from '../../components/shared';
 import AiTriagePanel from './ai-triage-panel';
 import InfoHelp from '../../components/info-help';
+import PartsOrders from '../../components/parts-orders';
 
 interface DetailPayload {
   workOrder: MaintWorkOrder;
@@ -439,6 +440,12 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
           <p className="note">
             Failed access auto-returns the WO to SCHEDULED and requires the new date (tripwire #5).
           </p>
+        </div>
+
+        {/* ── Parts orders ── */}
+        <div className="mo-panel">
+          <h2>Parts orders</h2>
+          <PartsOrders workOrderId={workOrderId} onChanged={load} />
         </div>
 
         {/* ── Sub-entities ── */}

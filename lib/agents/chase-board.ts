@@ -5,7 +5,7 @@
  */
 import type { FollowupCandidate, FollowupReview } from './estimate-followups';
 
-export type Lane = 'vendor' | 'owner' | 'schedule' | 'help';
+export type Lane = 'vendor' | 'owner' | 'schedule' | 'parts' | 'help';
 export type Heat = 'fresh' | 'warm' | 'hot' | 'escalate';
 export type ChaseEvent = { id: number; work_order_id: string; actor: string; action: string; created_at: string; details: Partial<Omit<FollowupReview, 'status'>> & { status?: string } };
 export type LegacyChase = { subject_id: string; created_at: string; action_type: string; status: string };
@@ -17,6 +17,7 @@ export const LANES: { key: Lane; label: string; hint: string }[] = [
   { key: 'vendor', label: 'Vendor estimate', hint: 'Bid outstanding' },
   { key: 'owner', label: 'Owner approval', hint: 'Decision pending' },
   { key: 'schedule', label: 'Needs scheduling', hint: 'No service date' },
+  { key: 'parts', label: 'Waiting on parts', hint: 'Supplier order open' },
   { key: 'help', label: 'Needs help', hint: 'Escalated to the team' },
 ];
 
@@ -25,16 +26,23 @@ export function isDue(r?: FollowupReview, now = new Date()) {
 }
 export const isLocked = (r?: FollowupReview) => !!r && ['sending', 'uncertain'].includes(r.status);
 
-/** active: on the board · parked: waiting for its review date · closed: dismissed or no longer overdue. */
+/**
+ * active: on the board · parked: waiting for its review date, or a parts order not yet due
+ * for a chase · closed: dismissed or no longer overdue.
+ */
 export function bucketFor(c: FollowupCandidate, r?: FollowupReview, now = new Date()): 'active' | 'parked' | 'closed' {
   if (c.eligible === false || r?.status === 'dismissed') return 'closed';
-  if (r?.status === 'help' || isLocked(r) || c.newEpisode || isDue(r, now)) return 'active';
+  if (r?.status === 'help' || isLocked(r)) return 'active';
+  if (c.parts && !c.parts.due && !c.parts.help) return 'parked';
+  if (c.newEpisode || isDue(r, now)) return 'active';
   return 'parked';
 }
 export function laneFor(c: FollowupCandidate, r?: FollowupReview): Lane {
-  if (r?.status === 'help') return 'help';
-  return c.kind === 'vendor' ? 'vendor' : c.kind === 'schedule' ? 'schedule' : 'owner';
+  if (r?.status === 'help' || c.parts?.help) return 'help';
+  return c.kind === 'vendor' ? 'vendor' : c.kind === 'schedule' ? 'schedule' : c.kind === 'parts' ? 'parts' : 'owner';
 }
+/** Chase dots: confirmed sends, or for parts every logged call, email, or text (sends are logged there too). */
+export const chasesFor = (c: FollowupCandidate, sends: Map<string, number>) => c.parts ? c.parts.contacts : sends.get(c.id) || 0;
 
 /** Calendar days in the current status; 45+ is the chaser's escalation line. */
 export function daysStuck(c: Pick<FollowupCandidate, 'statusSince'>, now = new Date()) {
@@ -124,6 +132,7 @@ export function nextStep(c: FollowupCandidate, r?: FollowupReview, now = new Dat
   const reach = c.email ? 'Email' : 'Text';
   if (isLocked(r)) return { kind: 'check', text: 'Check whether the last message went out, then record it' };
   if (r?.status === 'help') return { kind: 'wait', text: r.note ? `Waiting on team help: ${r.note}` : 'Waiting on team help' };
+  if (c.kind === 'parts' && c.parts) return partsStep(c, c.parts, now);
   if (c.kind === 'decision') return { kind: 'fix', text: 'Record who approves this estimate (owner or PM) in the work order' };
   if (c.kind === 'owner') return { kind: 'chase', text: `Ask ${c.decisionMaker || 'the owner'} to approve or decline the estimate (${days} days waiting)` };
   if (c.kind === 'vendor') {
@@ -135,6 +144,19 @@ export function nextStep(c: FollowupCandidate, r?: FollowupReview, now = new Dat
   if (!vendor) return { kind: 'fix', text: 'Assign this work to a vendor or in-house tech in AppFolio' };
   if (!c.email && !c.phone) return { kind: 'chase', text: `Set a service date with ${vendor}` };
   return { kind: 'chase', text: `${reach} ${vendor} for a service date (${days} days waiting)` };
+}
+
+function partsStep(c: FollowupCandidate, p: NonNullable<FollowupCandidate['parts']>, now: Date): NextStep {
+  const o = p.orders.find(x => x.id === p.primaryId) || p.orders[0];
+  const ref = o.orderNumber ? `order #${o.orderNumber}` : o.item;
+  if (o.status === 'issue') return { kind: 'fix', text: `Sort out the problem with ${p.supplier} ${ref}` };
+  if (o.status === 'delivered') {
+    const days = o.deliveredAt ? Math.max(0, Math.floor((now.getTime() - Date.parse(o.deliveredAt)) / 86400_000)) : 0;
+    return { kind: 'chase', text: `Part delivered ${days} day${days === 1 ? '' : 's'} ago — schedule the install${c.vendor ? ` with ${c.vendor}` : ''}` };
+  }
+  if (p.contacts >= 3) return { kind: 'wait', text: `${p.contacts} contacts with ${p.supplier} and still no part — needs a decision` };
+  if (!c.email && !c.phone) return { kind: 'fix', text: `Add a phone or email for ${p.supplier}, then call about ${ref}` };
+  return { kind: 'chase', text: `${c.phone ? 'Call' : 'Email'} ${p.supplier} about ${ref} — ${p.reason.charAt(0).toLowerCase()}${p.reason.slice(1)}` };
 }
 
 export const AGE_BUCKETS = [

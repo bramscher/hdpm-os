@@ -9,6 +9,7 @@ import { canReviewFollowups } from './followup-access';
 import type { OutboxMessage } from './types';
 import { businessDaysBetween } from '@/lib/maintenance/business-days';
 import { logAudit } from '@/lib/audit';
+import { logPartsContact } from '@/lib/maintenance/parts-db';
 
 export function followupSenders() {
   return { email: process.env.AGENT_EMAIL_FROM || process.env.MAINT_DIGEST_FROM || 'HDPM Agents <maintenance@highdesertpm.com>',
@@ -75,6 +76,7 @@ export async function decideFollowup(actor: string,input: Record<string,any>) {
   const finished=await db.rpc('estimate_followup_finish',{request:{id:input.id,attempt_id:review.attempt_id,...outcome}});
   if(finished.error)throw new Error('Delivery was attempted but could not be recorded. Check the sending account before retrying.');
   if(outcome.status!=='sent')throw new Error(outcome.error||'Delivery could not be confirmed. Check message history.');
+  if(candidate?.parts)await logPartsContact(actor,candidate.parts.primaryId,{kind:message.channel==='email'?'email':'text',note:`Follow-up sent to ${message.recipient} from the chase board`}).catch(e=>console.error('[parts] send not logged on order',e));
   return {sent:true};
 }
 async function assertSendingOpen(channel:'email'|'sms_zoom',sender:unknown) {
