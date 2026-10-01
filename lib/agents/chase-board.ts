@@ -131,7 +131,7 @@ export function nextStep(c: FollowupCandidate, r?: FollowupReview, now = new Dat
     if (!c.email && !c.phone) return { kind: 'fix', text: `Add an email or phone for ${vendor} — there's no way to reach them` };
     return { kind: 'chase', text: `${reach} ${vendor} for the bid (${days} days waiting)` };
   }
-  if (days >= STALE_DAYS) return { kind: 'decide', text: `${days} days with no date — still needed? Close it in AppFolio or set a date` };
+  if (days > STALE_DAYS) return { kind: 'decide', text: `${days} days with no date — still needed? Close it in AppFolio or set a date` };
   if (!vendor) return { kind: 'fix', text: 'Assign this work to a vendor or in-house tech in AppFolio' };
   if (!c.email && !c.phone) return { kind: 'chase', text: `Set a service date with ${vendor}` };
   return { kind: 'chase', text: `${reach} ${vendor} for a service date (${days} days waiting)` };

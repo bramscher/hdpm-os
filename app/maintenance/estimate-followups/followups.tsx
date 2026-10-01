@@ -84,7 +84,7 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
    <select aria-label="Follow-up owner filter" className="rounded-lg border border-sand-200 p-3 text-sm" value={scope} onChange={e=>setScope(e.target.value)}><option value="all">All team</option><option value="mine">My work orders</option></select>
   </div>
   {Object.keys(snapFilter).length>0&&<p className="flex flex-wrap items-center gap-2 text-sm"><span className="rounded-full bg-charcoal-900 px-3 py-1 text-white">Showing {model.filtered.length}: {[snapFilter.lane&&laneLabel[snapFilter.lane],snapFilter.age&&AGE_LABEL[snapFilter.age],snapFilter.step&&STEP[snapFilter.step].label].filter(Boolean).join(' · ')}</span><button className="font-medium text-green-800 underline" onClick={()=>setSnapFilter({})}>Show all</button></p>}
-  {view==='lanes'?<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{model.lanes.map(l=>{
+  {view==='lanes'?<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{model.lanes.filter(l=>!Object.keys(snapFilter).length||l.all.length).map(l=>{
    const more=expanded[l.key],list=more?l.rest:l.rest.slice(0,LANE_PREVIEW);
    return <section key={l.key} aria-labelledby={`lane-${l.key}`} className="flex flex-col rounded-xl bg-sand-50 p-3">
     <header className="mb-2 flex items-baseline justify-between gap-2"><div><h3 id={`lane-${l.key}`} className="text-sm font-semibold">{l.label}</h3><p className="text-xs text-charcoal-500">{l.hint}{l.all.length?` · oldest ${l.oldest}d`:''}</p></div><span className="text-2xl font-semibold tabular-nums">{l.all.length}</span></header>

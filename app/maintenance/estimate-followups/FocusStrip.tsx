@@ -20,7 +20,7 @@ export default function FocusStrip({cleared,remaining,weeks,daysToGate}:{cleared
    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sand-100"><div className={`h-full ${met?'bg-green-700':'bg-amber-400'}`} style={{width:`${Math.min(100,thisWeek/GATE.sendsPerWeek*100)}%`}}/></div>
    <p className="mt-1 text-xs text-charcoal-500">{daysToGate>0?`Gate review in ${daysToGate} day${daysToGate===1?'':'s'} (Oct 15)`:daysToGate===0?'Gate review today':'Gate review date passed'}</p></div>
   <div className="rounded-xl border border-sand-200 bg-white p-4"><p className="text-xs uppercase tracking-wide text-charcoal-500">Last 8 weeks</p>
-   <div className="h-16"><ResponsiveContainer width="100%" height="100%"><BarChart data={weeks} margin={{top:4,right:0,bottom:0,left:0}}><XAxis dataKey="week" hide/><Tooltip cursor={false} formatter={(v)=>[`${v} sent`,'']} labelFormatter={(w)=>`Week of ${w}`}/><ReferenceLine y={GATE.sendsPerWeek} stroke="#a3a3a3" strokeDasharray="3 3"/><Bar dataKey="sends" fill="#15803d" radius={[3,3,0,0]}/></BarChart></ResponsiveContainer></div>
+   {weeks.some(w=>w.sends)?<div className="h-16"><ResponsiveContainer width="100%" height="100%"><BarChart data={weeks} margin={{top:4,right:0,bottom:0,left:0}}><XAxis dataKey="week" hide/><Tooltip cursor={false} formatter={(v)=>[`${v} sent`,'']} labelFormatter={(w)=>`Week of ${w}`}/><ReferenceLine y={GATE.sendsPerWeek} stroke="#a3a3a3" strokeDasharray="3 3"/><Bar dataKey="sends" fill="#15803d" radius={[3,3,0,0]}/></BarChart></ResponsiveContainer></div>:<p className="flex h-16 items-center text-sm text-charcoal-500">No follow-ups sent yet. Each send adds to this week’s bar.</p>}
    <p className="text-xs text-charcoal-500">Dashed line: gate ({GATE.sendsPerWeek}/week)</p></div>
  </div>;
 }

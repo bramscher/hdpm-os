@@ -3,7 +3,7 @@ import {STEP_ORDER,type AgeBucket,type Lane,type SnapshotFilter,type StepKind,ty
 import {STEP} from './ChaseCard';
 
 type Snapshot=ReturnType<typeof agingSnapshot>;
-const STEP_HELP:Record<StepKind,string>={fix:'Can’t be chased yet: no vendor, no contact, or no recorded decider',decide:'Over 90 days with no date: close it or set a date',chase:'Ready: send the follow-up',check:'A message may not have gone out',wait:'Waiting on team help'};
+const STEP_HELP:Record<StepKind,string>={fix:'Can’t be chased yet: no vendor, no contact, or no recorded decider',decide:'Over 90 days with no date: close it or set a date',chase:'Ready: contact the vendor or owner, or set the date',check:'A message may not have gone out',wait:'Waiting on team help'};
 
 /** One-hue sequential shade by share of the busiest cell; text flips to white on the dark steps. */
 function shade(count:number,max:number) {
