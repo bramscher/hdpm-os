@@ -111,3 +111,28 @@ export function buildVendorBatchDraft(vendor: string, items: FollowupCandidate[]
     body: `Hello${vendor ? ` ${vendor}` : ''},\n\nWe're following up on estimates we requested and haven't received yet:\n\n${lines.join('\n')}\n\nCould you reply with an estimate or an expected date for each? If any of these are no longer something you can take on, let us know so we can reassign it.\n\nThank you,\nHigh Desert Property Management`,
   };
 }
+
+export type StepKind = 'check' | 'fix' | 'decide' | 'chase' | 'wait';
+export type NextStep = { kind: StepKind; text: string };
+export const STALE_DAYS = 90;
+/**
+ * The one thing to do next on a card, in plain words. Cleanup steps ('fix') come
+ * before a chase is possible: no vendor, no contact on file, or no recorded decider.
+ */
+export function nextStep(c: FollowupCandidate, r?: FollowupReview, now = new Date()): NextStep {
+  const days = daysStuck(c, now), vendor = c.vendor?.trim();
+  const reach = c.email ? 'Email' : 'Text';
+  if (isLocked(r)) return { kind: 'check', text: 'Check whether the last message went out, then record it' };
+  if (r?.status === 'help') return { kind: 'wait', text: r.note ? `Waiting on team help: ${r.note}` : 'Waiting on team help' };
+  if (c.kind === 'decision') return { kind: 'fix', text: 'Record who approves this estimate (owner or PM) in the work order' };
+  if (c.kind === 'owner') return { kind: 'chase', text: `Ask ${c.decisionMaker || 'the owner'} to approve or decline the estimate (${days} days waiting)` };
+  if (c.kind === 'vendor') {
+    if (!vendor) return { kind: 'fix', text: 'Assign a vendor in AppFolio — no one has been asked for this bid' };
+    if (!c.email && !c.phone) return { kind: 'fix', text: `Add an email or phone for ${vendor} — there's no way to reach them` };
+    return { kind: 'chase', text: `${reach} ${vendor} for the bid (${days} days waiting)` };
+  }
+  if (days >= STALE_DAYS) return { kind: 'decide', text: `${days} days with no date — still needed? Close it in AppFolio or set a date` };
+  if (!vendor) return { kind: 'fix', text: 'Assign this work to a vendor or in-house tech in AppFolio' };
+  if (!c.email && !c.phone) return { kind: 'chase', text: `Set a service date with ${vendor}` };
+  return { kind: 'chase', text: `${reach} ${vendor} for a service date (${days} days waiting)` };
+}

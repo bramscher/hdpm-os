@@ -2,8 +2,8 @@
 import {useEffect,useState} from 'react';
 import Link from 'next/link';
 import type {FollowupCandidate,FollowupReview} from '@/lib/agents/estimate-followups';
-import {isDue,isLocked,daysStuck,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
-import {HeatBar,ChaseDots} from './ChaseCard';
+import {isDue,isLocked,daysStuck,nextStep,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
+import {HeatBar,ChaseDots,STEP} from './ChaseCard';
 
 export const button='inline-flex min-h-11 items-center justify-center rounded-lg border border-sand-200 px-4 py-2 text-sm font-medium disabled:opacity-50';
 export const field='w-full rounded-lg border border-sand-200 bg-white p-3 text-sm';
@@ -22,7 +22,7 @@ export default function ChaseDrawer({c,r,legacy,events,chases,staff,senders,avai
  const locked=isLocked(r),canSend=c.eligible!==false&&c.kind!=='decision'&&isDue(r)&&!locked;
  const sender=channel==='email'?senders.email:senders.sms,ready=available[channel==='email'?'email':'sms'];
  const act=(op:string)=>onAct(op,{version:r?.version||0,contextVersion:c.contextVersion||'',sender,note,owner_person:owner,next_review_date:nextDate||null,channel,recipient,subject,body,confirmed});
- const days=daysStuck(c);
+ const days=daysStuck(c),step=nextStep(c,r),st=STEP[step.kind],cleanup=step.kind==='fix'||step.kind==='decide';
  return <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="chase-drawer-title">
   <button aria-label="Close review" className="absolute inset-0 bg-charcoal-900/30" onClick={()=>!busy&&onClose()}/>
   <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-2xl">
@@ -32,13 +32,18 @@ export default function ChaseDrawer({c,r,legacy,events,chases,staff,senders,avai
     <div className="flex flex-wrap gap-2"><Link className={button} href={`/maintenance/board/wo/${c.id}`}>Work order &amp; owner</Link>{c.appfolioLink&&<a className={button} href={c.appfolioLink} target="_blank" rel="noreferrer">AppFolio</a>}{c.estimate&&<Link className={button} href={`/turn-estimator/estimates/${c.estimate.id}`}>Estimate</Link>}</div>
    </header>
    <div className="space-y-4 p-5">
-    <p className="text-sm font-medium">{c.reason}</p>
+    <section className="rounded-xl border border-sand-200 bg-sand-50 p-4" aria-label="Next step">
+     <p className={`text-xs font-semibold uppercase tracking-wide ${st.text}`}>Next step · {st.label}</p>
+     <p className="mt-1 text-base font-semibold">{step.text}</p>
+     {cleanup&&<p className="mt-1 text-sm text-charcoal-600">{step.kind==='fix'?'A follow-up can’t go anywhere useful until this is fixed. Fix it in AppFolio or the work order, then add a note here.':'If it’s no longer needed, close it in AppFolio and it will drop off this board. If it is, set a date and record a note.'}</p>}
+    </section>
+    <p className="text-sm text-charcoal-600">{c.reason}</p>
     <p className="whitespace-pre-wrap text-sm">{c.description}</p>
     <p className="text-sm text-charcoal-500">HDPM owner: {c.owner||'Unassigned'} · Assigned to: {c.assignedTo||'Unassigned'} · Total age: {c.totalAge??'Unknown'} calendar days · Synced {date(c.sourceUpdatedAt)} PT</p>
     {c.decisionMaker&&<p className="text-sm">Decision requested of: {c.decisionMaker} · {date(c.approvalRequestedAt)} PT</p>}
     {c.estimate&&<p className="text-sm">Estimate: {c.estimate.total===null?'Amount unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c.estimate.total)} · {c.estimate.status} · version {c.estimate.version??'draft'}</p>}
     {legacy&&<p className="rounded bg-amber-50 p-3 text-sm">Earlier chaser activity: {date(legacy.created_at)} PT ({legacy.action_type}). A prepared draft is not proof of sending. Check the current conversation.</p>}
-    {locked?<p role="status" className="rounded bg-amber-50 p-3 text-sm">{r?.error||'Delivery has not been confirmed.'} Check the sending account before any retry.</p>:canSend?<section className="space-y-3 rounded-xl border border-sand-200 p-4">
+    {locked?<p role="status" className="rounded bg-amber-50 p-3 text-sm">{r?.error||'Delivery has not been confirmed.'} Check the sending account before any retry.</p>:canSend?<details open={!cleanup} className="rounded-xl border border-sand-200 p-4"><summary className="cursor-pointer text-sm font-medium">{cleanup?'Send a follow-up anyway':'Write the follow-up'}</summary><section className="mt-3 space-y-3">
      <div className="flex gap-2"><button className={`${button} ${channel==='email'?'bg-charcoal-900 text-white':''}`} aria-pressed={channel==='email'} onClick={()=>mode('email')}>Email</button><button className={`${button} ${channel==='sms_zoom'?'bg-charcoal-900 text-white':''}`} aria-pressed={channel==='sms_zoom'} onClick={()=>mode('sms_zoom')}>Text</button></div>
      <p className="text-sm">From: {sender} · {ready?'Ready for your review':'Sending unavailable'}</p>
      <label className="block text-sm">{channel==='email'?'Recipient email':'Recipient phone, including country code'}<input className={field} value={recipient} disabled={busy} onChange={e=>{setRecipient(e.target.value);setConfirmed(false);}}/></label>
@@ -46,7 +51,7 @@ export default function ChaseDrawer({c,r,legacy,events,chases,staff,senders,avai
      <label className="block text-sm">Message<textarea className={field} rows={7} value={body} disabled={busy} onChange={e=>{setBody(e.target.value);setConfirmed(false);}}/></label>
      <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>I checked the conversation, recipient, and message. Send this follow-up.</label>
      <button className={`${button} bg-green-700 text-white`} disabled={busy||!confirmed||!recipient.trim()||!body.trim()||!ready} onClick={()=>void act('send')}>{channel==='email'?'Send email':'Send text'}</button>
-    </section>:<p className="text-sm">{c.kind==='decision'?'Confirm who needs to decide in the work order before sending a follow-up.':c.eligible===false?'This work is no longer overdue. Its history remains available.':'Waiting for the next review. Reopen with a note if a new follow-up is needed now.'}</p>}
+    </section></details>:<p className="text-sm">{c.kind==='decision'?'Confirm who needs to decide in the work order before sending a follow-up.':c.eligible===false?'This work is no longer overdue. Its history remains available.':'Waiting for the next review. Reopen with a note if a new follow-up is needed now.'}</p>}
     <label className="block text-sm">Team note / call or reply outcome<textarea className={field} rows={2} value={note} disabled={busy} maxLength={2000} onChange={e=>setNote(e.target.value)}/></label>
     {!locked&&<label className="block text-sm">Next review date (8 AM Pacific; defaults to 3 business days)<input type="date" className={field} value={nextDate} disabled={busy} onChange={e=>setNextDate(e.target.value)}/></label>}
     <div className="flex flex-wrap gap-2">{(locked?[['verified_sent','Checked: sent'],['verified_unsent','Checked: not sent']]:[['note','Record call / reply'],['snooze','Snooze'],['help','Request help'],['dismiss','No follow-up needed'],...(r&&!isDue(r)?[['reopen','Reopen review']]:[])]).map(([op,label])=><button key={op} className={button} disabled={busy||!note.trim()} onClick={()=>void act(op)}>{label}</button>)}</div>

@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,FOCUS_CAP} from '../chase-board';
+import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,FOCUS_CAP} from '../chase-board';
 import type {FollowupCandidate,FollowupReview} from '../estimate-followups';
 const now=new Date('2026-10-01T18:00:00Z');
 const ago=(d:number)=>new Date(now.getTime()-d*86400_000).toISOString();
@@ -69,5 +69,26 @@ describe('vendor grouping and batch draft',()=>{
  it('lists every work order and never states an amount',()=>{
   const d=buildVendorBatchDraft('Firkus',[c({woNumber:'4471',property:'Wilson',unit:'B'}),c({woNumber:'4480'})],now);
   expect(d.subject).toContain('2 High Desert work orders');expect(d.body).toContain('WO 4471 — Wilson, Unit B');expect(d.body).toContain('WO 4480');expect(d.body).not.toMatch(/\$/);
+ });
+});
+describe('next step',()=>{
+ it('names the cleanup before a chase is possible',()=>{
+  expect(nextStep(c({kind:'vendor',vendor:''}),undefined,now)).toEqual({kind:'fix',text:'Assign a vendor in AppFolio — no one has been asked for this bid'});
+  expect(nextStep(c({kind:'vendor',email:'',phone:''}),undefined,now).kind).toBe('fix');
+  expect(nextStep(c({kind:'decision'}),undefined,now).text).toMatch(/Record who approves/);
+ });
+ it('says who to chase and for how long',()=>{
+  expect(nextStep(c({kind:'vendor',vendor:'Yak Landscaping',statusSince:ago(36)}),undefined,now)).toEqual({kind:'chase',text:'Email Yak Landscaping for the bid (36 days waiting)'});
+  expect(nextStep(c({kind:'vendor',vendor:'Yak',email:'',phone:'+15415551234'}),undefined,now).text).toMatch(/^Text Yak/);
+  expect(nextStep(c({kind:'owner',decisionMaker:'Jane Owner'}),undefined,now).text).toMatch(/^Ask Jane Owner to approve/);
+ });
+ it('asks whether very old scheduling work is still needed',()=>{
+  expect(nextStep(c({kind:'schedule',statusSince:ago(188)}),undefined,now)).toEqual({kind:'decide',text:'188 days with no date — still needed? Close it in AppFolio or set a date'});
+  expect(nextStep(c({kind:'schedule',vendor:'',statusSince:ago(10)}),undefined,now).kind).toBe('fix');
+  expect(nextStep(c({kind:'schedule',vendor:'High Desert Maintenance',email:'',phone:'',statusSince:ago(10)}),undefined,now).text).toBe('Set a service date with High Desert Maintenance');
+ });
+ it('puts delivery checks and help ahead of everything',()=>{
+  expect(nextStep(c(),r({status:'uncertain'}),now).kind).toBe('check');
+  expect(nextStep(c(),r({status:'help',note:'Matt calling vendor'}),now).text).toBe('Waiting on team help: Matt calling vendor');
  });
 });

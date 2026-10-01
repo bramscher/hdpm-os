@@ -5,7 +5,7 @@ import {useSession} from 'next-auth/react';
 import {useRouter} from 'next/navigation';
 import type {FollowupCandidate,FollowupReview} from '@/lib/agents/estimate-followups';
 import {LANES,GATE,bucketFor,laneFor,focusQueue,chaseCounts,weeklySends,clearedToday,daysUntil,daysStuck,groupByVendor,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
-import ChaseCard from './ChaseCard';
+import ChaseCard,{STEP} from './ChaseCard';
 import ChaseDrawer,{button,field,date} from './ChaseDrawer';
 import FocusStrip from './FocusStrip';
 import VendorView from './VendorView';
@@ -58,7 +58,8 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
  const card=(c:FollowupCandidate,showLane=false)=><ChaseCard key={c.id} c={c} r={model.reviews.get(c.id)} chases={model.chases.get(c.id)||0} onOpen={()=>setSelected(c.id)} showLane={showLane?laneLabel[laneFor(c,model.reviews.get(c.id))]:undefined}/>;
  const alerts=<>{error&&<p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">{error}</p>}{notice&&<p role="status" className="rounded-lg bg-green-50 p-4 text-sm">{notice}</p>}</>;
  const focusList=<section aria-labelledby="focus-heading" className="space-y-2">
-  <h3 id="focus-heading" className="text-sm font-semibold">Do these first</h3>
+  <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 id="focus-heading" className="text-sm font-semibold">Do these first</h3>
+   <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-charcoal-500">Each card says its next step:{(['fix','decide','chase','check'] as const).map(k=><span key={k} className="inline-flex items-center gap-1"><span className={`h-1.5 w-1.5 rounded-full ${STEP[k].dot}`}/>{STEP[k].label}</span>)}</p></div>
   {model.focus.length?<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">{model.focus.map(c=>card(c,true))}</div>
    :<p className="rounded-xl border border-dashed border-sand-200 p-6 text-center text-sm text-charcoal-500">{loading&&!data?'Loading…':'Nothing needs a follow-up right now.'}</p>}
  </section>;
