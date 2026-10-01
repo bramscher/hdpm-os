@@ -28,6 +28,7 @@ import {
   Home,
   Sparkles,
   Percent,
+  Handshake,
   type LucideIcon,
 } from "lucide-react";
 import { canViewHabuDemo } from "@/lib/habu-demo-access";
@@ -476,6 +477,12 @@ export function DashboardCanvas() {
               icon={TrendingUp}
               label="Trends"
               title="KPI trends over time"
+            />
+            <Tile
+              href="/partners/admin"
+              icon={Handshake}
+              label="Partners"
+              title="Referral partners, invites, lead pipeline and fee policy"
             />
             <Tile
               href="/admin/zoom-sync"

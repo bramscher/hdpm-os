@@ -324,12 +324,13 @@ export const APP_SECTIONS: AppSection[] = [
   },
   {
     key: 'referrals_admin',
-    label: 'Referral portal admin',
-    description: 'Partner referral leads and referrers.',
+    label: 'Partners',
+    description: 'Referral partner program: referrers, invites, the lead pipeline and fee policy.',
     group: 'Admin',
     defaultRoles: ['admin'],
     pages: ['/partners/admin'],
     apis: ['/api/partners/admin'],
+    nav: { href: '/partners/admin', icon: 'handshake', order: 42.5 },
   },
   {
     key: 'habu_paper',
