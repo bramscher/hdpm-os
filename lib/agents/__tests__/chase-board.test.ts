@@ -30,6 +30,12 @@ describe('focus queue',()=>{
   const q=focusQueue([...items,p1,check],reviews,now);
   expect(q).toHaveLength(FOCUS_CAP);expect(q[0].id).toBe(check.id);expect(q[1].id).toBe(p1.id);expect(daysStuck(q[2],now)).toBe(12);
  });
+ it('lets lanes take turns so one backlog cannot fill the list',()=>{
+  const old=Array.from({length:10},(_,i)=>c({kind:'schedule',statusSince:ago(150+i)}));
+  const vendor=c({kind:'vendor',statusSince:ago(20)}),owner=c({kind:'owner',statusSince:ago(30)});
+  const q=focusQueue([...old,vendor,owner],new Map(),now);
+  expect(q).toHaveLength(FOCUS_CAP);expect(q.slice(0,3).map(x=>x.kind).sort()).toEqual(['owner','schedule','vendor']);
+ });
  it('leaves out parked, closed and help items',()=>{
   const parked=c(),help=c(),closed=c({eligible:false});
   const reviews=new Map([[parked.id,r({status:'snoozed',next_review_at:ago(-3)})],[help.id,r({status:'help'})]]);
@@ -38,9 +44,9 @@ describe('focus queue',()=>{
 });
 describe('send counting',()=>{
  const sent=(wo:string,at:string,id=++n)=>({id,work_order_id:wo,actor:'craig',action:'delivery',created_at:at,details:{status:'sent'}});
- it('counts confirmed deliveries and legacy proposals per work order',()=>{
-  const m=chaseCounts([sent('a',ago(1)),sent('a',ago(5)),{...sent('b',ago(1)),details:{status:'failed'}}],[{subject_id:'a',created_at:ago(30),action_type:'vendor_chase',status:'approved'}]);
-  expect(m.get('a')).toBe(3);expect(m.get('b')).toBeUndefined();
+ it('counts confirmed deliveries only',()=>{
+  const m=chaseCounts([sent('a',ago(1)),sent('a',ago(5)),{...sent('b',ago(1)),details:{status:'failed'}}]);
+  expect(m.get('a')).toBe(2);expect(m.get('b')).toBeUndefined();
  });
  it('buckets sends into Pacific Monday weeks, current week last',()=>{
   // now = Thu Oct 1 2026 PT; week starts Mon Sep 28.

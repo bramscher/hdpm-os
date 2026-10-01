@@ -48,7 +48,7 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
   return {reviews,focus,lanes,active,
    parked:shown.filter(c=>bucket(c)==='parked').sort((a,b)=>(reviews.get(a.id)?.next_review_at||'').localeCompare(reviews.get(b.id)?.next_review_at||'')),
    closed:shown.filter(c=>bucket(c)==='closed'),
-   chases:chaseCounts(events,data?.legacy||[]),weeks:weeklySends(events,8,now),cleared:clearedToday(events,now),daysToGate:daysUntil(GATE.date,now),
+   chases:chaseCounts(events),weeks:weeklySends(events,8,now),cleared:clearedToday(events,now),daysToGate:daysUntil(GATE.date,now),
    vendors:groupByVendor(shown,reviews,now)};
  },[data,search,scope,session?.user?.name]);
 

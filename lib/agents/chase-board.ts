@@ -46,21 +46,24 @@ export function heatFor(days: number): Heat {
 }
 
 const confirmedSend = (e: ChaseEvent) => e.action === 'delivery' && e.details?.status === 'sent';
-/** Confirmed sends from the shared queue plus earlier chaser proposals, per work order. */
-export function chaseCounts(events: ChaseEvent[], legacy: LegacyChase[]) {
+/** Confirmed sends per work order. Earlier chaser proposals are drafts, not proof of sending, so they don't count. */
+export function chaseCounts(events: ChaseEvent[]) {
   const counts = new Map<string, number>();
   for (const e of events) if (confirmedSend(e)) counts.set(e.work_order_id, (counts.get(e.work_order_id) || 0) + 1);
-  for (const p of legacy) counts.set(p.subject_id, (counts.get(p.subject_id) || 0) + 1);
   return counts;
 }
 
-/** Up to FOCUS_CAP items worth doing now: delivery checks first, then P1, then longest stuck. */
+/**
+ * Up to FOCUS_CAP items worth doing now. Delivery checks come first, then lanes take
+ * turns (each lane ordered P1, then longest stuck) so one lane's backlog can't fill the list.
+ */
 export function focusQueue(items: FollowupCandidate[], reviews: Map<string, FollowupReview>, now = new Date()) {
-  return items
-    .filter(c => bucketFor(c, reviews.get(c.id), now) === 'active' && laneFor(c, reviews.get(c.id)) !== 'help')
-    .sort((a, b) => Number(isLocked(reviews.get(b.id))) - Number(isLocked(reviews.get(a.id)))
-      || Number(b.priority === 'P1') - Number(a.priority === 'P1') || daysStuck(b, now) - daysStuck(a, now))
-    .slice(0, FOCUS_CAP);
+  const rank = (a: FollowupCandidate, b: FollowupCandidate) => Number(b.priority === 'P1') - Number(a.priority === 'P1') || daysStuck(b, now) - daysStuck(a, now);
+  const open = items.filter(c => bucketFor(c, reviews.get(c.id), now) === 'active' && laneFor(c, reviews.get(c.id)) !== 'help');
+  const queue = open.filter(c => isLocked(reviews.get(c.id))).sort(rank);
+  const lanes = LANES.map(l => open.filter(c => !isLocked(reviews.get(c.id)) && laneFor(c, reviews.get(c.id)) === l.key).sort(rank)).filter(l => l.length);
+  for (let i = 0; queue.length < FOCUS_CAP && lanes.some(l => i < l.length); i++) for (const l of lanes) if (i < l.length && queue.length < FOCUS_CAP) queue.push(l[i]);
+  return queue;
 }
 
 const ptDay = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(d);
