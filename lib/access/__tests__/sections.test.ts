@@ -115,11 +115,11 @@ describe('effective access', () => {
     expect(on('maintenance')).toEqual(
       ['home', 'activities', 'maintos', 'work_billing', 'field_app', 'inspections', 'route_builder', 'turns', 'price_book', 'keys', 'property_map', 'company', 'timekeeping'].sort()
     );
-    expect(on('field')).toEqual(['home', 'field_app', 'maintos', 'keys', 'property_map', 'company', 'timekeeping'].sort());
-    expect(on('inspector')).toEqual(['home', 'inspections', 'route_builder', 'keys', 'property_map', 'company', 'timekeeping'].sort());
+    expect(on('field')).toEqual(['home', 'activities', 'field_app', 'maintos', 'keys', 'property_map', 'company', 'timekeeping'].sort());
+    expect(on('inspector')).toEqual(['home', 'activities', 'inspections', 'route_builder', 'keys', 'property_map', 'company', 'timekeeping'].sort());
     expect(on('front_desk')).toEqual(['home', 'activities', 'rent_comps', 'craigslist', 'keys', 'haven', 'property_map', 'company', 'timekeeping'].sort());
     expect(on('finance')).toEqual(['home', 'activities', 'work_billing', 'maintos', 'owner_reports', 'company', 'timekeeping'].sort());
-    expect(on('read_only')).toEqual(['home', 'company'].sort());
+    expect(on('read_only')).toEqual(['home', 'activities', 'company'].sort());
     expect(on('admin')).toEqual(APP_SECTIONS.map((s) => s.key).sort());
   });
 

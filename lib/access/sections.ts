@@ -78,7 +78,8 @@ export const APP_SECTIONS: AppSection[] = [
     label: 'Activities',
     description: 'AppFolio activities and follow-ups.',
     group: 'main',
-    defaultRoles: [...PM, 'maintenance', 'front_desk', 'finance'],
+    // Every employee sees their own AppFolio activities (also on the home dashboard).
+    defaultRoles: 'all',
     pages: ['/activities'],
     apis: ['/api/activities'],
     nav: { href: '/activities', icon: 'list', order: 2 },
