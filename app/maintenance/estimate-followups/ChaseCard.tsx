@@ -10,8 +10,8 @@ const HEAT:Record<Heat,{bar:string;text:string;label:string}>={
 };
 export const STEP:Record<StepKind,{dot:string;text:string;label:string}>={
  check:{dot:'bg-red-600',text:'text-red-800',label:'Check'},
- fix:{dot:'bg-amber-500',text:'text-amber-900',label:'Fix first'},
- decide:{dot:'bg-purple-600',text:'text-purple-900',label:'Decide'},
+ fix:{dot:'bg-amber-600',text:'text-amber-900',label:'Fix first'},
+ decide:{dot:'bg-purple-700',text:'text-purple-900',label:'Decide'},
  chase:{dot:'bg-green-700',text:'text-green-900',label:'Chase'},
  wait:{dot:'bg-charcoal-300',text:'text-charcoal-600',label:'Waiting'},
 };

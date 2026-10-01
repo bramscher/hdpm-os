@@ -4,21 +4,23 @@ import Link from 'next/link';
 import {useSession} from 'next-auth/react';
 import {useRouter} from 'next/navigation';
 import type {FollowupCandidate,FollowupReview} from '@/lib/agents/estimate-followups';
-import {LANES,GATE,bucketFor,laneFor,focusQueue,chaseCounts,weeklySends,clearedToday,daysUntil,daysStuck,groupByVendor,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
+import {LANES,GATE,AGE_BUCKETS,agingSnapshot,matchesSnapshot,type SnapshotFilter,bucketFor,laneFor,focusQueue,chaseCounts,weeklySends,clearedToday,daysUntil,daysStuck,groupByVendor,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
 import ChaseCard,{STEP} from './ChaseCard';
 import ChaseDrawer,{button,field,date} from './ChaseDrawer';
 import FocusStrip from './FocusStrip';
+import AgingSnapshot from './AgingSnapshot';
 import VendorView from './VendorView';
 
 type Data={staff:string[];candidates:FollowupCandidate[];reviews:FollowupReview[];events:ChaseEvent[];legacy:LegacyChase[];senders:{email:string;sms:string};available:{email:boolean;sms:boolean};messagingStatus:string;loadedAt:string};
 const LANE_PREVIEW=8;
 const laneLabel=Object.fromEntries(LANES.map(l=>[l.key,l.label]));
+const AGE_LABEL=Object.fromEntries(AGE_BUCKETS.map(b=>[b.key,b.key==='d7'?'0–7 days':`${b.label} days`]));
 
 export default function Followups({embedded=false}:{embedded?:boolean}) {
  const {data:session}=useSession();const router=useRouter();
  const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[view,setView]=useState<'lanes'|'vendors'>('lanes'),[scope,setScope]=useState('all'),[search,setSearch]=useState('');
- const [selected,setSelected]=useState<string|null>(null),[expanded,setExpanded]=useState<Record<string,boolean>>({});
+ const [selected,setSelected]=useState<string|null>(null),[snapFilter,setSnapFilter]=useState<SnapshotFilter>({}),[expanded,setExpanded]=useState<Record<string,boolean>>({});
  const load=useCallback(async()=>{setLoading(true);try{const response=await fetch('/api/maintenance/estimate-followups');const result=await response.json();if(!response.ok)throw new Error(result.error);setData(result);setError('');}catch(e){setError((e as Error).message);}finally{setLoading(false);}},[]);
  useEffect(()=>{void load();},[load]);
  useEffect(()=>{if(selected||busy)return;const timer=setInterval(()=>void load(),30000);return()=>clearInterval(timer);},[load,selected,busy]);
@@ -44,13 +46,15 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
   const bucket=(c:FollowupCandidate)=>bucketFor(c,reviews.get(c.id),now);
   const active=shown.filter(c=>bucket(c)==='active');
   const focus=focusQueue(active,reviews,now),inFocus=new Set(focus.map(c=>c.id));
-  const lanes=LANES.map(l=>{const all=active.filter(c=>laneFor(c,reviews.get(c.id))===l.key).sort((a,b)=>daysStuck(b,now)-daysStuck(a,now));return {...l,all,rest:all.filter(c=>!inFocus.has(c.id)),oldest:all[0]?daysStuck(all[0],now):0};});
-  return {reviews,focus,lanes,active,
+  const snap=agingSnapshot(active,reviews,now);
+  const filtered=active.filter(c=>matchesSnapshot(c,reviews.get(c.id),snapFilter,now));
+  const lanes=LANES.map(l=>{const all=filtered.filter(c=>laneFor(c,reviews.get(c.id))===l.key).sort((a,b)=>daysStuck(b,now)-daysStuck(a,now));return {...l,all,rest:Object.keys(snapFilter).length?all:all.filter(c=>!inFocus.has(c.id)),oldest:all[0]?daysStuck(all[0],now):0};});
+  return {reviews,focus,lanes,active,snap,filtered,
    parked:shown.filter(c=>bucket(c)==='parked').sort((a,b)=>(reviews.get(a.id)?.next_review_at||'').localeCompare(reviews.get(b.id)?.next_review_at||'')),
    closed:shown.filter(c=>bucket(c)==='closed'),
    chases:chaseCounts(events),weeks:weeklySends(events,8,now),cleared:clearedToday(events,now),daysToGate:daysUntil(GATE.date,now),
    vendors:groupByVendor(shown,reviews,now)};
- },[data,search,scope,session?.user?.name]);
+ },[data,search,scope,snapFilter,session?.user?.name]);
 
  const current=data?.candidates.find(c=>c.id===selected);
  const drawer=current&&data&&<ChaseDrawer key={current.id} c={current} r={model.reviews.get(current.id)} legacy={data.legacy.find(p=>p.subject_id===current.id)} events={data.events.filter(e=>e.work_order_id===current.id)} chases={model.chases.get(current.id)||0}
@@ -71,18 +75,20 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
 
  return <section id="maintenance-followups" className="mx-auto max-w-[1400px] space-y-5 p-4 sm:p-6">
   <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-semibold">Chase board</h2><p className="mt-1 text-sm text-charcoal-500">{data?.messagingStatus||'Checking trial setup…'} · Source checked {date(data?.loadedAt)} PT</p></div><button className={button} disabled={busy||loading} onClick={()=>void load()}>{loading?'Refreshing…':'Refresh'}</button></div>
+  <AgingSnapshot snap={model.snap} filter={snapFilter} onFilter={f=>{setSnapFilter(f);setView('lanes');if(Object.keys(f).length)setTimeout(()=>document.getElementById('chase-lanes')?.scrollIntoView({behavior:'smooth',block:'start'}),50);}}/>
   <FocusStrip cleared={model.cleared} remaining={model.focus.length} weeks={model.weeks} daysToGate={model.daysToGate}/>
   {alerts}{focusList}
-  <div className="flex flex-wrap items-center gap-3 border-t border-sand-200 pt-4">
+  <div id="chase-lanes" className="flex scroll-mt-4 flex-wrap items-center gap-3 border-t border-sand-200 pt-4">
    <div className="inline-flex rounded-lg border border-sand-200 p-1" role="group" aria-label="Board view">{([['lanes','By stage'],['vendors','By vendor']] as const).map(([v,label])=><button key={v} aria-pressed={view===v} className={`rounded-md px-3 py-1.5 text-sm font-medium ${view===v?'bg-charcoal-900 text-white':''}`} onClick={()=>setView(v)}>{label}</button>)}</div>
    <input className={`${field} min-w-[200px] flex-1`} placeholder="Find property, work order, vendor, or owner" aria-label="Search maintenance follow-ups" value={search} onChange={e=>setSearch(e.target.value)}/>
    <select aria-label="Follow-up owner filter" className="rounded-lg border border-sand-200 p-3 text-sm" value={scope} onChange={e=>setScope(e.target.value)}><option value="all">All team</option><option value="mine">My work orders</option></select>
   </div>
+  {Object.keys(snapFilter).length>0&&<p className="flex flex-wrap items-center gap-2 text-sm"><span className="rounded-full bg-charcoal-900 px-3 py-1 text-white">Showing {model.filtered.length}: {[snapFilter.lane&&laneLabel[snapFilter.lane],snapFilter.age&&AGE_LABEL[snapFilter.age],snapFilter.step&&STEP[snapFilter.step].label].filter(Boolean).join(' · ')}</span><button className="font-medium text-green-800 underline" onClick={()=>setSnapFilter({})}>Show all</button></p>}
   {view==='lanes'?<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{model.lanes.map(l=>{
    const more=expanded[l.key],list=more?l.rest:l.rest.slice(0,LANE_PREVIEW);
    return <section key={l.key} aria-labelledby={`lane-${l.key}`} className="flex flex-col rounded-xl bg-sand-50 p-3">
     <header className="mb-2 flex items-baseline justify-between gap-2"><div><h3 id={`lane-${l.key}`} className="text-sm font-semibold">{l.label}</h3><p className="text-xs text-charcoal-500">{l.hint}{l.all.length?` · oldest ${l.oldest}d`:''}</p></div><span className="text-2xl font-semibold tabular-nums">{l.all.length}</span></header>
-    {l.all.length>l.rest.length&&<p className="mb-2 text-xs text-charcoal-500">{l.all.length-l.rest.length} in today’s focus above</p>}
+    {!Object.keys(snapFilter).length&&l.all.length>l.rest.length&&<p className="mb-2 text-xs text-charcoal-500">{l.all.length-l.rest.length} in today’s focus above</p>}
     <div className="space-y-2">{list.map(c=>card(c))}</div>
     {l.rest.length>LANE_PREVIEW&&<button className="mt-2 text-sm font-medium text-green-800 underline" onClick={()=>setExpanded(x=>({...x,[l.key]:!more}))}>{more?'Show fewer':`Show ${l.rest.length-LANE_PREVIEW} more`}</button>}
     {!l.all.length&&<p className="py-4 text-center text-xs text-charcoal-400">Clear</p>}

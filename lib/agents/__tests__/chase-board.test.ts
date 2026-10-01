@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,FOCUS_CAP} from '../chase-board';
+import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,ageBucket,agingSnapshot,matchesSnapshot,FOCUS_CAP} from '../chase-board';
 import type {FollowupCandidate,FollowupReview} from '../estimate-followups';
 const now=new Date('2026-10-01T18:00:00Z');
 const ago=(d:number)=>new Date(now.getTime()-d*86400_000).toISOString();
@@ -90,5 +90,21 @@ describe('next step',()=>{
  it('puts delivery checks and help ahead of everything',()=>{
   expect(nextStep(c(),r({status:'uncertain'}),now).kind).toBe('check');
   expect(nextStep(c(),r({status:'help',note:'Matt calling vendor'}),now).text).toBe('Waiting on team help: Matt calling vendor');
+ });
+});
+describe('aging snapshot',()=>{
+ it('buckets ages at the edges',()=>{expect([0,7,8,21,22,45,46,90,91,400].map(ageBucket)).toEqual(['d7','d7','d21','d21','d45','d45','d90','d90','old','old']);});
+ it('counts stage × age with a next-step split, and totals by step',()=>{
+  const items=[c({kind:'vendor',vendor:'',statusSince:ago(50)}),c({kind:'vendor',vendor:'Yak',statusSince:ago(50)}),c({kind:'schedule',statusSince:ago(188)}),c({kind:'decision',statusSince:ago(3)})];
+  const s=agingSnapshot(items,new Map(),now);
+  const vendor=s.rows.find(r=>r.key==='vendor')!;
+  expect(vendor.total).toBe(2);expect(vendor.cells.find(x=>x.key==='d90')).toMatchObject({count:2,steps:{fix:1,chase:1}});
+  expect(s.rows.find(r=>r.key==='schedule')!.cells.find(x=>x.key==='old')!.count).toBe(1);
+  expect(s.steps).toMatchObject({fix:2,chase:1,decide:1});expect(s.columns.find(x=>x.key==='d90')!.total).toBe(2);expect(s.max).toBe(2);
+ });
+ it('filters by stage, age and step together',()=>{
+  const x=c({kind:'vendor',vendor:'',statusSince:ago(50)});
+  expect(matchesSnapshot(x,undefined,{lane:'vendor',age:'d90',step:'fix'},now)).toBe(true);
+  expect(matchesSnapshot(x,undefined,{step:'chase'},now)).toBe(false);expect(matchesSnapshot(x,undefined,{},now)).toBe(true);
  });
 });

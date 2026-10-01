@@ -136,3 +136,33 @@ export function nextStep(c: FollowupCandidate, r?: FollowupReview, now = new Dat
   if (!c.email && !c.phone) return { kind: 'chase', text: `Set a service date with ${vendor}` };
   return { kind: 'chase', text: `${reach} ${vendor} for a service date (${days} days waiting)` };
 }
+
+export const AGE_BUCKETS = [
+  { key: 'd7', label: '0–7 days', min: 0, max: 7 },
+  { key: 'd21', label: '8–21', min: 8, max: 21 },
+  { key: 'd45', label: '22–45', min: 22, max: 45 },
+  { key: 'd90', label: '46–90', min: 46, max: 90 },
+  { key: 'old', label: '90+', min: 91, max: Infinity },
+] as const;
+export type AgeBucket = typeof AGE_BUCKETS[number]['key'];
+export const ageBucket = (days: number): AgeBucket => AGE_BUCKETS.find(b => days <= b.max)!.key;
+export const STEP_ORDER: StepKind[] = ['fix', 'decide', 'chase', 'check', 'wait'];
+
+export type SnapshotFilter = { lane?: Lane; age?: AgeBucket; step?: StepKind };
+export function matchesSnapshot(c: FollowupCandidate, r: FollowupReview | undefined, f: SnapshotFilter, now = new Date()) {
+  return (!f.lane || laneFor(c, r) === f.lane) && (!f.age || ageBucket(daysStuck(c, now)) === f.age) && (!f.step || nextStep(c, r, now).kind === f.step);
+}
+/** Stage × age counts (with next-step split per cell) and totals by next step, over active work. */
+export function agingSnapshot(active: FollowupCandidate[], reviews: Map<string, FollowupReview>, now = new Date()) {
+  const rows = LANES.filter(l => l.key !== 'help').map(l => ({ ...l, cells: AGE_BUCKETS.map(b => ({ ...b, count: 0, steps: {} as Partial<Record<StepKind, number>> })), total: 0 }));
+  const steps = Object.fromEntries(STEP_ORDER.map(k => [k, 0])) as Record<StepKind, number>;
+  for (const c of active) {
+    const r = reviews.get(c.id), step = nextStep(c, r, now).kind;
+    steps[step]++;
+    const row = rows.find(x => x.key === laneFor(c, r)); if (!row) continue;
+    const cell = row.cells.find(x => x.key === ageBucket(daysStuck(c, now)))!;
+    cell.count++; cell.steps[step] = (cell.steps[step] || 0) + 1; row.total++;
+  }
+  const columns = AGE_BUCKETS.map((b, i) => ({ ...b, total: rows.reduce((n, r) => n + r.cells[i].count, 0) }));
+  return { rows, columns, steps, total: active.length, max: Math.max(1, ...rows.flatMap(r => r.cells.map(c => c.count))) };
+}
