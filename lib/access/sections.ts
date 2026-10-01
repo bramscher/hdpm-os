@@ -249,6 +249,17 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/agents', icon: 'bot', order: 32 },
   },
   {
+    key: 'brain',
+    label: 'Brain map',
+    description: 'A 3D map of everything Dez knows (policies, SOPs, Oregon law, company memory) and how often each piece is cited.',
+    group: 'Company',
+    defaultRoles: [...PM],
+    pages: ['/brain'],
+    // /api/brain is a public proxy prefix (cron + service-token callers); /api/brain/viz guards itself.
+    apis: ['/api/brain/viz'],
+    nav: { href: '/brain', icon: 'brain', order: 32.5 },
+  },
+  {
     key: 'desk_demo',
     label: 'The Desk (demo)',
     description: 'Clickable demo of per-person desks with circulating colored folders and paper-form tracking. Sample data only.',

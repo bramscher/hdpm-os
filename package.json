@@ -41,6 +41,7 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "three": "^0.170.0",
     "unpdf": "^1.4.0",
     "xlsx": "^0.18.5"
   },
@@ -50,6 +51,7 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.5",
+    "@types/three": "^0.170.0",
     "autoprefixer": "^10.4.20",
     "dotenv": "^16.4.5",
     "eslint": "^8.57.1",
