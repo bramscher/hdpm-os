@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  activityPeople,
   activityKey,
   activityLink,
   activitiesForStaff,
@@ -134,5 +135,36 @@ describe('activityKey', () => {
     expect(activityKey(act())).toBe(activityKey(act()));
     expect(activityKey(act())).not.toBe(activityKey(act({ activity_date: '2026-09-25' })));
     expect(activityKey(act())).not.toBe(activityKey(act({ unit_address: '2 Other St' })));
+  });
+});
+
+describe('activityPeople (admin dropdown)', () => {
+  const row = (assignee: string | null, hidden = false) =>
+    ({ date: '2026-10-01', activity: 'x', activityFor: null, label: null, assignee, assigneeHidden: hidden, propertyName: null, unitAddress: null, createdBy: null, createdOn: null, link: null });
+  const staff = [
+    { person: 'Brody', name: 'Brody Bramscher' },
+    { person: 'Alberto', name: 'Alberto Flores' },
+    { person: 'Matt', name: 'Matt Free' },
+  ];
+
+  it('lists every active staff member, even with nothing pending', () => {
+    const people = activityPeople([row('Matt Free'), row('Matt Free')], staff);
+    expect(people.map((p) => [p.name, p.count, p.staff])).toEqual([
+      ['Matt Free', 2, true],
+      ['Alberto Flores', 0, true],
+      ['Brody Bramscher', 0, true],
+    ]);
+  });
+
+  it('keeps AppFolio assignees with no staff match, and unassigned', () => {
+    const people = activityPeople([row('Bianca Nyseth', true), row('Ann Other'), row('Ann Other'), row(null)], staff);
+    expect(people.find((p) => p.name === 'Bianca Nyseth')).toMatchObject({ count: 1, hidden: true, staff: false });
+    expect(people.find((p) => p.name === 'Ann Other')).toMatchObject({ count: 2, staff: false });
+    expect(people.find((p) => p.name === '(unassigned)')).toMatchObject({ count: 1, staff: false });
+    expect(people.filter((p) => p.staff)).toHaveLength(3);
+  });
+
+  it('matches staff on person when the AppFolio name is the short name', () => {
+    expect(activityPeople([row('Brody')], staff).find((p) => p.name === 'Brody Bramscher')?.count).toBe(1);
   });
 });

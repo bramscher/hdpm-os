@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCompanySession } from '@/lib/require-role';
 import { reportsApiConfigured } from '@/lib/appfolio-reports';
 import { todayPacific } from '@/lib/eos/escalation';
-import { activitiesForStaff, bucketActivities, staffForAssignee, type Activity } from '@/lib/activities';
+import { activitiesForStaff, activityPeople, bucketActivities, staffForAssignee, type Activity, type ActivityPerson } from '@/lib/activities';
 import { fetchActivities, loadActiveStaff } from '@/lib/activities-server';
 
 export const maxDuration = 60;
@@ -32,7 +32,11 @@ export async function GET(request: NextRequest) {
     const requested = isAdmin ? request.nextUrl.searchParams.get('person')?.trim() : null;
     let viewing: string;
     let mine: Activity[];
-    if (requested) {
+    const requestedStaff = requested ? staffForAssignee(requested, staff) : null;
+    if (requested && requestedStaff) {
+      viewing = requestedStaff.name ?? requestedStaff.person;
+      mine = activitiesForStaff(rows, requestedStaff);
+    } else if (requested) {
       viewing = requested;
       mine = rows.filter((a) => (a.assignee ?? '(unassigned)').toLowerCase() === requested.toLowerCase());
     } else if (me) {
@@ -46,17 +50,7 @@ export async function GET(request: NextRequest) {
     const buckets = bucketActivities(mine, today);
     const counts = Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, v.length]));
 
-    let people: Array<{ name: string; count: number; hidden: boolean; staff: boolean }> | undefined;
-    if (isAdmin) {
-      const byName = new Map<string, { name: string; count: number; hidden: boolean; staff: boolean }>();
-      for (const a of rows) {
-        const name = a.assignee ?? '(unassigned)';
-        const entry = byName.get(name) ?? { name, count: 0, hidden: a.assigneeHidden, staff: Boolean(staffForAssignee(a.assignee, staff)) };
-        entry.count += 1;
-        byName.set(name, entry);
-      }
-      people = [...byName.values()].sort((a, b) => b.count - a.count);
-    }
+    const people: ActivityPerson[] | undefined = isAdmin ? activityPeople(rows, staff) : undefined;
 
     return NextResponse.json({
       viewing,
