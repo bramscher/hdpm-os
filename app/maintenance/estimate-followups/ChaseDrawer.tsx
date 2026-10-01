@@ -4,16 +4,17 @@ import Link from 'next/link';
 import type {FollowupCandidate,FollowupReview} from '@/lib/agents/estimate-followups';
 import {isDue,isLocked,daysStuck,nextStep,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
 import {HeatBar,ChaseDots,STEP} from './ChaseCard';
+import PartsOrders from '../board/components/parts-orders';
 
 export const button='inline-flex min-h-11 items-center justify-center rounded-lg border border-sand-200 px-4 py-2 text-sm font-medium disabled:opacity-50';
 export const field='w-full rounded-lg border border-sand-200 bg-white p-3 text-sm';
 export const date=(value?:string|null)=>value?new Date(value).toLocaleString('en-US',{timeZone:'America/Los_Angeles'}):'Not recorded';
 
 type Props={c:FollowupCandidate;r?:FollowupReview;legacy?:LegacyChase;events:ChaseEvent[];chases:number;staff:string[];senders:{email:string;sms:string};available:{email:boolean;sms:boolean};busy:boolean;
- onAct:(op:string,payload:Record<string,unknown>)=>Promise<boolean>;onClose:()=>void};
+ onAct:(op:string,payload:Record<string,unknown>)=>Promise<boolean>;onClose:()=>void;onPartsChanged:()=>void};
 
 /** The shared review editor for one work order, as a right-hand drawer. */
-export default function ChaseDrawer({c,r,legacy,events,chases,staff,senders,available,busy,onAct,onClose}:Props) {
+export default function ChaseDrawer({c,r,legacy,events,chases,staff,senders,available,busy,onAct,onClose,onPartsChanged}:Props) {
  const [channel,setChannel]=useState<'email'|'sms_zoom'>('email');
  const [recipient,setRecipient]=useState(c.email),[subject,setSubject]=useState(c.subject),[body,setBody]=useState(c.emailBody);
  const [note,setNote]=useState(''),[nextDate,setNextDate]=useState(''),[confirmed,setConfirmed]=useState(false),[owner,setOwner]=useState('');
@@ -37,6 +38,8 @@ export default function ChaseDrawer({c,r,legacy,events,chases,staff,senders,avai
      <p className="mt-1 text-base font-semibold">{step.text}</p>
      {cleanup&&<p className="mt-1 text-sm text-charcoal-600">{step.kind==='fix'?'A follow-up can’t go anywhere useful until this is fixed. Fix it in AppFolio or the work order, then add a note here.':'If it’s no longer needed, close it in AppFolio and it will drop off this board. If it is, set a date and record a note.'}</p>}
     </section>
+    {c.kind==='parts'?<section aria-labelledby="parts-heading" className="space-y-2"><h3 id="parts-heading" className="text-sm font-semibold">Parts orders · {c.parts?.minutes||0} min spent chasing</h3><PartsOrders workOrderId={c.id} onChanged={onPartsChanged} addOpen={false}/></section>
+     :<details className="rounded-xl border border-sand-200 p-4"><summary className="cursor-pointer text-sm font-medium">Waiting on parts? Log the supplier order</summary><div className="mt-3"><PartsOrders workOrderId={c.id} onChanged={onPartsChanged}/></div></details>}
     <p className="text-sm text-charcoal-600">{c.reason}</p>
     <p className="whitespace-pre-wrap text-sm">{c.description}</p>
     <p className="text-sm text-charcoal-500">HDPM owner: {c.owner||'Unassigned'} · Assigned to: {c.assignedTo||'Unassigned'} · Total age: {c.totalAge??'Unknown'} calendar days · Synced {date(c.sourceUpdatedAt)} PT</p>

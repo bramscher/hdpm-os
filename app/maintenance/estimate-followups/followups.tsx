@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {useSession} from 'next-auth/react';
 import {useRouter} from 'next/navigation';
 import type {FollowupCandidate,FollowupReview} from '@/lib/agents/estimate-followups';
-import {LANES,GATE,AGE_BUCKETS,agingSnapshot,matchesSnapshot,type SnapshotFilter,bucketFor,laneFor,focusQueue,chaseCounts,weeklySends,clearedToday,daysUntil,daysStuck,groupByVendor,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
+import {LANES,GATE,AGE_BUCKETS,agingSnapshot,matchesSnapshot,chasesFor,type SnapshotFilter,bucketFor,laneFor,focusQueue,chaseCounts,weeklySends,clearedToday,daysUntil,daysStuck,groupByVendor,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
 import ChaseCard,{STEP} from './ChaseCard';
 import ChaseDrawer,{button,field,date} from './ChaseDrawer';
 import FocusStrip from './FocusStrip';
@@ -13,6 +13,8 @@ import VendorView from './VendorView';
 
 type Data={staff:string[];candidates:FollowupCandidate[];reviews:FollowupReview[];events:ChaseEvent[];legacy:LegacyChase[];senders:{email:string;sms:string};available:{email:boolean;sms:boolean};messagingStatus:string;loadedAt:string};
 const LANE_PREVIEW=8;
+/** When a parked item comes back: its review date, or for a parts order not yet due, its chase date. */
+const backOn=(c:FollowupCandidate,reviews:Map<string,FollowupReview>)=>c.parts&&!c.parts.due?c.parts.dueAt||'':reviews.get(c.id)?.next_review_at||'';
 const laneLabel=Object.fromEntries(LANES.map(l=>[l.key,l.label]));
 const AGE_LABEL=Object.fromEntries(AGE_BUCKETS.map(b=>[b.key,b.key==='d7'?'0–7 days':`${b.label} days`]));
 
@@ -50,16 +52,16 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
   const filtered=active.filter(c=>matchesSnapshot(c,reviews.get(c.id),snapFilter,now));
   const lanes=LANES.map(l=>{const all=filtered.filter(c=>laneFor(c,reviews.get(c.id))===l.key).sort((a,b)=>daysStuck(b,now)-daysStuck(a,now));return {...l,all,rest:Object.keys(snapFilter).length?all:all.filter(c=>!inFocus.has(c.id)),oldest:all[0]?daysStuck(all[0],now):0};});
   return {reviews,focus,lanes,active,snap,filtered,
-   parked:shown.filter(c=>bucket(c)==='parked').sort((a,b)=>(reviews.get(a.id)?.next_review_at||'').localeCompare(reviews.get(b.id)?.next_review_at||'')),
+   parked:shown.filter(c=>bucket(c)==='parked').sort((a,b)=>backOn(a,reviews).localeCompare(backOn(b,reviews))),
    closed:shown.filter(c=>bucket(c)==='closed'),
    chases:chaseCounts(events),weeks:weeklySends(events,8,now),cleared:clearedToday(events,now),daysToGate:daysUntil(GATE.date,now),
    vendors:groupByVendor(shown,reviews,now)};
  },[data,search,scope,snapFilter,session?.user?.name]);
 
  const current=data?.candidates.find(c=>c.id===selected);
- const drawer=current&&data&&<ChaseDrawer key={current.id} c={current} r={model.reviews.get(current.id)} legacy={data.legacy.find(p=>p.subject_id===current.id)} events={data.events.filter(e=>e.work_order_id===current.id)} chases={model.chases.get(current.id)||0}
-  staff={data.staff} senders={data.senders} available={data.available} busy={busy} onAct={act(current.id)} onClose={()=>setSelected(null)}/>;
- const card=(c:FollowupCandidate,showLane=false)=><ChaseCard key={c.id} c={c} r={model.reviews.get(c.id)} chases={model.chases.get(c.id)||0} onOpen={()=>setSelected(c.id)} showLane={showLane?laneLabel[laneFor(c,model.reviews.get(c.id))]:undefined}/>;
+ const drawer=current&&data&&<ChaseDrawer key={current.id} c={current} r={model.reviews.get(current.id)} legacy={data.legacy.find(p=>p.subject_id===current.id)} events={data.events.filter(e=>e.work_order_id===current.id)} chases={chasesFor(current,model.chases)}
+  staff={data.staff} senders={data.senders} available={data.available} busy={busy} onAct={act(current.id)} onClose={()=>setSelected(null)} onPartsChanged={()=>void load()}/>;
+ const card=(c:FollowupCandidate,showLane=false)=><ChaseCard key={c.id} c={c} r={model.reviews.get(c.id)} chases={chasesFor(c,model.chases)} onOpen={()=>setSelected(c.id)} showLane={showLane?laneLabel[laneFor(c,model.reviews.get(c.id))]:undefined}/>;
  const alerts=<>{error&&<p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">{error}</p>}{notice&&<p role="status" className="rounded-lg bg-green-50 p-4 text-sm">{notice}</p>}</>;
  const focusList=<section aria-labelledby="focus-heading" className="space-y-2">
   <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 id="focus-heading" className="text-sm font-semibold">Do these first</h3>
@@ -84,7 +86,7 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
    <select aria-label="Follow-up owner filter" className="rounded-lg border border-sand-200 p-3 text-sm" value={scope} onChange={e=>setScope(e.target.value)}><option value="all">All team</option><option value="mine">My work orders</option></select>
   </div>
   {Object.keys(snapFilter).length>0&&<p className="flex flex-wrap items-center gap-2 text-sm"><span className="rounded-full bg-charcoal-900 px-3 py-1 text-white">Showing {model.filtered.length}: {[snapFilter.lane&&laneLabel[snapFilter.lane],snapFilter.age&&AGE_LABEL[snapFilter.age],snapFilter.step&&STEP[snapFilter.step].label].filter(Boolean).join(' · ')}</span><button className="font-medium text-green-800 underline" onClick={()=>setSnapFilter({})}>Show all</button></p>}
-  {view==='lanes'?<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{model.lanes.filter(l=>!Object.keys(snapFilter).length||l.all.length).map(l=>{
+  {view==='lanes'?<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{model.lanes.filter(l=>!Object.keys(snapFilter).length||l.all.length).map(l=>{
    const more=expanded[l.key],list=more?l.rest:l.rest.slice(0,LANE_PREVIEW);
    return <section key={l.key} aria-labelledby={`lane-${l.key}`} className="flex flex-col rounded-xl bg-sand-50 p-3">
     <header className="mb-2 flex items-baseline justify-between gap-2"><div><h3 id={`lane-${l.key}`} className="text-sm font-semibold">{l.label}</h3><p className="text-xs text-charcoal-500">{l.hint}{l.all.length?` · oldest ${l.oldest}d`:''}</p></div><span className="text-2xl font-semibold tabular-nums">{l.all.length}</span></header>
@@ -96,7 +98,7 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
   })}</div>
   :<VendorView groups={model.vendors} reviews={model.reviews} chases={model.chases} sender={data?.senders.email||''} available={!!data?.available.email} busy={busy} onOpen={setSelected} onBatch={batch}/>}
   <details className="rounded-xl border border-sand-200 bg-white p-4"><summary className="cursor-pointer text-sm font-semibold">Waiting on replies ({model.parked.length})</summary>
-   <ul className="mt-3 divide-y divide-sand-100">{model.parked.map(c=>{const r=model.reviews.get(c.id);return <li key={c.id}><button className="flex w-full flex-wrap items-baseline justify-between gap-2 py-2 text-left text-sm hover:bg-sand-50" onClick={()=>setSelected(c.id)}><span>WO {c.woNumber||'—'} · {c.property}{c.unit&&` · ${c.unit}`} · {c.vendor||'No vendor'}</span><span className="text-xs text-charcoal-500">{r?.status==='sent'?'Sent':'Snoozed'} · back {date(r?.next_review_at)}</span></button></li>;})}</ul>
+   <ul className="mt-3 divide-y divide-sand-100">{model.parked.map(c=>{const r=model.reviews.get(c.id);return <li key={c.id}><button className="flex w-full flex-wrap items-baseline justify-between gap-2 py-2 text-left text-sm hover:bg-sand-50" onClick={()=>setSelected(c.id)}><span>WO {c.woNumber||'—'} · {c.property}{c.unit&&` · ${c.unit}`} · {c.vendor||'No vendor'}</span><span className="text-xs text-charcoal-500">{c.parts&&!c.parts.due?`Parts · due for a check ${new Date(`${c.parts.dueAt}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})}`:`${r?.status==='sent'?'Sent':'Snoozed'} · back ${date(r?.next_review_at)}`}</span></button></li>;})}</ul>
   </details>
   <details className="rounded-xl border border-sand-200 bg-white p-4"><summary className="cursor-pointer text-sm font-semibold">No longer chasing ({model.closed.length})</summary>
    <ul className="mt-3 divide-y divide-sand-100">{model.closed.map(c=><li key={c.id}><button className="w-full py-2 text-left text-sm hover:bg-sand-50" onClick={()=>setSelected(c.id)}>WO {c.woNumber||'—'} · {c.property}{c.unit&&` · ${c.unit}`} <span className="text-xs text-charcoal-500">· {model.reviews.get(c.id)?.status==='dismissed'?'Dismissed':'No longer overdue'}</span></button></li>)}</ul>

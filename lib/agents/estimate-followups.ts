@@ -7,16 +7,29 @@ import type { MaintWorkOrder, TripwireSnapshot } from '@/lib/maintenance/types';
 import { createHash } from 'node:crypto';
 import { getDashboardConfig } from '@/lib/dashboard-config';
 import { classifyPool, buildVendorChaseDraft, buildVendorChaseSms, buildOwnerApprovalDraft } from './estimate-chaser';
+import { loadOpenPartsForFollowups, type PartsOrderView } from '@/lib/maintenance/parts-db';
+import { buildSupplierDraft, needsHelp, partsChaseDue, type PartsStatus } from '@/lib/maintenance/parts';
 
 export interface FollowupCandidate {
   eligible?: boolean; id: string; property: string; unit: string; woNumber: string; vendor: string;
-  description: string; age: number; kind: 'vendor' | 'owner' | 'decision' | 'schedule';
+  description: string; age: number; kind: 'vendor' | 'owner' | 'decision' | 'schedule' | 'parts';
   decisionMaker?: string; approvalRequestedAt?: string; totalAge?: number; legacyActivity?: string;
   episodeKey?: string; newEpisode?: boolean;
   owner?: string; sourceStatus?: string; statusSince?: string; sourceUpdatedAt?: string; nextActionDate?: string | null;
   appfolioLink?: string | null; assignedTo?: string | null; priority?: string | null; contextVersion?: string;
   estimate?: {id: string; total: number | null; status: string; version: number | null};
+  parts?: PartsSummary;
   reason: string; email: string; phone: string; subject: string; emailBody: string; smsBody: string;
+}
+export interface PartsOrderLine {
+  id: string; supplier: string; item: string; orderNumber: string | null; poNumber: string | null; status: PartsStatus;
+  orderedAt: string; expectedAt: string | null; deliveredAt: string | null; trackingUrl: string | null;
+  contacts: number; minutes: number; due: boolean; dueAt: string | null; reason: string;
+}
+/** Open supplier orders on a work order; the primary one is the most urgent and is what the card chases. */
+export interface PartsSummary {
+  orders: PartsOrderLine[]; primaryId: string; supplier: string; contacts: number; minutes: number;
+  due: boolean; dueAt: string | null; help: boolean; reason: string;
 }
 export interface FollowupReview {
   work_order_id: string; status: 'review' | 'snoozed' | 'dismissed' | 'sending' | 'sent' | 'uncertain' | 'help';
@@ -68,6 +81,20 @@ export async function gatherFollowups(): Promise<FollowupCandidate[]> {
     const candidate:FollowupCandidate={id:wo.id,property:wo.property_name,unit:wo.unit_name||'',woNumber:wo.wo_number||'',vendor:wo.vendor_name||'',description:wo.description,age:businessDaysBetween(new Date(approval.requested_at),now),kind:'owner',reason:'Recorded owner decision requested.',email:'',phone:'',subject:`Owner decision — WO ${wo.wo_number||wo.id}`,emailBody:text,smsBody:text};
     if(prior>=0)rows[prior]=candidate;else rows.push(candidate);
   }
+  // Parts: a work order with an open supplier order is past the bid and scheduling stages, so its row is replaced.
+  const open = snapshot.openWorkOrders.filter(w => w.status === 'open');
+  const orders = await loadOpenPartsForFollowups(open.map(w => w.id));
+  for (const wo of open) {
+    const summary = partsSummary(orders.filter(o => o.work_order_id === wo.id), wo, now); if (!summary) continue;
+    const primary = orders.find(o => o.id === summary.primaryId)!;
+    const draft = buildSupplierDraft(primary, primary.supplier, { woNumber: wo.wo_number || '', property: wo.property_address || wo.property_name, unit: wo.unit_name || '' });
+    const candidate: FollowupCandidate = { id: wo.id, property: wo.property_name, unit: wo.unit_name || '', woNumber: wo.wo_number || '', vendor: wo.vendor_name || '',
+      description: wo.description, age: businessDaysBetween(new Date(`${primary.ordered_at}T12:00:00Z`), now), kind: 'parts', parts: summary,
+      reason: `${primary.item} from ${primary.supplier.name}: ${summary.reason}.`, email: primary.supplier.email || '', phone: primary.supplier.phone || '',
+      subject: draft.subject, emailBody: draft.emailBody, smsBody: draft.smsBody };
+    const prior = rows.findIndex(c => c.id === wo.id);
+    if (prior >= 0) rows[prior] = candidate; else rows.push(candidate);
+  }
   const ids = rows.map(r => r.id);
   const estimates: Record<string, any>[] = [];
   for (let i = 0; i < ids.length; i += 150) {
@@ -91,13 +118,25 @@ export async function gatherFollowups(): Promise<FollowupCandidate[]> {
       if(!isOverThreshold(DASHBOARD_THRESHOLDS.owner_approval, new Date(approval.requested_at), now)) c.eligible = false;
     }
     const enriched = {...c, owner: wo.owner_name || 'Unassigned', sourceStatus: wo.appfolio_status || 'Unknown',
-      statusSince: (c.kind === 'owner' && approval ? new Date(approval.requested_at) : statusSinceFor(wo,snapshot)).toISOString(),
+      statusSince: (c.kind === 'parts' && c.parts ? new Date(`${c.parts.orders.find(o => o.id === c.parts!.primaryId)!.orderedAt}T12:00:00Z`) : c.kind === 'owner' && approval ? new Date(approval.requested_at) : statusSinceFor(wo,snapshot)).toISOString(),
       sourceUpdatedAt: wo.synced_at, nextActionDate: wo.next_action_date, assignedTo: wo.assigned_to,
       priority: wo.priority_class, appfolioLink: wo.appfolio_link, totalAge:daysBetween(new Date(wo.appfolio_created_at||wo.created_at),now),decisionMaker:approval?.requested_of,approvalRequestedAt:approval?.requested_at,
       ...(est ? {estimate: {id:est.id,total:version ? Number(version.owner_total) : null,status:est.status,version:version?.version_number ?? null}} : {})};
     // Stable source fingerprint: regular polling alone must not invalidate an open review.
-    return {...enriched, episodeKey: createHash('sha256').update(JSON.stringify([c.kind,enriched.statusSince,wo.appfolio_status,est?.current_version_id,approval?.id])).digest('hex').slice(0,24), contextVersion: createHash('sha256').update(JSON.stringify([c.kind,wo.appfolio_status,wo.vendor_id,wo.description,wo.owner_name,wo.next_action_date,wo.scheduled_start,est?.current_version_id,est?.status,approval?.id])).digest('hex').slice(0,24)};
+    const part = c.parts?.orders.find(o => o.id === c.parts!.primaryId); const partKey = part ? [part.id, part.status, part.expectedAt] : null;
+    return {...enriched, episodeKey: createHash('sha256').update(JSON.stringify([c.kind,enriched.statusSince,wo.appfolio_status,est?.current_version_id,approval?.id,...(partKey ? [partKey] : [])])).digest('hex').slice(0,24), contextVersion: createHash('sha256').update(JSON.stringify([c.kind,wo.appfolio_status,wo.vendor_id,wo.description,wo.owner_name,wo.next_action_date,wo.scheduled_start,est?.current_version_id,est?.status,approval?.id,...(partKey ? [partKey] : [])])).digest('hex').slice(0,24)};
   }).sort((a,b) => Number(b.priority === 'P1') - Number(a.priority === 'P1') || b.age-a.age);
+}
+
+/** Open orders on one work order, most urgent first: issue, then due, then earliest due date. Null when none are open. */
+export function partsSummary(orders: PartsOrderView[], wo: { scheduled_start?: string | null }, now = new Date()): PartsSummary | null {
+  if (!orders.length) return null;
+  const lines: PartsOrderLine[] = orders.map(o => ({ id: o.id, supplier: o.supplier?.name || 'Supplier', item: o.item, orderNumber: o.order_number, poNumber: o.po_number, status: o.status,
+    orderedAt: o.ordered_at, expectedAt: o.expected_at, deliveredAt: o.delivered_at, trackingUrl: o.tracking_url, contacts: o.contacts, minutes: o.minutes, ...partsChaseDue(o, wo, now) }));
+  lines.sort((a, b) => Number(b.status === 'issue') - Number(a.status === 'issue') || Number(b.due) - Number(a.due) || (a.dueAt || '9999').localeCompare(b.dueAt || '9999'));
+  const p = lines[0];
+  return { orders: lines, primaryId: p.id, supplier: p.supplier, contacts: p.contacts, minutes: lines.reduce((n, l) => n + l.minutes, 0),
+    due: p.due, dueAt: p.dueAt, help: needsHelp(p, p.contacts), reason: p.reason };
 }
 
 export function schedulingFollowups(snapshot: TripwireSnapshot): MaintWorkOrder[] {

@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,ageBucket,agingSnapshot,matchesSnapshot,FOCUS_CAP} from '../chase-board';
+import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,ageBucket,agingSnapshot,matchesSnapshot,chasesFor,FOCUS_CAP} from '../chase-board';
 import type {FollowupCandidate,FollowupReview} from '../estimate-followups';
 const now=new Date('2026-10-01T18:00:00Z');
 const ago=(d:number)=>new Date(now.getTime()-d*86400_000).toISOString();
@@ -107,4 +107,32 @@ describe('aging snapshot',()=>{
   expect(matchesSnapshot(x,undefined,{lane:'vendor',age:'d90',step:'fix'},now)).toBe(true);
   expect(matchesSnapshot(x,undefined,{step:'chase'},now)).toBe(false);expect(matchesSnapshot(x,undefined,{},now)).toBe(true);
  });
+});
+describe('parts lane',()=>{
+ const line=(o:Record<string,unknown>={})=>({id:'po-1',supplier:'Lowe\'s (Bend Pro desk)',item:'Dishwasher',orderNumber:'884',poNumber:null,status:'ordered' as const,orderedAt:'2026-09-15',expectedAt:'2026-09-25',deliveredAt:null,trackingUrl:null,contacts:0,minutes:0,due:true,dueAt:'2026-09-29',reason:'Expected Sep 25 and not delivered',...o});
+ const parts=(o:Record<string,unknown>={},l:Record<string,unknown>={})=>{const ln=line(l);return {orders:[ln],primaryId:ln.id,supplier:ln.supplier,contacts:ln.contacts,minutes:0,due:ln.due,dueAt:ln.dueAt,help:false,reason:ln.reason,...o};};
+ const p=(po:Record<string,unknown>={},l:Record<string,unknown>={},o:Partial<FollowupCandidate>={})=>c({kind:'parts',vendor:'Firkus',email:'',phone:'+15415550100',parts:parts(po,l),...o});
+ it('maps parts to its own lane and escalates issues or three contacts to help',()=>{
+  expect(laneFor(p())).toBe('parts');
+  expect(laneFor(p({help:true}))).toBe('help');
+  expect(laneFor(p(),r({status:'help'}))).toBe('help');
+ });
+ it('parks an order that is not due yet, even with no review',()=>{
+  expect(bucketFor(p({due:false,dueAt:'2026-10-08'}),undefined,now)).toBe('parked');
+  expect(bucketFor(p(),undefined,now)).toBe('active');
+  expect(bucketFor(p({due:false}),r({status:'uncertain'}),now)).toBe('active');
+ });
+ it('says what to do next for each order state',()=>{
+  expect(nextStep(p(),undefined,now)).toEqual({kind:'chase',text:'Call Lowe\'s (Bend Pro desk) about order #884 — expected Sep 25 and not delivered'});
+  expect(nextStep(p({},{status:'issue'}),undefined,now).kind).toBe('fix');
+  expect(nextStep(p({},{status:'delivered',deliveredAt:ago(3)}),undefined,now).text).toBe('Part delivered 3 days ago — schedule the install with Firkus');
+  expect(nextStep(p({contacts:3}),undefined,now).kind).toBe('wait');
+  expect(nextStep(p({},{},{phone:''}),undefined,now).text).toMatch(/^Add a phone or email/);
+ });
+ it('shows logged contacts as chase dots',()=>{expect(chasesFor(p({contacts:2}),new Map())).toBe(2);expect(chasesFor(c(),new Map([['x',1]]))).toBe(0);});
+ it('gives parts a turn in the focus queue',()=>{
+  const vendors=Array.from({length:10},(_,i)=>c({statusSince:ago(i+20)}));const part=p({},{},{statusSince:ago(3)});
+  expect(focusQueue([...vendors,part],new Map(),now).map(x=>x.id)).toContain(part.id);
+ });
+ it('adds a parts row to the aging snapshot',()=>{expect(agingSnapshot([p()],new Map(),now).rows.find(x=>x.key==='parts')?.total).toBe(1);});
 });
