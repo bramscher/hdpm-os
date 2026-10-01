@@ -3,8 +3,9 @@ import { requireStaffOrService } from '@/lib/maintenance/api-auth';
 import { readSnapshot } from '@/lib/brain/viz-server';
 
 /**
- * GET /api/brain/viz — the latest brain map snapshot. Staff session (or agents service token) only
- * (/api/brain is a public proxy prefix, so this route guards itself).
+ * GET /api/brain/viz — the latest brain map snapshot. The proxy requires a
+ * staff session and the `brain` section (lib/access/sections.ts); the check
+ * here is defence in depth.
  */
 export async function GET(request: NextRequest) {
   if (!(await requireStaffOrService(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -18,7 +18,7 @@ import { checkPath } from "@/lib/access/sections";
 const AUTH_SECRET = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
 
 // Routes reachable without a user session (protected by their own secrets, or public).
-const PUBLIC_PREFIXES = [
+export const PUBLIC_PREFIXES = [
   "/login",
   "/api/auth",
   "/api/sync",
@@ -33,7 +33,12 @@ const PUBLIC_PREFIXES = [
   // missing, so their Vercel crons were redirected to /login and never ran.
   "/api/haven/sync",
   "/api/haven/cron",
-  "/api/brain", // self-guarded: cron via CRON_SECRET; search/think via service token or staff session
+  // Brain routes that machines call — self-guarded: cron via CRON_SECRET; search/think via
+  // service token or staff session. /api/brain/viz is deliberately NOT public: it is
+  // UI-only, so it goes through the session gate and the `brain` section switch below.
+  "/api/brain/cron",
+  "/api/brain/search",
+  "/api/brain/think",
   "/api/eos/cron", // Friday scorecard — CRON_SECRET-guarded in the route
   "/api/reception/sync",
   "/api/inspections/candidates/sync",
