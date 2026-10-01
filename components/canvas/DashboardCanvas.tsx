@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { canViewHabuDemo } from "@/lib/habu-demo-access";
 import { sectionByKey, sectionForPage } from "@/lib/access/sections";
+import { MyActivitiesCard } from "@/components/activities/MyActivitiesCard";
 
 function getGreeting() {
   // Force Pacific Time for Central Oregon
@@ -255,6 +256,9 @@ export function DashboardCanvas() {
           <button onClick={() => setDeniedNotice(null)} className="text-charcoal-400 hover:text-charcoal-900" aria-label="Dismiss">✕</button>
         </div>
       )}
+
+      {/* The signed-in person's own AppFolio activities */}
+      <MyActivitiesCard />
 
       {/* Today's field route (published from the maintenance board) */}
       {todayRoutes.map((route) => {
