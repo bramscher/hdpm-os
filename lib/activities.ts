@@ -141,6 +141,35 @@ export function activitiesForStaff(rows: Activity[], staff: { person: string; na
   return rows.filter((r) => names.has(key(r.assignee)));
 }
 
+export interface ActivityPerson {
+  name: string;
+  count: number;
+  hidden: boolean;
+  staff: boolean;
+}
+
+/**
+ * The admin "view activities for" list: every active staff member (even with
+ * nothing pending, so nobody is missing from the dropdown) plus every AppFolio
+ * assignee, including ones with no staff match (deactivated or misnamed users)
+ * so mismatches stay visible. Sorted by pending count, then name.
+ */
+export function activityPeople(rows: Activity[], staff: { person: string; name: string | null }[]): ActivityPerson[] {
+  const byKey = new Map<string, ActivityPerson>();
+  for (const s of staff) {
+    const name = (s.name ?? '').trim() || s.person;
+    byKey.set(key(name), { name, count: activitiesForStaff(rows, s).length, hidden: false, staff: true });
+  }
+  for (const a of rows) {
+    if (staffForAssignee(a.assignee, staff)) continue; // counted under the staff entry
+    const name = a.assignee ?? '(unassigned)';
+    const entry = byKey.get(key(name)) ?? { name, count: 0, hidden: a.assigneeHidden, staff: false };
+    entry.count += 1;
+    byKey.set(key(name), entry);
+  }
+  return [...byKey.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
 // ============================================
 // Slack DM (pure builders)
 // ============================================
