@@ -54,6 +54,36 @@ export default function ReferrersAdmin({
   const [w9SendingId, setW9SendingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  async function viewW9(r: ReferralPartner) {
+    setError(null);
+    // Open the tab synchronously (popup blockers), then point it at the short-lived signed link.
+    const win = window.open('', '_blank');
+    try {
+      const res = await fetch(`/api/partners/admin/referrers/${r.id}/w9`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Could not open the W-9');
+      if (win) win.location.href = body.url;
+      else window.location.href = body.url;
+    } catch (err) {
+      win?.close();
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function verifyW9(r: ReferralPartner) {
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/partners/admin/referrers/${r.id}/w9`, { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Could not verify the W-9');
+      setReferrers((list) => list.map((x) => (x.id === r.id ? { ...x, w9_status: 'verified' } : x)));
+      setNotice(`W-9 for ${r.display_name} marked verified.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function sendW9Reminder(r: ReferralPartner) {
     setW9SendingId(r.id);
     setError(null);
@@ -221,13 +251,14 @@ export default function ReferrersAdmin({
               <th className="px-4 py-3 font-medium">Code</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Terms</th>
+              <th className="px-4 py-3 font-medium">W-9</th>
               <th className="px-4 py-3 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {referrers.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-charcoal-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-charcoal-400">
                   No referrers yet — create the first one above.
                 </td>
               </tr>
@@ -254,6 +285,24 @@ export default function ReferrersAdmin({
                       Set terms
                     </Button>
                   )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge tone={r.w9_status === 'verified' ? 'success' : r.w9_status === 'on_file' ? 'info' : 'warning'}>
+                      {r.w9_status === 'on_file' ? 'on file' : r.w9_status}
+                    </Badge>
+                    {r.w9_doc_path && (
+                      <Button variant="ghost" size="sm" onClick={() => viewW9(r)}>
+                        View
+                      </Button>
+                    )}
+                    {r.w9_doc_path && r.w9_status !== 'verified' && (
+                      <Button variant="ghost" size="sm" onClick={() => verifyW9(r)} title="Confirm the PDF matches the legal name and tax ID on file">
+                        Verify
+                      </Button>
+                    )}
+                  </div>
+                  {r.legal_name && <div className="mt-0.5 text-xs text-charcoal-400">{r.legal_name}{r.tax_id_last4 ? ` · ***-**-${r.tax_id_last4}` : ''}</div>}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex gap-2">

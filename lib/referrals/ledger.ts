@@ -176,7 +176,7 @@ export async function approveBounty(leadId: string, actor: string): Promise<void
   await logAudit('referral_lead', leadId, 'bounty_approved', actor, { amount });
 }
 
-export async function markBountyPaid(leadId: string, actor: string, reference: string): Promise<void> {
+export async function markBountyPaid(leadId: string, actor: string, reference: string, batchId?: string): Promise<void> {
   if (isAgentActor(actor)) throw new BountyActionError('Payments must be recorded by a person.', 400);
   const ref = reference.trim().slice(0, 120);
   if (!ref) throw new BountyActionError('Enter a payment reference (check number, QuickBooks ref, …).', 400);
@@ -191,11 +191,12 @@ export async function markBountyPaid(leadId: string, actor: string, reference: s
     amount,
     reason: 'Paid',
     qbo_reference: ref,
+    batch_id: batchId ?? null,
     actor,
   });
   if (isUniqueViolation(error)) return;
   if (error) throw new Error(`ledger paid: ${error.message}`);
-  await leadEvent(leadId, 'bounty_paid', { amount, reference: ref }, actor);
+  await leadEvent(leadId, 'bounty_paid', { amount, reference: ref, batch_id: batchId ?? null }, actor);
   await logAudit('referral_lead', leadId, 'bounty_paid', actor, { amount, reference: ref });
   await notifyPayout({ id: leadId, prospect_name: lead.prospect_name, partner_id: lead.partner_id! }, amount, ref);
 }
