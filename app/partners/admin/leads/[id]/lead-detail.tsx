@@ -6,9 +6,23 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LEAD_STAGES, type LeadEvent, type LeadStage, type ReferralLead } from '@/lib/referrals/types';
+import { LEAD_STAGES, type FeeAgreementRow, type LedgerEntry, type LeadEvent, type LeadStage, type ReferralLead } from '@/lib/referrals/types';
+import type { BountyDecision } from '@/lib/referrals/bounty';
+import BountyCard from './bounty-card';
 
-export default function LeadDetail({ lead, events }: { lead: ReferralLead; events: LeadEvent[] }) {
+export default function LeadDetail({
+  lead,
+  events,
+  ledger,
+  agreement,
+  preview,
+}: {
+  lead: ReferralLead;
+  events: LeadEvent[];
+  ledger: LedgerEntry[];
+  agreement: FeeAgreementRow | null;
+  preview: BountyDecision | null;
+}) {
   const router = useRouter();
   const [stage, setStage] = useState<LeadStage>(lead.stage);
   const [busy, setBusy] = useState<string | null>(null);
@@ -139,6 +153,8 @@ export default function LeadDetail({ lead, events }: { lead: ReferralLead; event
             </Button>
           </div>
         </div>
+
+        <BountyCard lead={lead} ledger={ledger} agreement={agreement} preview={preview} busy={busy} patch={patch} />
       </div>
 
       {/* History */}

@@ -148,3 +148,31 @@ export function isFeeKind(v: unknown): v is FeeKind {
 export function isPartnerStatus(v: unknown): v is PartnerStatus {
   return typeof v === 'string' && (PARTNER_STATUSES as readonly string[]).includes(v);
 }
+
+// Money ledger (Batch 5). Append-only; status changes are new rows.
+export const LEDGER_ENTRY_TYPES = ['earned', 'adjusted', 'approved', 'paid', 'voided'] as const;
+export type LedgerEntryType = (typeof LEDGER_ENTRY_TYPES)[number];
+
+export interface LedgerEntry {
+  id: number;
+  partner_id: string;
+  lead_id: string | null;
+  entry_type: LedgerEntryType;
+  period: string | null;
+  amount: number;
+  reason: string;
+  qbo_reference: string | null;
+  actor: string;
+  created_at: string;
+}
+
+export interface FeeAgreementRow {
+  id: string;
+  lead_id: string;
+  partner_id: string;
+  fee_kind: FeeKind;
+  bounty_mode: BountyMode | null;
+  bounty_amount: number | null;
+  bounty_trigger: BountyTrigger | null;
+  signed_at: string;
+}

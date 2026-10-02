@@ -5,6 +5,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { OPEN_LEAD_STAGES } from './types';
+import { summarizeLedger } from './bounty';
 
 export interface ReferralAdminStats {
   referrersTotal: number;
@@ -15,6 +16,10 @@ export interface ReferralAdminStats {
   suspectedDupes: number;
   leadsReferral: number;
   leadsOrganic: number;
+  /** Batch 5 bounty totals ($). 0 before the ledger migration / any bounties. */
+  bountyPendingApproval: number;
+  bountyApprovedUnpaid: number;
+  bountyPaid: number;
 }
 
 export async function getReferralAdminStats(): Promise<ReferralAdminStats> {
@@ -47,7 +52,13 @@ export async function getReferralAdminStats(): Promise<ReferralAdminStats> {
     return r.count ?? 0;
   };
 
+  const { data: ledgerRows } = await db.from('referral_ledger').select('entry_type, amount').eq('org_id', 'hdpm');
+  const money = summarizeLedger((ledgerRows ?? []) as { entry_type: 'earned'; amount: number }[]);
+
   return {
+    bountyPendingApproval: money.pendingApproval,
+    bountyApprovedUnpaid: money.approvedUnpaid,
+    bountyPaid: money.paid,
     referrersTotal: n(referrersTotal, 'referrersTotal'),
     referrersActive: n(referrersActive, 'referrersActive'),
     w9Missing: n(w9Missing, 'w9Missing'),
