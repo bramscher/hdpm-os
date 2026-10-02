@@ -14,6 +14,7 @@ import { getToken } from "next-auth/jwt";
 import { NextResponse, type NextRequest } from "next/server";
 import { isDepartedStaff } from "@/lib/staff-lifecycle";
 import { checkPath } from "@/lib/access/sections";
+import { isPartnersHost, partnerHostRoute } from "@/lib/referrals/partner-host";
 
 const AUTH_SECRET = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
 
@@ -63,6 +64,15 @@ function isAdminPath(pathname: string): boolean {
 
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // partners.highdesertpm.com serves only the referrer portal (lib/referrals/partner-host.ts).
+  if (isPartnersHost(req.headers.get("host"))) {
+    const route = partnerHostRoute(pathname, req.nextUrl.search);
+    if (route.kind === "rewrite") return NextResponse.rewrite(new URL(route.path, req.url));
+    if (route.kind === "redirect") return NextResponse.redirect(route.url);
+    if (route.kind === "not_found") return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // "pass": fall through; /partners and /api/partners are handled by the carve-out below.
+  }
 
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
