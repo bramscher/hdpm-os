@@ -28,6 +28,7 @@ export default async function ReferrersPage() {
             <a href="/partners/admin" className="text-sm text-charcoal-600 hover:underline">Overview</a>
             <a href="/partners/admin/leads" className="text-sm text-charcoal-600 hover:underline">Pipeline</a>
             <a href="/partners/admin/fee-policy" className="text-sm text-charcoal-600 hover:underline">Fee policy</a>
+            <a href="/partners/admin/payouts" className="text-sm text-charcoal-600 hover:underline">Payouts</a>
           </>
         }
       />

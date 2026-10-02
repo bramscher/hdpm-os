@@ -162,6 +162,7 @@ export interface LedgerEntry {
   amount: number;
   reason: string;
   qbo_reference: string | null;
+  batch_id: string | null;
   actor: string;
   created_at: string;
 }

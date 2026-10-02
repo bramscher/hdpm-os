@@ -49,6 +49,7 @@ export default async function ReferralAdminHome() {
     { href: '/partners/admin/referrers', title: 'Referrers', desc: 'Create partners, mint codes, invite, set fee terms, pause.', icon: <Users className="h-5 w-5" /> },
     { href: '/partners/admin/leads', title: 'Pipeline', desc: 'Every owner lead — referral + organic. Work stages, resolve dupes, link AppFolio.', icon: <ScrollText className="h-5 w-5" /> },
     { href: '/partners/admin/fee-policy', title: 'Fee policy', desc: 'The Oregon compensation-eligibility switches. Enable a fee type after legal sign-off.', icon: <SlidersHorizontal className="h-5 w-5" /> },
+    { href: '/partners/admin/payouts', title: 'Payouts & 1099', desc: 'Pay approved bounties in a batch, export for QuickBooks, and check who needs a 1099.', icon: <DollarSign className="h-5 w-5" /> },
   ];
 
   return (
@@ -84,7 +85,7 @@ export default async function ReferralAdminHome() {
       </div>
 
       {/* Section navigation */}
-      <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {sections.map((s) => (
           <Link
             key={s.href}
