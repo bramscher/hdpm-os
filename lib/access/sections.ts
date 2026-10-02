@@ -261,6 +261,15 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/brain', icon: 'brain', order: 32.5 },
   },
   {
+    key: 'brain_2',
+    label: 'Brain 2',
+    description: 'The original galaxy view of the brain map, kept alongside the anatomical one. Uses the same data, so it also needs Brain map.',
+    group: 'Company',
+    defaultRoles: [...PM],
+    pages: ['/brain-2'],
+    nav: { href: '/brain-2', icon: 'brain', order: 32.6 },
+  },
+  {
     key: 'desk_demo',
     label: 'The Desk (demo)',
     description: 'Clickable demo of per-person desks with circulating colored folders and paper-form tracking. Sample data only.',

@@ -20,6 +20,8 @@ describe('brain map access', () => {
     expect(checkPath('/api/brain/viz', ['brain']).allowed).toBe(false);
     expect(checkPath('/api/brain/viz/ask', ['brain']).allowed).toBe(false);
     expect(checkPath('/brain', ['brain']).allowed).toBe(false);
+    expect(checkPath('/brain-2', ['brain_2']).allowed).toBe(false);
+    expect(checkPath('/brain-2', ['brain']).allowed).toBe(true); // its own section; the page itself still loads
     expect(checkPath('/api/brain/viz', []).allowed).toBe(true);
     expect(checkPath('/api/brain/viz', ['agents']).allowed).toBe(true);
   });

@@ -2,7 +2,7 @@
 ontology: true
 type: brief
 domain: brain-map
-status: draft
+status: active
 summary: Rebuild /brain from a ring "galaxy" into an anatomical brain, with one lobe per layer, taught/learned halves, density-scaled dots, a skull, an opening animation and relevance-lit search
 tags: [brain-map, workstream-d, three-js, visualization, snapshot, brain-search]
 related: [10-restart-2026-08-20, 00-DRAFT-master-plan]
@@ -11,7 +11,25 @@ discovered: 2026-10-01
 
 # Brain map: anatomy rebuild (brief)
 
-Date: October 1, 2026. Status: brief, not started. Owner: Craig.
+Date: October 1, 2026. Status: built and shipped the same day (`feature/brain-anatomy`). Owner: Craig.
+
+> **As built: two changes from this brief.**
+>
+> 1. **The galaxy is kept, not replaced.** It moved to `/brain-2` (sidebar: "Brain 2", section `brain_2`), unchanged. `/brain` is the anatomical map.
+> 2. **Layout happens in the browser, not in a version-2 snapshot.** The galaxy still needs the version-1 snapshot (ring positions), and that snapshot already carries everything the anatomy needs:
+>    - `layer` gives the region.
+>    - The node id prefix gives the half (`k:` taught, `b:` learned). Routines use `r:<id>`, checked against the intake set.
+>    - Sector, cites, heat, edges and status are all there.
+>
+>    So `lib/brain/anatomy.ts` (pure, tested) lays the snapshot out on the client in about 200 ms. The snapshot, cron job, storage and API routes are unchanged, and no rerun was needed.
+>
+>    Sections 2 and 5 below describe the original server-side plan. The geometry, half rules, dot sizing, explode, scan scoring and tests landed as described, but in `lib/brain/anatomy.ts`, `components/brain/anatomy/AnatomyScene.tsx` and `components/brain/anatomy/AnatomyMap.tsx`.
+>
+> **Tuning made against sample data:**
+> - Neighbour lines and dots in crowded lobes are dimmed, so additive blending doesn't wash the Memory lobe out to white.
+> - A title-only search match scores 0.5, and is no longer stretched to 100%.
+> - Easing is time-based, so the opening takes the same time at any frame rate.
+> - There's no bloom pass.
 
 Mockup (sample data, approved look): https://claude.ai/artifact/N3zSnMt8aksSveRDrnSmke
 
