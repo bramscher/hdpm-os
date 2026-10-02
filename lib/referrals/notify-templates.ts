@@ -103,3 +103,38 @@ export function buildW9MissingEmail(input: { partner_name: string }): EmailConte
     text: `Hi ${input.partner_name}, we need a completed W-9 on file before any referral fee can be paid. Sign in to upload it.`,
   };
 }
+
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const usd = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+
+/** Bounty earned (Batch 5): sent to the referrer when their lead signs. */
+export function buildAccrualEmail(input: { prospect_name: string; amount: number }): EmailContent {
+  const name = escapeHtml(input.prospect_name);
+  return {
+    subject: `You earned a ${usd(input.amount)} referral bounty`,
+    html: wrap(
+      'Referral bounty earned',
+      `<p>Your referral <strong>${name}</strong> signed a management agreement with High Desert Property Management.</p>
+       <p style="font-size:16px">Bounty earned: <strong>${usd(input.amount)}</strong></p>
+       <p>It's now pending approval. Sign in to your partner dashboard to follow it through to payment.</p>`
+    ),
+    text: `Your referral ${input.prospect_name} signed a management agreement. Bounty earned: ${usd(input.amount)} (pending approval). Sign in to your partner dashboard for details.`,
+  };
+}
+
+/** Bounty paid (Batch 5): sent to the referrer when an admin marks it paid. */
+export function buildPayoutEmail(input: { prospect_name: string; amount: number; reference: string | null }): EmailContent {
+  const name = escapeHtml(input.prospect_name);
+  const ref = input.reference ? ` (reference ${escapeHtml(input.reference)})` : '';
+  return {
+    subject: `Your ${usd(input.amount)} referral bounty has been paid`,
+    html: wrap(
+      'Referral bounty paid',
+      `<p>We've paid your referral bounty for <strong>${name}</strong>.</p>
+       <p style="font-size:16px">Amount: <strong>${usd(input.amount)}</strong>${ref}</p>
+       <p>Thank you for the referral. Sign in to your partner dashboard to see your earnings.</p>`
+    ),
+    text: `We've paid your referral bounty for ${input.prospect_name}: ${usd(input.amount)}${input.reference ? ` (reference ${input.reference})` : ''}. Thank you for the referral.`,
+  };
+}

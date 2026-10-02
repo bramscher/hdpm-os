@@ -1,6 +1,10 @@
 import { requireReferrer, getReferrerPartner } from '@/lib/referrals/referrer-context';
 import BrandButton from '@/components/referrals/BrandButton';
 import SignOutButton from './sign-out-button';
+import { summarizeLedger } from '@/lib/referrals/bounty';
+import type { LedgerEntry } from '@/lib/referrals/types';
+
+const usd = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'HDPM — Referral dashboard' };
@@ -41,6 +45,11 @@ export default async function ReferrerDashboard() {
     );
   }
 
+  // Earnings (Batch 5), read through RLS: the policy only returns this referrer's own ledger rows.
+  const { data: ledger } = await ctx.supabase.from('referral_ledger').select('entry_type, amount');
+  const money = summarizeLedger((ledger ?? []) as Pick<LedgerEntry, 'entry_type' | 'amount'>[]);
+  const hasEarnings = (ledger ?? []).length > 0;
+
   return (
     <div className="space-y-7">
       <div className="flex items-start justify-between">
@@ -78,9 +87,27 @@ export default async function ReferrerDashboard() {
         </BrandButton>
       </div>
 
-      <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-6 text-sm text-neutral-400">
-        Earnings appear here once fee payouts launch.
-      </div>
+      <section aria-label="Earnings">
+        <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Your earnings</div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {[
+            { label: 'Earned', value: money.earned },
+            { label: 'Pending approval', value: money.pendingApproval },
+            { label: 'Approved', value: money.approvedUnpaid },
+            { label: 'Paid', value: money.paid },
+          ].map((t) => (
+            <div key={t.label} className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+              <div className="font-brand-heading text-xl font-extrabold tracking-tight text-brand-ink tabular-nums">{usd(t.value)}</div>
+              <div className="mt-1 text-xs text-neutral-500">{t.label}</div>
+            </div>
+          ))}
+        </div>
+        {!hasEarnings && (
+          <p className="mt-3 text-sm text-neutral-400">
+            You earn a referral bounty when a referred owner signs a management agreement with us.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

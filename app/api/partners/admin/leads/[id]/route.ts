@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireReferralAdmin } from '@/lib/referrals/admin';
 import { getLeadWithEvents, setLeadStage, resolveDedupe, linkAppFolio } from '@/lib/referrals/leads';
 import { isLeadStage, type LeadStage } from '@/lib/referrals/types';
+import { BountyActionError, approveBounty, earnBountyNow, markBountyPaid, voidBounty } from '@/lib/referrals/ledger';
 
 /** GET /api/partners/admin/leads/:id — lead + full event history. */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +23,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
  *   { action: 'stage', stage }
  *   { action: 'dedupe', decision: 'confirmed'|'cleared', reason? }
  *   { action: 'link_appfolio', appfolio_owner_id?, appfolio_property_ids?, doors_under_mgmt? }
+ *   { action: 'earn_bounty' } | { action: 'approve_bounty' }
+ *   { action: 'mark_paid', reference } | { action: 'void_bounty', reason }   (Batch 5)
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireReferralAdmin();
@@ -63,10 +66,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         );
         return NextResponse.json({ ok: true });
       }
+      case 'earn_bounty': {
+        const decision = await earnBountyNow(id, guard.email);
+        return NextResponse.json({ ok: true, decision });
+      }
+      case 'approve_bounty':
+        await approveBounty(id, guard.email);
+        return NextResponse.json({ ok: true });
+      case 'mark_paid':
+        await markBountyPaid(id, guard.email, typeof body.reference === 'string' ? body.reference : '');
+        return NextResponse.json({ ok: true });
+      case 'void_bounty':
+        await voidBounty(id, guard.email, typeof body.reason === 'string' ? body.reason : '');
+        return NextResponse.json({ ok: true });
       default:
         return NextResponse.json({ error: 'unknown action' }, { status: 400 });
     }
   } catch (err) {
+    if (err instanceof BountyActionError) return NextResponse.json({ error: err.message }, { status: err.status });
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[referrals] lead PATCH failed:', msg);
     return NextResponse.json({ error: msg }, { status: 500 });

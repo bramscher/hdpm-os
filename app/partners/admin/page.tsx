@@ -10,12 +10,15 @@ import {
   ArrowRight,
   ScrollText,
   SlidersHorizontal,
+  DollarSign,
 } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { getReferralAdminStats } from '@/lib/referrals/dashboard';
 import { listLeads } from '@/lib/referrals/leads';
+
+const usd = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'HDPM-OS — Referral program' };
@@ -38,6 +41,8 @@ export default async function ReferralAdminHome() {
     { label: 'Referral / organic', value: `${stats.leadsReferral} / ${stats.leadsOrganic}`, sub: 'by source', icon: <Sparkles className="h-5 w-5" /> },
     { label: 'Suspected dupes', value: stats.suspectedDupes, sub: 'need review', icon: <AlertTriangle className="h-5 w-5" />, warn: stats.suspectedDupes > 0 },
     { label: 'W-9 missing', value: stats.w9Missing, sub: 'active referrers', icon: <FileWarning className="h-5 w-5" />, warn: stats.w9Missing > 0 },
+    { label: 'Bounties to approve', value: usd(stats.bountyPendingApproval), sub: `${usd(stats.bountyApprovedUnpaid)} approved, unpaid`, icon: <DollarSign className="h-5 w-5" />, warn: stats.bountyPendingApproval > 0 },
+    { label: 'Bounties paid', value: usd(stats.bountyPaid), sub: 'all-time', icon: <DollarSign className="h-5 w-5" /> },
   ];
 
   const sections = [
@@ -54,7 +59,7 @@ export default async function ReferralAdminHome() {
       />
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
         {tiles.map((t) => (
           <div key={t.label} className="rounded-xl border border-sand-200 bg-white p-5 shadow-card">
             <div className="flex items-start gap-3">

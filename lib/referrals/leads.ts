@@ -15,6 +15,7 @@ import { fetchAppFolioOwnerContacts } from '@/lib/appfolio';
 import { logAudit } from '@/lib/audit';
 import { findDuplicate, type DedupeCandidate, type Prospect } from './dedupe';
 import { notifyLeadSubmitted, notifyStatusChange } from './notify';
+import { accrueBountyOnSigning } from './ledger';
 import {
   OPEN_LEAD_STAGES,
   type LeadEvent,
@@ -225,6 +226,8 @@ export async function setLeadStage(id: string, stage: LeadStage, actor: string):
   } catch (err) {
     console.error('[referrals] notifyStatusChange failed:', err instanceof Error ? err.message : err);
   }
+  // Batch 5: the first move into agreement_signed earns the referrer's bounty (best-effort).
+  await accrueBountyOnSigning(data as ReferralLead, (prev?.stage as string | undefined) ?? null, actor);
   return data as ReferralLead;
 }
 

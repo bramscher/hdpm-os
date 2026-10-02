@@ -12,6 +12,8 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { sendEmail } from '@/lib/agents/channels/email';
 import {
+  buildAccrualEmail,
+  buildPayoutEmail,
   buildInviteEmail,
   buildLeadSubmittedEmail,
   buildStatusChangeEmail,
@@ -174,4 +176,45 @@ export async function notifyW9Missing(partner: {
     partnerId: partner.id,
     content: buildW9MissingEmail({ partner_name: partner.display_name }),
   });
+}
+
+/** Send a referrer-facing email, honouring the referrer's email opt-out. Never throws. */
+async function notifyPartner(event: NotifyEvent, partnerId: string, leadId: string | null, content: EmailContent): Promise<void> {
+  try {
+    const { data: partner } = await getSupabaseAdmin()
+      .from('referral_partner')
+      .select('email, notify_email')
+      .eq('id', partnerId)
+      .maybeSingle();
+    if (!partner) return;
+    if (partner.notify_email === false) {
+      await getSupabaseAdmin().from('referral_notification_log').insert({
+        partner_id: partnerId,
+        lead_id: leadId,
+        event,
+        channel: 'email',
+        recipient: partner.email ?? null,
+        status: 'skipped',
+        detail: 'referrer opted out',
+      });
+      return;
+    }
+    await recordSend({ event, recipient: partner.email ?? null, partnerId, leadId, content });
+  } catch (err) {
+    console.error(`[referrals] notify ${event} failed:`, err instanceof Error ? err.message : err);
+  }
+}
+
+/** Bounty earned → the referrer (Batch 5). */
+export async function notifyAccrual(lead: { id: string; prospect_name: string; partner_id: string }, amount: number): Promise<void> {
+  await notifyPartner('accrual', lead.partner_id, lead.id, buildAccrualEmail({ prospect_name: lead.prospect_name, amount }));
+}
+
+/** Bounty paid → the referrer (Batch 5). */
+export async function notifyPayout(
+  lead: { id: string; prospect_name: string; partner_id: string },
+  amount: number,
+  reference: string | null
+): Promise<void> {
+  await notifyPartner('payout', lead.partner_id, lead.id, buildPayoutEmail({ prospect_name: lead.prospect_name, amount, reference }));
 }

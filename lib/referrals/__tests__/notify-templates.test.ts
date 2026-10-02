@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildAccrualEmail,
+  buildPayoutEmail,
   shouldNotifyStatusChange,
   stageLabel,
   buildLeadSubmittedEmail,
@@ -52,5 +54,22 @@ describe('email templates', () => {
     const e = buildW9MissingEmail({ partner_name: 'Bob Agent' });
     expect(e.html).toContain('Bob Agent');
     expect(e.subject.toLowerCase()).toContain('w-9');
+  });
+});
+
+describe('bounty emails (Batch 5)', () => {
+  it('accrual names the amount and escapes the prospect name', () => {
+    const e = buildAccrualEmail({ prospect_name: 'Ann <b>Owner</b>', amount: 500 });
+    expect(e.subject).toBe('You earned a $500.00 referral bounty');
+    expect(e.html).toContain('Ann &lt;b&gt;Owner&lt;/b&gt;');
+    expect(e.html).not.toContain('<b>Owner</b>');
+    expect(e.text).toContain('pending approval');
+  });
+
+  it('payout includes the reference when given', () => {
+    const withRef = buildPayoutEmail({ prospect_name: 'Ann', amount: 1250.5, reference: 'CHK-1042' });
+    expect(withRef.subject).toBe('Your $1,250.50 referral bounty has been paid');
+    expect(withRef.html).toContain('reference CHK-1042');
+    expect(buildPayoutEmail({ prospect_name: 'Ann', amount: 10, reference: null }).text).not.toContain('reference');
   });
 });
