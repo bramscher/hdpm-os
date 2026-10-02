@@ -73,3 +73,32 @@ describe('bounty emails (Batch 5)', () => {
     expect(buildPayoutEmail({ prospect_name: 'Ann', amount: 10, reference: null }).text).not.toContain('reference');
   });
 });
+
+describe('escaping in the original referral emails', () => {
+  const evil = 'Ann <img src=x onerror=alert(1)> "O\'Neil"';
+
+  it('lead submitted escapes the prospect and partner names', () => {
+    const e = buildLeadSubmittedEmail({ prospect_name: evil, source: 'referral', partner_name: 'Bob <b>' });
+    expect(e.html).not.toContain('<img');
+    expect(e.html).toContain('Ann &lt;img src=x onerror=alert(1)&gt; &quot;O&#39;Neil&quot;');
+    expect(e.html).toContain('Bob &lt;b&gt; (referral)');
+  });
+
+  it('status change escapes the prospect name and keeps subjects on one line', () => {
+    const e = buildStatusChangeEmail({ prospect_name: 'Ann\r\nBcc: x@y.com', to: 'qualified' });
+    expect(e.subject).toBe('Your referral Ann Bcc: x@y.com is now: Qualified');
+    expect(e.subject).not.toMatch(/[\r\n]/);
+    expect(buildStatusChangeEmail({ prospect_name: evil, to: 'qualified' }).html).not.toContain('<img');
+  });
+
+  it('invite escapes the name and the link', () => {
+    const e = buildInviteEmail({ partner_name: '<script>x</script>', url: 'https://os.example/partners/invite/abc"><script>' });
+    expect(e.html).not.toContain('<script>');
+    expect(e.html).toContain('href="https://os.example/partners/invite/abc&quot;&gt;&lt;script&gt;"');
+    expect(e.text).toContain('<script>x</script>'); // plain-text part is not HTML
+  });
+
+  it('W-9 reminder escapes the name', () => {
+    expect(buildW9MissingEmail({ partner_name: '<b>Pat</b>' }).html).toContain('Hi &lt;b&gt;Pat&lt;/b&gt;');
+  });
+});
