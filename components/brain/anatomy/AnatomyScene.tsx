@@ -153,6 +153,8 @@ interface Data {
   citeIdx: number[];
   scanLines: ReturnType<typeof makeLines>;
   scanIdx: number[];
+  /** Regions holding at least one scan hit (their labels stay readable). */
+  scanRegions: Set<Region>;
   focus: ReturnType<typeof makeLines>;
   adj: number[][];
 }
@@ -338,7 +340,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
       // Skull lifts and fades as the brain comes apart.
       skull.scale.setScalar(1 + 0.35 * w.explodeNow);
       skull.position.y = 3 * w.explodeNow;
-      skullMat.uniforms.uOpacity.value = p.skull ? Math.max(0, 1 - w.explodeNow * 1.8) : 0;
+      skullMat.uniforms.uOpacity.value = p.skull ? Math.max(0, 1 - w.explodeNow * 1.8) * (1 - 0.75 * w.scanT) : 0;
       skull.visible = skullMat.uniforms.uOpacity.value > 0.01;
 
       // Camera: presets animate; otherwise orbit controls (auto-rotate when idle).
@@ -460,7 +462,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
     const objects = [shellPts, edges.l, cites.l, scanLines.l, focus.l, nodePts];
     for (const o of objects) w.scene.add(o);
     w.materials.push(shellMat, nodeMat);
-    w.data = { objects, shellPts, shellBase, shellAct: null, nodePts, nodeColor, baseSize, edges, cites, citeIdx, scanLines, scanIdx: [], focus, adj };
+    w.data = { objects, shellPts, shellBase, shellAct: null, nodePts, nodeColor, baseSize, edges, cites, citeIdx, scanLines, scanIdx: [], scanRegions: new Set(), focus, adj };
     w.resize?.();
     w.posDirty = true;
     w.colorDirty = true;
@@ -477,6 +479,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
       return;
     }
     d.scanIdx = [...scan.keys()].sort((a, b) => scan.get(b)! - scan.get(a)!).slice(0, MAX_SCAN);
+    d.scanRegions = new Set(d.scanIdx.map((i) => UNITS[layout.unit[i]].region));
     const act = new Float32Array(samples.shellUnit.length);
     const R = 2.4;
     for (const i of d.scanIdx) {
@@ -597,7 +600,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
       const focused =
         (p.focusRegion === null || u.region === p.focusRegion) && (p.focusHalf === null || u.half === p.focusHalf);
       let k = focused ? 1 : 0.25;
-      if (S > 0) k *= 1 - 0.65 * S;
+      if (S > 0) k *= 1 - 0.88 * S;
       let r = d.shellBase[i * 3] * k, g = d.shellBase[i * 3 + 1] * k, b = d.shellBase[i * 3 + 2] * k;
       const a = d.shellAct?.[i] ?? 0;
       if (S > 0 && a > 0) {
@@ -614,12 +617,14 @@ export default function AnatomyScene(props: AnatomySceneProps) {
     d.shellPts.geometry.attributes.aColor.needsUpdate = true;
 
     // Nodes.
+    // Crowded regions have smaller dots; dim them (and their lines) steeply too,
+    // or additive overlap washes a full lobe like Memory out to white.
+    const crowd = (i: number) => Math.max(0.12, Math.min(1, p.layout.size[i] / 0.3) ** 1.6);
     const nc = d.nodePts.geometry.attributes.aColor.array as Float32Array;
     const ns = d.nodePts.geometry.attributes.aSize.array as Float32Array;
     snapshot.nodes.forEach((n, i) => {
       const f = inFocus(i) ? 1 : 0.08;
-      // Crowded regions have smaller dots; dim them too, or additive overlap washes the lobe out.
-      let k = f * (0.7 + 0.6 * n.heat) * Math.max(0.3, Math.min(1, p.layout.size[i] / 0.3));
+      let k = f * (0.7 + 0.6 * n.heat) * crowd(i);
       let size = d.baseSize[i];
       tmp.copy(d.nodeColor[i]);
       if (S > 0) {
@@ -627,9 +632,9 @@ export default function AnatomyScene(props: AnatomySceneProps) {
         if (s > 0) {
           ramp(d.nodeColor[i], s, hot);
           tmp.lerp(hot, S);
-          k = k * (1 - S) + f * (0.9 + 0.9 * s) * S;
+          k = k * (1 - S) + f * (0.9 + 0.9 * s) * S; // full brightness, not crowd-dimmed
           size *= 1 + 1.8 * s * S;
-        } else k *= 1 - 0.85 * S;
+        } else k *= 1 - 0.96 * S;
       }
       if (i === p.selected || i === p.hovered) {
         tmp.lerp(WHITE, 0.6);
@@ -647,9 +652,9 @@ export default function AnatomyScene(props: AnatomySceneProps) {
     // Edges: faint; lit between scan hits; dim outside the focus.
     snapshot.edges.forEach((e, k) => {
       const a = d.nodeColor[e.s], b = d.nodeColor[e.t];
-      let m = e.kind === 'link' ? 0.22 : 0.03;
+      let m = (e.kind === 'link' ? 0.22 : 0.03) * Math.sqrt(crowd(e.s) * crowd(e.t));
       if (anyFocus && !(inFocus(e.s) || inFocus(e.t))) m *= 0.1;
-      if (S > 0) m *= scan.has(e.s) && scan.has(e.t) ? 1 + 2.5 * S : 1 - 0.85 * S;
+      if (S > 0) m *= scan.has(e.s) && scan.has(e.t) ? 1 + 2.5 * S / Math.sqrt(crowd(e.s) * crowd(e.t)) : 1 - 0.97 * S;
       d.edges.col.set([a.r * m, a.g * m, a.b * m, b.r * m, b.g * m, b.b * m], k * 6);
     });
     d.edges.g.attributes.color.needsUpdate = true;
@@ -657,7 +662,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
     // Citation beams fade while a scan is showing; scan beams brighten by score.
     const gold = new THREE.Color(REGION_COLOR.core);
     d.citeIdx.forEach((i, k) => {
-      const m = (anyFocus && !inFocus(i) ? 0.1 : 1) * (1 - 0.85 * S);
+      const m = (anyFocus && !inFocus(i) ? 0.1 : 1) * (1 - S);
       d.cites.col.set([gold.r * 0.5 * m, gold.g * 0.5 * m, gold.b * 0.5 * m, gold.r * 0.12 * m, gold.g * 0.12 * m, gold.b * 0.12 * m], k * 6);
     });
     d.cites.g.attributes.color.needsUpdate = true;
@@ -671,7 +676,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
       d.shellAct = null;
       d.scanLines.g.setDrawRange(0, 0);
     }
-    (w.dez.material as THREE.MeshBasicMaterial).opacity = p.focusRegion === null || p.focusRegion === 'core' ? 0.7 : 0.15;
+    (w.dez.material as THREE.MeshBasicMaterial).opacity = p.focusRegion === null || p.focusRegion === 'core' ? 0.7 + 0.3 * S : 0.15;
   }
 
   // Region + half labels and the hover tooltip, positioned from the camera each frame.
@@ -717,7 +722,8 @@ export default function AnatomyScene(props: AnatomySceneProps) {
         pt.x += LABEL_LIFT[region][0];
         pt.y += LABEL_LIFT[region][1];
         place(node, pt);
-        node.style.opacity = p.focusRegion === region ? '0.9' : '0.32';
+        const lit = w.scanT > 0.5 && (w.data?.scanRegions.has(region) || region === 'core');
+        node.style.opacity = p.focusRegion === region || lit ? '0.9' : w.scanT > 0.5 ? '0.12' : '0.32';
       } else if (half !== undefined) {
         if (p.focusHalf !== null && p.focusHalf !== half) {
           node.style.display = 'none';
