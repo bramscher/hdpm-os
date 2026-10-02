@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getInvoiceById, updateInvoice, uploadInvoicePdf } from '@/lib/invoices';
 import { generateInvoicePdf } from '@/lib/invoice-pdf-template';
+import { chargeProblems } from '@/lib/invoice-charge';
 
 export const maxDuration = 30;
 
@@ -37,6 +38,10 @@ export async function POST(
     }
 
     if(invoice.maintenance_job_id && invoice.status!=='draft')return NextResponse.json({invoice});
+
+    // A tenant charge needs its basis (tenant, unit, reason, note, lease clause) before it can be issued.
+    const chargeProblemList = chargeProblems(invoice, { finalizing: true });
+    if (chargeProblemList.length) return NextResponse.json({ error: chargeProblemList.join(' ') }, { status: 400 });
 
     // Ensure numeric fields are numbers (Supabase may return strings)
     const safeInvoice = {

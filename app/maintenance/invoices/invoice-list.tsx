@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { HdmsInvoice, TECHNICIANS } from "@/lib/invoices";
 
 import type { ReconciliationListState } from "@/lib/reconciliation-draft";
+import { chargeLabel } from "@/lib/invoice-charge";
 
 // How many invoice cards to show per page.
 const PAGE_SIZE = 25;
@@ -56,6 +57,7 @@ interface InvoiceListProps {
 }
 
 type PaidFilter = "all" | "unpaid" | "paid";
+type ChargeFilter = "all" | "owner" | "tenant";
 
 /** Tech filter: "all", a staff name, or "none" (no staff attribution). */
 type TechFilter = string;
@@ -263,12 +265,13 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
   const [paidFilter, setPaidFilter] = useState<PaidFilter>(reconciliationOnly ? "unpaid" : reconciliationState?.paidFilter ?? "all");
   const [afBilledOnly, setAfBilledOnly] = useState(reconciliationState?.afBilledOnly ?? false);
   const [techFilter, setTechFilter] = useState<TechFilter>(reconciliationState?.techFilter ?? "all");
+  const [chargeFilter, setChargeFilter] = useState<ChargeFilter>(reconciliationState?.chargeFilter ?? "all");
   const [sortField, setSortField] = useState<SortField>(reconciliationState?.sortField ?? "date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">(reconciliationState?.sortDir ?? "desc");
 
   useEffect(() => {
-    onReconciliationStateChange?.({invoiceIds:[...selectedIds],dateFrom,dateTo,search,paidFilter,afBilledOnly,techFilter,sortField,sortDir});
-  }, [selectedIds,dateFrom,dateTo,search,paidFilter,afBilledOnly,techFilter,sortField,sortDir,onReconciliationStateChange]);
+    onReconciliationStateChange?.({invoiceIds:[...selectedIds],dateFrom,dateTo,search,paidFilter,afBilledOnly,techFilter,chargeFilter,sortField,sortDir});
+  }, [selectedIds,dateFrom,dateTo,search,paidFilter,afBilledOnly,techFilter,chargeFilter,sortField,sortDir,onReconciliationStateChange]);
 
   async function exportPeriod() {
     setPrinting(true); setPrintError('');
@@ -309,12 +312,16 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
           inv.wo_reference,
           inv.description,
           inv.assigned_tech,
+          inv.tenant_name,
         ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
         if (!haystack.includes(q)) return false;
       }
+
+      // Owner / tenant charges.
+      if (chargeFilter !== "all" && (inv.charge_to ?? "owner") !== chargeFilter) return false;
 
       // Paid / unpaid filter (payment_id presence = reconciled to a payment).
       if (paidFilter === "paid" && !inv.payment_id) return false;
@@ -359,7 +366,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [invoices, search, dateFrom, dateTo, paidFilter, afBilledOnly, techFilter, sortField, sortDir]);
+  }, [invoices, search, dateFrom, dateTo, paidFilter, afBilledOnly, techFilter, chargeFilter, sortField, sortDir]);
 
   // ── Pagination over the filtered/sorted list ──────────
   const [page, setPage] = useState(1);
@@ -368,7 +375,7 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
   // Snap back to page 1 whenever the filter/sort inputs change.
   useEffect(() => {
     setPage(1);
-  }, [search, dateFrom, dateTo, paidFilter, afBilledOnly, techFilter, sortField, sortDir]);
+  }, [search, dateFrom, dateTo, paidFilter, afBilledOnly, techFilter, chargeFilter, sortField, sortDir]);
 
   // Keep the page in range if the underlying list shrinks (e.g. after a delete).
   useEffect(() => {
@@ -594,6 +601,24 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                   </button>
                 ))}
               </div>
+              <div className="inline-flex rounded-lg border border-sand-200 overflow-hidden" role="group" aria-label="Who pays">
+                {(["all", "owner", "tenant"] as ChargeFilter[]).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    aria-pressed={chargeFilter === f}
+                    onClick={() => setChargeFilter(f)}
+                    className={cn(
+                      "px-2 py-1 text-[10px] font-medium capitalize transition-colors",
+                      chargeFilter === f
+                        ? "bg-terra-500 text-white"
+                        : "bg-white text-charcoal-500 hover:text-charcoal-700"
+                    )}
+                  >
+                    {f === "all" ? "Owner + tenant" : f}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={() => setAfBilledOnly((v) => !v)}
@@ -800,6 +825,15 @@ export function InvoiceList({ invoices, onRefresh, onEdit, onDuplicate, onRunRep
                             Credit
                           </span>
                         )}
+                        <span
+                          title={invoice.charge_to === "tenant" ? `${chargeLabel(invoice)}${invoice.tenant_ledger_posted_at ? " · posted to tenant ledger" : " · tenant ledger charge not posted yet"}` : "Owner charge"}
+                          className={cn(
+                            "text-xs px-2 py-0.5 rounded-full font-medium",
+                            invoice.charge_to === "tenant" ? "bg-amber-100 text-amber-800" : "bg-sand-100 text-charcoal-600"
+                          )}
+                        >
+                          {invoice.charge_to === "tenant" ? "Tenant" : "Owner"}
+                        </span>
                         <span
                           className={cn(
                             "text-xs px-2 py-0.5 rounded-full font-medium",

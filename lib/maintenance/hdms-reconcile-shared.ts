@@ -50,6 +50,8 @@ export interface HdmsReconInvoice {
   total_amount: number | null;
   work_order_id: string | null;
   wo_reference: string | null;
+  /** Owner or tenant charge; absent on older selects (treated as owner). */
+  charge_to?: 'owner' | 'tenant' | null;
 }
 
 /**
@@ -76,9 +78,13 @@ export interface HdmsReconRow {
   /** True when the job was completed before PRE_LAUNCH_CUTOFF (grandfathered). */
   pre_launch: boolean;
   appfolio_link: string | null;
+  /** Every live invoice on the WO (a job billed to both owner and tenant has two), comma-joined. */
   invoice_code: string | null;
   invoice_status: string | null;
+  /** Sum of all live invoices on the WO. */
   invoice_total: number | null;
+  /** Who those invoices charge: one payer, or 'both' when the WO was split. */
+  invoice_charge: 'owner' | 'tenant' | 'both' | null;
   billed_source: BilledSource;
   /** HDMS bill total on this WO in AppFolio (Reports API), when known. */
   appfolio_bill_total: number | null;
@@ -165,6 +171,12 @@ function emptySummary(): Record<HdmsReconCategory, HdmsReconSummaryBucket> {
  * Only `doc_type = 'invoice'` rows count as "billed" — credit memos are
  * corrections, not the bill that discharges a WO.
  */
+function chargeOf(invs: HdmsReconInvoice[]): HdmsReconRow['invoice_charge'] {
+  if (!invs.length) return null;
+  const set = new Set(invs.map((i) => (i.charge_to === 'tenant' ? 'tenant' : 'owner')));
+  return set.size > 1 ? 'both' : [...set][0];
+}
+
 export function categorizeHdmsReconciliation(
   workOrders: HdmsReconWorkOrder[],
   invoices: HdmsReconInvoice[],
@@ -176,11 +188,15 @@ export function categorizeHdmsReconciliation(
 
   // Index invoices by both join keys (id, and wo_reference → wo_number),
   // mirroring lib/invoices.ts attachAssignedTech and the tripwire snapshot.
-  const byWoId = new Map<string, HdmsReconInvoice>();
-  const byWoRef = new Map<string, HdmsReconInvoice>();
+  // A WO can have several live invoices (e.g. an owner charge and a tenant
+  // charge), so keep them all: the row sums them rather than showing the first
+  // and leaving the rest as orphans.
+  const byWoId = new Map<string, HdmsReconInvoice[]>();
+  const byWoRef = new Map<string, HdmsReconInvoice[]>();
+  const push = (m: Map<string, HdmsReconInvoice[]>, k: string, inv: HdmsReconInvoice) => m.set(k, [...(m.get(k) ?? []), inv]);
   for (const inv of bills) {
-    if (inv.work_order_id && !byWoId.has(inv.work_order_id)) byWoId.set(inv.work_order_id, inv);
-    if (inv.wo_reference && !byWoRef.has(inv.wo_reference)) byWoRef.set(inv.wo_reference, inv);
+    if (inv.work_order_id) push(byWoId, inv.work_order_id, inv);
+    if (inv.wo_reference) push(byWoRef, inv.wo_reference, inv);
   }
 
   const rows: HdmsReconRow[] = [];
@@ -193,7 +209,7 @@ export function categorizeHdmsReconciliation(
   const woRow = (
     wo: HdmsReconWorkOrder,
     category: HdmsReconCategory,
-    inv: HdmsReconInvoice | null,
+    invs: HdmsReconInvoice[],
     billed_source: BilledSource,
     appfolio_bill_total: number | null
   ): HdmsReconRow => ({
@@ -209,21 +225,23 @@ export function categorizeHdmsReconciliation(
     completed_date: wo.completed_date,
     pre_launch: isPreLaunch(wo),
     appfolio_link: wo.appfolio_link,
-    invoice_code: inv?.invoice_code ?? null,
-    invoice_status: inv?.status ?? null,
-    invoice_total: inv?.total_amount ?? null,
+    invoice_code: invs.length ? invs.map((i) => i.invoice_code).join(', ') : null,
+    invoice_status: invs[0]?.status ?? null,
+    invoice_total: invs.length ? invs.reduce((n, i) => n + (Number(i.total_amount) || 0), 0) : null,
+    invoice_charge: chargeOf(invs),
     billed_source,
     appfolio_bill_total,
   });
 
   for (const wo of workOrders) {
-    const inv =
-      byWoId.get(wo.id) ?? (wo.wo_number ? byWoRef.get(wo.wo_number) : undefined) ?? null;
-    if (inv) matchedInvoiceIds.add(inv.id);
+    // Linked by id, else by WO number; an invoice matching both keys counts once.
+    const invs = [...new Map([...(byWoId.get(wo.id) ?? []), ...(wo.wo_number ? byWoRef.get(wo.wo_number) ?? [] : [])]
+      .map((i) => [i.id, i] as const)).values()];
+    for (const inv of invs) matchedInvoiceIds.add(inv.id);
 
     // A WO counts as billed if it has our invoice OR an HDMS bill in AppFolio.
     const afBillTotal = wo.wo_number ? appfolioBilledWos.get(wo.wo_number) ?? null : null;
-    const hasSystem = !!inv;
+    const hasSystem = invs.length > 0;
     const hasAppfolio = afBillTotal != null;
     const billed = hasSystem || hasAppfolio;
     const billed_source: BilledSource = hasSystem
@@ -243,7 +261,7 @@ export function categorizeHdmsReconciliation(
       category = billed ? 'billed_not_done' : 'not_done';
     }
 
-    const row = woRow(wo, category, inv, billed_source, afBillTotal);
+    const row = woRow(wo, category, invs, billed_source, afBillTotal);
     rows.push(row);
     summary[category].count += 1;
     summary[category].invoicedTotal += row.invoice_total ?? 0;
@@ -268,6 +286,7 @@ export function categorizeHdmsReconciliation(
       invoice_code: inv.invoice_code,
       invoice_status: inv.status,
       invoice_total: inv.total_amount ?? null,
+      invoice_charge: chargeOf([inv]),
       billed_source: 'system',
       appfolio_bill_total: null,
     };

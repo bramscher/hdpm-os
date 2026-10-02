@@ -64,6 +64,20 @@ describe('done / canceled predicates', () => {
 });
 
 describe('categorizeHdmsReconciliation', () => {
+  it('sums every live invoice on a work order (owner + tenant) instead of orphaning the second', () => {
+    const wos = [wo({ id: 'w1', wo_number: '500', appfolio_status: 'Completed', completed_date: '2026-09-30' })];
+    const invoices = [
+      inv({ id: 'a', invoice_code: 'HDMS-INV-1', work_order_id: 'w1', total_amount: 190, charge_to: 'owner' }),
+      inv({ id: 'b', invoice_code: 'HDMS-INV-2', wo_reference: '500', total_amount: 60, charge_to: 'tenant' }),
+      inv({ id: 'c', invoice_code: 'HDMS-INV-3', work_order_id: 'w1', wo_reference: '500', total_amount: 10 }),
+    ];
+    const r = categorizeHdmsReconciliation(wos, invoices);
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0]).toMatchObject({ category: 'done_billed', invoice_total: 260, invoice_charge: 'both' });
+    expect(r.rows[0].invoice_code).toBe('HDMS-INV-1, HDMS-INV-3, HDMS-INV-2');
+    expect(r.summary.billed_not_done.count).toBe(0);
+  });
+
   it('buckets each of the five states', () => {
     const wos: HdmsReconWorkOrder[] = [
       wo({ id: 'done-billed', wo_number: '100-1', appfolio_status: 'Completed', completed_date: '2026-09-01' }),

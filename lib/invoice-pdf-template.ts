@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { HdmsInvoice, LineItem, TECHNICIAN_INITIALS, normalizeTechnician } from './invoices';
 import { HDPM_LOGO_BASE64 } from './hdpm-logo';
+import { TENANT_REASON_LABEL } from './invoice-charge';
 
 // ============================================
 // Helpers
@@ -122,6 +123,13 @@ export function generateInvoicePdf(
     }
   }
 
+  // Who pays, top right: every invoice is an owner charge or a tenant charge, never both.
+  const isTenant = invoice.charge_to === 'tenant';
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(isCredit ? 10 : 12);
+  doc.setTextColor(isTenant ? RED : GREEN);
+  doc.text(isTenant ? 'TENANT CHARGE' : 'OWNER CHARGE', MARGIN + CONTENT_W, y + (isCredit ? (opts.originalCode ? 32 : 20) : 4), { align: 'right' });
+
   y += logoH + 8;
 
   // Header divider (red for a credit memo)
@@ -146,7 +154,14 @@ export function generateInvoicePdf(
   y += 40;
 
   // ── Property Section (gray background) ──────
-  const propBoxH = 55;
+  const tenantLines = isTenant
+    ? [
+        [invoice.tenant_name, invoice.tenant_unit ? `Unit ${invoice.tenant_unit}` : null].filter(Boolean).join(' · '),
+        [invoice.tenant_charge_reason ? `Reason: ${TENANT_REASON_LABEL[invoice.tenant_charge_reason]}` : null,
+          invoice.lease_clause ? `Lease clause: ${invoice.lease_clause}` : null].filter(Boolean).join('   ·   '),
+      ].filter((l) => l)
+    : [];
+  const propBoxH = 55 + (tenantLines.length ? 22 + tenantLines.length * 13 : 0);
   doc.setFillColor(BG_GRAY);
   doc.roundedRect(MARGIN, y, CONTENT_W, propBoxH, 4, 4, 'F');
 
@@ -169,6 +184,21 @@ export function generateInvoicePdf(
   doc.setFontSize(10);
   doc.setTextColor('#444444');
   doc.text(String(invoice.property_address), MARGIN + propPad, propY);
+
+  if (tenantLines.length) {
+    propY += 20;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(LABEL);
+    doc.text('CHARGED TO TENANT', MARGIN + propPad, propY);
+    tenantLines.forEach((line, i) => {
+      propY += 13;
+      doc.setFont('helvetica', i === 0 ? 'bold' : 'normal');
+      doc.setFontSize(i === 0 ? 10 : 9);
+      doc.setTextColor(i === 0 ? BLACK : '#444444');
+      doc.text(String(line), MARGIN + propPad, propY);
+    });
+  }
 
   y += propBoxH + 20;
 

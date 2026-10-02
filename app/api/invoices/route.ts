@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { createInvoice, createCredit, getInvoices } from '@/lib/invoices';
 import { CreditValidationError } from '@/lib/invoice-credit';
 import { attachAfBillsToInvoices } from '@/lib/af-bills';
+import { ChargeValidationError, pickChargeFields } from '@/lib/invoice-charge';
 
 export async function GET(request: NextRequest) {
   try {
@@ -78,6 +79,8 @@ export async function POST(request: NextRequest) {
       line_items: body.line_items?.length ? body.line_items : undefined,
       internal_notes: body.internal_notes?.trim() || undefined,
       created_by: session.user.email!,
+      // Who pays. A credit's payer is copied from the invoice it corrects (createCredit).
+      ...pickChargeFields(body),
     };
 
     const invoice = isCredit
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {
-    if (error instanceof CreditValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error instanceof CreditValidationError || error instanceof ChargeValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
     console.error('Create invoice error:', error);
     const message = error instanceof Error ? error.message : 'Failed to create invoice';
     return NextResponse.json({ error: message }, { status: 500 });

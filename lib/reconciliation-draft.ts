@@ -3,6 +3,8 @@ export interface ReconciliationListState {
   invoiceIds: string[]; dateFrom: string; dateTo: string; search: string;
   paidFilter: 'all' | 'unpaid' | 'paid'; afBilledOnly: boolean; techFilter: string;
   sortField: 'date' | 'number' | 'amount' | 'property' | 'tech'; sortDir: 'asc' | 'desc';
+  /** Owner / tenant charges. Optional so drafts saved before it existed stay valid. */
+  chargeFilter?: 'all' | 'owner' | 'tenant';
 }
 export interface ReconciliationPaymentState {
   mode: 'existing' | 'new'; selectedPaymentId: string; payee: string; paidOn: string;

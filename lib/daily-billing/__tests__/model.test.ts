@@ -6,6 +6,15 @@ const invoice=(extra={})=>({id:'i',invoice_code:'INV-1',status:'generated',doc_t
 const wo=(extra={})=>({id:'w',wo_number:'123',property_name:'Property',description:'Repair',completed_date:'2026-09-14',assigned_tech:'Alberto',status:'done',appfolio_status:'Work Completed',canceled_date:null,...extra}) as any;
 const input=(extra:Partial<Input>={}):Input=>({from:'2026-09-14',to:'2026-09-20',today:'2026-09-21',technician:'Alberto',invoices:[],workOrders:[],records:[],bills:[],decisions:[],tasks:[],jobs:[],allocations:[],billsFresh:true,...extra});
 describe('daily billing review',()=>{
+ it('asks the office to post a tenant charge to the tenant ledger until it is marked posted',()=>{
+  const bill={id:'b',hdms_invoice_id:'i',reference:'INV-1',total_amount:190,synced_at:'2026-09-21'};
+  const tenant={charge_to:'tenant',tenant_name:'Jane Doe',tenant_unit:'4'};
+  const open=buildDailyBilling(input({invoices:[invoice(tenant)],bills:[bill]})).issues.find(i=>i.kind==='tenant_charge');
+  expect(open?.title).toBe('Post tenant ledger charge in AppFolio');expect(open?.detail).toContain('Jane Doe, unit 4');
+  expect(buildDailyBilling(input({invoices:[invoice({...tenant,tenant_ledger_posted_at:'2026-09-22T00:00:00Z'})],bills:[bill]})).issues.some(i=>i.kind==='tenant_charge')).toBe(false);
+  expect(buildDailyBilling(input({invoices:[invoice({...tenant,status:'draft'})]})).issues.some(i=>i.kind==='tenant_charge')).toBe(false);
+  expect(buildDailyBilling(input({invoices:[invoice()],bills:[bill]})).issues.some(i=>i.kind==='tenant_charge')).toBe(false);
+ });
  it('separates drafts and issued labor, excludes credit hours, and preserves signed credit dollars',()=>{
   const data=buildDailyBilling(input({invoices:[invoice(),invoice({id:'draft',status:'draft'}),invoice({id:'credit',doc_type:'credit',line_items:[{type:'labor',qty:1,amount:-95,technician:'Alberto'}]}),invoice({id:'void',status:'void'})]}));expect(data.days[0]).toMatchObject({issuedHours:2,draftHours:2,issuedLabor:95,draftLabor:190});
  });
