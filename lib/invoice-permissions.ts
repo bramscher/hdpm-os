@@ -1,5 +1,6 @@
 import type { Capabilities } from './staff-capabilities';
 import type { HdmsInvoice, UpdateInvoiceInput } from './invoices';
+import { CHARGE_FIELD_KEYS } from './invoice-charge';
 
 export function canIssueInvoices(role?: string): boolean {
   return ['admin', 'finance', 'maintenance', 'pm', 'manager'].includes(role ?? '');
@@ -42,6 +43,6 @@ export function canEditInvoiceDraft(role: string | undefined, email: string | nu
 // PDF, credit, or approved-workspace linkage changes.
 export function invoiceDraftFields(body: Record<string, unknown>): UpdateInvoiceInput {
   const keys = ['property_name', 'property_address', 'wo_reference', 'completed_date', 'description',
-    'labor_amount', 'materials_amount', 'total_amount', 'line_items', 'internal_notes'];
+    'labor_amount', 'materials_amount', 'total_amount', 'line_items', 'internal_notes', ...CHARGE_FIELD_KEYS];
   return Object.fromEntries(keys.filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]));
 }

@@ -2,6 +2,7 @@ import { recordedLaborHours, invoiceServiceDate } from './invoice-labor';
 import { getSupabaseAdmin } from './supabase';
 import { normalizeCreditItems } from './invoice-credit';
 import { weekStartPacific, weeksBefore } from './eos/scorecard';
+import { chargeFieldsFrom, type ChargeTo, type TenantChargeReason } from './invoice-charge';
 
 // ============================================
 // Types
@@ -227,12 +228,38 @@ export interface HdmsInvoice {
   af_billed_total?: number | null;
   af_bill_count?: number;
   af_bill_status?: 'match' | 'mismatch' | 'unbilled' | null;
+  /**
+   * Who pays: an invoice is an Owner charge or a Tenant charge, never both
+   * (see lib/invoice-charge.ts). Tenant fields are null on owner charges.
+   * Always present on database rows (NOT NULL DEFAULT 'owner'); optional here
+   * only so older fixtures and partial selects type-check. Read it with
+   * `?? 'owner'`.
+   */
+  charge_to?: ChargeTo;
+  tenant_name?: string | null;
+  tenant_unit?: string | null;
+  tenant_charge_reason?: TenantChargeReason | null;
+  tenant_charge_note?: string | null;
+  lease_clause?: string | null;
+  /** When the office posted the matching charge to the tenant's AppFolio ledger. */
+  tenant_ledger_posted_at?: string | null;
+  tenant_ledger_posted_by?: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface CreateInvoiceInput {
+/** Who-pays fields accepted on create/update. */
+export interface ChargeInput {
+  charge_to?: ChargeTo;
+  tenant_name?: string | null;
+  tenant_unit?: string | null;
+  tenant_charge_reason?: TenantChargeReason | null;
+  tenant_charge_note?: string | null;
+  lease_clause?: string | null;
+}
+
+export interface CreateInvoiceInput extends ChargeInput {
   property_name: string;
   property_address: string;
   wo_reference?: string;
@@ -251,8 +278,11 @@ export interface CreateInvoiceInput {
   credits_invoice_id?: string | null;
 }
 
-export interface UpdateInvoiceInput {
+export interface UpdateInvoiceInput extends ChargeInput {
   status?: HdmsInvoice['status'];
+  /** Set only by the tenant-ledger route, never by an edit. */
+  tenant_ledger_posted_at?: string | null;
+  tenant_ledger_posted_by?: string | null;
   property_name?: string;
   property_address?: string;
   wo_reference?: string;
@@ -323,6 +353,7 @@ export async function createInvoice(input: CreateInvoiceInput): Promise<HdmsInvo
       created_by: input.created_by,
       doc_type: input.doc_type || 'invoice',
       credits_invoice_id: input.credits_invoice_id || null,
+      ...chargeFieldsFrom(input),
     })
     .select()
     .single();
@@ -389,6 +420,7 @@ export async function duplicateInvoice(id: string, createdBy: string): Promise<H
       line_items: source.line_items?.length ? source.line_items : null,
       internal_notes: source.internal_notes,
       credits_invoice_id: source.credits_invoice_id,
+      ...chargeFieldsFrom(source),
       created_by: createdBy,
     })
     .select()
@@ -412,7 +444,18 @@ export async function createCredit(
   input: Omit<CreateInvoiceInput, 'doc_type'>
 ): Promise<HdmsInvoice> {
   // Itemized credits derive their totals on the server, never from caller summaries.
-  const credit = input.line_items?.length ? { ...input, ...normalizeCreditItems(input.line_items) } : input;
+  let credit = input.line_items?.length ? { ...input, ...normalizeCreditItems(input.line_items) } : input;
+  // A credit charges the same party as the invoice it corrects: read that from
+  // the database rather than trusting what the form sent.
+  if (input.credits_invoice_id) {
+    const { data: original, error } = await getSupabaseAdmin()
+      .from('hdms_invoices')
+      .select('charge_to, tenant_name, tenant_unit, tenant_charge_reason, tenant_charge_note, lease_clause')
+      .eq('id', input.credits_invoice_id)
+      .maybeSingle();
+    if (error) throw new Error(`Failed to read the invoice being credited: ${error.message}`);
+    if (original) credit = { ...credit, ...chargeFieldsFrom(original) };
+  }
   const neg = (n: number) => -Math.abs(n);
   const line_items = credit.line_items?.map((li) => ({
     ...li,

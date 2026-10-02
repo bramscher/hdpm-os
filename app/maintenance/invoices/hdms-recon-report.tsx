@@ -73,6 +73,7 @@ function toCsv(rows: HdmsReconRow[]): string {
     "invoice_code",
     "invoice_status",
     "invoice_total",
+    "invoice_charge",
     "appfolio_bill_total",
     "appfolio_link",
   ];
@@ -95,6 +96,7 @@ function toCsv(rows: HdmsReconRow[]): string {
       r.invoice_code,
       r.invoice_status,
       r.invoice_total,
+      r.invoice_charge ?? "",
       r.appfolio_bill_total,
       r.appfolio_link,
     ]
@@ -330,6 +332,9 @@ export function HdmsReconReport() {
                             <span>
                               {r.invoice_code}
                               {r.invoice_status ? <span className="text-charcoal-300"> · {r.invoice_status}</span> : null}
+                              {r.invoice_charge && r.invoice_charge !== "owner" ? (
+                                <span className="ml-1 text-[10px] font-semibold text-amber-700">{r.invoice_charge === "both" ? "Owner + tenant" : "Tenant"}</span>
+                              ) : null}
                               {r.billed_source === "both" ? (
                                 <span className="ml-1 text-[10px] font-semibold text-blue-600">+AF</span>
                               ) : null}

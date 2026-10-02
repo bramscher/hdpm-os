@@ -27,7 +27,7 @@ export * from './hdms-reconcile-shared';
 const WO_COLUMNS =
   'id, wo_number, unit_name, property_name, description, appfolio_status, status, stage, assigned_to, assigned_tech, owner_name, vendor_id, vendor_name, completed_date, canceled_date, verified_at, appfolio_link';
 
-const INV_COLUMNS = 'id, invoice_code, status, doc_type, total_amount, work_order_id, wo_reference';
+const INV_COLUMNS = 'id, invoice_code, status, doc_type, total_amount, work_order_id, wo_reference, charge_to';
 
 const PAGE = 1000;
 

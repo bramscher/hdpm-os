@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/require-role';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getInvoiceById, updateInvoice, deleteInvoice } from '@/lib/invoices';
+import { ChargeValidationError, mergeChargeUpdate, pickChargeFields } from '@/lib/invoice-charge';
 
 export async function GET(
   _request: NextRequest,
@@ -59,7 +60,8 @@ export async function PATCH(
       if (!canEditInvoiceDraft(roleGuard.role, roleGuard.email, existing, roleGuard.capabilities)) {
         return NextResponse.json({ error: 'Invoice editing is unavailable for this record. Voided invoices, credits, and approved-workspace invoices require office review.' }, { status: 403 });
       }
-      const changes = invoiceDraftFields(body);
+      const draft = invoiceDraftFields(body);
+      const changes = { ...draft, ...mergeChargeUpdate(existing, pickChargeFields(draft)) };
       // A correction invalidates the old PDF; it must be generated again.
       const invoice = (existing.status === 'generated' || existing.status === 'attached')
         ? await updateInvoice(id, { ...changes, status: 'draft', pdf_path: null }, existing.created_by, existing.status)
@@ -77,9 +79,15 @@ export async function PATCH(
       body.pdf_path = null;
     }
 
-    const invoice = await updateInvoice(id, body);
+    // The tenant-ledger follow-up has its own route (it must not reset the invoice to draft).
+    delete body.tenant_ledger_posted_at;
+    delete body.tenant_ledger_posted_by;
+    const invoice = await updateInvoice(id, { ...body, ...mergeChargeUpdate(existing, pickChargeFields(body)) });
     return NextResponse.json({ invoice });
   } catch (error) {
+    if (error instanceof ChargeValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
+    const fixed = error instanceof Error && /Who pays this invoice is fixed|credit must charge the same party/.test(error.message);
+    if (fixed) return NextResponse.json({ error: (error as Error).message.replace(/^Failed to update invoice: /, '') }, { status: 409 });
     console.error('Update invoice error:', error);
     const message = error instanceof Error ? error.message : 'Failed to update invoice';
     return NextResponse.json({ error: message }, { status: 500 });

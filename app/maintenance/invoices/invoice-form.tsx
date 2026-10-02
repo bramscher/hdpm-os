@@ -18,6 +18,7 @@ import {
 
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 import { needsPriceReview, priceBookName, priceBookRate } from "@/lib/turn-estimator/price-book-display";
+import { chargeProblems, TENANT_REASON_LABEL, type ChargeTo, type TenantChargeReason } from "@/lib/invoice-charge";
 
 interface InvoiceFormProps {
   initialLineType?: "labor" | "appliance";
@@ -107,6 +108,29 @@ const TYPE_STYLES: Record<LineItemType, { bg: string; text: string; label: strin
   other: { bg: "bg-charcoal-50", text: "text-charcoal-600", label: "Other", icon: Wrench },
 };
 
+
+type ChargeState = {
+  charge_to: ChargeTo;
+  tenant_name: string;
+  tenant_unit: string;
+  tenant_charge_reason: TenantChargeReason | "";
+  tenant_charge_note: string;
+  lease_clause: string;
+};
+const OWNER_CHARGE: ChargeState = { charge_to: "owner", tenant_name: "", tenant_unit: "", tenant_charge_reason: "", tenant_charge_note: "", lease_clause: "" };
+/** Payer fields for the API; an owner charge sends no tenant details. */
+function chargePayload(c: ChargeState) {
+  const v = (x: string) => (c.charge_to === "tenant" && x.trim() ? x.trim() : null);
+  return {
+    charge_to: c.charge_to,
+    tenant_name: v(c.tenant_name),
+    tenant_unit: v(c.tenant_unit),
+    tenant_charge_reason: c.charge_to === "tenant" && c.tenant_charge_reason ? c.tenant_charge_reason : null,
+    tenant_charge_note: v(c.tenant_charge_note),
+    lease_clause: v(c.lease_clause),
+  };
+}
+
 export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice, onBack, onSaved }: InvoiceFormProps) {
   const { data: session } = useSession();
   const role = session?.user?.role;
@@ -118,6 +142,10 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
   const [woReference, setWoReference] = useState("");
   const [completedDate, setCompletedDate] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
+  // Who pays: an Owner charge or a Tenant charge, never both.
+  const [charge, setCharge] = useState<ChargeState>(OWNER_CHARGE);
+  const chargeLocked = !!editInvoice && (editInvoice.status === "attached" || !!editInvoice.tenant_ledger_posted_at);
+  const updateCharge = (patch: Partial<ChargeState>) => { userHasEdited.current = true; setCharge((c) => ({ ...c, ...patch })); };
 
   // Line items
   const [lineItems, setLineItems] = useState<FormLineItem[]>([blankLineItem(initialLineType)]);
@@ -215,6 +243,14 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
       setWoReference(editInvoice.wo_reference || "");
       setCompletedDate(editInvoice.completed_date || "");
       setInternalNotes(editInvoice.internal_notes || "");
+      setCharge({
+        charge_to: editInvoice.charge_to ?? "owner",
+        tenant_name: editInvoice.tenant_name ?? "",
+        tenant_unit: editInvoice.tenant_unit ?? "",
+        tenant_charge_reason: editInvoice.tenant_charge_reason ?? "",
+        tenant_charge_note: editInvoice.tenant_charge_note ?? "",
+        lease_clause: editInvoice.lease_clause ?? "",
+      });
 
       // Load line items from invoice if present
       if (editInvoice.line_items && editInvoice.line_items.length > 0) {
@@ -291,6 +327,8 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
       setPropertyAddress(workOrder.property_address);
       setWoReference(workOrder.wo_number);
       setCompletedDate(workOrder.completed_date);
+      // Owner by default; the unit is ready if this turns out to be a tenant charge.
+      setCharge({ ...OWNER_CHARGE, tenant_unit: workOrder.unit || "" });
 
       // Default the labor tech from the work order's assigned tech (editable per line).
       const defaultTech = normalizeTechnician(workOrder.assigned_to || workOrder.technician);
@@ -616,7 +654,7 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyName, propertyAddress, woReference, completedDate, internalNotes, lineItems, canEdit]);
+  }, [propertyName, propertyAddress, woReference, completedDate, internalNotes, lineItems, charge, canEdit]);
 
   // ── Warn before page unload if unsaved ──────────
   useEffect(() => {
@@ -791,6 +829,7 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
       total_amount: computedTotal,
       line_items: validLineItems.length > 0 ? validLineItems : null,
       internal_notes: internalNotes.trim() || null,
+      ...chargePayload(charge),
     };
   }
 
@@ -835,6 +874,14 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
     if (!completedDate.trim()) {
       setError("Completed date is required before saving or printing the invoice.");
       return;
+    }
+
+    if (generatePdf) {
+      const problems = chargeProblems(chargePayload(charge), { finalizing: true });
+      if (problems.length) {
+        setError(problems.join(" "));
+        return;
+      }
     }
 
     // Cancel any pending auto-save
@@ -1002,6 +1049,60 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
               className="bg-white"
             />
           </div>
+        </div>
+
+        {/* Who pays */}
+        <div className="rounded-xl border border-sand-200 px-4 py-3 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-charcoal-400 uppercase tracking-wider">Charge to <span className="text-red-500">*</span></p>
+              <p className="text-xs text-charcoal-400">An invoice charges the owner or the tenant, never both. Bill a split job as two invoices.</p>
+            </div>
+            <div role="radiogroup" aria-label="Charge to" className="inline-flex rounded-lg border border-sand-300 p-0.5">
+              {(["owner", "tenant"] as const).map((who) => (
+                <button
+                  key={who}
+                  type="button"
+                  role="radio"
+                  aria-checked={charge.charge_to === who}
+                  disabled={isLoading || chargeLocked}
+                  onClick={() => updateCharge({ charge_to: who })}
+                  className={`px-3 py-1.5 text-sm rounded-md ${charge.charge_to === who ? (who === "tenant" ? "bg-red-600 text-white" : "bg-terra-600 text-white") : "text-charcoal-600 hover:bg-sand-100"}`}
+                >
+                  {who === "owner" ? "Owner charge" : "Tenant charge"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {chargeLocked && <p className="text-xs text-charcoal-500">Who pays is fixed because this invoice is attached in AppFolio or its tenant charge is posted. Void it and issue a new one to change it.</p>}
+          {charge.charge_to === "tenant" && (
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="tenant-name" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Tenant name <span className="text-red-500">*</span></label>
+                <Input id="tenant-name" value={charge.tenant_name} onChange={(e) => updateCharge({ tenant_name: e.target.value })} placeholder="As on the lease" disabled={isLoading || chargeLocked} className="bg-white" />
+              </div>
+              <div>
+                <label htmlFor="tenant-unit" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Unit <span className="text-red-500">*</span></label>
+                <Input id="tenant-unit" value={charge.tenant_unit} onChange={(e) => updateCharge({ tenant_unit: e.target.value })} placeholder="Unit" disabled={isLoading || chargeLocked} className="bg-white" />
+              </div>
+              <div>
+                <label htmlFor="tenant-reason" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Reason <span className="text-red-500">*</span></label>
+                <select id="tenant-reason" value={charge.tenant_charge_reason} onChange={(e) => updateCharge({ tenant_charge_reason: e.target.value as TenantChargeReason | "" })} disabled={isLoading || chargeLocked} className="h-9 w-full rounded-md border border-sand-300 bg-white px-2 text-sm">
+                  <option value="">Choose a reason…</option>
+                  {(Object.keys(TENANT_REASON_LABEL) as TenantChargeReason[]).map((r) => <option key={r} value={r}>{TENANT_REASON_LABEL[r]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="lease-clause" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Lease clause {charge.tenant_charge_reason === "lease_fee" && <span className="text-red-500">*</span>}</label>
+                <Input id="lease-clause" value={charge.lease_clause} onChange={(e) => updateCharge({ lease_clause: e.target.value })} placeholder="e.g. Section 14, lockout fee" disabled={isLoading || chargeLocked} className="bg-white" />
+              </div>
+              <div className="md:col-span-2">
+                <label htmlFor="tenant-note" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">What happened, and the evidence <span className="text-red-500">*</span></label>
+                <textarea id="tenant-note" value={charge.tenant_charge_note} onChange={(e) => updateCharge({ tenant_charge_note: e.target.value })} rows={2} placeholder="e.g. Tenant-caused damage to bathroom door; photos on WO" disabled={isLoading || chargeLocked} className="w-full rounded-md border border-sand-300 bg-white px-3 py-2 text-sm" />
+                <p className="mt-1 text-xs text-charcoal-400">The owner pays this invoice as usual; the office then posts the charge to the tenant’s ledger to reimburse the owner. The note stays internal.</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Scanned Work Order Context (if available) */}
