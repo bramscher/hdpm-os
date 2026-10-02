@@ -9,6 +9,7 @@
  */
 
 import { getKpiConfig, v0FetchAll } from '@/lib/appfolio-kpi';
+import { fetchDirectoryByUuid } from '@/lib/appfolio-property-directory';
 import type { FeeFacts, OwnerContact, OwnerSet, PropertyFact } from './model';
 
 interface V0Property {
@@ -83,6 +84,8 @@ export async function fetchFeeFacts(): Promise<FeeFacts> {
   const units = await v0FetchAll<V0Unit>('/units', ALL, config, 1000, 20);
   const groups = await v0FetchAll<V0OwnerGroup>('/owner_groups', ALL, config, 1000, 20);
   const owners = await v0FetchAll<V0Owner>('/owners', ALL, config, 1000, 10);
+  // Numeric web ids for AppFolio property links (Reports API; empty if unavailable).
+  const directory = await fetchDirectoryByUuid();
 
   const active = properties.filter((p) => !p.HiddenAt && !p.ManagementEndDate);
   const activeIds = new Set(active.map((p) => p.Id));
@@ -140,6 +143,7 @@ export async function fetchFeeFacts(): Promise<FeeFacts> {
       flatMonthly: isFlat ? flat : null,
       feeStartDate: policy?.StartDate ?? null,
       mgmtStartDate: p.ManagementStartDate ?? null,
+      appfolioWebId: directory.get(p.Id)?.property_id != null ? String(directory.get(p.Id)!.property_id) : null,
       doors: agg.doors,
       occupiedDoors: agg.occupied,
       occupiedRentMonthly: Math.round(agg.rent * 100) / 100,
