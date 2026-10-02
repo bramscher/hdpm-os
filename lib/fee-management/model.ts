@@ -25,6 +25,8 @@ export interface PropertyFact {
   feeType: 'percent' | 'flat' | 'none';
   feePct: number | null;
   flatMonthly: number | null;
+  /** Numeric AppFolio web-app property id, for links (from the property_directory report). Absent on older snapshots. */
+  appfolioWebId?: string | null;
   /** CurrentManagementFeePolicy.StartDate — when the current fee took effect. */
   feeStartDate: string | null;
   mgmtStartDate: string | null;
@@ -84,6 +86,13 @@ export interface Agreement {
   autoRenew: boolean;
   noticeDays: number | null;
   notes: string | null;
+  /**
+   * Link to the latest signed agreement in AppFolio, and the date it was last
+   * renewed (which tells you the agreement version). Optional: undefined means
+   * "not part of this edit", so other editors never wipe them.
+   */
+  agreementUrl?: string | null;
+  lastRenewedOn?: string | null;
 }
 
 export const CAMPAIGN_STATUSES = ['not_contacted', 'contacted', 'accepted', 'declined', 'at_risk'] as const;
@@ -580,9 +589,47 @@ export function parseWeights(v: unknown): PriorityWeights | null {
   return w;
 }
 
-export function parseAgreement(v: unknown): Agreement | null {
+export const APPFOLIO_WEB = 'https://highdesertpm.appfolio.com';
+
+/** A link into our AppFolio site (https, exact host), or null when blank; undefined when invalid. */
+function optAppfolioUrl(v: unknown): string | null | undefined {
+  if (v == null || v === '') return null;
+  if (typeof v !== 'string' || v.length > 2000) return undefined;
+  try {
+    const u = new URL(v.trim());
+    return u.protocol === 'https:' && u.host === 'highdesertpm.appfolio.com' ? u.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Why an agreement edit was rejected, in words staff can act on. */
+export function agreementError(v: unknown, today = new Date().toISOString().slice(0, 10)): string {
+  const o = (v ?? {}) as Record<string, unknown>;
+  if ('agreementUrl' in o && optAppfolioUrl(o.agreementUrl) === undefined) {
+    return 'The agreement link must be a link into AppFolio (https://highdesertpm.appfolio.com/…). Open the agreement in AppFolio and copy its address.';
+  }
+  if ('lastRenewedOn' in o && o.lastRenewedOn) {
+    if (!isDate(o.lastRenewedOn)) return 'Last renewed must be a date (YYYY-MM-DD).';
+    if ((o.lastRenewedOn as string) > today) return 'Last renewed can’t be in the future.';
+  }
+  return 'Check the dates (YYYY-MM-DD, end after start) and notice days (0–365)';
+}
+
+export function parseAgreement(v: unknown, today = new Date().toISOString().slice(0, 10)): Agreement | null {
   const o = v as Record<string, unknown> | null;
   if (!o || typeof o.propertyId !== 'string' || !o.propertyId || o.propertyId.length > 64) return null;
+  // Document fields are only touched when the edit includes them.
+  let agreementUrl: string | null | undefined;
+  let lastRenewedOn: string | null | undefined;
+  if ('agreementUrl' in o) {
+    agreementUrl = optAppfolioUrl(o.agreementUrl);
+    if (agreementUrl === undefined) return null;
+  }
+  if ('lastRenewedOn' in o) {
+    lastRenewedOn = optDate(o.lastRenewedOn);
+    if (lastRenewedOn === undefined || (lastRenewedOn && lastRenewedOn > today)) return null;
+  }
   const startDate = optDate(o.startDate);
   const endDate = optDate(o.endDate);
   const notes = optText(o.notes);
@@ -590,7 +637,93 @@ export function parseAgreement(v: unknown): Agreement | null {
   if (startDate === undefined || endDate === undefined || notes === undefined) return null;
   if (noticeDays != null && (!Number.isInteger(noticeDays) || noticeDays < 0 || noticeDays > 365)) return null;
   if (startDate && endDate && endDate < startDate) return null;
-  return { propertyId: o.propertyId, startDate, endDate, autoRenew: o.autoRenew !== false, noticeDays, notes };
+  const out: Agreement = { propertyId: o.propertyId, startDate, endDate, autoRenew: o.autoRenew !== false, noticeDays, notes };
+  if (agreementUrl !== undefined) out.agreementUrl = agreementUrl;
+  if (lastRenewedOn !== undefined) out.lastRenewedOn = lastRenewedOn;
+  return out;
+}
+
+// ── Agreements tab ─────────────────────────────────────────
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Mar 14": the renewal day with the year stripped (most agreements renew every year). */
+export function monthDay(iso: string | null | undefined): string {
+  if (!iso || !ISO_DATE.test(iso.slice(0, 10))) return '';
+  const [, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return `${MONTHS[m - 1]} ${d}`;
+}
+
+/** "03-14": sorts renewal days in calendar order regardless of year. */
+export function monthDayKey(iso: string | null | undefined): string {
+  return iso && ISO_DATE.test(iso.slice(0, 10)) ? iso.slice(5, 10) : '';
+}
+
+export interface AgreementRow {
+  propertyId: string;
+  propertyName: string;
+  address: string;
+  ownerNames: string;
+  renewal: Renewal | null;
+  /** Renewal day without the year, e.g. "Mar 14". */
+  expiresMonthDay: string;
+  autoRenew: boolean;
+  lastRenewedOn: string | null;
+  agreementUrl: string | null;
+  appfolioPropertyUrl: string | null;
+  agreement: Agreement | undefined;
+  missingLink: boolean;
+  missingRenewedDate: boolean;
+  /** No entered end date: the expiration is projected from AppFolio's management start date. */
+  projected: boolean;
+}
+
+/** One row per active property, with its agreement, next expiration and document link. */
+export function agreementRows(facts: FeeFacts, agreements: Agreement[], today: string): AgreementRow[] {
+  const byProperty = new Map(agreements.map((a) => [a.propertyId, a]));
+  const owners = new Map(facts.ownerSets.map((o) => [o.key, o]));
+  return facts.properties.map((p) => {
+    const agreement = byProperty.get(p.id);
+    const renewal = nextRenewal(p.mgmtStartDate, agreement, today);
+    const set = owners.get(p.ownerSetKey);
+    const ownerNames = set ? (set.owners.length ? set.owners.map((o) => o.name).join(', ') : set.name) : '';
+    const agreementUrl = agreement?.agreementUrl ?? null;
+    const lastRenewedOn = agreement?.lastRenewedOn ?? null;
+    return {
+      propertyId: p.id,
+      propertyName: p.name,
+      address: p.address,
+      ownerNames,
+      renewal,
+      expiresMonthDay: monthDay(renewal?.date),
+      autoRenew: agreement?.autoRenew ?? true,
+      lastRenewedOn,
+      agreementUrl,
+      appfolioPropertyUrl: p.appfolioWebId ? `${APPFOLIO_WEB}/properties/${p.appfolioWebId}` : null,
+      agreement,
+      missingLink: !agreementUrl,
+      missingRenewedDate: !lastRenewedOn,
+      projected: !renewal || renewal.source === 'projected',
+    };
+  });
+}
+
+export type AgreementSort = 'expiration' | 'monthDay' | 'property' | 'owner' | 'lastRenewed';
+
+/** Sort rows; rows without a value always go last. */
+export function sortAgreementRows(rows: AgreementRow[], by: AgreementSort, dir: 'asc' | 'desc' = 'asc'): AgreementRow[] {
+  const key = (r: AgreementRow): string =>
+    by === 'expiration' ? r.renewal?.date ?? ''
+    : by === 'monthDay' ? monthDayKey(r.renewal?.date)
+    : by === 'property' ? r.propertyName.toLowerCase()
+    : by === 'owner' ? r.ownerNames.toLowerCase()
+    : r.lastRenewedOn ?? '';
+  const sign = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const ka = key(a), kb = key(b);
+    if (!ka || !kb) return ka ? -1 : kb ? 1 : a.propertyName.localeCompare(b.propertyName);
+    return ka === kb ? a.propertyName.localeCompare(b.propertyName) : ka < kb ? -sign : sign;
+  });
 }
 
 export function parseCampaign(v: unknown): (Omit<CampaignEntry, 'updatedAt'> & { ownerName: string | null }) | null {

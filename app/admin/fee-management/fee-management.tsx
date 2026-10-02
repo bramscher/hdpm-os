@@ -4,11 +4,13 @@ import { useState } from "react";
 import { ManagementFeeIndex } from "@/components/dashboard/ManagementFeeIndex";
 import { OwnerFeeOpportunity } from "@/components/fee-management/OwnerFeeOpportunity";
 import { FeeSchedule } from "@/components/fee-management/FeeSchedule";
+import { AgreementsTable } from "@/components/fee-management/AgreementsTable";
 
 const TABS = [
   { key: "opportunity", label: "Owner Fee Opportunity" },
   { key: "index", label: "Fee Index" },
   { key: "schedule", label: "Fee Schedule" },
+  { key: "agreements", label: "Agreements" },
 ] as const;
 
 export function FeeManagement() {
@@ -18,7 +20,7 @@ export function FeeManagement() {
       <p className="mb-1 text-[11px] font-medium text-charcoal-400">Admin</p>
       <h1 className="text-xl font-semibold tracking-tight text-charcoal-950">Fee Management</h1>
       <p className="mt-1 text-sm text-charcoal-500">
-        Management fee levels across the portfolio, the owner-by-owner fee increase campaign, and our standard fee schedule.
+        Management fee levels across the portfolio, the owner-by-owner fee increase campaign, our standard fee schedule, and every owner's management agreement.
       </p>
 
       <div className="mt-5 mb-5 flex gap-5 border-b border-sand-200">
@@ -35,7 +37,7 @@ export function FeeManagement() {
         ))}
       </div>
 
-      {tab === "opportunity" ? <OwnerFeeOpportunity /> : tab === "index" ? <ManagementFeeIndex /> : <FeeSchedule />}
+      {tab === "opportunity" ? <OwnerFeeOpportunity /> : tab === "index" ? <ManagementFeeIndex /> : tab === "agreements" ? <AgreementsTable /> : <FeeSchedule />}
     </div>
   );
 }

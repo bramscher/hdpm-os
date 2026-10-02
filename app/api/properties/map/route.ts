@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { runReport, reportsApiConfigured } from '@/lib/appfolio-reports';
+import { fetchDirectoryByUuid } from '@/lib/appfolio-property-directory';
 
 export type PropertyMgmtStatus = 'active' | 'offboarding' | 'lost';
 
@@ -26,40 +26,6 @@ export interface MapProperty {
   hot_prospects: number;
 }
 
-interface DirectoryRow {
-  property_id: number | string | null;
-  property_integration_id: string | null;
-  management_end_date: string | null;
-  management_end_reason: string | null;
-}
-
-/**
- * Property-directory lookup keyed by v0 UUID: numeric web-app id (for links)
- * and management end date/reason (visible property + end date = offboarding).
- * Report covers visible properties only — hidden (lost) ones are deliberately
- * off the map for now.
- */
-async function fetchDirectoryByUuid(): Promise<Map<string, DirectoryRow>> {
-  const byUuid = new Map<string, DirectoryRow>();
-  if (!reportsApiConfigured()) return byUuid;
-  try {
-    const rows = await runReport<DirectoryRow>('property_directory', {
-      columns: [
-        'property_id',
-        'property_integration_id',
-        'management_end_date',
-        'management_end_reason',
-      ],
-    });
-    for (const row of rows) {
-      if (row.property_integration_id) byUuid.set(row.property_integration_id, row);
-    }
-  } catch (err) {
-    // Links and derived yellows are enhancements — the map works without them.
-    console.error('[properties/map] property_directory fetch failed:', err);
-  }
-  return byUuid;
-}
 
 interface UnitRow {
   name: string | null;

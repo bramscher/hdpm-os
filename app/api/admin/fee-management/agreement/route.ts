@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { parseAgreement } from '@/lib/fee-management/model';
+import { agreementError, parseAgreement } from '@/lib/fee-management/model';
 
-/** PUT one property's agreement dates (staff backfill; AppFolio has none). */
+/**
+ * PUT one property's agreement dates (staff backfill; AppFolio has none),
+ * plus the link to the latest signed agreement and its last-renewed date when
+ * the edit includes them (the Agreements tab). Omitted document fields are
+ * left as they are, so the Owner Fee Opportunity editor never wipes them.
+ */
 export async function PUT(request: NextRequest) {
   const guard = await requireRole('admin');
   if (!guard.ok) return guard.response;
-  const a = parseAgreement(await request.json().catch(() => null));
-  if (!a) return NextResponse.json({ error: 'Check the dates (YYYY-MM-DD, end after start) and notice days (0–365)' }, { status: 400 });
+  const body = await request.json().catch(() => null);
+  const a = parseAgreement(body);
+  if (!a) return NextResponse.json({ error: agreementError(body) }, { status: 400 });
 
   const { error } = await getSupabaseAdmin().from('property_agreement').upsert(
     {
@@ -19,6 +25,8 @@ export async function PUT(request: NextRequest) {
       auto_renew: a.autoRenew,
       notice_days: a.noticeDays,
       notes: a.notes,
+      ...(a.agreementUrl !== undefined ? { agreement_url: a.agreementUrl } : {}),
+      ...(a.lastRenewedOn !== undefined ? { last_renewed_on: a.lastRenewedOn } : {}),
       updated_at: new Date().toISOString(),
       updated_by: guard.email,
     },

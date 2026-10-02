@@ -92,6 +92,8 @@ export async function GET(request: NextRequest) {
         autoRenew: a.auto_renew,
         noticeDays: a.notice_days,
         notes: a.notes,
+        agreementUrl: a.agreement_url ?? null,
+        lastRenewedOn: a.last_renewed_on ?? null,
       })
     ),
     campaign: (campaign.data ?? []).map(
