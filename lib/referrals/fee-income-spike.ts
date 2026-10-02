@@ -28,6 +28,8 @@ export interface ColumnMap {
   account: string | null;
   accountNumber: string | null;
   amount: string | null;
+  /** When a report splits debit/credit, fee = debit − credit (reversals post as credits). */
+  credit: string | null;
   propertyName: string | null;
   propertyId: string | null;
   propertyIntegrationId: string | null;
@@ -43,6 +45,7 @@ export function describeColumns(rows: Row[]): ColumnMap {
     account: find(all, /^account_name$/, /gl_account_name/, /^account$/, /account_name/, /^gl_account$/),
     accountNumber: find(all, /^account_number$/, /gl_account_number/, /account_code/, /account_number/),
     amount: find(all, /^amount$/, /^paid$/, /^net_amount$/, /^debit$/, /amount/, /^total$/),
+    credit: all.includes('debit') && all.includes('credit') && !all.includes('amount') ? 'credit' : null,
     propertyName: find(all, /^property_name$/, /^property$/, /property_name/),
     propertyId: find(all, /^property_id$/),
     propertyIntegrationId: find(all, /^property_integration_id$/, /property_integration/),
@@ -60,6 +63,10 @@ export const toNumber = (v: unknown): number => {
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** A row's fee amount: debit − credit when the report splits them, else the amount column. */
+export const rowAmount = (r: Row, cols: ColumnMap): number =>
+  round2((cols.amount ? toNumber(r[cols.amount]) : 0) - (cols.credit ? toNumber(r[cols.credit]) : 0));
 
 export interface FeeSummary {
   rows: number;
@@ -81,7 +88,7 @@ export function summarizeByProperty(rows: Row[], cols: ColumnMap, top = 15): Fee
     const acct = cols.account ? r[cols.account] : null;
     if (!matchFeeAccount(acct)) continue;
     feeRows++;
-    const amt = cols.amount ? toNumber(r[cols.amount]) : 0;
+    const amt = rowAmount(r, cols);
     total += amt;
     const num = cols.accountNumber ? String(r[cols.accountNumber] ?? '') || null : null;
     const a = accounts.get(String(acct)) ?? { name: String(acct), number: num, rows: 0, total: 0 };
@@ -119,7 +126,7 @@ export function propertyLines(rows: Row[], cols: ColumnMap, property: string) {
     .map((r) => ({
       date: cols.date ? r[cols.date] ?? null : null,
       account: cols.account ? r[cols.account] : null,
-      amount: cols.amount ? toNumber(r[cols.amount]) : null,
+      amount: cols.amount ? rowAmount(r, cols) : null,
       description: cols.description ? String(r[cols.description] ?? '').slice(0, 160) : null,
       property: cols.propertyName ? r[cols.propertyName] : null,
     }));
