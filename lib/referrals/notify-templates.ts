@@ -11,6 +11,15 @@ export interface EmailContent {
   text: string;
 }
 
+/**
+ * Names, sources and links here come from people (a referrer types the
+ * prospect's name), so every value is HTML-escaped before it goes into the
+ * email body, and line breaks are stripped from subjects.
+ */
+export const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+export const oneLine = (s: string) => s.replace(/[\r\n]+/g, ' ').trim();
+
 const wrap = (title: string, body: string): string =>
   `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;margin:0 auto;color:#2d2a33">
   <h2 style="font-size:18px;margin:0 0 12px">${title}</h2>
@@ -46,10 +55,10 @@ export function buildLeadSubmittedEmail(input: {
 }): EmailContent {
   const who = input.partner_name ? `${input.partner_name} (${input.source})` : input.source;
   return {
-    subject: `New referral lead: ${input.prospect_name}`,
+    subject: oneLine(`New referral lead: ${input.prospect_name}`),
     html: wrap(
       'New referral lead',
-      `<p><strong>${input.prospect_name}</strong> was just submitted via <strong>${who}</strong>.</p>
+      `<p><strong>${escapeHtml(input.prospect_name)}</strong> was just submitted via <strong>${escapeHtml(who)}</strong>.</p>
        <p>Open the pipeline to review and work it.</p>`
     ),
     text: `New referral lead: ${input.prospect_name} (via ${who}). Open the pipeline to review.`,
@@ -62,10 +71,10 @@ export function buildStatusChangeEmail(input: {
 }): EmailContent {
   const label = stageLabel(input.to);
   return {
-    subject: `Your referral ${input.prospect_name} is now: ${label}`,
+    subject: oneLine(`Your referral ${input.prospect_name} is now: ${label}`),
     html: wrap(
       'Referral status update',
-      `<p>Your referral <strong>${input.prospect_name}</strong> has moved to:</p>
+      `<p>Your referral <strong>${escapeHtml(input.prospect_name)}</strong> has moved to:</p>
        <p style="font-size:16px"><strong>${label}</strong></p>
        <p>Sign in to your partner dashboard to see details.</p>`
     ),
@@ -74,17 +83,19 @@ export function buildStatusChangeEmail(input: {
 }
 
 export function buildInviteEmail(input: { partner_name: string; url: string }): EmailContent {
+  const name = escapeHtml(input.partner_name);
+  const url = escapeHtml(input.url);
   return {
     subject: 'You’re invited — High Desert Property Management Referral Partners',
     html: wrap(
       'You’re invited to become a referral partner',
-      `<p>Hi ${input.partner_name}, High Desert Property Management has invited you to our referral
+      `<p>Hi ${name}, High Desert Property Management has invited you to our referral
        partner program. Set up your account to submit referrals and track what you earn.</p>
        <p style="margin:20px 0">
-         <a href="${input.url}" style="display:inline-block;background:#2ECC52;color:#fff;text-decoration:none;
+         <a href="${url}" style="display:inline-block;background:#2ECC52;color:#fff;text-decoration:none;
             font-weight:600;padding:12px 22px;border-radius:8px">Accept your invite</a>
        </p>
-       <p style="font-size:12px;color:#9a9aa5">Or paste this link into your browser:<br>${input.url}</p>
+       <p style="font-size:12px;color:#9a9aa5">Or paste this link into your browser:<br>${url}</p>
        <p style="font-size:12px;color:#9a9aa5">This link is single-use and expires in 14 days.</p>`
     ),
     text: `Hi ${input.partner_name}, you're invited to the High Desert Property Management referral partner program. Accept your invite (single-use, expires in 14 days): ${input.url}`,
@@ -96,7 +107,7 @@ export function buildW9MissingEmail(input: { partner_name: string }): EmailConte
     subject: 'Action needed: W-9 on file',
     html: wrap(
       'We need your W-9',
-      `<p>Hi ${input.partner_name}, we don't have a completed W-9 on file for your referral
+      `<p>Hi ${escapeHtml(input.partner_name)}, we don't have a completed W-9 on file for your referral
        partner account. We need it before any referral fee can be paid.</p>
        <p>Sign in to your partner dashboard to upload it.</p>`
     ),
@@ -104,15 +115,13 @@ export function buildW9MissingEmail(input: { partner_name: string }): EmailConte
   };
 }
 
-const escapeHtml = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const usd = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
 /** Bounty earned (Batch 5): sent to the referrer when their lead signs. */
 export function buildAccrualEmail(input: { prospect_name: string; amount: number }): EmailContent {
   const name = escapeHtml(input.prospect_name);
   return {
-    subject: `You earned a ${usd(input.amount)} referral bounty`,
+    subject: oneLine(`You earned a ${usd(input.amount)} referral bounty`),
     html: wrap(
       'Referral bounty earned',
       `<p>Your referral <strong>${name}</strong> signed a management agreement with High Desert Property Management.</p>
