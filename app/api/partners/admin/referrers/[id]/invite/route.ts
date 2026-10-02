@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { partnersBaseUrl } from '@/lib/referrals/partner-host';
 import { requireReferralAdmin, getReferrer } from '@/lib/referrals/admin';
 import { createInvite } from '@/lib/referrals/invites';
 import { notifyInvite } from '@/lib/referrals/notify';
@@ -24,7 +25,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const { id } = await params;
-    const origin = new URL(request.url).origin;
+    // Invite links point at partners.highdesertpm.com once PARTNERS_BASE_URL is set.
+    const origin = partnersBaseUrl(new URL(request.url).origin);
     const invite = await createInvite(id, guard.email, origin);
 
     if (deliver === 'email') {
