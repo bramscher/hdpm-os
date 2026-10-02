@@ -48,3 +48,18 @@ describe('helpers', () => {
     expect(monthRange('sept')).toBeNull();
   });
 });
+
+describe('general_ledger debit/credit', () => {
+  it('nets credits (reversals) against debits', () => {
+    const rows = [
+      { account_name: '5010 - Mgmt: Management Fee', debit: '500.00', credit: '0', property_name: 'A', property_integration_id: 'u1' },
+      { account_name: '5010 - Mgmt: Management Fee', debit: '0', credit: '120.00', property_name: 'A', property_integration_id: 'u1' },
+    ];
+    const cols = describeColumns(rows);
+    expect(cols).toMatchObject({ amount: 'debit', credit: 'credit' });
+    expect(summarizeByProperty(rows, cols)).toMatchObject({ total: 380, feeRows: 2, properties: 1 });
+  });
+  it('leaves bill_detail (no credit column) alone', () => {
+    expect(describeColumns([{ account_name: 'x', paid: '1' }]).credit).toBeNull();
+  });
+});
