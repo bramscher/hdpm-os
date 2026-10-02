@@ -3,7 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {pacificDay,shiftDay} from '@/lib/maintenance-workspace/model';
-import {weekStartPacific} from '@/lib/eos/scorecard';
+import {invoiceReportPeriods} from '@/lib/invoice-report-periods';
 import type {DaySummary,Issue,WorkRecord} from '@/lib/daily-billing/model';
 import {ReportPeriodPresets} from '../invoices/report-period-presets';
 import './review.css';
@@ -14,8 +14,9 @@ const money=(n:number)=>new Intl.NumberFormat('en-US',{style:'currency',currency
 const pretty=(d:string)=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',weekday:'short',timeZone:'UTC'});
 const kinds:Record<string,string>={no_invoice:'Completed work',ready:'Billing coverage',draft:'Draft invoices',posting:'AppFolio posting',data_quality:'Missing details',review:'Work review',in_progress:'In progress',credit_review:'Credits'};
 export default function DailyBillingReview({embedded=false}:{embedded?:boolean}){
- const params=useSearchParams();const initial=params.get('date');const thisWeek=weekStartPacific(new Date());
- const [from,setFrom]=useState(initial||thisWeek),[to,setTo]=useState(initial||shiftDay(thisWeek,6)),[tech,setTech]=useState('');
+ // Reports default to payroll periods (1–15 / 16–month end, Pacific), not weeks.
+ const params=useSearchParams();const initial=params.get('date');const [payPeriod,lastPayPeriod]=invoiceReportPeriods(new Date(),2).payroll;
+ const [from,setFrom]=useState(initial||payPeriod.from),[to,setTo]=useState(initial||payPeriod.to),[tech,setTech]=useState('');
  const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false);
  const [view,setView]=useState<'list'|'calendar'>('list'),[day,setDay]=useState<string|null>(initial),[kind,setKind]=useState(''),[history,setHistory]=useState(false),[editor,setEditor]=useState<Editor|null>(null),[search,setSearch]=useState('');
  const generation=useRef(0);
@@ -39,7 +40,7 @@ export default function DailyBillingReview({embedded=false}:{embedded?:boolean})
   {data?.warnings.map(w=><div role="status" className="db-warning" key={w}>{w}</div>)}
   <div className="db-filters"><label>From<input type="date" value={from} onChange={e=>{setFrom(e.target.value);setDay(null)}}/></label><label>Through<input type="date" value={to} onChange={e=>{setTo(e.target.value);setDay(null)}}/></label>
    {data?.office&&<label>Technician<select value={tech} onChange={e=>setTech(e.target.value)}><option value="">All technicians</option>{data.staff.map(s=><option key={s.person} value={s.person}>{s.name||s.person}</option>)}</select></label>}
-   <button onClick={()=>{setFrom(thisWeek);setTo(shiftDay(thisWeek,6));setDay(null)}}>This week</button><button onClick={()=>{setFrom(shiftDay(thisWeek,-7));setTo(shiftDay(thisWeek,-1));setDay(null)}}>Last week</button>
+   <button onClick={()=>{setFrom(payPeriod.from);setTo(payPeriod.to);setDay(null)}}>This pay period</button><button onClick={()=>{setFrom(lastPayPeriod.from);setTo(lastPayPeriod.to);setDay(null)}}>Last pay period</button>
    <ReportPeriodPresets from={from} to={to} onChange={(a,b)=>{setFrom(a);setTo(b);setDay(null)}}/>
   </div>
   {data&&<>
