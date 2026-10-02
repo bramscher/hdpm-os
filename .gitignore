@@ -52,3 +52,7 @@ scripts/*.candidates.json
 services/dez-operator/register-passkey.sh
 services/dez-operator/test-login.sh
 services/dez-operator/data/
+
+# Local tool output (base code map, Orca drops)
+.base-ast/
+.orca/
