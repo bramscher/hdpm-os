@@ -4,6 +4,7 @@ import { getRentAnalysis, updateRentAnalysis, deleteRentAnalysis } from '@/lib/r
 import { generateRentReportPdf } from '@/lib/rent-report-pdf';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import type { RentAnalysis } from '@/types/comps';
+import { rentReportFileName } from '@/lib/rent-report-files';
 
 /**
  * GET /api/comps/analyses/[id]
@@ -87,12 +88,7 @@ export async function PATCH(
 
       // Upload to storage
       const supabase = getSupabaseAdmin();
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const dateStr = now.toISOString().split('T')[0];
-      const sanitizedAddress = existing.address.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
-      const fileName = `reports/${year}/${month}/rent-analysis_${existing.town}_${sanitizedAddress}_${dateStr}.pdf`;
+      const fileName = rentReportFileName(existing.town, existing.address);
 
       await supabase.storage.from('rent-reports').upload(fileName, pdfBuffer, {
         contentType: 'application/pdf',
