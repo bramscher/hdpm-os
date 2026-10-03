@@ -43,6 +43,11 @@ export const PUBLIC_PREFIXES = [
   "/api/eos/cron", // Friday scorecard — CRON_SECRET-guarded in the route
   "/api/reception/sync",
   "/api/inspections/candidates/sync",
+  // Owner-facing rent analysis short links (/r/<id>). Self-guarded: random
+  // 8-char id, 30-day expiry in report_links, redirects to a 1-hour signed
+  // URL. The trailing slash matters: "/r" alone would also open /reports,
+  // /routes etc. without a session.
+  "/r/",
 ];
 
 // Admin-only: the entire KPI/financial dashboard and its data APIs.

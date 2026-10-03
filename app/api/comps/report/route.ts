@@ -6,6 +6,7 @@ import { generateRentReportPdf } from '@/lib/rent-report-pdf';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { saveRentAnalysis } from '@/lib/rent-analyses';
 import type { SubjectProperty, CompetingListing } from '@/types/comps';
+import { rentReportFileName } from '@/lib/rent-report-files';
 
 export const maxDuration = 120;
 
@@ -85,13 +86,7 @@ export async function POST(request: NextRequest) {
     // 4. Upload to Supabase Storage
     const supabase = getSupabaseAdmin();
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const dateStr = now.toISOString().split('T')[0];
-    const sanitizedAddress = subject.address
-      .replace(/[^a-zA-Z0-9]/g, '_')
-      .substring(0, 40);
-    const fileName = `reports/${year}/${month}/rent-analysis_${subject.town}_${sanitizedAddress}_${dateStr}.pdf`;
+    const fileName = rentReportFileName(subject.town, subject.address, now);
 
     const { error: uploadError } = await supabase.storage
       .from('rent-reports')
