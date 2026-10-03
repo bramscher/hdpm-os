@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import ImproveWithAI from "@/components/ImproveWithAI";
 import EstimateReview from "./EstimateReview";
 import { needsPriceReview, priceBookName } from "@/lib/turn-estimator/price-book-display";
 import { STARTER_TEMPLATES, type EstimateTemplate } from "@/lib/turn-estimator/templates";
@@ -391,6 +392,7 @@ export default function EstimateBuilder({
                       ))}
                     </select>
                     <input aria-label="Scope description" className={`${input} w-full mt-2`} placeholder={method === "hourly" ? "Describe the repair, location and work included" : "Scope / checklist description"} value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
+                    <ImproveWithAI value={r.description} context="estimate" disabled={busy !== null} onApply={text=>setRow(r.key,{description:text})}/>
                   </td>
                   <td className="px-3 py-2">
                     <input aria-label={method === "hourly" ? "Quantity (use labor hours)" : "Quantity"} disabled={method === "hourly"} className={`${input} w-full min-w-0`} value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import ImproveWithAI from '@/components/ImproveWithAI';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import type {
@@ -406,6 +407,8 @@ export default function DetailClient({ workOrderId }: { workOrderId: string }) {
               Add
             </button>
           </div>
+
+          {noteType !== 'photo' && <ImproveWithAI key={noteType} value={note} context="work-order" disabled={saving} onApply={setNote}/>}
 
           <h2 style={{ marginTop: 14 }}>Failed access</h2>
           <div style={{ display: 'flex', gap: 8 }}>

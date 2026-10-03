@@ -3,8 +3,9 @@
 import { useSession } from "next-auth/react";
 import { canEditInvoiceDraft, canCreateInvoices, canGenerateInvoice } from "@/lib/invoice-permissions";
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { ArrowLeft, Save, FileDown, Loader2, Trash2, Wrench, Package, Check, Sparkles, Clock, Refrigerator } from "lucide-react";
+import { ArrowLeft, Save, FileDown, Loader2, Trash2, Wrench, Package, Check, Clock, Refrigerator } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import ImproveWithAI from "@/components/ImproveWithAI";
 import { Input } from "@/components/ui/input";
 import {
   WorkOrderRow,
@@ -189,8 +190,6 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
   const [showTechNotes, setShowTechNotes] = useState(false);
   const [showTaskList, setShowTaskList] = useState(false);
 
-  // AI rewrite state
-  const [rewritingId, setRewritingId] = useState<string | null>(null);
   const [extractingMaterials, setExtractingMaterials] = useState(false);
 
   // Auto-save state
@@ -833,34 +832,6 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
     };
   }
 
-  // ── AI rewrite handler ──────────
-  async function handleAiRewrite(lineItemId: string) {
-    const li = lineItems.find((l) => l.id === lineItemId);
-    if (!li || !li.description.trim()) return;
-
-    setRewritingId(lineItemId);
-    try {
-      const res = await fetch("/api/invoices/rewrite-description", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: li.description.trim() }),
-      });
-      const data = await res.json();
-      if (res.ok && data.rewritten) {
-        userHasEdited.current = true;
-        setLineItems((prev) =>
-          prev.map((item) =>
-            item.id === lineItemId ? { ...item, description: data.rewritten } : item
-          )
-        );
-      }
-    } catch (err) {
-      console.error("AI rewrite failed:", err);
-    } finally {
-      setRewritingId(null);
-    }
-  }
-
   // ── Manual save / generate PDF ──────────
   async function handleSave(generatePdf: boolean) {
     setError(null);
@@ -1349,27 +1320,14 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
                       value={li.description}
                       onChange={(e) => updateLineItem(li.id, "description", e.target.value)}
                       placeholder={idx === 0 && isLabor ? "Describe the work performed...\n• Bullet points supported" : isMaterials ? "Parts / materials description" : `Line item ${idx + 1} description`}
-                      disabled={isLoading || rewritingId === li.id}
+                      disabled={isLoading}
                       rows={2}
                       className={`w-full text-xs bg-transparent border border-sand-200 rounded-md px-3 py-2 resize-y leading-relaxed focus:outline-none focus:ring-2 focus:ring-terra-600/30 disabled:opacity-50 ${
                         li.description.trim().length > 3 ? "pr-10" : ""
                       }`}
                     />
-                    {li.description.trim().length > 3 && (
-                      <button
-                        type="button"
-                        onClick={() => handleAiRewrite(li.id)}
-                        disabled={isLoading || rewritingId !== null}
-                        className="absolute right-1 top-1 h-7 w-7 flex items-center justify-center text-purple-300 hover:text-purple-600 hover:bg-purple-50 disabled:hover:text-charcoal-300 disabled:hover:bg-transparent transition-colors rounded-md border border-transparent hover:border-purple-200"
-                        title="AI rewrite for professional invoice voice"
-                      >
-                        {rewritingId === li.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
-                        ) : (
-                          <Sparkles className="h-4 w-4" />
-                        )}
-                      </button>
-                    )}
+                    <ImproveWithAI value={li.description} context="invoice" disabled={isLoading || !canEdit}
+                      onApply={(text) => updateLineItem(li.id, "description", text)} />
                   </div>
 
                   {/* Qty/Hrs — hours for labor, count for materials/appliance/other */}
