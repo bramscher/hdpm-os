@@ -474,7 +474,7 @@ export function RentAnalysisWizard({
 
       {/* Footer */}
       <p className="text-center text-[10px] text-charcoal-300 pb-8">
-        Powered by AppFolio, HUD FMR, and Zillow market data
+        Powered by AppFolio, RentCast and HUD Fair Market Rent data
       </p>
     </div>
   );
