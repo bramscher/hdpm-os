@@ -9,6 +9,7 @@
 import { getComps, getBaselines } from './comps';
 import { getValueEstimate, getRentEstimate } from './rentcast';
 import { refreshRentCastComps } from './rentcast-comps';
+import { listingSourceLabel, mergeCompetingListings } from './competing-listings';
 import type {
   SubjectProperty,
   RentAnalysis,
@@ -236,7 +237,7 @@ function computeRecommendedRent(
     const compMedian = median(compPrices);
     const blendedRec = recommended * 0.8 + compMedian * 0.2;
     notes.push(
-      `Zillow competing median ($${round(compMedian)}) blended at 20% weight: $${round(blendedRec)}`
+      `Competing listings median (${listingSourceLabel(competingListings)}, ${competingListings.length}) ($${round(compMedian)}) blended at 20% weight: $${round(blendedRec)}`
     );
     recommended = blendedRec;
   }
@@ -359,24 +360,19 @@ export async function generateRentAnalysis(
   };
 
   // 5. Build competing listings (include RentCast rental comps if available)
-  const allCompetingListings: CompetingListing[] = [...(competingListings || [])];
-
-  if (rentCastRent?.comparables) {
-    const now = new Date().toISOString();
-    for (const rc of rentCastRent.comparables) {
-      if (rc.rent && rc.rent > 0) {
-        allCompetingListings.push({
-          address: rc.formattedAddress,
-          price: rc.rent,
-          bedrooms: rc.bedrooms,
-          bathrooms: rc.bathrooms,
-          sqft: rc.squareFootage,
-          source: 'rentcast',
-          fetched_at: now,
-        });
-      }
-    }
-  }
+  const now = new Date().toISOString();
+  const rentCastListings: CompetingListing[] = (rentCastRent?.comparables ?? [])
+    .filter((rc): rc is typeof rc & { rent: number } => !!rc.rent && rc.rent > 0)
+    .map((rc) => ({
+      address: rc.formattedAddress,
+      price: rc.rent,
+      bedrooms: rc.bedrooms,
+      bathrooms: rc.bathrooms,
+      sqft: rc.squareFootage,
+      source: 'rentcast',
+      fetched_at: now,
+    }));
+  const allCompetingListings = mergeCompetingListings(competingListings || [], rentCastListings);
 
   // 6. Calculate recommended rent
   const { low, mid, high, notes } = computeRecommendedRent(
@@ -408,3 +404,4 @@ export async function generateRentAnalysis(
     generated_by: userEmail,
   };
 }
+

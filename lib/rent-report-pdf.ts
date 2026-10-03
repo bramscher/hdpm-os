@@ -8,6 +8,7 @@
 import { jsPDF } from 'jspdf';
 import { HDPM_LOGO_BASE64 } from './hdpm-logo';
 import type { RentAnalysis, RentalComp, CompetingListing } from '@/types/comps';
+import { listingSourceLabel } from './competing-listings';
 
 // ============================================
 // Helpers
@@ -175,10 +176,9 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
   const { subject, stats, comparable_comps, competing_listings, baselines, methodology_notes } =
     analysis;
 
-  // Count total pages for footer (estimate)
   const hasZillow = competing_listings.length > 0;
-  const totalPages = hasZillow ? 4 : 3;
-  let currentPage = 1;
+  const zillowCount = competing_listings.filter((l) => l.source === 'zillow').length;
+  const rentCastCount = competing_listings.filter((l) => l.source === 'rentcast').length;
 
   // ════════════════════════════════════════════
   // PAGE 1: Summary
@@ -288,7 +288,7 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
 
     // Calculated range as small reference text
     doc.setFontSize(8);
-    doc.setTextColor('#ffffffcc');
+    doc.setTextColor('#e3efe3'); // opaque light green: jsPDF writes 8-digit (alpha) hex as an invalid PDF operator
     doc.text(
       `Calculated range: ${fmt(analysis.recommended_rent_low)} - ${fmt(analysis.recommended_rent_high)}/mo (target: ${fmt(analysis.recommended_rent_mid)})`,
       MARGIN + 20,
@@ -310,36 +310,55 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
 
   y += recBoxH + 16;
 
-  // Manager notes — gray box similar to subject property
+  // Manager notes — gray box similar to subject property. A long note
+  // continues on the next page in its own box instead of running into the
+  // footer or pushing later sections off the page.
   if (analysis.manager_notes) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     const noteLines: string[] = doc.splitTextToSize(analysis.manager_notes, CONTENT_W - 24);
-    const noteBoxH = Math.max(noteLines.length * 13 + 32, 46);
+    const NOTE_LINE = 13;
+    const NOTE_PAD = 32; // label + top and bottom padding
+    let next = 0;
+    while (next < noteLines.length) {
+      // Start a page if fewer than three lines (or the rest of the note) fit here.
+      y = checkPageBreak(doc, y, NOTE_PAD + NOTE_LINE * Math.min(3, noteLines.length - next));
+      const fits = Math.floor((FOOTER_Y - 20 - y - NOTE_PAD) / NOTE_LINE);
+      const count = Math.max(1, Math.min(noteLines.length - next, fits));
+      const noteBoxH = Math.max(count * NOTE_LINE + NOTE_PAD, 46);
 
-    y = checkPageBreak(doc, y, noteBoxH + 8);
+      doc.setFillColor(BG_GRAY);
+      doc.roundedRect(MARGIN, y, CONTENT_W, noteBoxH, 4, 4, 'F');
 
-    doc.setFillColor(BG_GRAY);
-    doc.roundedRect(MARGIN, y, CONTENT_W, noteBoxH, 4, 4, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(LABEL);
+      doc.text(next === 0 ? 'NOTES FROM HIGH DESERT PROPERTY MANAGEMENT' : 'NOTES (CONTINUED)', MARGIN + 12, y + 13);
 
-    // Label
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(LABEL);
-    doc.text('NOTES FROM HIGH DESERT PROPERTY MANAGEMENT', MARGIN + 12, y + 13);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(DARK);
+      for (let li = 0; li < count; li++) {
+        doc.text(noteLines[next + li], MARGIN + 12, y + 26 + li * NOTE_LINE);
+      }
 
-    // Note text
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(DARK);
-    for (let li = 0; li < noteLines.length; li++) {
-      doc.text(noteLines[li], MARGIN + 12, y + 26 + li * 13);
+      next += count;
+      y += noteBoxH + 16;
+      if (next < noteLines.length) {
+        doc.addPage();
+        y = drawHeader(doc);
+      }
     }
-
-    y += noteBoxH + 16;
   }
 
-  // Quick stats summary
+  // Quick stats summary — kept together on one page.
+  const townBaseline = baselines.find(
+    (b) => b.area_name === subject.town && b.bedrooms === subject.bedrooms && b.fmr_rent
+  );
+  const snapshotH = 20 + 38 + (stats.avg_sqft ? 34 : 0) + (townBaseline?.fmr_rent ? 34 : 0) + 10;
+  y = checkPageBreak(doc, y, snapshotH);
+  // A long note pushed the snapshot past page 1; let Methodology follow it on the same page.
+  const snapshotOnContinuationPage = doc.getNumberOfPages() > 1;
   y = drawSectionTitle(doc, y, 'MARKET SNAPSHOT');
 
   const colW = CONTENT_W / 4;
@@ -372,23 +391,22 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
   }
 
   // HUD FMR baseline
-  const townBaseline = baselines.find(
-    (b) => b.area_name === subject.town && b.bedrooms === subject.bedrooms && b.fmr_rent
-  );
   if (townBaseline?.fmr_rent) {
     drawLabel(doc, MARGIN, y, `HUD FAIR MARKET RENT (${subject.town}, ${subject.bedrooms}BR)`);
     drawValue(doc, MARGIN, y + 14, `${fmt(Number(townBaseline.fmr_rent))}/mo`, 10);
     y += 34;
   }
 
-  drawFooter(doc, currentPage, totalPages);
 
   // ════════════════════════════════════════════
   // PAGE 2: Methodology
   // ════════════════════════════════════════════
-  doc.addPage();
-  currentPage++;
-  y = drawHeader(doc);
+  if (snapshotOnContinuationPage) {
+    y = checkPageBreak(doc, y + 10, 160);
+  } else {
+    doc.addPage();
+    y = drawHeader(doc);
+  }
 
   y = drawSectionTitle(doc, y, 'METHODOLOGY');
 
@@ -429,9 +447,8 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
     `Manual Entry: ${comparable_comps.filter((c) => c.data_source === 'manual').length} manually entered comps`,
     `Rentometer: ${comparable_comps.filter((c) => c.data_source === 'rentometer').length} Rentometer data points`,
     `HUD FMR: ${baselines.length} Fair Market Rent baselines`,
-    competing_listings.length > 0
-      ? `Zillow: ${competing_listings.length} competing listings`
-      : 'Zillow: Not included in this report',
+    `Zillow: ${zillowCount ? `${zillowCount} competing listings` : 'Not included in this report'}`,
+    ...(rentCastCount ? [`RentCast: ${rentCastCount} rental listings`] : []),
   ];
 
   for (const src of sources) {
@@ -443,13 +460,11 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
     y += 14;
   }
 
-  drawFooter(doc, currentPage, totalPages);
 
   // ════════════════════════════════════════════
   // PAGE 3: Comparable Properties Table
   // ════════════════════════════════════════════
   doc.addPage();
-  currentPage++;
   y = drawHeader(doc);
 
   y = drawSectionTitle(doc, y, `COMPARABLE PROPERTIES (${comparable_comps.length})`);
@@ -528,17 +543,15 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
     y += 14;
   }
 
-  drawFooter(doc, currentPage, totalPages);
 
   // ════════════════════════════════════════════
   // PAGE 4: Competing Listings (if Zillow data)
   // ════════════════════════════════════════════
   if (hasZillow) {
     doc.addPage();
-    currentPage++;
     y = drawHeader(doc);
 
-    y = drawSectionTitle(doc, y, `COMPETING LISTINGS — ZILLOW (${competing_listings.length})`);
+    y = drawSectionTitle(doc, y, `COMPETING LISTINGS — ${listingSourceLabel(competing_listings).toUpperCase()} (${competing_listings.length})`);
 
     const zCols = [
       { label: 'ADDRESS', x: MARGIN, w: 200 },
@@ -592,7 +605,13 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
       y += 14;
     }
 
-    drawFooter(doc, currentPage, totalPages);
+  }
+
+  // Footers last, so every page (including overflow pages) gets one with the real page count.
+  const pageCount = doc.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page++) {
+    doc.setPage(page);
+    drawFooter(doc, page, pageCount);
   }
 
   // Output buffer
