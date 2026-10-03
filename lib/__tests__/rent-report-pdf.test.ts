@@ -58,4 +58,23 @@ describe('rent analysis PDF layout', () => {
     const total = pagesOf(pdf);
     for (let p = 1; p <= total; p++) expect(text).toContain(`Page ${p} of ${total}`);
   });
+
+  it('adds the Nearby Rentals page when RentCast returns enough comparables, and skips it otherwise', () => {
+    const comps = [2750, 2500, 2600, 2300, 2825].map((rent, i) => ({
+      formattedAddress: `${i} NE Sample Ln, Bend, OR`, city: 'Bend', state: 'OR', zipCode: '97701', bedrooms: 3, bathrooms: 2,
+      squareFootage: 1400, propertyType: 'Single Family', rent, correlation: 0.95 - i / 100, daysOld: 10, distance: 1.5,
+    }));
+    const base = sampleAnalysis(NOTE, 0);
+    const withComps = { ...base, rentcast_rent_estimate: { rent: 2550, rentRangeLow: 2300, rentRangeHigh: 2800, comparables: comps } } as RentAnalysis;
+    const text = generateRentReportPdf(withComps).toString('latin1');
+    expect(text).toContain('NEARBY RENTALS');
+    expect(text).toContain('SIMILARITY');
+    expect(text).toContain('about 2 miles away');
+    expect(text).toContain('Nearby rentals page: 5 RentCast comparables');
+    const total = pagesOf(generateRentReportPdf(withComps));
+    for (let p = 1; p <= total; p++) expect(text).toContain(`Page ${p} of ${total}`);
+
+    const few = { ...base, rentcast_rent_estimate: { rent: 2550, rentRangeLow: 2300, rentRangeHigh: 2800, comparables: comps.slice(0, 2) } } as RentAnalysis;
+    expect(generateRentReportPdf(few).toString('latin1')).not.toContain('NEARBY RENTALS');
+  });
 });

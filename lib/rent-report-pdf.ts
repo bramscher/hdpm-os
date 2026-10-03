@@ -9,6 +9,7 @@ import { jsPDF } from 'jspdf';
 import { HDPM_LOGO_BASE64 } from './hdpm-logo';
 import type { RentAnalysis, RentalComp, CompetingListing } from '@/types/comps';
 import { listingSourceLabel } from './competing-listings';
+import { buildNearbyRentals, type NearbyRentals } from './rent-report-nearby';
 
 // ============================================
 // Helpers
@@ -160,6 +161,232 @@ function drawValue(doc: jsPDF, x: number, y: number, value: string, size = 11): 
   doc.setFontSize(size);
   doc.setTextColor(BLACK);
   doc.text(value, x, y);
+}
+
+
+// ============================================
+// Nearby Rentals (modelled on AppFolio's Nearby Advertised Units)
+// ============================================
+
+const BAR = '#efd3c1';
+const BAR_MEDIAN = '#d9ad91';
+const YOUR_FILL = '#e6f1e6';
+const YOUR_COLUMN = '#f2f8f2';
+const UP = '#2f7d32';
+const DOWN = '#b3261e';
+
+function mix(a: string, b: string, t: number): string {
+  const p = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16);
+  const c = [0, 1, 2].map((i) => Math.round(p(a, i) + (p(b, i) - p(a, i)) * t));
+  return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Small up/down triangle plus a signed amount, e.g. ▲ 50 / ▼ $200 (drawn; standard fonts have no arrows). */
+function drawDelta(doc: jsPDF, x: number, y: number, diff: number | null, money: boolean, higherIsGood: boolean): void {
+  if (diff == null || diff === 0) return;
+  const up = diff > 0;
+  doc.setFillColor(up === higherIsGood ? UP : DOWN);
+  if (up) doc.triangle(x, y - 1, x + 6, y - 1, x + 3, y - 6, 'F');
+  else doc.triangle(x, y - 6, x + 6, y - 6, x + 3, y - 1, 'F');
+  doc.setTextColor(up === higherIsGood ? UP : DOWN);
+  doc.text(money ? fmt(Math.abs(diff)) : Math.abs(diff).toLocaleString(), x + 9, y);
+}
+
+function drawNearbyRentals(doc: jsPDF, startY: number, m: NearbyRentals): number {
+  let y = drawSectionTitle(doc, startY, 'NEARBY RENTALS');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(MID);
+  doc.text(
+    `${m.rows.length} similar rentals advertised near this property, ranked by similarity (RentCast). ${m.above} ask more than your rent and ${m.below} ask less.`,
+    MARGIN,
+    y
+  );
+  y += 12;
+
+  // Your unit strip
+  const stripH = 40;
+  doc.setFillColor(YOUR_FILL);
+  doc.roundedRect(MARGIN, y, CONTENT_W, stripH, 4, 4, 'F');
+  drawLabel(doc, MARGIN + 12, y + 14, 'YOUR UNIT');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(BLACK);
+  doc.text(String(m.unit.address).slice(0, 48), MARGIN + 12, y + 28);
+  const cols: [string, string][] = [
+    ['BEDS', String(m.unit.bedrooms)],
+    ['BATHS', m.unit.bathrooms != null ? String(m.unit.bathrooms) : '—'],
+    ['SQ FT', m.unit.sqft ? m.unit.sqft.toLocaleString() : '—'],
+    ['YOUR RENT', fmt(m.unit.rent)],
+  ];
+  cols.forEach(([label, value], i) => {
+    const x = MARGIN + 300 + i * 54;
+    drawLabel(doc, x, y + 14, label);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(i === 3 ? 11 : 10);
+    doc.setTextColor(i === 3 ? GREEN : BLACK);
+    doc.text(value, x, y + 28);
+  });
+  y += stripH + 22;
+
+  // Histogram
+  const chartX = MARGIN + 30;
+  const chartW = CONTENT_W - 40;
+  const chartH = 120;
+  const top = y + 10;
+  const base = top + chartH;
+  const maxCount = Math.max(1, ...m.bins.map((b) => b.count));
+  const binW = chartW / m.bins.length;
+  const barX = (i: number) => chartX + i * binW;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setDrawColor(LIGHT_BORDER);
+  doc.setLineWidth(0.4);
+  for (let c = 0; c <= maxCount; c++) {
+    const gy = base - (c / maxCount) * chartH;
+    if (c > 0) doc.line(chartX, gy, chartX + chartW, gy);
+    doc.setTextColor(MID);
+    if (c > 0) doc.text(String(c), chartX - 8, gy + 2, { align: 'right' });
+  }
+  doc.setTextColor(LABEL);
+  doc.text('Number of rentals', MARGIN + 4, base - chartH / 2 + 30, { angle: 90 });
+
+  // Your rent column behind the bars
+  doc.setFillColor(YOUR_COLUMN);
+  doc.rect(barX(m.yourBin) + 1, top - 6, binW - 2, chartH + 6, 'F');
+
+  m.bins.forEach((b, i) => {
+    if (!b.count) return;
+    const h = (b.count / maxCount) * chartH;
+    doc.setFillColor(i === m.medianBin ? BAR_MEDIAN : BAR);
+    doc.rect(barX(i) + 1.5, base - h, binW - 3, h, 'F');
+  });
+
+  doc.setDrawColor(GREEN);
+  doc.setLineWidth(0.8);
+  doc.setLineDashPattern([2, 2], 0);
+  doc.rect(barX(m.yourBin) + 1, top - 6, binW - 2, chartH + 6, 'S');
+  doc.setLineDashPattern([], 0);
+
+  // Median label above its bin
+  const medX = barX(m.medianBin) + binW / 2;
+  const medLabel = `Median ${fmt(m.median)}`;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  const medW = doc.getTextWidth(medLabel) + 10;
+  const medLeft = Math.min(Math.max(medX - medW / 2, chartX), chartX + chartW - medW);
+  doc.setFillColor(WHITE);
+  doc.setDrawColor(LIGHT_BORDER);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(medLeft, top - 22, medW, 13, 2, 2, 'FD');
+  doc.setTextColor(BLACK);
+  doc.text(medLabel, medLeft + 5, top - 13);
+
+  // Axis band: low (green) to high (red)
+  const bandY = base + 2;
+  const steps = 48;
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    doc.setFillColor(t < 0.5 ? mix('#9fca9f', '#f3f3f3', t * 2) : mix('#f3f3f3', '#e7a3a3', (t - 0.5) * 2));
+    doc.rect(chartX + (i * chartW) / steps, bandY, chartW / steps + 0.5, 6, 'F');
+  }
+
+  // House marker under your rent
+  const hx = barX(m.yourBin) + binW / 2;
+  const hy = bandY + 6;
+  doc.setFillColor(GREEN);
+  doc.triangle(hx - 6, hy + 6, hx + 6, hy + 6, hx, hy, 'F');
+  doc.rect(hx - 4, hy + 6, 8, 6, 'F');
+
+  // Tick labels at bin edges (thinned to fit)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(MID);
+  const every = Math.ceil(m.bins.length / 8);
+  for (let i = 0; i <= m.bins.length; i += every) {
+    const v = m.bins[0].from + i * m.binWidth;
+    doc.text(fmt(v), chartX + i * binW, bandY + 22, { align: 'center' });
+  }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(BLACK);
+  doc.text(`Low ${fmt(m.low)}`, chartX, bandY + 34);
+  doc.text(`High ${fmt(m.high)}`, chartX + chartW, bandY + 34, { align: 'right' });
+
+  y = bandY + 50;
+
+  // Table
+  const tcols = [
+    { label: 'SIMILARITY', x: MARGIN },
+    { label: 'BEDS', x: MARGIN + 74 },
+    { label: 'BATHS', x: MARGIN + 104 },
+    { label: 'SQ FT', x: MARGIN + 138 },
+    { label: 'LOCATION', x: MARGIN + 216 },
+    { label: 'LAST ADVERTISED', x: MARGIN + 316 },
+    { label: 'RENT', x: MARGIN + 400 },
+  ];
+  const drawTableHeader = () => {
+    doc.setFillColor(BG_GRAY);
+    doc.rect(MARGIN, y - 9, CONTENT_W, 14, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(LABEL);
+    for (const c of tcols) doc.text(c.label, c.x + 3, y);
+    y += 14;
+  };
+  drawTableHeader();
+
+  for (let i = 0; i < m.rows.length; i++) {
+    const before = doc.getNumberOfPages();
+    y = checkPageBreak(doc, y, 18);
+    if (doc.getNumberOfPages() > before) {
+      y = drawSectionTitle(doc, y, 'NEARBY RENTALS (continued)');
+      drawTableHeader();
+    }
+    const r = m.rows[i];
+    if (i % 2 === 1) {
+      doc.setFillColor('#fafafa');
+      doc.rect(MARGIN, y - 10, CONTENT_W, 16, 'F');
+    }
+    // Similarity bar
+    doc.setFillColor('#dfe7df');
+    doc.rect(MARGIN + 3, y - 7, 44, 8, 'F');
+    doc.setFillColor(GREEN);
+    doc.rect(MARGIN + 3, y - 7, (44 * r.similarity) / 100, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(DARK);
+    doc.text(`${r.similarity}%`, MARGIN + 50, y);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(r.bedrooms), tcols[1].x + 3, y);
+    doc.text(String(r.bathrooms), tcols[2].x + 3, y);
+    doc.text(r.sqft ? r.sqft.toLocaleString() : '—', tcols[3].x + 3, y);
+    drawDelta(doc, tcols[3].x + 34, y, r.sqftDiff, false, true);
+    doc.setTextColor(DARK);
+    doc.text(r.distanceLabel, tcols[4].x + 3, y);
+    doc.text(fmtDate(r.lastAdvertised), tcols[5].x + 3, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(BLACK);
+    doc.text(fmt(r.rent), tcols[6].x + 3, y);
+    doc.setFont('helvetica', 'normal');
+    drawDelta(doc, tcols[6].x + 46, y, r.rentDiff, true, true);
+    y += 16;
+  }
+
+  y = checkPageBreak(doc, y, 24);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(LABEL);
+  doc.text(
+    'Similar rentals from RentCast. Similarity is RentCast\'s match score; rents are advertised asking rents, not signed leases.',
+    MARGIN,
+    y + 6
+  );
+  doc.text('The green dashed column and house mark your rent. Arrows compare each rental with your unit: green = more, red = less.', MARGIN, y + 16);
+  return y + 26;
 }
 
 // ============================================
@@ -399,9 +626,16 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
 
 
   // ════════════════════════════════════════════
+  // Nearby Rentals (when RentCast returned enough comparables)
+  const nearby = buildNearbyRentals(analysis, (analysis.generated_at || new Date().toISOString()).slice(0, 10));
+  if (nearby) {
+    doc.addPage();
+    y = drawNearbyRentals(doc, drawHeader(doc), nearby);
+  }
+
   // PAGE 2: Methodology
   // ════════════════════════════════════════════
-  if (snapshotOnContinuationPage) {
+  if (nearby || snapshotOnContinuationPage) {
     y = checkPageBreak(doc, y + 10, 160);
   } else {
     doc.addPage();
@@ -414,7 +648,10 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
   const TEXT_X = MARGIN + 16;            // indent for wrapped lines
   const WRAP_W = CONTENT_W - (TEXT_X - MARGIN) - 4; // available width for text
 
-  for (const note of methodology_notes) {
+  const notesToShow = nearby
+    ? [...methodology_notes, `Nearby rentals page: ${nearby.rows.length} RentCast comparables, ranked by similarity`]
+    : methodology_notes;
+  for (const note of notesToShow) {
     // Pre-calculate height so page break check is accurate
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);

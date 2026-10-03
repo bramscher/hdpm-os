@@ -319,6 +319,10 @@ export interface RentCastComparable {
   rent?: number;
   correlation: number;
   daysOld: number;
+  /** Miles from the subject property (rent AVM comparables; absent on older saved analyses). */
+  distance?: number;
+  listedDate?: string;
+  lastSeenDate?: string;
 }
 
 /** RentCast property value estimate (AVM) */
