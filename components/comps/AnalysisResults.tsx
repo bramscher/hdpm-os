@@ -14,6 +14,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NearbyRentals } from "./NearbyRentals";
+import { listingSourceLabel } from "@/lib/competing-listings";
 import type { RentAnalysis, RentalComp } from "@/types/comps";
 
 interface AnalysisResultsProps {
@@ -244,6 +246,9 @@ export function AnalysisResults({
         </div>
       )}
 
+      {/* Nearby rentals: chart + similarity table (same as the PDF page) */}
+      <NearbyRentals analysis={analysis} rentOverride={rentOverride} />
+
       {/* Methodology notes */}
       {methodology_notes.length > 0 && (
         <div className="glass-heavy rounded-xl p-4">
@@ -304,12 +309,12 @@ export function AnalysisResults({
         </div>
       </div>
 
-      {/* Zillow section */}
+      {/* Competing listings (Zillow and/or RentCast) */}
       {competing_listings.length > 0 && (
         <div className="glass-heavy rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-charcoal-200/50">
             <h4 className="text-xs font-medium text-charcoal-400 uppercase tracking-wider">
-              Zillow Competing Listings ({competing_listings.length})
+              Competing Listings — {listingSourceLabel(competing_listings)} ({competing_listings.length})
             </h4>
           </div>
           <div className="divide-y divide-charcoal-100/50">
