@@ -235,6 +235,9 @@ interface RentCastRentResponse {
     price?: number; // RentCast uses "price" for rent in comparables
     correlation?: number;
     daysOld?: number;
+    distance?: number; // miles from the subject
+    listedDate?: string;
+    lastSeenDate?: string;
   }>;
 }
 
@@ -277,6 +280,9 @@ export async function getRentEstimate(
     rent: c.price, // RentCast returns rent as "price" in comparables
     correlation: c.correlation || 0,
     daysOld: c.daysOld || 0,
+    ...(typeof c.distance === 'number' ? { distance: c.distance } : {}),
+    ...(c.listedDate ? { listedDate: c.listedDate } : {}),
+    ...(c.lastSeenDate ? { lastSeenDate: c.lastSeenDate } : {}),
   }));
 
   console.log(
