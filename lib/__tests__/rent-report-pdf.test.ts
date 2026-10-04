@@ -59,6 +59,18 @@ describe('rent analysis PDF layout', () => {
     for (let p = 1; p <= total; p++) expect(text).toContain(`Page ${p} of ${total}`);
   });
 
+  it('lists only the data sources that contributed, including RentCast database comps', () => {
+    const base = sampleAnalysis(NOTE, 0);
+    const comps = base.comparable_comps.map((c, i) => ({ ...c, data_source: i < 11 ? 'appfolio' : 'rentcast' }));
+    const text = generateRentReportPdf({ ...base, comparable_comps: comps } as RentAnalysis).toString('latin1');
+    expect(text).toContain('AppFolio: 11 comps from portfolio data');
+    expect(text).toContain('RentCast: 4 advertised rental comps');
+    expect(text).toContain('HUD FMR: Redmond 3BR Fair Market Rent');
+    expect(text).not.toContain('Rentometer:');
+    expect(text).not.toContain('Manual Entry:');
+    expect(text).not.toContain('Zillow:');
+  });
+
   it('adds the Nearby Rentals page when RentCast returns enough comparables, and skips it otherwise', () => {
     const comps = [2750, 2500, 2600, 2300, 2825].map((rent, i) => ({
       formattedAddress: `${i} NE Sample Ln, Bend, OR`, city: 'Bend', state: 'OR', zipCode: '97701', bedrooms: 3, bathrooms: 2,
