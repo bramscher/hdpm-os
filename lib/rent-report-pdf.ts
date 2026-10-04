@@ -679,14 +679,20 @@ export function generateRentReportPdf(analysis: RentAnalysis): Buffer {
   y = checkPageBreak(doc, y, 60);
   y = drawSectionTitle(doc, y, 'DATA SOURCES');
 
-  const sources = [
-    `AppFolio: ${comparable_comps.filter((c) => c.data_source === 'appfolio').length} comps from portfolio data`,
-    `Manual Entry: ${comparable_comps.filter((c) => c.data_source === 'manual').length} manually entered comps`,
-    `Rentometer: ${comparable_comps.filter((c) => c.data_source === 'rentometer').length} Rentometer data points`,
-    `HUD FMR: ${baselines.length} Fair Market Rent baselines`,
-    `Zillow: ${zillowCount ? `${zillowCount} competing listings` : 'Not included in this report'}`,
-    ...(rentCastCount ? [`RentCast: ${rentCastCount} rental listings`] : []),
+  // Only list sources that actually contributed; a "0" line reads as missing data.
+  const compsFrom = (source: string) => comparable_comps.filter((c) => c.data_source === source).length;
+  const sourceLines: [number, string][] = [
+    [compsFrom('appfolio'), `AppFolio: ${compsFrom('appfolio')} comps from portfolio data`],
+    [compsFrom('rentcast'), `RentCast: ${compsFrom('rentcast')} advertised rental comps`],
+    [compsFrom('manual'), `Manual Entry: ${compsFrom('manual')} manually entered comps`],
+    [compsFrom('rentometer'), `Rentometer: ${compsFrom('rentometer')} Rentometer data points`],
+    [rentCastCount, `RentCast: ${rentCastCount} nearby listings near the subject property`],
+    [zillowCount, `Zillow: ${zillowCount} competing listings`],
   ];
+  const sources = sourceLines.filter(([count]) => count > 0).map(([, line]) => line);
+  if (townBaseline?.fmr_rent) {
+    sources.push(`HUD FMR: ${subject.town} ${subject.bedrooms}BR Fair Market Rent, ${fmt(Number(townBaseline.fmr_rent))}/mo`);
+  }
 
   for (const src of sources) {
     doc.setFont('helvetica', 'normal');
