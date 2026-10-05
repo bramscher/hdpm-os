@@ -266,8 +266,8 @@ export const APP_SECTIONS: AppSection[] = [
     description: 'The original galaxy view of the brain map, kept alongside the anatomical one. Uses the same data, so it also needs Brain map.',
     group: 'Company',
     defaultRoles: [...PM],
+    // Off the menu (still reachable at /brain-2).
     pages: ['/brain-2'],
-    nav: { href: '/brain-2', icon: 'brain', order: 32.6 },
   },
   {
     key: 'desk_demo',
@@ -330,6 +330,16 @@ export const APP_SECTIONS: AppSection[] = [
     pages: ['/admin/hiring'],
     apis: ['/api/admin/hiring'],
     nav: { href: '/admin/hiring', icon: 'briefcase', order: 42.6 },
+  },
+  {
+    key: 'leads_admin',
+    label: 'Leads',
+    description: 'Website CRM leads: pipeline status, follow-ups, owner and notes.',
+    group: 'Admin',
+    defaultRoles: ['admin'],
+    pages: ['/admin/leads'],
+    apis: ['/api/admin/leads'],
+    nav: { href: '/admin/leads', icon: 'target', order: 42.55 },
   },
   {
     key: 'website_admin',
