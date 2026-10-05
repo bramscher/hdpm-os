@@ -5,6 +5,8 @@ import { optimizeRouteWithGoogle } from '@/lib/route-directions';
 import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
 import { routeArrival } from '@/lib/route-builder/inspection-time';
 import { routeBlockers } from '@/lib/inspection-route-blockers';
+import { requireNewNotice } from '@/lib/inspection-route-reschedule';
+import { postInspectionNoticeCard } from '@/lib/agents/dez/inspection-notice';
 import { validRouteStartTime } from '@/lib/route-builder/inspection-time';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
@@ -354,6 +356,8 @@ export async function POST(request: NextRequest) {
       // Mark the stops scheduled with the route's date. Send Notices finds
       // inspections by target_date, so it must match the route date.
       const routeInspectionIds = proposed.stops.map((stop) => stop.inspection_id);
+      // A tenant told an earlier date (route deleted or skipped) needs a fresh notice.
+      await requireNewNotice(supabase, routeInspectionIds);
       const { error: updateError } = await supabase
         .from('inspections')
         .update({
@@ -361,6 +365,7 @@ export async function POST(request: NextRequest) {
           route_plan_id: routePlan.id,
           target_date: proposed.route_date,
           assigned_to: routePlan.assigned_to,
+          notice_status: 'pending',
           updated_at: new Date().toISOString(),
         })
         .in('id', routeInspectionIds);
@@ -372,6 +377,11 @@ export async function POST(request: NextRequest) {
       scheduledInspectionIds.push(...routeInspectionIds);
 
       createdRoutes.push(routePlan);
+    }
+
+    // Same Slack heads-up the Candidates scheduler sends (off unless enabled).
+    if (scheduledInspectionIds.length > 0 && process.env.DEZ_INSPECTION_NOTICES === '1') {
+      await postInspectionNoticeCard(supabase, scheduledInspectionIds);
     }
 
     // Step 5: Return results

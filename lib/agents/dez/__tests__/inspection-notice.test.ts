@@ -21,6 +21,14 @@ function notice(over: Partial<DueNotice> = {}): DueNotice {
     attempts: 0,
     channel: null,
     error: null,
+    route_plan_id: 'plan-1',
+    route_assigned_to: 'brody@highdesertpm.com',
+    route_window: 'between 8:30 AM and 1:00 PM',
+    arrival: '9:15 AM',
+    previous_target_date: null,
+    financially_responsible: null,
+    appfolio_unit_id: 'u1',
+    synced_at: null,
     ...over,
   };
 }
@@ -56,7 +64,7 @@ describe('buildInspectionNoticeCard', () => {
   it('shows action buttons when unresolved, with the sendable count on Mark all sent', () => {
     const card = buildInspectionNoticeCard({ proposalId: 'p1', routeDate: '2026-09-15', items });
     const json = JSON.stringify(card.blocks);
-    expect(json).toContain('Review & Send in Realm-X');
+    expect(json).toContain('Review & Send');
     expect(json).toContain('Mark all sent (1)'); // only 1 of 2 has an email
     expect(json).toContain(buildNoticeActionId('sent', 'p1'));
     expect(json).toContain('no tenant email'); // missing-email warning present
@@ -71,7 +79,7 @@ describe('buildInspectionNoticeCard', () => {
       resolution: '✅ 1 notice marked sent by Brody 9:00 AM.',
     });
     const json = JSON.stringify(card.blocks);
-    expect(json).not.toContain('Review & Send in Realm-X');
+    expect(json).not.toContain('Review & Send');
     expect(json).not.toContain(buildNoticeActionId('sent', 'p1'));
     expect(json).toContain('marked sent by Brody');
   });
@@ -85,3 +93,36 @@ describe('getNoticeOwner', () => {
     if (prev !== undefined) process.env.DEZ_INSPECTION_NOTICE_OWNER = prev;
   });
 });
+
+describe('route card with Realm-X request', () => {
+  it('shows the window, the paste-ready request, and a date-changed title', () => {
+    const card = buildInspectionNoticeCard({
+      proposalId: 'p1',
+      routeDate: '2026-09-15',
+      items: toNoticeCardItems([notice({ financially_responsible: ['Jane Doe', 'John Doe'] })]),
+      windowLabel: 'between 8:30 AM and 1:00 PM',
+      realmxRequest: 'Draft a bulk email (do not send yet) to the current tenants of these units:',
+      dateChanged: true,
+    });
+    const text = JSON.stringify(card.blocks);
+    expect(text).toContain('Date changed');
+    expect(text).toContain('between 8:30 AM and 1:00 PM');
+    expect(text).toContain('Jane Doe, John Doe');
+    expect(text).toContain('Draft a bulk email');
+  });
+  it('drops the request once resolved', () => {
+    const card = buildInspectionNoticeCard({ proposalId: 'p1', routeDate: '2026-09-15', items: [], realmxRequest: 'REQ', resolution: 'done' });
+    expect(JSON.stringify(card.blocks)).not.toContain('REQ');
+  });
+});
+
+describe('without Realm-X', () => {
+  it('points to the AppFolio letter with the date and window', () => {
+    const card = buildInspectionNoticeCard({ proposalId: 'p1', routeDate: '2026-10-14', items: [], windowLabel: 'between 8:30 AM and 1:00 PM' });
+    const text = JSON.stringify(card.blocks);
+    expect(text).toContain('Inspection Letter');
+    expect(text).toContain('Wednesday, October 14, 2026, between 8:30 AM and 1:00 PM');
+    expect(text).not.toContain('Paste this into AppFolio');
+  });
+});
+

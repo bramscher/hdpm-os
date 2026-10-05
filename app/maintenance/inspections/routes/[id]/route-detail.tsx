@@ -2,6 +2,7 @@
 
 import { inspectionSchedule } from "@/lib/route-builder/inspection-schedule";
 import { routeStartTime, routeTimeLabel } from "@/lib/route-builder/inspection-time";
+import { inspectionHorizon, inspectionToday, shiftInspectionDate } from "@/lib/inspection-window";
 
 import { formatInspectionOccupants, formatInspectionPets } from '@/lib/inspection-household';
 import type { AppFolioPet } from '@/lib/appfolio';
@@ -172,6 +173,9 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
   const [startTime, setStartTime] = useState("08:00");
   const [savingTime, setSavingTime] = useState(false);
   const [timeMessage, setTimeMessage] = useState<string | null>(null);
+  const [routeDate, setRouteDate] = useState("");
+  const [savingDate, setSavingDate] = useState(false);
+  const [dateMessage, setDateMessage] = useState<string | null>(null);
 
   // ── Fetch route ──
   const fetchRoute = useCallback(async () => {
@@ -225,6 +229,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
       };
       setRoute(transformed);
       setStartTime(transformed.start_time);
+      setRouteDate(transformed.date);
       if (raw.polyline) setPolyline(raw.polyline);
     } catch (err) {
       console.error("Fetch route error:", err);
@@ -401,6 +406,7 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
   }
 
   const stops = route.stops || [];
+  const dateLocked = ["in_progress", "completed"].includes(route.status) || stops.some(stop => ["in_progress", "completed"].includes(stop.status));
   const timing = inspectionSchedule(stops.map(stop => ({...stop, travel_minutes_from_previous:stop.drive_minutes})));
   const totalDrive = timing.driveMinutes;
   const totalService = timing.serviceMinutes;
@@ -569,6 +575,39 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
           <p className="text-xs text-charcoal-500">Departure from the office; arrival and finish estimates adjust automatically.</p>
         </form>
         {timeMessage && <p role="status" className="mt-2 text-sm text-charcoal-700">{timeMessage}</p>}
+
+        <form onSubmit={async e => {
+          e.preventDefault();
+          if (routeDate === route.date) return;
+          setSavingDate(true); setDateMessage(null);
+          try {
+            const res = await fetch(`/api/inspections/routes/${routeId}`, {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({route_date:routeDate})});
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to change date");
+            const renoticed = data.reschedule?.renoticed ?? 0;
+            let calendarNote = "";
+            if (route.calendar_event_id) {
+              const cal = await fetch(`/api/inspections/routes/${routeId}/calendar?reschedule=1`, {method:"POST"});
+              const calData = await cal.json().catch(() => ({}));
+              calendarNote = cal.ok ? " The Outlook event moved too." : ` Outlook wasn't updated (${calData.error || cal.statusText}) — use Republish to Outlook.`;
+            }
+            await fetchRoute();
+            setDateMessage(
+              `Moved to ${new Date(`${routeDate}T12:00:00`).toLocaleDateString("en-US", {weekday:"long", month:"long", day:"numeric"})}.` +
+              (renoticed > 0 ? ` ${renoticed} tenant${renoticed === 1 ? " was" : "s were"} already told the old date — they're back in Send Notices as "Date changed".` : " Send notices for the new date from Send Notices.") +
+              calendarNote
+            );
+          } catch (err) { setDateMessage(err instanceof Error ? err.message : "Failed to change date"); }
+          finally { setSavingDate(false); }
+        }} className="flex flex-wrap items-end gap-3 mt-4 pt-4 border-t border-charcoal-100">
+          <div>
+            <label htmlFor="route-date" className="block text-xs font-medium text-charcoal-600 mb-1">Route date</label>
+            <input id="route-date" type="date" required value={routeDate} min={shiftInspectionDate(inspectionToday(), 7)} max={inspectionHorizon()} onChange={e => setRouteDate(e.target.value)} disabled={savingDate || dateLocked} className="border border-charcoal-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <button type="submit" disabled={savingDate || dateLocked || !routeDate || routeDate === route.date} className="rounded-lg bg-terra-500 text-white px-4 py-2 text-sm disabled:opacity-50">{savingDate ? "Moving…" : "Change date"}</button>
+          <p className="text-xs text-charcoal-500">{dateLocked ? "This route has started, so its date can't change." : "7–21 days out. Tenants already noticed are queued for an updated notice."}</p>
+        </form>
+        {dateMessage && <p role="status" className="mt-2 text-sm text-charcoal-700">{dateMessage}</p>}
       </div>
 
       {/* ── Stats Bar ── */}

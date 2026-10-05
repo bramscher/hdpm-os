@@ -14,6 +14,7 @@ import { inspectionToday, inspectionHorizon } from './inspection-window';
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { routeArrivals } from './inspection-realmx-request';
 
 const COMPANY_NAME = 'High Desert Property Management';
 const COMPANY_PHONE = '(541) 406-6409';
@@ -29,6 +30,8 @@ export interface NoticeInspectionRow {
   notice_attempts: number | null;
   notice_channel: string | null;
   notice_error: string | null;
+  route_plan_id?: string | null;
+  notice_previous_target_date?: string | null;
   inspection_properties: {
     address_1: string | null;
     address_2: string | null;
@@ -37,6 +40,9 @@ export interface NoticeInspectionRow {
     zip: string | null;
     resident_name: string | null;
     tenant_email: string | null;
+    appfolio_unit_id?: string | null;
+    financially_responsible_occupants?: string[] | null;
+    last_appfolio_sync_at?: string | null;
   } | null;
 }
 
@@ -56,6 +62,18 @@ export interface DueNotice {
   attempts: number;
   channel: string | null;
   error: string | null;
+  /** Route this inspection is on, and its date/assignee/arrival window. */
+  route_plan_id: string | null;
+  route_assigned_to: string | null;
+  route_window: string | null;
+  /** This unit's estimated arrival, e.g. "9:15 AM". */
+  arrival: string | null;
+  /** Set when the route moved after the tenant was told this earlier date. */
+  previous_target_date: string | null;
+  /** From the last AppFolio sync: who to tick in AppFolio, and how fresh that is. */
+  financially_responsible: string[] | null;
+  appfolio_unit_id: string | null;
+  synced_at: string | null;
 }
 
 export interface DueNoticesResult {
@@ -130,6 +148,13 @@ const RICH_NOTICE_COLS =
   `id, target_date, inspection_type, unit_name, resident_name, notice_email,
    notice_status, notice_attempts, notice_channel, notice_error,
    inspection_properties ( address_1, address_2, city, state, zip, resident_name, tenant_email )`;
+// Notices v2 adds route, previous-date and household fields (20261011 + 20260928).
+const V2_NOTICE_COLS =
+  `id, target_date, inspection_type, unit_name, resident_name, notice_email,
+   notice_status, notice_attempts, notice_channel, notice_error,
+   route_plan_id, notice_previous_target_date,
+   inspection_properties ( address_1, address_2, city, state, zip, resident_name, tenant_email,
+     appfolio_unit_id, financially_responsible_occupants, last_appfolio_sync_at )`;
 const LEGACY_NOTICE_COLS =
   `id, target_date, inspection_type, unit_name, resident_name, notice_email,
    notice_status,
@@ -163,7 +188,10 @@ export async function getDueNotices(
     return q;
   };
 
-  let { data, error } = await runQuery(RICH_NOTICE_COLS);
+  let { data, error } = await runQuery(V2_NOTICE_COLS);
+  if (error && isMissingColumn(error)) {
+    ({ data, error } = await runQuery(RICH_NOTICE_COLS));
+  }
   if (error && isMissingColumn(error)) {
     ({ data, error } = await runQuery(LEGACY_NOTICE_COLS));
   }
@@ -177,8 +205,12 @@ export async function getDueNotices(
     return { ...(row as object), inspection_properties: prop } as NoticeInspectionRow;
   });
 
+  const routes = await loadRouteTiming(supabase, rows);
+
   const notices: DueNotice[] = rows.map((insp) => {
     const { subject, body } = buildNoticeContent(insp);
+    const route = insp.route_plan_id ? routes.get(insp.route_plan_id) : undefined;
+    const p = insp.inspection_properties;
     return {
       id: insp.id,
       target_date: insp.target_date,
@@ -191,6 +223,14 @@ export async function getDueNotices(
       attempts: insp.notice_attempts ?? 0,
       channel: insp.notice_channel ?? null,
       error: insp.notice_error ?? null,
+      route_plan_id: insp.route_plan_id ?? null,
+      route_assigned_to: route?.assigned_to ?? null,
+      route_window: route?.window ?? null,
+      arrival: route?.arrivals.get(insp.id) ?? null,
+      previous_target_date: insp.notice_previous_target_date ?? null,
+      financially_responsible: p?.financially_responsible_occupants ?? null,
+      appfolio_unit_id: p?.appfolio_unit_id ?? null,
+      synced_at: p?.last_appfolio_sync_at ?? null,
     };
   });
 
@@ -200,6 +240,34 @@ export async function getDueNotices(
     missing_email: notices.filter((n) => !n.email).length,
     notices,
   };
+}
+
+interface RouteTiming {
+  assigned_to: string | null;
+  window: string | null;
+  arrivals: Map<string, string>;
+}
+
+/** Arrival window per route and arrival per inspection, computed like the route page. */
+async function loadRouteTiming(supabase: SupabaseClient, rows: NoticeInspectionRow[]): Promise<Map<string, RouteTiming>> {
+  const routeIds = [...new Set(rows.map((r) => r.route_plan_id).filter(Boolean))] as string[];
+  const result = new Map<string, RouteTiming>();
+  if (routeIds.length === 0) return result;
+  const [{ data: plans }, { data: stops }] = await Promise.all([
+    supabase.from('route_plans').select('id, start_time, assigned_to').in('id', routeIds),
+    supabase.from('route_stops')
+      .select('route_plan_id, inspection_id, stop_order, status, travel_minutes_from_previous, service_minutes')
+      .in('route_plan_id', routeIds)
+      .order('stop_order', { ascending: true }),
+  ]);
+  for (const plan of plans || []) {
+    const planStops = (stops || []).filter((s) => s.route_plan_id === plan.id);
+    const { arrivals, window } = routeArrivals(plan.start_time, planStops);
+    const byInspection = new Map<string, string>();
+    planStops.forEach((s, i) => { if (arrivals[i]) byInspection.set(s.inspection_id, arrivals[i]!); });
+    result.set(plan.id, { assigned_to: plan.assigned_to ?? null, window: window?.label ?? null, arrivals: byInspection });
+  }
+  return result;
 }
 
 export type NoticeResultStatus = 'sent' | 'failed' | 'skipped';
@@ -226,7 +294,8 @@ export interface RecordResultsSummary {
  */
 export async function recordNoticeResults(
   supabase: SupabaseClient,
-  results: NoticeResult[]
+  results: NoticeResult[],
+  sentBy?: string | null
 ): Promise<RecordResultsSummary> {
   const summary: RecordResultsSummary = { sent: 0, failed: 0, skipped: 0 };
   if (!results.length) return summary;
@@ -263,6 +332,9 @@ export async function recordNoticeResults(
       legacy.notice_sent_at = now;
       legacy.notice_message_id = r.message_id ?? null;
       rich.notice_error = null;
+      // Notices v2 (20261011): who sent it; the new date is now what the tenant knows.
+      rich.notice_sent_by = sentBy ?? null;
+      rich.notice_previous_target_date = null;
     } else if (r.status === 'failed') {
       // Pre-migration there's no 'failed' bucket; leave the legacy status as-is
       // (still pending) so it stays in the queue, and only note the error richly.
@@ -277,6 +349,11 @@ export async function recordNoticeResults(
       .from('inspections')
       .update({ ...legacy, ...rich })
       .eq('id', r.id);
+    if (error && isMissingColumn(error) && ('notice_sent_by' in rich || 'notice_previous_target_date' in rich)) {
+      // 20261011 not applied yet — retry without the Notices v2 columns.
+      const { notice_sent_by: _by, notice_previous_target_date: _prev, ...older } = rich;
+      ({ error } = await supabase.from('inspections').update({ ...legacy, ...older }).eq('id', r.id));
+    }
     if (error && isMissingColumn(error)) {
       // Dispatch migration not applied yet — persist the legacy fields only.
       // A 'failed' result has no legacy field (no pre-migration 'failed' state),
@@ -298,11 +375,13 @@ export async function recordNoticeResults(
 /** Back-compat: staff bulk-sent via AppFolio Realm-X and marked them sent. */
 export async function markNoticesSent(
   supabase: SupabaseClient,
-  ids: string[]
+  ids: string[],
+  sentBy?: string | null
 ): Promise<{ updated: number }> {
   const summary = await recordNoticeResults(
     supabase,
-    ids.map((id) => ({ id, status: 'sent' as const, channel: 'manual' as const }))
+    ids.map((id) => ({ id, status: 'sent' as const, channel: 'manual' as const })),
+    sentBy
   );
   return { updated: summary.sent };
 }

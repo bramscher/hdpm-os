@@ -12,7 +12,7 @@ related: [inspection-notice-dispatch, inspection-notices-appfolio]
 
 **Applies to:** HDPM-OS `/maintenance/inspections`
 **Owner:** Maintenance coordinator
-**Last updated:** 2026-10-05
+**Last updated:** 2026-10-05 (Notices v2)
 
 ## Purpose
 
@@ -117,17 +117,35 @@ existing inspection properties (including already scheduled candidates).
 ### 4. Send tenant notices (required, logged in AppFolio)
 
 All tenant correspondence must live in AppFolio, and AppFolio has no send API,
-so notices are sent from AppFolio by hand.
+so notices are sent from AppFolio. HDPM-OS prepares everything per **route**
+(one date and one arrival window, e.g. "between 8:30 AM and 1:00 PM").
 
-1. On the Inspection Queue click **Send Notices**. The **Send Tenant
-   Inspection Notices** window lists every scheduled inspection still needing
-   notice.
-2. Click **Open Inspection Letter in AppFolio** (letter template 197) and use
-   **Copy date**, **Copy message**, **Copy emails** and **Copy address** to
-   fill and send the letter. Sending from AppFolio logs it on each tenant.
-3. Back in HDPM-OS, click **Mark N as sent** so they stop surfacing.
-4. Rows showing **(no email)** need a phone call or posted notice — handle
-   manually and note it.
+1. On the Inspection Queue click **Send Notices**. Each route shows its date,
+   arrival window and units, with each unit's estimated arrival and who to
+   tick in AppFolio (financially responsible occupants from the last sync).
+2. Click **Re-check tenants**. It pulls current tenants from AppFolio and warns
+   about a tenant who changed since scheduling, a move-out on or before the
+   visit, a vacant unit, or no email. Resolve warnings before sending.
+3. Click **Open Inspection Letter in AppFolio** (template 197). Paste the
+   date with **Copy date** (it includes the arrival window), search each unit
+   with **Copy address**, tick the people listed for it, and send. **Copy
+   message** and **Copy emails** are there if you need them.
+   - *Once Realm-X is on the AppFolio plan:* set `NEXT_PUBLIC_REALMX_ENABLED=1`
+     in Vercel. A **Copy Realm-X request** button appears; paste it into
+     Realm-X Assistant, which drafts the email to each unit's current tenants
+     for you to check and send.
+4. Tick the units you sent and click **Mark selected sent**. HDPM-OS records
+   who marked it and warns if it was less than 7 days before the visit.
+5. Units with no email need a phone call or posted notice — handle manually,
+   then mark them sent.
+
+**Date changed:** units whose route moved after their notice went out return
+here with a **Date changed (was …)** badge, and the notice text becomes an
+"Updated" notice. Send it the same way.
+
+**Dez (optional):** with `DEZ_INSPECTION_NOTICES=1`, Brody also gets a Slack
+card per route with the date line, who to tick, and a **Mark all sent** button
+(plus the Realm-X request once Realm-X is enabled).
 
 ### 5. Run the route & complete inspections
 
@@ -156,13 +174,15 @@ so notices are sent from AppFolio by hand.
   in the stop notes.
 - **Visit date passed, stop unfinished:** it shows as **Past appointment**
   (needs review). Complete it or Skip it.
-- **Route needs a different day:** there is no move button. **Delete Route**
-  (stops return to the queue and the Outlook event is removed), then schedule
-  again and re-send notices for the new date.
+- **Route needs a different day:** on the route page set **Route date** and
+  click **Change date** (7–21 days out; not once a stop has started). Arrival
+  times, the inspections and the Outlook event move with it, and tenants
+  already noticed come back to **Send Notices** as **Date changed**.
 - **Whole day cancelled:** Route Builder calendar → **Clear all routes for this
   day**.
 - **Start time changes:** edit it, **Save start time**, then **Republish to
-  Outlook**.
+  Outlook**. If notices already went out, the arrival window in them is now
+  wrong — call or message the affected tenants.
 - **Urgent unit for an existing route:** not supported. Rebuild the route, or
   schedule the unit on its own route at least 7 days out.
 - **Inspection should not happen:** select it on the queue and use **Change
@@ -188,7 +208,7 @@ so notices are sent from AppFolio by hand.
   "due."
 - **Flag Issue** does not create a work order, and there are no photos or
   inspection reports in HDPM-OS.
-- No **move route**, **reorder stops**, **remove one stop**, or **add a stop**
+- No **reorder stops**, **remove one stop**, or **add a stop**
   buttons yet (some exist in the API only).
 - Units that fail geocoding sit out of routing until the address is fixed.
 

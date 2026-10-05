@@ -24,6 +24,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buildRealmxRequest, longDate, noticeDateLine, realmxEnabled } from "@/lib/inspection-realmx-request";
 import { SkeletonCard, SkeletonRows } from "@/components/ui/skeleton";
 
 // AppFolio "Letters" deep link. Opens the saved "Inspection Letter — TENANT
@@ -73,6 +74,13 @@ interface DueNotice {
   attempts?: number;
   channel?: string | null;
   error?: string | null;
+  route_plan_id?: string | null;
+  route_assigned_to?: string | null;
+  route_window?: string | null;
+  arrival?: string | null;
+  previous_target_date?: string | null;
+  financially_responsible?: string[] | null;
+  synced_at?: string | null;
 }
 
 interface DueNoticesResult {
@@ -353,8 +361,8 @@ export function InspectionDashboard() {
     }
   };
 
-  const handleMarkNoticesSent = async (ids: string[]) => {
-    if (!ids.length) return;
+  const handleMarkNoticesSent = async (ids: string[]): Promise<string[]> => {
+    if (!ids.length) return [];
     setMarkingSent(true);
     try {
       const res = await fetch("/api/inspections/notify", {
@@ -364,10 +372,14 @@ export function InspectionDashboard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to mark sent");
-      setNoticeModal(null);
+      // Keep the window open on the remaining routes.
+      const refreshed = await fetch("/api/inspections/notify");
+      if (refreshed.ok) setNoticeModal((await refreshed.json()) as DueNoticesResult);
       await fetchInspections();
+      return Array.isArray(data.late) ? data.late : [];
     } catch (err) {
       alert(`Mark sent failed: ${err instanceof Error ? err.message : err}`);
+      return [];
     } finally {
       setMarkingSent(false);
     }
@@ -1108,33 +1120,22 @@ function NoticeBadge({ inspection }: { inspection: Inspection }) {
 // Tenant Notices Modal — bulk-send via AppFolio Realm-X
 // ────────────────────────────────────────────────
 
-const COMPANY_PHONE = "(541) 406-6409";
-
-function longDate(dateStr: string): string {
-  return new Date(`${dateStr}T12:00:00`).toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric", year: "numeric",
-  });
+interface RecipientTenant {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  financially_responsible: boolean;
+  primary: boolean;
+  move_in: string | null;
+  move_out: string | null;
 }
+interface RecipientCheck { id: string; tenants: RecipientTenant[]; warnings: string[] }
 
-// One bulk email goes to many recipients, so the body is generic per send-date.
-function genericNotice(dateStr: string): { subject: string; body: string } {
-  const d = longDate(dateStr);
-  return {
-    subject: `Notice of Routine Property Inspection — ${d}`,
-    body: [
-      "Hello,",
-      "",
-      `This is an advance notice that High Desert Property Management will conduct a routine inspection of your residence on ${d}.`,
-      "",
-      "Routine inspections occur about twice a year and help us keep the property well maintained. Our inspector will briefly walk through the unit to check its condition and note any maintenance needs. You are welcome to be present but do not need to be.",
-      "",
-      `Please make sure pets are secured and the unit is accessible on that day. If the scheduled date does not work, contact us as soon as possible at ${COMPANY_PHONE}.`,
-      "",
-      "Thank you,",
-      "High Desert Property Management",
-      COMPANY_PHONE,
-    ].join("\n"),
-  };
+function syncedAgo(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const hours = Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000);
+  if (!Number.isFinite(hours)) return null;
+  return hours < 1 ? "synced <1 h ago" : hours < 48 ? `synced ${hours} h ago` : `synced ${Math.round(hours / 24)} days ago`;
 }
 
 function NoticeModal({
@@ -1146,9 +1147,14 @@ function NoticeModal({
   result: DueNoticesResult;
   marking: boolean;
   onClose: () => void;
-  onMarkSent: (ids: string[]) => void;
+  onMarkSent: (ids: string[]) => Promise<string[]>;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [checks, setChecks] = useState<Map<string, RecipientCheck>>(new Map());
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [lateIds, setLateIds] = useState<string[]>([]);
 
   const copy = (key: string, text: string) => {
     navigator.clipboard?.writeText(text).then(() => {
@@ -1157,157 +1163,272 @@ function NoticeModal({
     });
   };
 
-  // Group by target date so each bulk send is a single date's recipients.
+  // One section per route: one Realm-X bulk email (same date + window) per route.
   const groups = new Map<string, DueNotice[]>();
   for (const n of result.notices) {
-    const key = n.target_date || "no-date";
+    const key = n.route_plan_id || `date:${n.target_date || "none"}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(n);
   }
-  const sortedDates = [...groups.keys()].sort();
-  const allIds = result.notices.map((n) => n.id);
+  const sortedKeys = [...groups.keys()].sort((a, b) =>
+    (groups.get(a)![0].target_date || "").localeCompare(groups.get(b)![0].target_date || ""));
+
+  const toggle = (id: string) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  async function recheckTenants() {
+    setChecking(true);
+    setCheckError(null);
+    try {
+      const ids = result.notices.map((n) => n.id).join(",");
+      const res = await fetch(`/api/inspections/notify/recipients?ids=${encodeURIComponent(ids)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Tenant check failed");
+      setChecks(new Map((data.results as RecipientCheck[]).map((r) => [r.id, r])));
+    } catch (err) {
+      setCheckError(err instanceof Error ? err.message : "Tenant check failed");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function markSelected(ids: string[]) {
+    const late = await onMarkSent(ids);
+    setLateIds(late);
+    setSelected((prev) => new Set([...prev].filter((id) => !ids.includes(id))));
+  }
+
+  const warningCount = [...checks.values()].filter((c) => c.warnings.length > 0).length;
+  const realmx = realmxEnabled();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-card-hover w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-card-hover w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between p-6 pb-4 border-b border-charcoal-200">
           <div>
             <h3 className="text-base font-bold text-charcoal-900">Send Tenant Inspection Notices</h3>
-            <p className="text-xs text-charcoal-500 mt-1 max-w-md">
-              For each date, click <b>Open Inspection Letter in AppFolio</b> — it opens the saved
-              <b> &ldquo;Inspection Letter — TENANT NOTIFICATION&rdquo;</b> template. Set the inspection
-              date, search each unit below and check its resident, send, then mark them sent here.
-            </p>
+            {realmx ? (
+              <p className="text-xs text-charcoal-500 mt-1 max-w-xl">
+                For each route: click <b>Re-check tenants</b>, then <b>Copy Realm-X request</b> and paste it into
+                AppFolio → Realm-X Assistant. Realm-X drafts the email to each unit&apos;s current tenants — check its
+                recipients, send, then tick the units here and <b>Mark selected sent</b>.
+              </p>
+            ) : (
+              <p className="text-xs text-charcoal-500 mt-1 max-w-xl">
+                For each route: click <b>Re-check tenants</b>, then <b>Open Inspection Letter in AppFolio</b>. Paste
+                the date (<b>Copy date</b>), search each unit (<b>Copy address</b>) and tick the people listed here,
+                send, then tick the units here and <b>Mark selected sent</b>.
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="p-1 hover:bg-charcoal-100 rounded-lg">
             <XIcon className="w-4 h-4 text-charcoal-400" />
           </button>
         </div>
 
-        <div className="px-6 py-2 text-xs text-charcoal-500 border-b border-charcoal-100">
-          {result.count} due &bull; {result.with_email} with email
-          {result.missing_email > 0 && <span className="text-amber-600"> &bull; {result.missing_email} missing email</span>}
-          {result.notices.some((n) => n.status === "failed") && (
-            <span className="text-red-600"> &bull; {result.notices.filter((n) => n.status === "failed").length} failed (will retry)</span>
-          )}
+        <div className="flex flex-wrap items-center gap-3 px-6 py-2 text-xs text-charcoal-500 border-b border-charcoal-100">
+          <span>
+            {result.count} due &bull; {result.with_email} with email
+            {result.missing_email > 0 && <span className="text-amber-600"> &bull; {result.missing_email} missing email</span>}
+            {result.notices.some((n) => n.previous_target_date) && (
+              <span className="text-blue-700"> &bull; {result.notices.filter((n) => n.previous_target_date).length} date changed</span>
+            )}
+          </span>
+          <button
+            onClick={recheckTenants}
+            disabled={checking || result.count === 0}
+            className="ml-auto px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-900 text-white hover:bg-charcoal-800 disabled:opacity-50"
+            title="Pulls current tenants from AppFolio now"
+          >
+            {checking ? "Checking AppFolio…" : checks.size ? "Re-check tenants again" : "Re-check tenants"}
+          </button>
         </div>
-
-        <div className="px-6 py-2 text-[11px] text-charcoal-500 bg-charcoal-50 border-b border-charcoal-100">
-          The button opens the exact letter template (Communication → Letters). AppFolio picks
-          recipients in-page, so each unit&apos;s address + resident is listed to search &amp; check.
-          Fully-automated send via the Realm-X connector is still pending activation.
-        </div>
+        {checkError && <div className="px-6 py-2 text-xs text-red-700 bg-red-50">{checkError}</div>}
+        {checks.size > 0 && (
+          <div className={cn("px-6 py-2 text-xs border-b", warningCount ? "bg-amber-50 text-amber-800 border-amber-100" : "bg-emerald-50 text-emerald-800 border-emerald-100")}>
+            {warningCount ? `${warningCount} unit${warningCount === 1 ? " needs" : "s need"} attention before sending — see the warnings below.` : "Tenants match AppFolio for every unit."}
+          </div>
+        )}
+        {lateIds.length > 0 && (
+          <div className="px-6 py-2 text-xs bg-amber-50 text-amber-800 border-b border-amber-100">
+            {lateIds.length} notice{lateIds.length === 1 ? " was" : "s were"} marked sent less than 7 days before the inspection.
+          </div>
+        )}
 
         <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
           {result.count === 0 && (
             <p className="text-sm text-charcoal-500 py-8 text-center">No scheduled inspections are awaiting a notice.</p>
           )}
-          {sortedDates.map((dateKey) => {
-            const items = groups.get(dateKey)!;
+          {sortedKeys.map((key) => {
+            const items = groups.get(key)!;
+            const first = items[0];
+            const dateKey = first.target_date;
+            const dateChanged = items.some((n) => n.previous_target_date);
+            const notice = dateKey
+              ? buildRealmxRequest({ routeDate: dateKey, windowLabel: first.route_window, units: items.map((n) => ({ address: n.address })), dateChanged })
+              : null;
             const emails = [...new Set(items.map((n) => n.email).filter(Boolean) as string[])];
-            const tmpl = dateKey !== "no-date" ? genericNotice(dateKey) : { subject: "Routine Property Inspection", body: "" };
+            const groupIds = items.map((n) => n.id);
+            const groupSelected = groupIds.filter((id) => selected.has(id));
             return (
-              <div key={dateKey} className="border border-charcoal-200 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-semibold text-charcoal-800">
-                    {dateKey === "no-date" ? "No date" : longDate(dateKey)}
-                  </p>
-                  <span className="text-xs text-charcoal-500">
-                    {items.length} unit{items.length !== 1 ? "s" : ""} &bull; {emails.length} email{emails.length !== 1 ? "s" : ""}
-                    {items.some((n) => n.status === "failed") && (
-                      <span className="text-red-600"> &bull; {items.filter((n) => n.status === "failed").length} retry</span>
-                    )}
-                  </span>
+              <div key={key} className="border border-charcoal-200 rounded-lg p-4">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p className="text-sm font-semibold text-charcoal-800">
+                      {dateKey ? longDate(dateKey) : "No date"}
+                      {first.route_window && <span className="font-normal text-charcoal-500"> &middot; {first.route_window}</span>}
+                    </p>
+                    <p className="text-xs text-charcoal-500">
+                      {items.length} unit{items.length !== 1 ? "s" : ""}
+                      {first.route_assigned_to && <> &bull; {first.route_assigned_to.split("@")[0]}</>}
+                      {dateChanged && <span className="ml-1 text-blue-700 font-medium">&bull; Date changed — send the updated notice</span>}
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-charcoal-600">
+                    <input
+                      type="checkbox"
+                      checked={groupSelected.length === groupIds.length}
+                      onChange={(e) => setSelected((prev) => {
+                        const next = new Set(prev);
+                        for (const id of groupIds) if (e.target.checked) next.add(id); else next.delete(id);
+                        return next;
+                      })}
+                    />
+                    All
+                  </label>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  {/* Primary: open the exact AppFolio letter template */}
+
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  {realmx && notice && (
+                    <button
+                      onClick={() => copy(`rx-${key}`, notice.request)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-terra-500 text-white hover:bg-terra-600"
+                    >
+                      {copied === `rx-${key}` ? "Copied!" : "Copy Realm-X request"}
+                    </button>
+                  )}
                   <a
                     href={APPFOLIO_INSPECTION_LETTER_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-terra-500 text-white hover:bg-terra-600"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                      realmx ? "font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200" : "font-semibold bg-terra-500 text-white hover:bg-terra-600"
+                    )}
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    Open Inspection Letter in AppFolio
+                    {realmx ? "Or open the Inspection Letter" : "Open Inspection Letter in AppFolio"}
                   </a>
-                  {dateKey !== "no-date" && (
+                  {dateKey && (
                     <button
-                      onClick={() => copy(`date-${dateKey}`, longDate(dateKey))}
+                      onClick={() => copy(`date-${key}`, noticeDateLine(dateKey, first.route_window))}
                       className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
+                      title="Date and arrival window, to paste into the letter"
                     >
-                      {copied === `date-${dateKey}` ? "Copied!" : "Copy date"}
+                      {copied === `date-${key}` ? "Copied!" : "Copy date"}
                     </button>
                   )}
-                  <button
-                    onClick={() => copy(`body-${dateKey}`, tmpl.body)}
-                    className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
-                  >
-                    {copied === `body-${dateKey}` ? "Copied!" : "Copy message"}
-                  </button>
+                  {notice && (
+                    <button
+                      onClick={() => copy(`body-${key}`, notice.body)}
+                      className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
+                    >
+                      {copied === `body-${key}` ? "Copied!" : "Copy message"}
+                    </button>
+                  )}
                   {emails.length > 0 && (
                     <button
-                      onClick={() => copy(`em-${dateKey}`, emails.join(", "))}
+                      onClick={() => copy(`em-${key}`, emails.join(", "))}
                       className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
-                      title="For the Realm-X email fallback"
                     >
-                      {copied === `em-${dateKey}` ? "Copied!" : "Copy emails"}
+                      {copied === `em-${key}` ? "Copied!" : "Copy emails"}
                     </button>
                   )}
                 </div>
-
-                {dateKey !== "no-date" && (
+                {dateKey && !realmx && (
                   <p className="text-[11px] text-charcoal-500 mb-2">
-                    In AppFolio: set the inspection date to <b>{longDate(dateKey)}</b>, then search
-                    each unit below and check its resident.
+                    In the letter, set the inspection date to <b>{noticeDateLine(dateKey, first.route_window)}</b>, then search
+                    each unit below and tick the people listed.
                   </p>
                 )}
 
-                {/* Per-unit recipients — the search term + resident to check in AppFolio */}
-                <div className="space-y-1">
-                  {items.map((n) => (
-                    <div
-                      key={n.id}
-                      className="flex items-center justify-between gap-2 text-xs bg-charcoal-50 rounded px-2 py-1.5"
-                    >
-                      <div className="min-w-0">
-                        <span className="font-medium text-charcoal-800">{n.resident_name || "Resident"}</span>
-                        {n.address && <span className="text-charcoal-400"> &middot; {n.address}</span>}
-                        {!n.email && <span className="ml-1 text-amber-600">(no email)</span>}
-                      </div>
-                      {n.address && (
+                <div className="space-y-1.5">
+                  {items.map((n) => {
+                    const check = checks.get(n.id);
+                    return (
+                      <label key={n.id} className={cn("flex items-start gap-2 text-xs rounded px-2 py-1.5 cursor-pointer", selected.has(n.id) ? "bg-terra-50" : "bg-charcoal-50")}>
+                        <input type="checkbox" className="mt-0.5" checked={selected.has(n.id)} onChange={() => toggle(n.id)} />
+                        <div className="min-w-0 flex-1">
+                          <div>
+                            <span className="font-medium text-charcoal-800">{n.address}</span>
+                            {n.arrival && <span className="text-charcoal-500"> &middot; ~{n.arrival}</span>}
+                            {n.previous_target_date && (
+                              <span className="ml-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-medium">
+                                Date changed (was {new Date(`${n.previous_target_date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+                              </span>
+                            )}
+                          </div>
+                          {check ? (
+                            <div className="mt-0.5 space-y-0.5">
+                              {check.tenants.length > 0 && (
+                                <div className="text-charcoal-600">
+                                  {check.tenants.map((t) => (
+                                    <span key={t.name + (t.email || "")} className="mr-3 inline-block">
+                                      <b>{t.name}</b>{t.financially_responsible && " (fin. resp.)"}
+                                      {t.email ? ` · ${t.email}` : " · no email"}{t.phone ? ` · ${t.phone}` : ""}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {check.warnings.map((w) => <div key={w} className="text-amber-700">⚠️ {w}</div>)}
+                            </div>
+                          ) : (
+                            <div className="text-charcoal-500 mt-0.5">
+                              Tick in AppFolio: <b>{n.financially_responsible?.length ? n.financially_responsible.join(", ") : n.resident_name || "the current resident"}</b>
+                              {n.email ? ` · ${n.email}` : <span className="text-amber-600"> · no email</span>}
+                              {syncedAgo(n.synced_at) && <span className="text-charcoal-400"> · {syncedAgo(n.synced_at)}</span>}
+                            </div>
+                          )}
+                        </div>
                         <button
-                          onClick={() => copy(`addr-${n.id}`, n.address)}
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); copy(`addr-${n.id}`, n.address); }}
                           className="shrink-0 px-2 py-1 rounded text-[11px] bg-white border border-charcoal-200 text-charcoal-600 hover:bg-charcoal-100"
-                          title="Copy the unit address to search recipients in AppFolio"
+                          title="Copy the unit address to search in AppFolio"
                         >
                           {copied === `addr-${n.id}` ? "Copied!" : "Copy address"}
                         </button>
-                      )}
-                    </div>
-                  ))}
+                      </label>
+                    );
+                  })}
                 </div>
 
-                <details className="text-xs text-charcoal-500 mt-2">
-                  <summary className="cursor-pointer hover:text-charcoal-700">Letter message (reference)</summary>
-                  <pre className="mt-2 whitespace-pre-wrap font-sans bg-charcoal-50 rounded p-2 text-charcoal-600">{tmpl.body}</pre>
-                </details>
+                <div className="flex items-center justify-between mt-3">
+                  {notice ? (
+                    <details className="text-xs text-charcoal-500">
+                      <summary className="cursor-pointer hover:text-charcoal-700">{realmx ? "Show the Realm-X request" : "Letter message (reference)"}</summary>
+                      <pre className="mt-2 whitespace-pre-wrap font-sans bg-charcoal-50 rounded p-2 text-charcoal-600">{realmx ? notice.request : notice.body}</pre>
+                    </details>
+                  ) : <span />}
+                  <button
+                    onClick={() => markSelected(groupSelected)}
+                    disabled={marking || groupSelected.length === 0}
+                    className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-charcoal-900 hover:bg-charcoal-800 disabled:opacity-40"
+                  >
+                    {marking ? "Marking…" : `Mark ${groupSelected.length || ""} selected sent`.replace("  ", " ")}
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
 
         <div className="flex items-center justify-between gap-3 p-6 pt-4 border-t border-charcoal-200">
-          <p className="text-xs text-charcoal-400">Mark sent only after you&apos;ve sent them in AppFolio.</p>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-charcoal-600 hover:bg-charcoal-100">Close</button>
-            <button
-              onClick={() => onMarkSent(allIds)}
-              disabled={marking || result.count === 0}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-terra-500 hover:bg-terra-600 disabled:opacity-50"
-            >
-              {marking ? "Marking…" : `Mark ${result.count} as sent`}
-            </button>
-          </div>
+          <p className="text-xs text-charcoal-400">Mark sent only after the email has gone out from AppFolio.</p>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-charcoal-600 hover:bg-charcoal-100">Close</button>
         </div>
       </div>
     </div>

@@ -284,8 +284,10 @@ export async function POST(
       reminderMinutesBeforeStart: 30,
     };
 
-    // Explicitly saved start times update the existing appointment; legacy routes keep their Outlook times.
-    const eventPayload = existingEventId ? { body: event.body, ...(routePlan.start_time ? {start: event.start, end: event.end} : {}) } : event;
+    // Explicitly saved start times update the existing appointment; legacy routes keep their Outlook times
+    // unless the route date moved (?reschedule=1), which must move the event too.
+    const moveTimes = !!routePlan.start_time || new URL(request.url).searchParams.get('reschedule') === '1';
+    const eventPayload = existingEventId ? { body: event.body, ...(moveTimes ? {start: event.start, end: event.end} : {}) } : event;
 
     // ── Dry-run escape hatch ──
     // Set INSPECTION_CALENDAR_DRYRUN=1 to skip the Graph POST and return the
