@@ -70,6 +70,11 @@ export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}
   const activeRequest = useRef<AbortController | null>(null);
   const [search, setSearch] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [linking, setLinking] = useState<Candidate | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [queueing, setQueueing] = useState(false);
+  // A selection only means something for the rows on screen.
+  useEffect(() => setSelected(new Set()), [groupFilter, search]);
   const [error, setError] = useState<string | null>(null);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
@@ -152,6 +157,29 @@ export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}
     }
   }
 
+  async function handleAddToQueue(ids: string[]) {
+    setQueueing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/inspections/candidates/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate_ids: ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add to queue");
+      const onRoute = data.on_route ? `, ${data.on_route} already on a route` : "";
+      setSyncToast(
+        `Added ${data.queued} to the inspection queue${onRoute}. Route them in Route Builder → Pick Properties.`
+      );
+      setSelected(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add to queue");
+    } finally {
+      setQueueing(false);
+    }
+  }
+
   async function handleRestore(id: string) {
     try {
       const res = await fetch(`/api/inspections/candidates/${id}`, {
@@ -166,6 +194,8 @@ export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}
       setError(err instanceof Error ? err.message : "Failed to restore");
     }
   }
+
+  const readyRows = loading ? [] : candidates.filter((c) => c.review_group === "ready" && (!groupFilter || c.review_group === groupFilter));
 
   return (
     <div className="space-y-6">
@@ -262,12 +292,38 @@ export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}
         </button>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm">
+          <span className="font-medium text-blue-900">{selected.size} selected</span>
+          <button
+            onClick={() => handleAddToQueue([...selected])}
+            disabled={queueing}
+            className="px-3 py-1.5 rounded-lg bg-charcoal-900 text-white text-xs font-medium hover:bg-charcoal-800 disabled:opacity-50"
+          >
+            {queueing ? "Adding..." : `Add ${selected.size} to queue`}
+          </button>
+          <button onClick={() => setSelected(new Set())} className="text-xs text-charcoal-600 hover:underline">
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white border border-charcoal-200 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-charcoal-200">
             <thead className="bg-charcoal-50">
               <tr className="text-left text-xs font-semibold text-charcoal-600 uppercase tracking-wide">
+                <th className="pl-4 py-3 w-8">
+                  {readyRows.length > 0 && (
+                    <input
+                      type="checkbox"
+                      aria-label="Select all ready units"
+                      checked={readyRows.every((c) => selected.has(c.id))}
+                      onChange={(e) => setSelected(e.target.checked ? new Set(readyRows.map((c) => c.id)) : new Set())}
+                    />
+                  )}
+                </th>
                 <th className="px-4 py-3">Property</th>
                 <th className="px-4 py-3">Address</th>
                 <th className="px-4 py-3">Move-in</th>
@@ -280,20 +336,34 @@ export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}
             <tbody className="divide-y divide-charcoal-100">
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-charcoal-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-charcoal-500">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loading && candidates.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-charcoal-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-charcoal-500">
                     No candidates match the current filters. Try "Sync from AppFolio" to refresh.
                   </td>
                 </tr>
               )}
               {!loading && candidates.filter(c => !groupFilter || c.review_group === groupFilter).map((c) => (
                 <tr key={c.id} className="text-sm text-charcoal-800">
+                  <td className="pl-4 py-3 w-8">
+                    {c.review_group === "ready" && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${c.address_1}`}
+                        checked={selected.has(c.id)}
+                        onChange={() => setSelected((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                          return next;
+                        })}
+                      />
+                    )}
+                  </td>
                   <td className="px-4 py-3 font-medium">
                     {c.name || c.appfolio_property_id || "—"}
                   </td>
@@ -314,8 +384,17 @@ export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}
                     {c.evidence_status && <div className="text-xs text-charcoal-500 mt-1">Record: {c.evidence_status} · {formatDate(c.evidence_date)}</div>}
                   </td>
                   <td className="px-4 py-3 text-right">
+                    {c.review_group === "ready" && (
+                      <button
+                        onClick={() => handleAddToQueue([c.id])}
+                        disabled={queueing}
+                        className="block ml-auto mb-2 text-xs font-medium text-charcoal-900 hover:underline disabled:opacity-50"
+                      >
+                        Add to queue
+                      </button>
+                    )}
                     {c.appfolio_url && <a href={c.appfolio_url} target="_blank" rel="noopener noreferrer" className="block mb-2 text-xs text-blue-700 hover:underline">Open AppFolio unit</a>}
-                    {c.review_item_type==='completion' ? <Link href="/maintenance/inspections" className="text-xs text-blue-700 hover:underline">Review local inspection</Link> : <>
+                    {c.review_item_type==='completion' ? <button onClick={() => setLinking(c)} className="text-xs text-blue-700 hover:underline">Link to unit</button> : <>
                     <button onClick={() => handleRoutinePolicy(c.id, c.routine_inspections_enabled === false)} className="block ml-auto mb-2 text-xs text-amber-700 hover:underline">{c.routine_inspections_enabled === false ? "Enable routine inspections" : "Exclude routine inspections"}</button>
                     {c.candidate_status === "dismissed" ? (
                       <button
@@ -348,6 +427,17 @@ export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}
           </table>
         </div>
       </div>
+
+      {linking && (
+        <LinkUnitModal
+          completion={linking}
+          onClose={() => setLinking(null)}
+          onLinked={async () => {
+            setLinking(null);
+            await fetchCandidates(true);
+          }}
+        />
+      )}
 
       {scheduleOpen && (
         <ScheduleModal
@@ -539,6 +629,151 @@ function ScheduleModal({
               {scheduling ? "Scheduling…" : "Schedule"}
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A street number and the word after it ("2002 SW") — a useful first search. */
+function addressSeed(address: string | null): string {
+  return address?.match(/\b\d+[A-Za-z]?\s+\S+/)?.[0] ?? "";
+}
+
+function LinkUnitModal({
+  completion,
+  onClose,
+  onLinked,
+}: {
+  completion: Candidate;
+  onClose: () => void;
+  onLinked: () => Promise<void>;
+}) {
+  const inspectionId = completion.id.replace(/^completion:/, "");
+  const [query, setQuery] = useState(addressSeed(completion.address_1));
+  const [units, setUnits] = useState<Candidate[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<Candidate | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const needle = query.trim();
+    if (needle.length < 2) {
+      setUnits([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/inspections/candidates?search=${encodeURIComponent(needle)}`, { signal: controller.signal, cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Search failed");
+        setUnits((data.candidates || []).filter((u: Candidate) => u.review_item_type === "candidate").slice(0, 25));
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "Search failed");
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
+
+  async function handleLink() {
+    if (!selected) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/inspections/candidates/link-completion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inspection_id: inspectionId, property_id: selected.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Link failed");
+      await onLinked();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Link failed");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-card-hover w-full max-w-lg p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          <h3 className="text-base font-bold text-charcoal-900">Link inspection to a unit</h3>
+          <p className="text-xs text-charcoal-500 mt-1">
+            Completed {formatDate(completion.last_inspection_date)} at {completion.address_1}. Pick the unit that was
+            inspected; it will be credited with this visit and its next inspection set 6 months out.
+          </p>
+        </div>
+
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
+          placeholder="Search address, owner, property name..."
+          autoFocus
+          className="w-full rounded-lg border border-charcoal-200 px-3 py-2 text-sm"
+        />
+
+        <div className="max-h-72 overflow-y-auto rounded-lg border border-charcoal-100 divide-y divide-charcoal-100">
+          {searching ? (
+            <div className="p-4 text-center text-xs text-charcoal-400">Searching...</div>
+          ) : units.length === 0 ? (
+            <div className="p-4 text-center text-xs text-charcoal-400">
+              {query.trim().length < 2 ? "Type at least 2 characters" : "No units match"}
+            </div>
+          ) : (
+            units.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => setSelected(u)}
+                className={cn(
+                  "w-full text-left px-3 py-2 hover:bg-charcoal-50",
+                  selected?.id === u.id && "bg-terra-50"
+                )}
+              >
+                <div className="text-xs font-medium text-charcoal-800">
+                  {u.address_1}{u.address_2 ? ` ${u.address_2}` : ""}
+                </div>
+                <div className="text-[10px] text-charcoal-500">
+                  {[u.name, u.city, u.owner_name].filter(Boolean).join(" • ")}
+                  {` • Last inspected ${formatDate(u.last_inspection_date)}`}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">{error}</div>
+        )}
+
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-charcoal-700 hover:bg-charcoal-50 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleLink}
+            disabled={!selected || saving}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-charcoal-900 text-white hover:bg-charcoal-800 disabled:opacity-50"
+          >
+            {saving ? "Linking..." : "Link to this unit"}
+          </button>
         </div>
       </div>
     </div>

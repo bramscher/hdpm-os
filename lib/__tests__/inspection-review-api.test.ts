@@ -7,6 +7,7 @@ vi.mock('@/lib/inspection-review-loader',()=>({loadInspectionReview:mocks.review
 import { POST as schedule } from '@/app/api/inspections/candidates/schedule/route';
 import { POST as buildRoutes } from '@/app/api/inspections/routes/route';
 import { GET as stats } from '@/app/api/inspections/stats/route';
+import { POST as addToQueue } from '@/app/api/inspections/candidates/queue/route';
 const candidate=(id:string,review_group:string)=>({id,review_group,candidate_status:'eligible',next_due_date:'2026-09-01',latitude:44,longitude:-121});
 const result=(candidates:ReturnType<typeof candidate>[],error:string|null=null)=>({rows:[],properties:candidates,candidates,review_counts:{ready:1,handled:1,confirmation:1},verification_error:error});
 const request=(ids?:string[])=>new NextRequest('http://localhost/api/inspections/candidates/schedule',{method:'POST',body:JSON.stringify({date_range_start:'2026-10-05',date_range_end:'2026-10-19',candidate_ids:ids})});
@@ -40,6 +41,13 @@ describe('review groups gate scheduling and alerts',()=>{
     expect(body.error).toContain('330 W 1st St #5 (needs confirmation)');
     expect(body.blocked).toEqual([{id:'inspection',address:'330 W 1st St #5',reason:'Needs confirmation'}]);
     expect(mocks.from).not.toHaveBeenCalled();
+  });
+  it.each(['handled','confirmation'])('Add to queue refuses a %s unit before writes',async group=>{
+    mocks.review.mockResolvedValue(result([candidate('p',group)]));
+    const response=await addToQueue(new NextRequest('http://localhost/api/inspections/candidates/queue',{method:'POST',body:JSON.stringify({candidate_ids:['p']})}));
+    expect(response.status).toBe(409);
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.review.mock.calls[0][1]).toEqual({fresh:true});
   });
   it('counts only ready candidates as overdue scheduling work',async()=>{
     mocks.review.mockResolvedValue(result([candidate('ready','ready'),candidate('uncertain','confirmation'),candidate('handled','handled')]));
