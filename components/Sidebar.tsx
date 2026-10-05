@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw, Clock3, ListTodo, Percent, Users, FolderOpen, Brain, Handshake } from "lucide-react";
+import { FileText, BarChart3, Home, LogOut, ClipboardCheck, Navigation, Megaphone, Activity, Phone, Wrench, Bot, KeyRound, Target, Menu, X, BookOpen, RefreshCw, Clock3, ListTodo, Percent, Users, FolderOpen, Brain, Handshake, Briefcase, Globe } from "lucide-react";
 import { canViewHabuDemo } from "@/lib/habu-demo-access";
 import { APP_SECTIONS, sectionForPage } from "@/lib/access/sections";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,7 @@ interface NavSection {
 const NAV_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   home: Home, list: ListTodo, wrench: Wrench, file: FileText, clipboard: ClipboardCheck, navigation: Navigation,
   refresh: RefreshCw, book: BookOpen, chart: BarChart3, megaphone: Megaphone, key: KeyRound, target: Target,
-  clock: Clock3, bot: Bot, users: Users, activity: Activity, percent: Percent, phone: Phone, folder: FolderOpen, brain: Brain, handshake: Handshake,
+  clock: Clock3, bot: Bot, users: Users, activity: Activity, percent: Percent, phone: Phone, folder: FolderOpen, brain: Brain, handshake: Handshake, briefcase: Briefcase, globe: Globe,
 };
 
 /** Menu built from the section registry (lib/access/sections.ts) — new sections appear automatically. */
