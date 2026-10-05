@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { releaseScheduledCandidates } from '@/lib/inspection-candidate-release';
 
 // ============================================
 // POST /api/inspections/routes/bulk-delete
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
         console.error('Error resetting inspections:', resetError);
         // Non-fatal — routes are already deleted
       }
+      await releaseScheduledCandidates(supabase, inspectionIds);
     }
 
     return NextResponse.json({

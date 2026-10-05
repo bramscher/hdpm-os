@@ -331,6 +331,14 @@ export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}
                       >
                         Dismiss
                       </button>
+                    ) : c.review_group === "confirmation" ? (
+                      // Flagged scheduled but no live appointment: put it back up for review.
+                      <button
+                        onClick={() => handleRestore(c.id)}
+                        className="text-xs text-terra-600 hover:text-terra-700"
+                      >
+                        Return to queue
+                      </button>
                     ) : null}
                     </>}
                   </td>

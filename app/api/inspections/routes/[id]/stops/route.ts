@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { releaseScheduledCandidates } from '@/lib/inspection-candidate-release';
 import { completeInspectionCascade } from '@/lib/inspection-complete';
 
 /**
@@ -137,6 +138,7 @@ export async function PATCH(
       console.error('Error updating inspection:', updateInspErr);
       return NextResponse.json({ error: updateInspErr.message }, { status: 500 });
     }
+    if (action === 'skip') await releaseScheduledCandidates(supabase, [stop.inspection_id]);
 
     // Check if all stops are done — if so, mark route complete
     const { data: allStops } = await supabase
