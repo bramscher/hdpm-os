@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { buildRoutePlans } from '@/lib/route-engine';
-import { computeInspectionDueDate } from '@/lib/inspection-candidates';
+import { planQueueRows, type PendingInspectionRow } from '@/lib/inspection-queue-rows';
 import { requireNewNotice } from '@/lib/inspection-route-reschedule';
 import { postInspectionNoticeCard } from '@/lib/agents/dez/inspection-notice';
 import type { GeoInspection } from '@/types/routes';
@@ -85,47 +85,7 @@ export async function POST(request: NextRequest) {
       .select('id, property_id, due_date, priority, status, route_plan_id')
       .in('property_id', candidates.map((c) => c.id))
       .not('status', 'in', '(completed,canceled)');
-    const pendingByProperty = new Map(
-      (pendingRows ?? []).map((r) => [r.property_id as string, r])
-    );
-
-    /** Unrouted queue statuses — safe to adopt into a new route. */
-    const ADOPTABLE = new Set(['imported', 'validated', 'queued']);
-
-    const toInsert: Record<string, unknown>[] = [];
-    const adopted: { id: string; property_id: string; due_date: string; priority: string; status: string }[] = [];
-    let skippedInFlight = 0;
-    for (const c of candidates) {
-      const existing = pendingByProperty.get(c.id);
-      if (existing) {
-        if (existing.route_plan_id || !ADOPTABLE.has(existing.status)) {
-          // Already attached to an active route — leave it alone entirely.
-          skippedInFlight++;
-          continue;
-        }
-        adopted.push(existing as (typeof adopted)[number]);
-        continue;
-      }
-      const dueDate =
-        c.next_due_date ||
-        computeInspectionDueDate(c.move_in_date ?? null, c.last_inspection_date ?? null) ||
-        todayStr;
-      toInsert.push({
-        property_id: c.id,
-        inspection_type: 'routine',
-        status: 'queued',
-        priority: 'normal',
-        priority_score: 50,
-        estimated_duration_minutes: 15,
-        occupancy_status: 'occupied',
-        due_date: dueDate,
-        last_inspection_date: c.last_inspection_date ?? null,
-        move_in_date: c.move_in_date ?? null,
-        resident_name: c.resident_name ?? null,
-        notice_email: c.tenant_email ?? null,
-        notice_status: c.tenant_email ? 'pending' : 'skipped_no_email',
-      });
-    }
+    const { toInsert, adopted, skippedInFlight } = planQueueRows(candidates, (pendingRows ?? []) as PendingInspectionRow[], todayStr);
 
     // Flip adopted rows into the queue for this run.
     if (adopted.length > 0) {
