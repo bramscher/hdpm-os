@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 import { requireRole } from '@/lib/require-role';
-import { webAdminUrl } from '@/lib/hdpm-web-admin';
+import { WEBSITE_URL } from '@/lib/hdpm-web-admin';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 
 export const metadata = { title: 'Website · HDPM OS' };
@@ -24,7 +24,7 @@ const LINKS = [
 export default async function WebsitePage() {
   const guard = await requireRole('admin');
   if (!guard.ok) redirect('/');
-  const base = webAdminUrl();
+  const base = WEBSITE_URL;
   return (
     <PageContainer>
       <PageHeader

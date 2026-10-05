@@ -7,8 +7,12 @@
  * as x-hdpm-actor and logged by the website.
  */
 
-export function webAdminUrl(): string {
-  return (process.env.HDPM_WEB_BASE_URL || 'https://www.highdesertpm.com').replace(/\/$/, '');
+/** Where staff open the website admin in their browser (www.highdesertpm.com/admin). */
+export const WEBSITE_URL = 'https://www.highdesertpm.com';
+
+/** Server-to-server base; HDPM_WEB_BASE_URL may point at a deployment URL. */
+function apiBaseUrl(): string {
+  return (process.env.HDPM_WEB_BASE_URL || WEBSITE_URL).replace(/\/$/, '');
 }
 
 export async function webAdminFetch(path: string, actor: string, init: RequestInit = {}): Promise<Response> {
@@ -17,7 +21,7 @@ export async function webAdminFetch(path: string, actor: string, init: RequestIn
     return Response.json({ error: 'Website connection is not configured (HDPM_OS_ADMIN_TOKEN).' }, { status: 503 });
   }
   try {
-    return await fetch(`${webAdminUrl()}/api/os${path}`, {
+    return await fetch(`${apiBaseUrl()}/api/os${path}`, {
       ...init,
       cache: 'no-store',
       headers: {
