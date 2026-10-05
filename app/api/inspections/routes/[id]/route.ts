@@ -1,4 +1,5 @@
-import { inspectionScheduleError } from '@/lib/inspection-window';
+import { rescheduleRoute } from '@/lib/inspection-route-reschedule';
+import { postRouteNoticeCards } from '@/lib/agents/dez/inspection-notice';
 import { validRouteStartTime } from '@/lib/route-builder/inspection-time';
 import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
 import { routeCalendarEventUrl } from '@/lib/route-builder/calendar-destination';
@@ -122,9 +123,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'Route plan not found' }, { status: 404 });
     }
 
+    // A date move also moves the inspections, arrivals and tenant notices.
+    let reschedule: { from: string; to: string; renoticed: number } | null = null;
     if (body.route_date) {
-      const scheduleError = inspectionScheduleError(body.route_date, body.route_date);
-      if (scheduleError) return NextResponse.json({ error: scheduleError }, { status: 400 });
+      const moved = await rescheduleRoute(supabase, id, body.route_date);
+      if ('error' in moved) return NextResponse.json({ error: moved.error }, { status: moved.status });
+      reschedule = moved;
+      if (moved.from !== moved.to && process.env.DEZ_INSPECTION_NOTICES === '1') {
+        await postRouteNoticeCards(supabase, id).catch((err) => console.error('[route PATCH] Dez notice card failed:', err));
+      }
     }
 
     if ('start_time' in body && !validRouteStartTime(body.start_time)) {
@@ -132,7 +139,7 @@ export async function PATCH(
     }
 
     // Update route plan fields (whitelisted)
-    const allowedFields = ['name', 'status', 'assigned_to', 'route_date', 'notes', 'start_time'];
+    const allowedFields = ['name', 'status', 'assigned_to', 'notes', 'start_time'];
     const updates: Record<string, unknown> = {};
 
     for (const field of allowedFields) {
@@ -227,6 +234,7 @@ export async function PATCH(
     return NextResponse.json({
       ...updatedPlan,
       stops: updatedStops || [],
+      reschedule,
     });
   } catch (error) {
     console.error('Route plan PATCH error:', error);

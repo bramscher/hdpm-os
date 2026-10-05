@@ -21,6 +21,14 @@ function notice(over: Partial<DueNotice> = {}): DueNotice {
     attempts: 0,
     channel: null,
     error: null,
+    route_plan_id: 'plan-1',
+    route_assigned_to: 'brody@highdesertpm.com',
+    route_window: 'between 8:30 AM and 1:00 PM',
+    arrival: '9:15 AM',
+    previous_target_date: null,
+    financially_responsible: null,
+    appfolio_unit_id: 'u1',
+    synced_at: null,
     ...over,
   };
 }
@@ -83,5 +91,27 @@ describe('getNoticeOwner', () => {
     delete process.env.DEZ_INSPECTION_NOTICE_OWNER;
     expect(getNoticeOwner()).toBe('Brody');
     if (prev !== undefined) process.env.DEZ_INSPECTION_NOTICE_OWNER = prev;
+  });
+});
+
+describe('route card with Realm-X request', () => {
+  it('shows the window, the paste-ready request, and a date-changed title', () => {
+    const card = buildInspectionNoticeCard({
+      proposalId: 'p1',
+      routeDate: '2026-09-15',
+      items: toNoticeCardItems([notice({ financially_responsible: ['Jane Doe', 'John Doe'] })]),
+      windowLabel: 'between 8:30 AM and 1:00 PM',
+      realmxRequest: 'Draft a bulk email (do not send yet) to the current tenants of these units:',
+      dateChanged: true,
+    });
+    const text = JSON.stringify(card.blocks);
+    expect(text).toContain('Date changed');
+    expect(text).toContain('between 8:30 AM and 1:00 PM');
+    expect(text).toContain('Jane Doe, John Doe');
+    expect(text).toContain('Draft a bulk email');
+  });
+  it('drops the request once resolved', () => {
+    const card = buildInspectionNoticeCard({ proposalId: 'p1', routeDate: '2026-09-15', items: [], realmxRequest: 'REQ', resolution: 'done' });
+    expect(JSON.stringify(card.blocks)).not.toContain('REQ');
   });
 });

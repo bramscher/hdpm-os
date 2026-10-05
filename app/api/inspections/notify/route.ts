@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { inspectionToday, shiftInspectionDate } from '@/lib/inspection-window';
 import {
   getDueNotices,
   recordNoticeResults,
@@ -75,11 +76,17 @@ export async function POST(request: NextRequest) {
     if (!ids.length) {
       return NextResponse.json({ error: 'ids[] or results[] required' }, { status: 400 });
     }
+    const session = await auth();
     const summary = await recordNoticeResults(
       supabase,
-      ids.map((id) => ({ id, status: 'sent' as const, channel: 'manual' as const }))
+      ids.map((id) => ({ id, status: 'sent' as const, channel: 'manual' as const })),
+      session?.user?.email ?? null
     );
-    return NextResponse.json({ marked_sent: summary.sent, ...summary });
+    // Policy: tenants get at least 7 days' notice. Flag any marked later than that.
+    const lateBefore = shiftInspectionDate(inspectionToday(), 7);
+    const { data: dated } = await supabase.from('inspections').select('id, target_date').in('id', ids);
+    const late = (dated || []).filter((r) => r.target_date && r.target_date < lateBefore).map((r) => r.id);
+    return NextResponse.json({ marked_sent: summary.sent, ...summary, late });
   } catch (err) {
     console.error('[inspections/notify] POST error:', err);
     return NextResponse.json(

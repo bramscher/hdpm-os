@@ -537,7 +537,7 @@ async function handleNoticeAction(
       } else if (sendableIds.length === 0) {
         resolution = `Marked by ${actor} ${tapTime}, but none had a tenant email to send — add addresses in AppFolio.`;
       } else {
-        const { updated } = await markNoticesSent(supabase, sendableIds);
+        const { updated } = await markNoticesSent(supabase, sendableIds, `slack:${actor}`);
         resolution = `✅ ${updated} notice${updated === 1 ? '' : 's'} marked sent by ${actor} ${tapTime}.`;
       }
     }
@@ -547,7 +547,14 @@ async function handleNoticeAction(
     resolution = `Couldn't complete that (${msg}) — nothing changed.`;
   }
 
-  const card = buildInspectionNoticeCard({ proposalId: proposal.id, routeDate, items, resolution });
+  const card = buildInspectionNoticeCard({
+    proposalId: proposal.id,
+    routeDate,
+    items,
+    resolution,
+    windowLabel: typeof pl.window_label === 'string' ? pl.window_label : null,
+    dateChanged: pl.date_changed === true,
+  });
   const replaced = await respond(responseUrl, {
     replace_original: true,
     text: card.text,

@@ -15,6 +15,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getDueNotices, type DueNotice } from '@/lib/inspection-notify';
+import { buildRealmxRequest } from '@/lib/inspection-realmx-request';
 import { createProposal } from '@/lib/agents/proposals';
 import { getNotifyRecipients } from '@/lib/agents/config';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
@@ -65,7 +66,7 @@ export interface NoticeCardItem {
 /** Map the notice engine's rows to the card's display items. Pure. */
 export function toNoticeCardItems(notices: DueNotice[]): NoticeCardItem[] {
   return notices.map((n) => ({
-    who: n.resident_name || 'Resident',
+    who: n.financially_responsible?.length ? n.financially_responsible.join(', ') : n.resident_name || 'Resident',
     address: n.address,
     date: n.target_date,
     hasEmail: Boolean(n.email),
@@ -82,13 +83,19 @@ export function buildInspectionNoticeCard(input: {
   routeDate: string | null;
   items: NoticeCardItem[];
   resolution?: string;
+  /** Route arrival window, e.g. "between 8:30 AM and 1:00 PM". */
+  windowLabel?: string | null;
+  /** Paste-ready Realm-X "Send Bulk Email" request for this route. */
+  realmxRequest?: string | null;
+  /** The route moved after some tenants were told the old date. */
+  dateChanged?: boolean;
 }): { text: string; blocks: unknown[] } {
   const dateLabel = formatShortDate(input.routeDate);
   const missingEmail = input.items.filter((i) => !i.hasEmail).length;
   const sendable = input.items.length - missingEmail;
-  const headline = `📬 *${input.items.length} inspection notice${
+  const headline = `${input.dateChanged ? '🔁 *Date changed* — ' : '📬 '}*${input.items.length} inspection notice${
     input.items.length === 1 ? '' : 's'
-  } ready* for the *${dateLabel}* route`;
+  } ready* for the *${dateLabel}* route${input.windowLabel ? ` (${input.windowLabel})` : ''}`;
 
   const lines = input.items
     .slice(0, 20)
@@ -115,6 +122,14 @@ export function buildInspectionNoticeCard(input: {
         },
       ],
     });
+  }
+
+  if (input.realmxRequest && !input.resolution) {
+    // Slack caps a section at 3000 chars; the request is well under that for a route.
+    blocks.push(
+      { type: 'section', text: { type: 'mrkdwn', text: '*Paste this into AppFolio → Realm-X Assistant*, check the draft and recipients, then send:' } },
+      { type: 'section', text: { type: 'mrkdwn', text: '```' + input.realmxRequest.slice(0, 2900) + '```' } },
+    );
   }
 
   if (input.resolution) {
@@ -147,7 +162,7 @@ export function buildInspectionNoticeCard(input: {
       elements: [
         {
           type: 'mrkdwn',
-          text: '“Review & Send” opens the inspections dashboard, where the ready-to-paste letters go out through AppFolio (Realm-X bulk email). Tap *Mark all sent* only after they’ve actually been sent.',
+          text: 'Realm-X drafts the email to each unit’s *current* tenants from AppFolio, so check its recipient list before sending. “Review & Send” opens Send Notices for per-unit details and a live tenant re-check. Tap *Mark all sent* only after they’ve actually been sent.',
         },
       ],
     });
@@ -160,9 +175,9 @@ export function buildInspectionNoticeCard(input: {
 }
 
 /**
- * Fire-and-forget after a schedule is created: DM the inspections owner a card
- * of the notices among `inspectionIds` that still need sending. Never throws —
- * scheduling must succeed regardless. Returns a small result for logging/tests.
+ * Fire-and-forget after a schedule is created or a route moves: DM the
+ * inspections owner one card per route for the notices among `inspectionIds`
+ * that still need sending. Never throws — scheduling must succeed regardless.
  */
 export async function postInspectionNoticeCard(
   supabase: SupabaseClient,
@@ -170,79 +185,111 @@ export async function postInspectionNoticeCard(
 ): Promise<{ posted: boolean; count: number; reason?: string }> {
   try {
     if (!inspectionIds.length) return { posted: false, count: 0, reason: 'no inspections' };
-
-    // Reuse the manual-bridge query, then narrow to just the ones we scheduled.
     const due = await getDueNotices(supabase);
     const idSet = new Set(inspectionIds);
-    const notices = due.notices.filter((n) => idSet.has(n.id));
-    if (!notices.length) return { posted: false, count: 0, reason: 'no due notices in batch' };
-
-    const missingEmail = notices.filter((n) => !n.email).length;
-    // All these were scheduled together, so they share one route date.
-    const routeDate = notices[0].target_date ?? null;
-    const items = toNoticeCardItems(notices);
-
-    // Recipients configurable per-agent (agent_config.slack_recipients for
-    // inspections/tenant_notice); defaults to the notice owner (Brody). All
-    // recipients get the same card; the proposal is double-tap guarded.
-    const recipients = await getNotifyRecipients('inspections', 'tenant_notice', [getNoticeOwner()]);
-    if (recipients.length === 0) {
-      return { posted: false, count: notices.length, reason: `no slack recipient for inspections/tenant_notice` };
-    }
-
-    const proposal = await createProposal({
-      agent: DEZ_NOTICE_AGENT,
-      subject_type: 'inspection_route',
-      subject_id: null,
-      action_type: INSPECTION_NOTICE_ACTION,
-      payload: {
-        route_date: routeDate,
-        notice_ids: notices.map((n) => n.id),
-        // Only ones with an email are markable-as-sent; the rest wait on data.
-        sendable_ids: notices.filter((n) => n.email).map((n) => n.id),
-        missing_email: missingEmail,
-        count: notices.length,
-        items, // stored so a tap can rebuild the exact card
-      },
-      rationale: `${notices.length} tenant inspection notices due for the ${routeDate ?? 'upcoming'} route`,
-    });
-
-    const card = buildInspectionNoticeCard({
-      proposalId: proposal.id,
-      routeDate,
-      items,
-    });
-
-    const rowIds: string[] = [];
-    for (const r of recipients) {
-      const row = await enqueueOutbox({
-        proposal_id: proposal.id,
-        channel: 'slack',
-        recipient_person: r.person,
-        recipient_address: r.slack_user_id!,
-        subject: 'Inspection notices ready',
-        body: card.text,
-        payload: { blocks: card.blocks, route_date: routeDate },
-      });
-      rowIds.push(row.id);
-    }
-    await dispatchOutbox({ channel: 'slack' });
-
-    const { data: sentRows } = await supabase
-      .from('agent_outbox')
-      .select('status, message_id')
-      .in('id', rowIds);
-    const firstSent = (sentRows ?? []).find((r) => r.status === 'sent');
-    if (firstSent?.message_id) {
-      await supabase
-        .from('agent_proposal')
-        .update({ channel_message_id: firstSent.message_id })
-        .eq('id', proposal.id);
-    }
-
-    return { posted: Boolean(firstSent), count: notices.length };
+    return await postNoticeGroups(supabase, due.notices.filter((n) => idSet.has(n.id)));
   } catch (err) {
     console.error('[dez/inspection-notice] post card failed:', err instanceof Error ? err.message : err);
     return { posted: false, count: 0, reason: 'error' };
   }
+}
+
+/** After a route moves: post its card again (titled "Date changed" when re-noticing). */
+export async function postRouteNoticeCards(
+  supabase: SupabaseClient,
+  routeId: string
+): Promise<{ posted: boolean; count: number; reason?: string }> {
+  try {
+    const due = await getDueNotices(supabase);
+    return await postNoticeGroups(supabase, due.notices.filter((n) => n.route_plan_id === routeId));
+  } catch (err) {
+    console.error('[dez/inspection-notice] post route card failed:', err instanceof Error ? err.message : err);
+    return { posted: false, count: 0, reason: 'error' };
+  }
+}
+
+/** Group notices by route (one Realm-X bulk email per route) and post each. */
+async function postNoticeGroups(
+  supabase: SupabaseClient,
+  notices: DueNotice[]
+): Promise<{ posted: boolean; count: number; reason?: string }> {
+  if (!notices.length) return { posted: false, count: 0, reason: 'no due notices in batch' };
+  const groups = new Map<string, DueNotice[]>();
+  for (const n of notices) {
+    const key = n.route_plan_id || `date:${n.target_date ?? 'none'}`;
+    groups.set(key, [...(groups.get(key) || []), n]);
+  }
+  let posted = false;
+  for (const group of groups.values()) {
+    const result = await postNoticeGroup(supabase, group);
+    posted = posted || result;
+  }
+  return { posted, count: notices.length };
+}
+
+async function postNoticeGroup(supabase: SupabaseClient, notices: DueNotice[]): Promise<boolean> {
+  const missingEmail = notices.filter((n) => !n.email).length;
+  const routeDate = notices[0].target_date ?? null;
+  const windowLabel = notices[0].route_window ?? null;
+  const dateChanged = notices.some((n) => n.previous_target_date);
+  const items = toNoticeCardItems(notices);
+  const realmxRequest = routeDate
+    ? buildRealmxRequest({ routeDate, windowLabel, units: notices.map((n) => ({ address: n.address })), dateChanged }).request
+    : null;
+
+  // Recipients configurable per-agent (agent_config.slack_recipients for
+  // inspections/tenant_notice); defaults to the notice owner (Brody). All
+  // recipients get the same card; the proposal is double-tap guarded.
+  const recipients = await getNotifyRecipients('inspections', 'tenant_notice', [getNoticeOwner()]);
+  if (recipients.length === 0) return false;
+
+  const proposal = await createProposal({
+    agent: DEZ_NOTICE_AGENT,
+    subject_type: 'inspection_route',
+    subject_id: notices[0].route_plan_id ?? null,
+    action_type: INSPECTION_NOTICE_ACTION,
+    payload: {
+      route_date: routeDate,
+      route_plan_id: notices[0].route_plan_id ?? null,
+      window_label: windowLabel,
+      date_changed: dateChanged,
+      notice_ids: notices.map((n) => n.id),
+      // Only ones with an email are markable-as-sent; the rest wait on data.
+      sendable_ids: notices.filter((n) => n.email).map((n) => n.id),
+      missing_email: missingEmail,
+      count: notices.length,
+      items, // stored so a tap can rebuild the exact card
+    },
+    rationale: `${notices.length} tenant inspection notices due for the ${routeDate ?? 'upcoming'} route`,
+  });
+
+  const card = buildInspectionNoticeCard({ proposalId: proposal.id, routeDate, items, windowLabel, realmxRequest, dateChanged });
+
+  const rowIds: string[] = [];
+  for (const r of recipients) {
+    const row = await enqueueOutbox({
+      proposal_id: proposal.id,
+      channel: 'slack',
+      recipient_person: r.person,
+      recipient_address: r.slack_user_id!,
+      subject: dateChanged ? 'Inspection date changed — re-notice tenants' : 'Inspection notices ready',
+      body: card.text,
+      payload: { blocks: card.blocks, route_date: routeDate },
+    });
+    rowIds.push(row.id);
+  }
+  await dispatchOutbox({ channel: 'slack' });
+
+  const { data: sentRows } = await supabase
+    .from('agent_outbox')
+    .select('status, message_id')
+    .in('id', rowIds);
+  const firstSent = (sentRows ?? []).find((r) => r.status === 'sent');
+  if (firstSent?.message_id) {
+    await supabase
+      .from('agent_proposal')
+      .update({ channel_message_id: firstSent.message_id })
+      .eq('id', proposal.id);
+  }
+  return Boolean(firstSent);
 }

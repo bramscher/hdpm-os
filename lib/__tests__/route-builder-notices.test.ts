@@ -48,9 +48,9 @@ describe('Route Builder routes reach Send Notices', () => {
       body: JSON.stringify({ date_range_start: '2026-10-14', date_range_end: '2026-10-14', assigned_to: 'brody@highdesertpm.com', inspection_ids: ['insp-1'] }),
     }));
     expect(response.status).toBe(200);
-    const update = mocks.calls.find((c) => c.table === 'inspections' && has(c, 'update'));
+    const update = mocks.calls.find((c) => c.table === 'inspections' && (c.ops.find(([name]) => name === 'update')?.[1][0] as Record<string, unknown> | undefined)?.target_date);
     expect(update?.ops.find(([name]) => name === 'update')?.[1][0]).toMatchObject({
-      status: 'scheduled', target_date: '2026-10-14', route_plan_id: 'plan-1', assigned_to: 'brody@highdesertpm.com',
+      status: 'scheduled', target_date: '2026-10-14', route_plan_id: 'plan-1', assigned_to: 'brody@highdesertpm.com', notice_status: 'pending',
     });
     expect(update?.ops.find(([name]) => name === 'in')?.[1]).toEqual(['id', ['insp-1']]);
   });

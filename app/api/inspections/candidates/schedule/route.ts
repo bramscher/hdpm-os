@@ -10,6 +10,7 @@ import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { buildRoutePlans } from '@/lib/route-engine';
 import { computeInspectionDueDate } from '@/lib/inspection-candidates';
+import { requireNewNotice } from '@/lib/inspection-route-reschedule';
 import { postInspectionNoticeCard } from '@/lib/agents/dez/inspection-notice';
 import type { GeoInspection } from '@/types/routes';
 
@@ -254,6 +255,7 @@ export async function POST(request: NextRequest) {
 
       // Update the inspections with route_plan_id + scheduled status + target_date
       const inspIds = proposed.stops.map((s) => s.inspection_id);
+      await requireNewNotice(supabase, inspIds);
       await supabase
         .from('inspections')
         .update({
