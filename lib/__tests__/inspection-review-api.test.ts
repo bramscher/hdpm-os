@@ -33,9 +33,12 @@ describe('review groups gate scheduling and alerts',()=>{
   });
   it('also blocks uncertain routine inspections in the older route builder',async()=>{
     const data=result([candidate('p','confirmation')]);
-    mocks.review.mockResolvedValue({...data,rows:[{id:'inspection',property_id:'p',inspection_type:'routine'}]});
+    mocks.review.mockResolvedValue({...data,rows:[{id:'inspection',property_id:'p',inspection_type:'routine',inspection_properties:{address_1:'330 W 1st St #5'}}]});
     const response=await buildRoutes(new NextRequest('http://localhost/api/inspections/routes',{method:'POST',body:JSON.stringify({date_range_start:'2026-10-05',date_range_end:'2026-10-19',inspection_ids:['inspection']})}));
     expect(response.status).toBe(409);
+    const body=await response.json();
+    expect(body.error).toContain('330 W 1st St #5 (needs confirmation)');
+    expect(body.blocked).toEqual([{id:'inspection',address:'330 W 1st St #5',reason:'Needs confirmation'}]);
     expect(mocks.from).not.toHaveBeenCalled();
   });
   it('counts only ready candidates as overdue scheduling work',async()=>{

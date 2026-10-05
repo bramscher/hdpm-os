@@ -55,6 +55,8 @@ interface PickableInspection {
   city: string;
   due_date: string | null;
   status: string;
+  /** Why this inspection can't be routed yet (shown, not selectable). */
+  blocked_reason: string | null;
 }
 
 const ROUTE_STATUS_BADGE: Record<string, string> = {
@@ -136,9 +138,16 @@ export function RouteBuilder() {
   const fetchAvailableInspections = useCallback(async () => {
     setLoadingInspections(true);
     try {
-      const res = await fetch("/api/inspections?page_size=2000");
+      const [res, blockedRes] = await Promise.all([
+        fetch("/api/inspections?page_size=2000"),
+        fetch("/api/inspections/routes/blocked"),
+      ]);
       if (!res.ok) return;
       const data = await res.json();
+      const blockedData = blockedRes.ok ? await blockedRes.json() : { blocked: [] };
+      const blockedReasons = new Map<string, string>(
+        (blockedData.blocked || []).map((b: { id: string; reason: string }) => [b.id, b.reason])
+      );
       const inspections = (data.inspections || [])
         .filter((i: Record<string, string>) => ["imported", "validated", "queued"].includes(i.status))
         .map((i: Record<string, unknown>) => {
@@ -156,9 +165,14 @@ export function RouteBuilder() {
             city: (ip?.city as string) || (i.city as string) || "",
             due_date: (i.due_date as string) || null,
             status: (i.status as string) || "",
+            blocked_reason: blockedReasons.get(i.id as string) ?? null,
           };
-        });
+        })
+        // Routable first; blocked ones stay visible so staff can see why.
+        .sort((a: PickableInspection, b: PickableInspection) => Number(!!a.blocked_reason) - Number(!!b.blocked_reason));
       setAvailableInspections(inspections);
+      // Drop blocked ids pre-selected from the dashboard link.
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !blockedReasons.has(id))));
     } catch (err) {
       console.error("Fetch inspections error:", err);
     } finally {
@@ -275,7 +289,7 @@ export function RouteBuilder() {
 
   // City chips — distinct cities present in the eligible pool, with counts,
   // sorted by count desc then name. "do all the Madras / Prineville / …".
-  const cityCounts = availableInspections.reduce<Map<string, number>>((m, i) => {
+  const cityCounts = availableInspections.filter((i) => !i.blocked_reason).reduce<Map<string, number>>((m, i) => {
     const c = (i.city || "Unknown").trim() || "Unknown";
     m.set(c, (m.get(c) ?? 0) + 1);
     return m;
@@ -302,7 +316,7 @@ export function RouteBuilder() {
   const selectAllFiltered = () => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      for (const i of filteredInspections) next.add(i.id);
+      for (const i of filteredInspections) if (!i.blocked_reason) next.add(i.id);
       return next;
     });
   };
@@ -315,7 +329,8 @@ export function RouteBuilder() {
     });
   };
   const allFilteredSelected =
-    filteredInspections.length > 0 && filteredInspections.every((i) => selectedIds.has(i.id));
+    filteredInspections.some((i) => !i.blocked_reason) &&
+    filteredInspections.every((i) => i.blocked_reason || selectedIds.has(i.id));
 
   // ────────────────────────────────────────────────
   // Render
@@ -689,7 +704,7 @@ export function RouteBuilder() {
                               : "bg-white text-charcoal-600 border-charcoal-200 hover:bg-charcoal-50"
                           )}
                         >
-                          All cities ({availableInspections.length})
+                          All cities ({availableInspections.filter((i) => !i.blocked_reason).length})
                         </button>
                         {cityOptions.map(([city, count]) => (
                           <button
@@ -740,12 +755,17 @@ export function RouteBuilder() {
                             key={insp.id}
                             type="button"
                             onClick={() => togglePickId(insp.id)}
+                            disabled={!!insp.blocked_reason}
+                            title={insp.blocked_reason ? `${insp.blocked_reason} — resolve on the Candidates page` : undefined}
                             className={cn(
                               "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-charcoal-50",
-                              selectedIds.has(insp.id) && "bg-terra-50"
+                              selectedIds.has(insp.id) && "bg-terra-50",
+                              insp.blocked_reason && "opacity-60 cursor-not-allowed hover:bg-transparent"
                             )}
                           >
-                            {selectedIds.has(insp.id) ? (
+                            {insp.blocked_reason ? (
+                              <Square className="w-4 h-4 text-charcoal-200 flex-shrink-0" />
+                            ) : selectedIds.has(insp.id) ? (
                               <CheckSquare className="w-4 h-4 text-terra-500 flex-shrink-0" />
                             ) : (
                               <Square className="w-4 h-4 text-charcoal-300 flex-shrink-0" />
@@ -758,6 +778,11 @@ export function RouteBuilder() {
                                 {insp.address}{insp.city ? ` • ${insp.city}` : ""}
                                 {insp.due_date ? ` • Due ${insp.due_date}` : ""}
                               </div>
+                              {insp.blocked_reason && (
+                                <div className="text-[10px] font-medium text-amber-700 truncate">
+                                  {insp.blocked_reason} — resolve on the Candidates page
+                                </div>
+                              )}
                             </div>
                           </button>
                         ))
