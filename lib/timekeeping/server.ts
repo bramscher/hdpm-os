@@ -591,8 +591,20 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
       }),
     }));
     validateDays(days, sheet.period_start, sheet.period_end);
+    if ((await getClock(sheet.employee_id)).shift) {
+      // A running clock owns today and later: keep those days exactly as saved
+      // (the database rejects any change). Earlier days stay editable, and the
+      // timekeeping_event audit row labels the edit.
+      const today = localDate();
+      days = days.map((d) =>
+        d.date >= today ? (sheet.days.find((x) => x.date === d.date) ?? d) : d,
+      );
+      if (!reason.trim()) reason = "Edited earlier days while clocked in";
+    }
   }
   if (op === "refresh") {
+    if ((await getClock(sheet.employee_id)).shift)
+      throw new TimeError("Clock out before applying defaults.");
     const own = sheet.employee_id === ctx.employee.id;
     if (!own && !ctx.isAdmin)
       throw new TimeError(

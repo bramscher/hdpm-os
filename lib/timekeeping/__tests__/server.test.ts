@@ -39,6 +39,9 @@ import {
 } from "../server";
 import { POST } from "@/app/api/timekeeping/route";
 
+/** Queue entries getClock consumes (upsert, then select) for a stopped clock. */
+const clockedOut = (shift: unknown = null) => [null, { shift, version: 1 }];
+
 const employee: Employee = {
   id: "employee",
   staff_person: "Employee",
@@ -356,7 +359,7 @@ describe("timekeeping server identity and signatures", () => {
           breaks: [],
         },
       ];
-      mock.results.push(s, [s]);
+      mock.results.push(s, [s], ...clockedOut());
       await command(ctx, {
         op: "save",
         sheetId: s.id,
@@ -411,6 +414,34 @@ describe("timekeeping server identity and signatures", () => {
       vi.useRealTimers();
     }
   });
+  it("while clocked in, saves earlier days with an audit reason and keeps today and later as saved", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-01-10T17:00:00Z")); // Jan 10, 9 AM Pacific
+      const s = sheet();
+      const edited = structuredClone(s.days);
+      edited[2] = { ...edited[2], off: false, note: "Fixed Jan 3" }; // earlier day
+      edited[9] = { ...edited[9], note: "Tried to change today" }; // today
+      edited[12] = { ...edited[12], note: "Tried to change a later day" };
+      mock.results.push(s, [s], ...clockedOut({ id: "running" }));
+      await command(ctx, { op: "save", sheetId: s.id, version: 1, days: edited });
+      const request = mock.rpc.mock.calls.at(-1)![1].p_request;
+      expect(request.days[2].note).toBe("Fixed Jan 3");
+      expect(request.days[9]).toEqual(s.days[9]);
+      expect(request.days[12]).toEqual(s.days[12]);
+      expect(request.reason).toBe("Edited earlier days while clocked in");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("does not apply defaults while the clock is running", async () => {
+    const s = sheet();
+    mock.results.push(s, [s], ...clockedOut({ id: "running" }));
+    await expect(
+      command(ctx, { op: "refresh", sheetId: s.id, version: 1 }),
+    ).rejects.toThrow("Clock out before applying defaults");
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
   it("still requires an active clock to stop before final-day signing", async () => {
     const s = sheet();
     mock.results.push(s, [s], null, {
@@ -428,7 +459,7 @@ describe("timekeeping server identity and signatures", () => {
     s.days[0].exception = true;
     s.days[1].exception = true;
     s.days[1].off = false; // A cleared, unfinished day can be filled; explicit days off stay protected.
-    mock.results.push(s, [s]);
+    mock.results.push(s, [s], ...clockedOut());
     await command(ctx, { op: "refresh", sheetId: s.id, version: 1 });
     const days = mock.rpc.mock.calls[0][1].p_request.days;
     expect(days[0].off).toBe(true);
@@ -437,7 +468,7 @@ describe("timekeeping server identity and signatures", () => {
   });
   it("uses company defaults when none are saved and respects real enrollment dates", async () => {
     const s = sheet();
-    mock.results.push(s, [s]);
+    mock.results.push(s, [s], ...clockedOut());
     await command(
       { ...ctx, employee: { ...employee, schedule: null } },
       { op: "refresh", sheetId: s.id, version: 1 },
@@ -446,7 +477,7 @@ describe("timekeeping server identity and signatures", () => {
     expect(totals(initialDays).scheduled).toBe(11 * 510);
     expect(localTime(initialDays[0].shifts[0].start)).toBe("07:00");
     mock.rpc.mockClear();
-    mock.results.push(s, [s]);
+    mock.results.push(s, [s], ...clockedOut());
     await command(
       { ...ctx, employee: { ...employee, starts_on: "2026-01-15" } },
       { op: "refresh", sheetId: s.id, version: 1 },
@@ -588,7 +619,7 @@ describe("timekeeping server identity and signatures", () => {
       },
     ];
     s.days[4].off = false;
-    mock.results.push(s, [], penny);
+    mock.results.push(s, [], ...clockedOut(), penny);
     await command(
       { email: craig.email, isAdmin: true, employee: craig },
       { op: "refresh", sheetId: s.id, version: 1 },
