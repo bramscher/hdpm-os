@@ -64,7 +64,7 @@ describe('buildInspectionNoticeCard', () => {
   it('shows action buttons when unresolved, with the sendable count on Mark all sent', () => {
     const card = buildInspectionNoticeCard({ proposalId: 'p1', routeDate: '2026-09-15', items });
     const json = JSON.stringify(card.blocks);
-    expect(json).toContain('Review & Send in Realm-X');
+    expect(json).toContain('Review & Send');
     expect(json).toContain('Mark all sent (1)'); // only 1 of 2 has an email
     expect(json).toContain(buildNoticeActionId('sent', 'p1'));
     expect(json).toContain('no tenant email'); // missing-email warning present
@@ -79,7 +79,7 @@ describe('buildInspectionNoticeCard', () => {
       resolution: '✅ 1 notice marked sent by Brody 9:00 AM.',
     });
     const json = JSON.stringify(card.blocks);
-    expect(json).not.toContain('Review & Send in Realm-X');
+    expect(json).not.toContain('Review & Send');
     expect(json).not.toContain(buildNoticeActionId('sent', 'p1'));
     expect(json).toContain('marked sent by Brody');
   });
@@ -115,3 +115,14 @@ describe('route card with Realm-X request', () => {
     expect(JSON.stringify(card.blocks)).not.toContain('REQ');
   });
 });
+
+describe('without Realm-X', () => {
+  it('points to the AppFolio letter with the date and window', () => {
+    const card = buildInspectionNoticeCard({ proposalId: 'p1', routeDate: '2026-10-14', items: [], windowLabel: 'between 8:30 AM and 1:00 PM' });
+    const text = JSON.stringify(card.blocks);
+    expect(text).toContain('Inspection Letter');
+    expect(text).toContain('Wednesday, October 14, 2026, between 8:30 AM and 1:00 PM');
+    expect(text).not.toContain('Paste this into AppFolio');
+  });
+});
+

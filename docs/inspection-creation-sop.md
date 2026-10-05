@@ -126,21 +126,26 @@ so notices are sent from AppFolio. HDPM-OS prepares everything per **route**
 2. Click **Re-check tenants**. It pulls current tenants from AppFolio and warns
    about a tenant who changed since scheduling, a move-out on or before the
    visit, a vacant unit, or no email. Resolve warnings before sending.
-3. Click **Copy Realm-X request** and paste it into AppFolio → **Realm-X
-   Assistant**. Realm-X drafts a bulk email to each unit's current tenants —
-   check the draft and its recipients, then send. (Alternative: **Or open the
-   Inspection Letter** for template 197.)
+3. Click **Open Inspection Letter in AppFolio** (template 197). Paste the
+   date with **Copy date** (it includes the arrival window), search each unit
+   with **Copy address**, tick the people listed for it, and send. **Copy
+   message** and **Copy emails** are there if you need them.
+   - *Once Realm-X is on the AppFolio plan:* set `NEXT_PUBLIC_REALMX_ENABLED=1`
+     in Vercel. A **Copy Realm-X request** button appears; paste it into
+     Realm-X Assistant, which drafts the email to each unit's current tenants
+     for you to check and send.
 4. Tick the units you sent and click **Mark selected sent**. HDPM-OS records
    who marked it and warns if it was less than 7 days before the visit.
 5. Units with no email need a phone call or posted notice — handle manually,
    then mark them sent.
 
 **Date changed:** units whose route moved after their notice went out return
-here with a **Date changed (was …)** badge, and the Realm-X request becomes an
+here with a **Date changed (was …)** badge, and the notice text becomes an
 "Updated" notice. Send it the same way.
 
 **Dez (optional):** with `DEZ_INSPECTION_NOTICES=1`, Brody also gets a Slack
-card per route with the same Realm-X request and a **Mark all sent** button.
+card per route with the date line, who to tick, and a **Mark all sent** button
+(plus the Realm-X request once Realm-X is enabled).
 
 ### 5. Run the route & complete inspections
 

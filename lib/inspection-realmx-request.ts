@@ -13,6 +13,20 @@ import { inspectionSchedule, type TimingStop } from './route-builder/inspection-
 import { routeTimeLabel } from './route-builder/inspection-time';
 
 export const COMPANY_NAME = 'High Desert Property Management';
+
+/**
+ * Realm-X Assistant isn't on HDPM's AppFolio plan yet. Until it is, notices go
+ * out through the AppFolio letter template and the Realm-X request stays hidden.
+ * Set NEXT_PUBLIC_REALMX_ENABLED=1 in Vercel once Realm-X is available.
+ */
+export function realmxEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_REALMX_ENABLED === '1';
+}
+
+/** The date line staff paste into the letter, e.g. "Wednesday, October 14, 2026, between 8:30 AM and 1:00 PM". */
+export function noticeDateLine(dateStr: string, windowLabel?: string | null): string {
+  return windowLabel ? `${longDate(dateStr)}, ${windowLabel}` : longDate(dateStr);
+}
 export const COMPANY_PHONE = '(541) 406-6409';
 
 export function longDate(dateStr: string): string {

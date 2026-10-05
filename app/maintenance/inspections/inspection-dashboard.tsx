@@ -24,7 +24,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buildRealmxRequest, longDate } from "@/lib/inspection-realmx-request";
+import { buildRealmxRequest, longDate, noticeDateLine, realmxEnabled } from "@/lib/inspection-realmx-request";
 import { SkeletonCard, SkeletonRows } from "@/components/ui/skeleton";
 
 // AppFolio "Letters" deep link. Opens the saved "Inspection Letter — TENANT
@@ -1202,6 +1202,7 @@ function NoticeModal({
   }
 
   const warningCount = [...checks.values()].filter((c) => c.warnings.length > 0).length;
+  const realmx = realmxEnabled();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -1209,11 +1210,19 @@ function NoticeModal({
         <div className="flex items-start justify-between p-6 pb-4 border-b border-charcoal-200">
           <div>
             <h3 className="text-base font-bold text-charcoal-900">Send Tenant Inspection Notices</h3>
-            <p className="text-xs text-charcoal-500 mt-1 max-w-xl">
-              For each route: click <b>Re-check tenants</b>, then <b>Copy Realm-X request</b> and paste it into
-              AppFolio → Realm-X Assistant. Realm-X drafts the email to each unit&apos;s current tenants — check its
-              recipients, send, then tick the units here and <b>Mark selected sent</b>.
-            </p>
+            {realmx ? (
+              <p className="text-xs text-charcoal-500 mt-1 max-w-xl">
+                For each route: click <b>Re-check tenants</b>, then <b>Copy Realm-X request</b> and paste it into
+                AppFolio → Realm-X Assistant. Realm-X drafts the email to each unit&apos;s current tenants — check its
+                recipients, send, then tick the units here and <b>Mark selected sent</b>.
+              </p>
+            ) : (
+              <p className="text-xs text-charcoal-500 mt-1 max-w-xl">
+                For each route: click <b>Re-check tenants</b>, then <b>Open Inspection Letter in AppFolio</b>. Paste
+                the date (<b>Copy date</b>), search each unit (<b>Copy address</b>) and tick the people listed here,
+                send, then tick the units here and <b>Mark selected sent</b>.
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="p-1 hover:bg-charcoal-100 rounded-lg">
             <XIcon className="w-4 h-4 text-charcoal-400" />
@@ -1258,9 +1267,10 @@ function NoticeModal({
             const first = items[0];
             const dateKey = first.target_date;
             const dateChanged = items.some((n) => n.previous_target_date);
-            const realmx = dateKey
+            const notice = dateKey
               ? buildRealmxRequest({ routeDate: dateKey, windowLabel: first.route_window, units: items.map((n) => ({ address: n.address })), dateChanged })
               : null;
+            const emails = [...new Set(items.map((n) => n.email).filter(Boolean) as string[])];
             const groupIds = items.map((n) => n.id);
             const groupSelected = groupIds.filter((id) => selected.has(id));
             return (
@@ -1292,9 +1302,9 @@ function NoticeModal({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                  {realmx && (
+                  {realmx && notice && (
                     <button
-                      onClick={() => copy(`rx-${key}`, realmx.request)}
+                      onClick={() => copy(`rx-${key}`, notice.request)}
                       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-terra-500 text-white hover:bg-terra-600"
                     >
                       {copied === `rx-${key}` ? "Copied!" : "Copy Realm-X request"}
@@ -1304,20 +1314,46 @@ function NoticeModal({
                     href={APPFOLIO_INSPECTION_LETTER_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs",
+                      realmx ? "font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200" : "font-semibold bg-terra-500 text-white hover:bg-terra-600"
+                    )}
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    Or open the Inspection Letter
+                    {realmx ? "Or open the Inspection Letter" : "Open Inspection Letter in AppFolio"}
                   </a>
-                  {realmx && (
+                  {dateKey && (
                     <button
-                      onClick={() => copy(`body-${key}`, realmx.body)}
+                      onClick={() => copy(`date-${key}`, noticeDateLine(dateKey, first.route_window))}
+                      className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
+                      title="Date and arrival window, to paste into the letter"
+                    >
+                      {copied === `date-${key}` ? "Copied!" : "Copy date"}
+                    </button>
+                  )}
+                  {notice && (
+                    <button
+                      onClick={() => copy(`body-${key}`, notice.body)}
                       className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
                     >
-                      {copied === `body-${key}` ? "Copied!" : "Copy message only"}
+                      {copied === `body-${key}` ? "Copied!" : "Copy message"}
+                    </button>
+                  )}
+                  {emails.length > 0 && (
+                    <button
+                      onClick={() => copy(`em-${key}`, emails.join(", "))}
+                      className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-charcoal-100 text-charcoal-700 hover:bg-charcoal-200"
+                    >
+                      {copied === `em-${key}` ? "Copied!" : "Copy emails"}
                     </button>
                   )}
                 </div>
+                {dateKey && !realmx && (
+                  <p className="text-[11px] text-charcoal-500 mb-2">
+                    In the letter, set the inspection date to <b>{noticeDateLine(dateKey, first.route_window)}</b>, then search
+                    each unit below and tick the people listed.
+                  </p>
+                )}
 
                 <div className="space-y-1.5">
                   {items.map((n) => {
@@ -1371,10 +1407,10 @@ function NoticeModal({
                 </div>
 
                 <div className="flex items-center justify-between mt-3">
-                  {realmx ? (
+                  {notice ? (
                     <details className="text-xs text-charcoal-500">
-                      <summary className="cursor-pointer hover:text-charcoal-700">Show the Realm-X request</summary>
-                      <pre className="mt-2 whitespace-pre-wrap font-sans bg-charcoal-50 rounded p-2 text-charcoal-600">{realmx.request}</pre>
+                      <summary className="cursor-pointer hover:text-charcoal-700">{realmx ? "Show the Realm-X request" : "Letter message (reference)"}</summary>
+                      <pre className="mt-2 whitespace-pre-wrap font-sans bg-charcoal-50 rounded p-2 text-charcoal-600">{realmx ? notice.request : notice.body}</pre>
                     </details>
                   ) : <span />}
                   <button

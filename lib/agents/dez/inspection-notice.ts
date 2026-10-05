@@ -15,7 +15,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getDueNotices, type DueNotice } from '@/lib/inspection-notify';
-import { buildRealmxRequest } from '@/lib/inspection-realmx-request';
+import { buildRealmxRequest, noticeDateLine, realmxEnabled } from '@/lib/inspection-realmx-request';
 import { createProposal } from '@/lib/agents/proposals';
 import { getNotifyRecipients } from '@/lib/agents/config';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
@@ -142,7 +142,7 @@ export function buildInspectionNoticeCard(input: {
         {
           type: 'button',
           style: 'primary',
-          text: { type: 'plain_text', text: 'Review & Send in Realm-X' },
+          text: { type: 'plain_text', text: 'Review & Send' },
           url: `${baseUrl}/maintenance/inspections`,
         },
         {
@@ -162,7 +162,9 @@ export function buildInspectionNoticeCard(input: {
       elements: [
         {
           type: 'mrkdwn',
-          text: 'Realm-X drafts the email to each unit’s *current* tenants from AppFolio, so check its recipient list before sending. “Review & Send” opens Send Notices for per-unit details and a live tenant re-check. Tap *Mark all sent* only after they’ve actually been sent.',
+          text: input.realmxRequest
+            ? 'Realm-X drafts the email to each unit’s *current* tenants from AppFolio, so check its recipient list before sending. “Review & Send” opens Send Notices for per-unit details and a live tenant re-check. Tap *Mark all sent* only after they’ve actually been sent.'
+            : `Send these from AppFolio’s Inspection Letter${input.routeDate ? ` with the date *${noticeDateLine(input.routeDate, input.windowLabel)}*` : ''}. “Review & Send” opens Send Notices with the letter link, who to tick for each unit, and a live tenant re-check. Tap *Mark all sent* only after they’ve actually been sent.`,
         },
       ],
     });
@@ -233,7 +235,7 @@ async function postNoticeGroup(supabase: SupabaseClient, notices: DueNotice[]): 
   const windowLabel = notices[0].route_window ?? null;
   const dateChanged = notices.some((n) => n.previous_target_date);
   const items = toNoticeCardItems(notices);
-  const realmxRequest = routeDate
+  const realmxRequest = routeDate && realmxEnabled()
     ? buildRealmxRequest({ routeDate, windowLabel, units: notices.map((n) => ({ address: n.address })), dateChanged }).request
     : null;
 
