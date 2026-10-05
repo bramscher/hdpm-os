@@ -173,8 +173,6 @@ so notices are sent from AppFolio by hand.
   directly from queued inspections (same engine, same 7–21 day rule).
   Units that aren't **Ready to schedule** show greyed out with the reason;
   resolve them on the Candidates page first.
-  **Warning:** these inspections currently do not appear in **Send Notices**
-  (no target date is saved), so send their notices by hand.
 - **Backfill / historical data:** **Import XLSX** (Import Inspections)
   validates rows and creates inspections in bulk. Legacy, one-off loads only.
 - **Un-dismissing a unit:** click **Restore** on it; it reclassifies on the
@@ -188,7 +186,6 @@ so notices are sent from AppFolio by hand.
 - Notices are a **manual bridge** into AppFolio — sending and marking sent are
   two separate human steps; skipping the second leaves notices perpetually
   "due."
-- Route Builder ad-hoc routes are missing from **Send Notices** (see above).
 - **Flag Issue** does not create a work order, and there are no photos or
   inspection reports in HDPM-OS.
 - No **move route**, **reorder stops**, **remove one stop**, or **add a stop**

@@ -351,28 +351,30 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `Failed to save route stops: ${stopsError.message}` }, { status: 500 });
       }
 
-      // Collect inspection IDs for status update
-      for (const stop of proposed.stops) {
-        scheduledInspectionIds.push(stop.inspection_id);
-      }
-
-      createdRoutes.push(routePlan);
-    }
-
-    // Step 5: Update included inspections to 'scheduled'
-    if (scheduledInspectionIds.length > 0) {
+      // Mark the stops scheduled with the route's date. Send Notices finds
+      // inspections by target_date, so it must match the route date.
+      const routeInspectionIds = proposed.stops.map((stop) => stop.inspection_id);
       const { error: updateError } = await supabase
         .from('inspections')
-        .update({ status: 'scheduled', updated_at: new Date().toISOString() })
-        .in('id', scheduledInspectionIds);
+        .update({
+          status: 'scheduled',
+          route_plan_id: routePlan.id,
+          target_date: proposed.route_date,
+          assigned_to: routePlan.assigned_to,
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', routeInspectionIds);
 
       if (updateError) {
         console.error('Error updating inspection statuses:', updateError);
         // Non-fatal: routes were created, but status update failed
       }
+      scheduledInspectionIds.push(...routeInspectionIds);
+
+      createdRoutes.push(routePlan);
     }
 
-    // Step 6: Return results
+    // Step 5: Return results
     return NextResponse.json({
       routes: createdRoutes,
       excluded_count: result.excluded.length,
