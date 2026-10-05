@@ -1,11 +1,10 @@
 import { loadInspectionReview } from '@/lib/inspection-review-loader';
-import { findHouseholdSource } from '@/lib/inspection-route-households';
 export const maxDuration = 120;
 import { inspectionScheduleError, inspectionHorizon } from '@/lib/inspection-window';
 import { optimizeRouteWithGoogle } from '@/lib/route-directions';
 import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
 import { routeArrival } from '@/lib/route-builder/inspection-time';
-import { inspectionExcluded } from '@/lib/inspection-queue';
+import { routeBlockers } from '@/lib/inspection-route-blockers';
 import { validRouteStartTime } from '@/lib/route-builder/inspection-time';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
@@ -107,16 +106,16 @@ export async function POST(request: NextRequest) {
     // Reject inactive legacy imports as well as directly linked AppFolio units.
     const review = await loadInspectionReview(supabase, {fresh:true});
     if (review.verification_error) return NextResponse.json({error:review.verification_error}, {status:503});
-    const { rows: queueRows, properties: queueProperties } = review;
-    const blockedIds = new Set(queueRows.filter(row=> {
-      if (!['routine','biannual'].includes(row.inspection_type || '')) return false;
-      const source = queueProperties.find(property=>property.id===row.property_id) || (row.inspection_properties ? findHouseholdSource(row.inspection_properties,queueProperties,row.resident_name) : null);
-      return !source?.id || !review.candidates.some(candidate=>candidate.id===source.id && candidate.review_group==='ready');
-    }).map(row=>row.id));
-    if (inspection_ids?.some(id=>blockedIds.has(id))) return NextResponse.json({error:'Some inspections need confirmation or are already handled. Review the candidate groups before scheduling.'}, {status:409});
-    const inactiveIds = new Set(queueRows.filter(row => inspectionExcluded(row, queueProperties)).map(row => row.id));
-    if (inspection_ids?.some(id => inactiveIds.has(id))) {
-      return NextResponse.json({ error: 'Some selected inspections are inactive or excluded from routine inspections. Refresh the queue and update your selection.' }, { status: 400 });
+    const blockers = routeBlockers(review);
+    const blockedIds = new Set(blockers.map((b) => b.id));
+    const pickedBlockers = blockers.filter((b) => inspection_ids?.includes(b.id));
+    if (pickedBlockers.length > 0) {
+      const named = pickedBlockers.slice(0, 3).map((b) => `${b.address} (${b.reason.toLowerCase()})`).join('; ');
+      const more = pickedBlockers.length > 3 ? ` and ${pickedBlockers.length - 3} more` : '';
+      return NextResponse.json({
+        error: `${pickedBlockers.length} selected inspection${pickedBlockers.length === 1 ? ' is' : 's are'} not ready to route: ${named}${more}. Unselect them or resolve them on the Candidates page.`,
+        blocked: pickedBlockers,
+      }, { status: 409 });
     }
 
     // Step 1: Fetch inspections — either manually picked or auto-selected
@@ -170,7 +169,7 @@ export async function POST(request: NextRequest) {
     const geoInspections: GeoInspection[] = [];
 
     for (const insp of rawInspections) {
-      if (inactiveIds.has(insp.id) || blockedIds.has(insp.id)) continue;
+      if (blockedIds.has(insp.id)) continue;
       const prop = insp.inspection_properties as unknown as {
         id: string;
         address_1: string;
