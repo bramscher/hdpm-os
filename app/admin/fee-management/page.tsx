@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation';
-import { requireRole } from '@/lib/require-role';
+import { requireSection } from '@/lib/require-role';
 import { FeeManagement } from './fee-management';
 
 export const metadata = { title: 'Fee Management · HDPM OS' };
 
 export default async function FeeManagementPage() {
-  const guard = await requireRole('admin');
+  const guard = await requireSection('fee_management');
   if (!guard.ok) redirect('/');
   return <FeeManagement />;
 }

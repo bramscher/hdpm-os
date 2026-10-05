@@ -52,7 +52,7 @@ export const PUBLIC_PREFIXES = [
 
 // Admin-only: the entire KPI/financial dashboard and its data APIs.
 // (/api/kpi/cron is deliberately excluded — it has no user session.)
-function isAdminPath(pathname: string): boolean {
+export function isAdminPath(pathname: string): boolean {
   if (pathname === "/api/kpi/cron") return false;
   return (
     pathname === "/dashboard" ||
@@ -65,6 +65,26 @@ function isAdminPath(pathname: string): boolean {
     pathname.startsWith("/api/financials") ||
     pathname.startsWith("/api/zoom-sync")
   );
+}
+
+// Admin areas an admin can switch on for one non-admin person (`delegable` in
+// lib/access/sections.ts). For those people the per-person section check below
+// decides; in-route guards (requireSection) check again. User settings, staff
+// permissions and the other admin pages stay admin-only.
+const DELEGABLE_PREFIXES = [
+  "/dashboard",
+  "/admin/fee-management",
+  "/admin/hiring",
+  "/partners/admin",
+  "/api/kpi",
+  "/api/financials",
+  "/api/config",
+  "/api/admin/fee-management",
+  "/api/admin/hiring",
+  "/api/partners/admin",
+];
+export function isDelegablePath(pathname: string): boolean {
+  return DELEGABLE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export default async function proxy(req: NextRequest) {
@@ -115,7 +135,10 @@ export default async function proxy(req: NextRequest) {
 
   // Admin gating for financial dashboards (role claim from staff.access_role;
   // isAdmin kept for tokens minted before the role claim existed).
-  if (isAdminPath(pathname) && token.role !== "admin" && token.isAdmin !== true) {
+  // A delegated area passes on to the section check only when the token carries
+  // the denied-sections list; an old token without it fails closed here.
+  const delegatedHere = isDelegablePath(pathname) && Array.isArray(token.deniedSections);
+  if (isAdminPath(pathname) && token.role !== "admin" && token.isAdmin !== true && !delegatedHere) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }

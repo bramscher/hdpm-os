@@ -50,3 +50,24 @@ export async function requireRole(...roles: AccessRole[]): Promise<Guard> {
   if (guard.role === 'admin' || roles.includes(guard.role)) return guard;
   return deny(403, 'Insufficient permissions');
 }
+
+/**
+ * Section guard for areas an admin can delegate to one person (see `delegable`
+ * in lib/access/sections.ts). Admins always pass; anyone else needs the section
+ * switched on for them. Checked live (60s cache), not from the session token.
+ */
+export async function requireSection(sectionKey: string): Promise<Guard> {
+  const guard = await requireCompanySession();
+  if (!guard.ok) return guard;
+  if (guard.role === 'admin') return guard;
+  const { getDeniedSections } = await import('@/lib/access/section-access');
+  const denied = await getDeniedSections(guard.email, guard.role);
+  if (denied.includes(sectionKey)) return deny(403, 'Insufficient permissions');
+  return guard;
+}
+
+/** Server pages: may this signed-in person open a (possibly delegated) section? */
+export async function hasSection(sectionKey: string): Promise<{ ok: boolean; isAdmin: boolean }> {
+  const guard = await requireSection(sectionKey);
+  return { ok: guard.ok, isAdmin: guard.ok && guard.role === 'admin' };
+}

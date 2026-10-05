@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
+import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { parseCampaign } from '@/lib/fee-management/model';
 
 /** PUT one owner set's campaign row (status, new fee, dates, notes). */
 export async function PUT(request: NextRequest) {
-  const guard = await requireRole('admin');
+  const guard = await requireSection('fee_management');
   if (!guard.ok) return guard.response;
   const c = parseCampaign(await request.json().catch(() => null));
   if (!c) return NextResponse.json({ error: 'Invalid status, fee % (0–100) or date' }, { status: 400 });

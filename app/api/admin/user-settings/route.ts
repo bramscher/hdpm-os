@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { hiddenFromRoster } from '@/lib/access/roster';
 import { clearSectionAccessCache, loadRoleDefaults } from '@/lib/access/section-access';
-import { deniedSections, parseSectionOverrides, type SectionOverrides } from '@/lib/access/sections';
+import { deniedSections, forbiddenAdminGrants, parseSectionOverrides, type SectionOverrides } from '@/lib/access/sections';
 
 async function activeAdmin(email: string) {
   // Verify current admin status in the DB — an old JWT is not permission to administer access.
@@ -76,8 +76,13 @@ export async function PATCH(request: NextRequest) {
   }
 
   const db = getSupabaseAdmin();
-  const { data: target } = await db.from('staff').select('person,active').eq('person', person).maybeSingle();
+  const { data: target } = await db.from('staff').select('person,active,access_role').eq('person', person).maybeSingle();
   if (!target?.active) return NextResponse.json({ error: 'Staff member not found' }, { status: 404 });
+  // Only delegable Admin sections can be switched on for a non-admin.
+  const forbidden = forbiddenAdminGrants(target.access_role as string | undefined, overrides);
+  if (forbidden.length > 0) {
+    return NextResponse.json({ error: `These admin areas need the Admin role: ${forbidden.join(', ')}` }, { status: 400 });
+  }
 
   const { data: current, error: readErr } = await db.from('staff_section_access').select('overrides,version').eq('person', person).maybeSingle();
   if (readErr) return NextResponse.json({ error: 'User settings table is not set up yet' }, { status: 503 });

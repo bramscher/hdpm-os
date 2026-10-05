@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { hasSection } from '@/lib/require-role';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { getFeePolicies } from '@/lib/referrals/admin';
 import FeePolicyAdmin from './fee-policy-admin';
@@ -15,7 +16,8 @@ export const metadata = { title: 'HDPM-OS — Fee policy' };
  */
 export default async function FeePolicyPage() {
   const session = await auth();
-  if (!session?.user?.isAdmin) redirect('/');
+  // Admins, or staff an admin has given the Partners section (tax documents stay admin-only).
+  if (!(await hasSection('referrals_admin')).ok) redirect('/');
 
   const policies = await getFeePolicies();
 

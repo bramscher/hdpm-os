@@ -40,6 +40,11 @@ export interface AppSection {
   adminLocked?: boolean;
   /** Only visible to Craig regardless of switches (HABU demos). */
   ownerOnly?: boolean;
+  /**
+   * Admin section an admin may switch on for one non-admin person (never via
+   * role defaults). Its pages/APIs check the section, not the admin role.
+   */
+  delegable?: boolean;
 }
 
 /** Human names for access roles (staff.access_role). */
@@ -303,6 +308,7 @@ export const APP_SECTIONS: AppSection[] = [
   },
   {
     key: 'kpis',
+    delegable: true,
     label: 'Company KPIs',
     description: 'KPI dashboard, trends and financials.',
     group: 'Admin',
@@ -313,6 +319,7 @@ export const APP_SECTIONS: AppSection[] = [
   },
   {
     key: 'fee_management',
+    delegable: true,
     label: 'Fee Management',
     description: 'Fee Index, owner fee opportunity and fee schedule.',
     group: 'Admin',
@@ -323,6 +330,7 @@ export const APP_SECTIONS: AppSection[] = [
   },
   {
     key: 'hiring',
+    delegable: true,
     label: 'Hiring',
     description: 'Website job applications, job availability and application email recipients.',
     group: 'Admin',
@@ -362,6 +370,7 @@ export const APP_SECTIONS: AppSection[] = [
   },
   {
     key: 'referrals_admin',
+    delegable: true,
     label: 'Partners',
     description: 'Referral partner program: referrers, invites, the lead pipeline and fee policy.',
     group: 'Admin',
@@ -462,8 +471,19 @@ export function sectionAllowed(
 ): boolean {
   if (section.alwaysOn) return true;
   if (section.adminLocked && role === 'admin') return true;
-  if (section.group === 'Admin' && role !== 'admin') return false;
+  if (section.group === 'Admin' && role !== 'admin') return section.delegable === true && overrides[section.key] === true;
   return overrides[section.key] ?? roleDefault(section, role, roleOverrides);
+}
+
+/** Admin sections that can be granted to one non-admin person. */
+export const DELEGABLE_SECTION_KEYS = APP_SECTIONS.filter((s) => s.group === 'Admin' && s.delegable).map((s) => s.key);
+
+/** Keys in `overrides` that would grant a non-delegable Admin section to a non-admin. */
+export function forbiddenAdminGrants(role: string | undefined, overrides: SectionOverrides): string[] {
+  if (role === 'admin') return [];
+  return Object.entries(overrides)
+    .filter(([key, on]) => on && BY_KEY.get(key)?.group === 'Admin' && !BY_KEY.get(key)?.delegable)
+    .map(([key]) => key);
 }
 
 /** Keys of sections this person is denied — small list, stamped into the session token. */

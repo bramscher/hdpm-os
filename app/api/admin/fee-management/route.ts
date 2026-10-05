@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
+import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { fetchFeeFacts } from '@/lib/fee-management/appfolio';
 import {
@@ -28,7 +28,7 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000;
  * the app-owned config, agreement overrides and campaign rows.
  */
 export async function GET(request: NextRequest) {
-  const guard = await requireRole('admin');
+  const guard = await requireSection('fee_management');
   if (!guard.ok) return guard.response;
   const db = getSupabaseAdmin();
   const refresh = request.nextUrl.searchParams.get('refresh') === '1';

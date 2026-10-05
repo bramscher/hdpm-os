@@ -3,7 +3,7 @@
  *
  * Authenticated with HDPM_OS_ADMIN_TOKEN — a secret separate from
  * HDPM_SERVICE_TOKEN, so only these admin calls can reach applicant data.
- * Callers must check the admin role first; the acting staff email is sent
+ * Callers must check access first (requireSection('hiring')); the acting staff email is sent
  * as x-hdpm-actor and logged by the website.
  */
 

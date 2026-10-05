@@ -510,7 +510,8 @@ function SectionRow({
 }) {
   const def = roleDefault(section, role, roleOv);
   const effective = sectionAllowed(section, role, draft, roleOv);
-  const adminOnlyForNonAdmin = section.group === "Admin" && role !== "admin";
+  const delegated = section.group === "Admin" && role !== "admin" && section.delegable === true;
+  const adminOnlyForNonAdmin = section.group === "Admin" && role !== "admin" && !delegated;
   const locked = section.alwaysOn || (section.adminLocked && role === "admin") || adminOnlyForNonAdmin;
   const lockNote = section.alwaysOn
     ? "Always on"
@@ -518,7 +519,9 @@ function SectionRow({
       ? "Always on for admins"
       : adminOnlyForNonAdmin
         ? "Admins only. Change their role to grant"
-        : null;
+        : delegated
+          ? "Delegated admin area — off unless switched on"
+          : null;
   const value = draft[section.key] === undefined ? "default" : draft[section.key] ? "on" : "off";
 
   return (

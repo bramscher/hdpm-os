@@ -8,7 +8,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
+import { requireRole, requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { makeReferralCode } from './codes';
@@ -25,12 +25,18 @@ type Guard =
   | { ok: false; response: NextResponse };
 
 /**
- * Who may work the referral pipeline. Admin-only for Batch 1 — matches the
- * proxy.ts edge gate on /partners/admin and the `isAdmin` page redirect, so all
- * three layers agree. Widen to manager/finance here (one place) when the
- * payout/ops batches need it.
+ * Who may work the referral pipeline: admins, plus anyone an admin has
+ * switched the Partners section on for (delegated admin). Tax documents
+ * (1099/TIN export, W-9 files) use requireRole('admin') directly instead.
  */
 export async function requireReferralAdmin(): Promise<Guard> {
+  const guard = await requireSection('referrals_admin');
+  if (!guard.ok) return guard;
+  return { ok: true, email: guard.email };
+}
+
+/** Tax documents (1099/TIN export, W-9 files): admins only, never delegated. */
+export async function requireReferralTaxAdmin(): Promise<Guard> {
   const guard = await requireRole('admin');
   if (!guard.ok) return guard;
   return { ok: true, email: guard.email };

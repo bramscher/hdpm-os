@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
+import { requireSection } from '@/lib/require-role';
 import { webAdminFetch } from '@/lib/hdpm-web-admin';
 
 // Resending applications since a date emails each one in turn on the website.
@@ -22,7 +22,7 @@ const ROUTES: { method: string; pattern: RegExp; target: (m: RegExpMatchArray) =
 ];
 
 async function handle(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
-  const guard = await requireRole('admin');
+  const guard = await requireSection('hiring');
   if (!guard.ok) return guard.response;
 
   const path = (await params).path.join('/');

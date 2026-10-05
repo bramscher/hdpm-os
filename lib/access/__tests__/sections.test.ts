@@ -3,6 +3,8 @@ import { readdirSync, statSync } from 'fs';
 import path from 'path';
 import {
   APP_SECTIONS,
+  DELEGABLE_SECTION_KEYS,
+  forbiddenAdminGrants,
   checkPath,
   deniedSections,
   parseRoleDefaults,
@@ -88,7 +90,9 @@ describe('path → section', () => {
 describe('effective access', () => {
   it('follows role defaults, then overrides', () => {
     expect(sectionAllowed(S('kpis'), 'staff', {})).toBe(false);
-    expect(sectionAllowed(S('kpis'), 'staff', { kpis: true })).toBe(false); // admin-only regardless
+    expect(sectionAllowed(S('kpis'), 'staff', { kpis: true })).toBe(true); // delegable admin area, granted per person
+    expect(sectionAllowed(S('user_settings'), 'staff', { user_settings: true })).toBe(false); // never delegable
+    expect(sectionAllowed(S('leads_admin'), 'pm', { leads_admin: true })).toBe(false);
     expect(sectionAllowed(S('keys'), 'staff', {})).toBe(true);
     expect(sectionAllowed(S('keys'), 'staff', { keys: false })).toBe(false);
   });
@@ -128,8 +132,9 @@ describe('effective access', () => {
     expect(sectionAllowed(S('keys'), 'maintenance', {}, roleOv)).toBe(false);
     expect(sectionAllowed(S('rent_comps'), 'maintenance', {}, roleOv)).toBe(true);
     expect(sectionAllowed(S('keys'), 'maintenance', { keys: true }, roleOv)).toBe(true);
-    // admin sections can't be granted to non-admins at any level
-    expect(sectionAllowed(S('kpis'), 'pm', { kpis: true }, { pm: { kpis: true } })).toBe(false);
+    // admin sections never come from role defaults; delegable ones only per person
+    expect(sectionAllowed(S('kpis'), 'pm', {}, { pm: { kpis: true } })).toBe(false);
+    expect(sectionAllowed(S('kpis'), 'pm', { kpis: true }, { pm: { kpis: true } })).toBe(true);
   });
 });
 
@@ -150,3 +155,21 @@ describe('parseSectionOverrides', () => {
     expect(parseSectionOverrides([])).toBeNull();
   });
 });
+
+describe('delegated admin sections', () => {
+  it('only KPIs, Fee Management, Hiring and Partners can be delegated', () => {
+    expect([...DELEGABLE_SECTION_KEYS].sort()).toEqual(['fee_management', 'hiring', 'kpis', 'referrals_admin']);
+  });
+  it('a PM granted them gets exactly those admin areas', () => {
+    const granted = { kpis: true, fee_management: true, hiring: true, referrals_admin: true };
+    const adminDenied = deniedSections('pm', granted).filter((k) => S(k).group === 'Admin');
+    expect(adminDenied).not.toContain('kpis');
+    expect(adminDenied).toContain('user_settings');
+    expect(adminDenied).toContain('leads_admin');
+  });
+  it('flags non-delegable admin grants for non-admins only', () => {
+    expect(forbiddenAdminGrants('pm', { kpis: true, user_settings: true, leads_admin: false })).toEqual(['user_settings']);
+    expect(forbiddenAdminGrants('admin', { user_settings: true })).toEqual([]);
+  });
+});
+
