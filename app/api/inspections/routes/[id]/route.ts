@@ -5,6 +5,7 @@ import { routeCalendarEventUrl } from '@/lib/route-builder/calendar-destination'
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { releaseScheduledCandidates } from '@/lib/inspection-candidate-release';
 
 // ============================================
 // GET /api/inspections/routes/[id]
@@ -324,6 +325,7 @@ export async function DELETE(
         console.error('Error resetting inspection statuses:', resetError);
         // Non-fatal: route was deleted, but status reset failed
       }
+      await releaseScheduledCandidates(supabase, inspectionIds);
     }
 
     return NextResponse.json({
