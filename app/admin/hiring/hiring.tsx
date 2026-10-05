@@ -158,7 +158,7 @@ function Applications({ applications, onChange }: { applications: Application[];
               {app.files.some((f) => f.kind === "video") && <Video className="h-4 w-4" aria-label="Video" />}
             </span>
             <span className="w-40 text-sm text-charcoal-500">{formatDate(app.createdAt)}</span>
-            <Badge tone={STATUS_TONE[app.notificationStatus]}>{app.notificationStatus === "sent" ? "Emailed" : app.notificationStatus === "failed" ? "Email failed" : "Sending"}</Badge>
+            <Badge tone={STATUS_TONE[app.notificationStatus]}>{app.notificationStatus === "sent" ? "Emailed" : app.notificationStatus === "failed" ? "Email failed" : "Not emailed"}</Badge>
           </button>
           {open === app.id && (
             <div className="space-y-4 bg-sand-50 px-4 py-4 text-sm">
