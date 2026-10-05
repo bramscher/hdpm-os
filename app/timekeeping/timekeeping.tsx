@@ -1419,8 +1419,9 @@ function SheetEditor({
     editable =
       !readOnly &&
       (own || isAdmin) &&
-      ["draft", "returned"].includes(initial.state) &&
-      !clockOpen;
+      ["draft", "returned"].includes(initial.state);
+  // While clocked in, only days before today can change (see 20261008 migration).
+  const lockedFrom = clockOpen ? localDate() : null;
   const [confirmed, setConfirmed] = useState(false);
   const change = (next: Sheet) => {
     draftRef.current = next;
@@ -1566,7 +1567,7 @@ function SheetEditor({
           </p>
         </div>
         <div className="tk-toolbar">
-          {editable && (own || isAdmin) && (
+          {editable && !clockOpen && (own || isAdmin) && (
             <button disabled={busy} onClick={() => void act("refresh")}>
               {busy ? "Please wait…" : "Apply defaults to untouched days"}
             </button>
@@ -1590,8 +1591,9 @@ function SheetEditor({
       )}
       {clockOpen && (
         <div className="tk-notice">
-          Your clock is running. Clock out before editing or submitting your
-          sheet.
+          Your clock is running. You can still fix earlier days; today and
+          later days unlock when you clock out. Clock out before submitting.
+          Edits are recorded in the change history.
         </div>
       )}
       {error && (
@@ -1680,9 +1682,15 @@ function SheetEditor({
         </label>
       )}
       <fieldset disabled={!editable || busy} className="tk-days">
-        {draft.days.map((day) => (
-          <DayEditor key={day.date} day={day} onChange={dayChange} />
-        ))}
+        {draft.days.map((day) =>
+          lockedFrom && day.date >= lockedFrom ? (
+            <fieldset key={day.date} disabled className="tk-day-locked" title="Clock out to edit today and later days">
+              <DayEditor day={day} onChange={dayChange} />
+            </fieldset>
+          ) : (
+            <DayEditor key={day.date} day={day} onChange={dayChange} />
+          ),
+        )}
       </fieldset>
       <label className="tk-period-note">
         Pay-period notes
@@ -1712,7 +1720,7 @@ function SheetEditor({
             </label>
             <button
               className="tk-primary"
-              disabled={busy || !confirmed || initial.period_end > localDate()}
+              disabled={busy || clockOpen || !confirmed || initial.period_end > localDate()}
               onClick={() => act("submit")}
             >
               Sign & submit to manager

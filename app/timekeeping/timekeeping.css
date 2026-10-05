@@ -771,3 +771,12 @@
     grid-column: 1 / -1;
   }
 }
+
+/* While clocked in, today and later days are read-only. */
+.tk-day-locked {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  opacity: 0.6;
+}
