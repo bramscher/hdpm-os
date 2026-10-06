@@ -2,6 +2,7 @@ import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
 import { routeStartTime, routeWallTime, routeTimeLabel } from '@/lib/route-builder/inspection-time';
 import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
 import { ROUTE_CALENDAR_EVENTS_URL, findLegacyRouteCalendarEvent, routeCalendarEventUrl, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError } from '@/lib/route-builder/calendar-destination';
+import { routePropertyLabel, routeUnitLabel } from '@/lib/route-builder/property-label';
 import { NextRequest, NextResponse } from 'next/server';
 import { formatInspectionOccupants, formatInspectionPets, escapeInspectionHtml } from '@/lib/inspection-household';
 import { auth } from '@/lib/auth';
@@ -115,7 +116,8 @@ export async function POST(
       const insp = stop.inspections;
       const prop = insp?.inspection_properties;
       const address = prop ? `${prop.address_1}, ${prop.city}, ${prop.state} ${prop.zip}` : 'Unknown';
-      const unit = insp?.unit_name ? ` - ${insp.unit_name}` : prop?.address_2 ? ` - ${prop.address_2}` : '';
+      const unitLabel = routeUnitLabel(insp?.unit_name, prop?.address_2);
+      const unit = unitLabel ? ` - ${unitLabel}` : '';
       const type = stop.status === 'skipped' ? 'Skipped — not included in route timing' : (insp?.inspection_type || 'Inspection');
       const resident = insp?.resident_name || null;
       const priority = insp?.priority || 'normal';
@@ -124,7 +126,8 @@ export async function POST(
       const serviceMin = timing.visits[i].serviceMinutes;
       const lat = prop?.latitude || null;
       const lng = prop?.longitude || null;
-      const propertyCode = prop?.appfolio_property_id || prop?.name || null;
+      // Property name (or legacy short code) — never AppFolio's internal id.
+      const propertyCode = routePropertyLabel(prop);
       const ownerName = prop?.owner_name || null;
 
       // Estimated arrival = start time + cumulative drive + cumulative service so far
