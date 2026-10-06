@@ -21,6 +21,7 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { getRoleForEmail } from "@/lib/roles";
 import { getDeniedSections } from "@/lib/access/section-access";
 import { isDepartedStaff } from "@/lib/staff-lifecycle";
+import { GRAPH_SCOPE, needsRefresh, refreshGraphToken } from "@/lib/microsoft-token";
 
 export const AUTH_SECRET = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
 
@@ -44,7 +45,8 @@ export const authConfig = {
       issuer: `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`,
       authorization: {
         params: {
-          scope: "openid profile email User.Read Calendars.ReadWrite Calendars.ReadWrite.Shared",
+          // offline_access returns a refresh token so calendar publishing works all session.
+          scope: GRAPH_SCOPE,
         },
       },
     }),
@@ -83,6 +85,12 @@ export const authConfig = {
       if (isDepartedStaff(token.email)) return null;
       if (account) {
         token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.accessTokenExpires = account.expires_at ? account.expires_at * 1000 : Date.now() + 3600 * 1000;
+        token.tokenError = undefined;
+      } else if (needsRefresh(token)) {
+        // Graph tokens last ~1h; renew quietly so Outlook publishing keeps working.
+        token = await refreshGraphToken(token);
       }
       // Stamp the access role from staff.access_role on every token refresh
       // (60s-cached lookup; ADMIN_EMAILS survives only as bootstrap fallback).
