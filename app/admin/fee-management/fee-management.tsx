@@ -5,8 +5,10 @@ import { ManagementFeeIndex } from "@/components/dashboard/ManagementFeeIndex";
 import { OwnerFeeOpportunity } from "@/components/fee-management/OwnerFeeOpportunity";
 import { FeeSchedule } from "@/components/fee-management/FeeSchedule";
 import { AgreementsTable } from "@/components/fee-management/AgreementsTable";
+import { ProposedStructure } from "@/components/fee-management/ProposedStructure";
 
 const TABS = [
+  { key: "proposed", label: "Proposed Structure" },
   { key: "opportunity", label: "Owner Fee Opportunity" },
   { key: "index", label: "Fee Index" },
   { key: "schedule", label: "Fee Schedule" },
@@ -37,7 +39,7 @@ export function FeeManagement() {
         ))}
       </div>
 
-      {tab === "opportunity" ? <OwnerFeeOpportunity /> : tab === "index" ? <ManagementFeeIndex /> : tab === "agreements" ? <AgreementsTable /> : <FeeSchedule />}
+      {tab === "proposed" ? <ProposedStructure /> : tab === "opportunity" ? <OwnerFeeOpportunity /> : tab === "index" ? <ManagementFeeIndex /> : tab === "agreements" ? <AgreementsTable /> : <FeeSchedule />}
     </div>
   );
 }
