@@ -23,10 +23,11 @@ describe('standard rent notes', () => {
   });
   it('explains the method, asks to talk and visit, and lists owner choices', () => {
     const text = standardRentNotes(analysis());
+    expect(text.startsWith('How we arrived at this range:\n\nTo build this range')).toBe(true);
     expect(text).toContain('in Redmond');
     expect(text).toMatch(/walk through it together/);
     expect(text).toMatch(/landscaping/);
-    expect(text).toContain('(541) 406-6409');
+    expect(text).toContain('Give us a call at (541) 548-0383');
   });
   it('fits in the PDF notes section', () => {
     const a = { ...analysis(), stats: { count: 2, avg_rent: 2400, median_rent: 2400, min_rent: 2300, max_rent: 2500, avg_sqft: null, avg_rent_per_sqft: null },
