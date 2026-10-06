@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { standardRentNotes } from "@/lib/rent-notes-template";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -63,6 +64,15 @@ export function RentAnalysisWizard({
   const [ownerEmail, setOwnerEmail] = useState("");
   const [rentOverride, setRentOverride] = useState("");
   const [managerNotes, setManagerNotes] = useState("");
+  // The standard notes we auto-filled, so a later data refresh (e.g. Zillow) can
+  // update them — but never text staff typed or edited.
+  const autoNotes = useRef<string | null>(null);
+  const autoFillNotes = (next: RentAnalysis) =>
+    setManagerNotes((current) => {
+      if (current.trim() && current !== autoNotes.current) return current;
+      autoNotes.current = standardRentNotes(next);
+      return autoNotes.current;
+    });
 
   // Saved reports
   const [savedReports, setSavedReports] = useState<SavedRentAnalysis[]>([]);
@@ -108,6 +118,7 @@ export function RentAnalysisWizard({
       if (!res.ok) throw new Error(data.error);
 
       setAnalysis(data.analysis);
+      autoFillNotes(data.analysis);
       setStep("results");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
@@ -143,6 +154,7 @@ export function RentAnalysisWizard({
         const reportData = await reportRes.json();
         if (reportRes.ok) {
           setAnalysis(reportData.analysis);
+          autoFillNotes(reportData.analysis);
         }
       } else if (data.zillow_url) {
         window.open(data.zillow_url, "_blank");
@@ -201,6 +213,8 @@ export function RentAnalysisWizard({
     setOwnerName(saved.prepared_for || "");
     setOwnerEmail(saved.owner_email || "");
     setRentOverride(saved.recommended_rent_override ? String(saved.recommended_rent_override) : "");
+    // A saved report keeps exactly the notes it was sent with.
+    autoNotes.current = null;
     setManagerNotes(saved.manager_notes || "");
     setPdfBase64(null);
     setDownloadUrl(null);
@@ -264,6 +278,7 @@ export function RentAnalysisWizard({
     setOwnerEmail("");
     setRentOverride("");
     setManagerNotes("");
+    autoNotes.current = null;
     setEditingId(null);
     setError(null);
   }
