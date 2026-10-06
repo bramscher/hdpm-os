@@ -32,9 +32,12 @@ function StatusBadge({ status }: { status: string }) {
 export default function ReferrersAdmin({
   initialReferrers,
   policies,
+  canViewTaxDocs = false,
 }: {
   initialReferrers: ReferralPartner[];
   policies: FeePolicyRow[];
+  /** W-9 files and tax IDs are admin-only, even for delegated Partners access. */
+  canViewTaxDocs?: boolean;
 }) {
   const router = useRouter();
   const [referrers, setReferrers] = useState(initialReferrers);
@@ -291,18 +294,18 @@ export default function ReferrersAdmin({
                     <Badge tone={r.w9_status === 'verified' ? 'success' : r.w9_status === 'on_file' ? 'info' : 'warning'}>
                       {r.w9_status === 'on_file' ? 'on file' : r.w9_status}
                     </Badge>
-                    {r.w9_doc_path && (
+                    {canViewTaxDocs && r.w9_doc_path && (
                       <Button variant="ghost" size="sm" onClick={() => viewW9(r)}>
                         View
                       </Button>
                     )}
-                    {r.w9_doc_path && r.w9_status !== 'verified' && (
+                    {canViewTaxDocs && r.w9_doc_path && r.w9_status !== 'verified' && (
                       <Button variant="ghost" size="sm" onClick={() => verifyW9(r)} title="Confirm the PDF matches the legal name and tax ID on file">
                         Verify
                       </Button>
                     )}
                   </div>
-                  {r.legal_name && <div className="mt-0.5 text-xs text-charcoal-400">{r.legal_name}{r.tax_id_last4 ? ` · ***-**-${r.tax_id_last4}` : ''}</div>}
+                  {r.legal_name && <div className="mt-0.5 text-xs text-charcoal-400">{r.legal_name}{canViewTaxDocs && r.tax_id_last4 ? ` · ***-**-${r.tax_id_last4}` : ''}</div>}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex gap-2">

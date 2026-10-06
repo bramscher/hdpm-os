@@ -5,6 +5,7 @@ import {
   type DashboardConfig,
 } from '@/lib/dashboard-config';
 import { requireAdmin } from '@/lib/require-admin';
+import { requireSection } from '@/lib/require-role';
 
 /**
  * GET  /api/config  → merged dashboard config (defaults + persisted overrides)
@@ -14,7 +15,8 @@ import { requireAdmin } from '@/lib/require-admin';
  */
 export async function GET() {
   try {
-    const guard = await requireAdmin();
+    // Reading is part of viewing Company KPIs; writing (PUT) stays admin-only.
+    const guard = await requireSection('kpis');
     if (!guard.ok) return guard.response;
     return NextResponse.json(await getDashboardConfig());
   } catch (err) {

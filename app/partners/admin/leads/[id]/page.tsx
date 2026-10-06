@@ -1,5 +1,6 @@
 import { redirect, notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { hasSection } from '@/lib/require-role';
 import { PageContainer } from '@/components/ui/page-header';
 import { getLeadWithEvents } from '@/lib/referrals/leads';
 import { getLeadAgreement, getLeadLedger, previewBounty } from '@/lib/referrals/ledger';
@@ -10,7 +11,8 @@ export const metadata = { title: 'HDPM-OS — Lead' };
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (!session?.user?.isAdmin) redirect('/');
+  // Admins, or staff an admin has given the Partners section (tax documents stay admin-only).
+  if (!(await hasSection('referrals_admin')).ok) redirect('/');
 
   const { id } = await params;
   const result = await getLeadWithEvents(id);

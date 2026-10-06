@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
+import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { agreementError, parseAgreement } from '@/lib/fee-management/model';
 
@@ -10,7 +10,7 @@ import { agreementError, parseAgreement } from '@/lib/fee-management/model';
  * left as they are, so the Owner Fee Opportunity editor never wipes them.
  */
 export async function PUT(request: NextRequest) {
-  const guard = await requireRole('admin');
+  const guard = await requireSection('fee_management');
   if (!guard.ok) return guard.response;
   const body = await request.json().catch(() => null);
   const a = parseAgreement(body);

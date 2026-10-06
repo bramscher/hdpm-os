@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRole } from '@/lib/require-role';
+import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { parseDoorSchedule, parseRaiseFloor, parseWeights } from '@/lib/fee-management/model';
 import { parseFeeSchedule } from '@/lib/fee-management/fee-schedule';
 
 /** PUT { doorSchedule?, raiseFloor?, priorityWeights?, feeSchedule? } — validated, then upserted. */
 export async function PUT(request: NextRequest) {
-  const guard = await requireRole('admin');
+  const guard = await requireSection('fee_management');
   if (!guard.ok) return guard.response;
   let body: Record<string, unknown>;
   try {

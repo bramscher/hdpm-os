@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 
 const guard = vi.fn();
 const webAdminFetch = vi.fn();
-vi.mock('@/lib/require-role', () => ({ requireRole: () => guard() }));
+vi.mock('@/lib/require-role', () => ({ requireSection: () => guard() }));
 vi.mock('@/lib/hdpm-web-admin', () => ({ webAdminFetch: (...args: unknown[]) => webAdminFetch(...args) }));
 
 import { GET, POST, PATCH } from '@/app/api/admin/hiring/[...path]/route';
@@ -17,7 +17,7 @@ describe('hiring admin proxy', () => {
     webAdminFetch.mockResolvedValue(Response.json({ ok: true }));
   });
 
-  it('requires an admin before touching the website', async () => {
+  it('requires the Hiring section before touching the website', async () => {
     guard.mockResolvedValue({ ok: false, response: Response.json({ error: 'no' }, { status: 403 }) });
     const res = await GET(req('GET', '/api/admin/hiring/overview'), ctx('overview'));
     expect(res.status).toBe(403);

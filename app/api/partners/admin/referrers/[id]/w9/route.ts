@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireReferralAdmin } from '@/lib/referrals/admin';
+import { requireReferralTaxAdmin } from '@/lib/referrals/admin';
 import { BountyActionError } from '@/lib/referrals/ledger';
 import { markW9Verified, w9Link } from '@/lib/referrals/payouts-server';
 
 /** GET — a 2-minute signed link to the referrer's W-9 (each view audited). */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireReferralAdmin();
+  const guard = await requireReferralTaxAdmin();
   if (!guard.ok) return guard.response;
   try {
     const { id } = await params;
@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 /** POST — mark the W-9 verified (admin checked it against the captured name + TIN). */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireReferralAdmin();
+  const guard = await requireReferralTaxAdmin();
   if (!guard.ok) return guard.response;
   try {
     const { id } = await params;

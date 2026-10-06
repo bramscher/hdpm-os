@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireReferralAdmin } from '@/lib/referrals/admin';
+import { requireReferralTaxAdmin } from '@/lib/referrals/admin';
 import { getTaxYear, taxWorksheet } from '@/lib/referrals/payouts-server';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +14,7 @@ const yearParam = (request: NextRequest) => {
  * GET ?year=2026&format=xlsx[&tins=1]  → 1099 worksheet; tins=1 decrypts tax IDs (audited per referrer)
  */
 export async function GET(request: NextRequest) {
-  const guard = await requireReferralAdmin();
+  const guard = await requireReferralTaxAdmin();
   if (!guard.ok) return guard.response;
   const year = yearParam(request);
   if (!year) return NextResponse.json({ error: 'year must be a 4-digit year' }, { status: 400 });

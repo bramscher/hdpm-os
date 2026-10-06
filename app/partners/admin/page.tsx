@@ -13,6 +13,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { auth } from '@/lib/auth';
+import { hasSection } from '@/lib/require-role';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { getReferralAdminStats } from '@/lib/referrals/dashboard';
@@ -30,7 +31,8 @@ export const metadata = { title: 'HDPM-OS — Referral program' };
  */
 export default async function ReferralAdminHome() {
   const session = await auth();
-  if (!session?.user?.isAdmin) redirect('/');
+  // Admins, or staff an admin has given the Partners section (tax documents stay admin-only).
+  if (!(await hasSection('referrals_admin')).ok) redirect('/');
 
   const [stats, recent] = await Promise.all([getReferralAdminStats(), listLeads()]);
   const recentLeads = recent.slice(0, 6);

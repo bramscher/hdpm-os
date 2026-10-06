@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { hasSection } from '@/lib/require-role';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { getPayoutsOverview } from '@/lib/referrals/payouts-server';
 import PayoutsAdmin from './payouts-admin';
@@ -10,7 +11,8 @@ export const metadata = { title: 'HDPM-OS — Referral payouts' };
 /** Admin → Partners → Payouts (Batch 8): pay approved bounties in a batch and export for QuickBooks. */
 export default async function PayoutsPage() {
   const session = await auth();
-  if (!session?.user?.isAdmin) redirect('/');
+  // Admins, or staff an admin has given the Partners section (tax documents stay admin-only).
+  if (!(await hasSection('referrals_admin')).ok) redirect('/');
   const overview = await getPayoutsOverview().catch(() => ({ ready: [], batches: [] }));
   return (
     <PageContainer>
@@ -22,7 +24,7 @@ export default async function PayoutsPage() {
             <a href="/partners/admin" className="text-sm text-charcoal-600 hover:underline">Overview</a>
             <a href="/partners/admin/referrers" className="text-sm text-charcoal-600 hover:underline">Referrers</a>
             <a href="/partners/admin/leads" className="text-sm text-charcoal-600 hover:underline">Pipeline</a>
-            <a href="/partners/admin/payouts/1099" className="text-sm text-charcoal-600 hover:underline">1099s</a>
+            {session?.user?.isAdmin && <a href="/partners/admin/payouts/1099" className="text-sm text-charcoal-600 hover:underline">1099s</a>}
           </>
         }
       />

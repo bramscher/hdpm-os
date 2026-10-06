@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { hasSection } from '@/lib/require-role';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { listReferrers, getFeePolicies } from '@/lib/referrals/admin';
 import ReferrersAdmin from './referrers-admin';
@@ -14,7 +15,8 @@ export const metadata = { title: 'HDPM-OS — Referrers' };
  */
 export default async function ReferrersPage() {
   const session = await auth();
-  if (!session?.user?.isAdmin) redirect('/');
+  // Admins, or staff an admin has given the Partners section (tax documents stay admin-only).
+  if (!(await hasSection('referrals_admin')).ok) redirect('/');
 
   const [referrers, policies] = await Promise.all([listReferrers(), getFeePolicies()]);
 
@@ -32,7 +34,7 @@ export default async function ReferrersPage() {
           </>
         }
       />
-      <ReferrersAdmin initialReferrers={referrers} policies={policies} />
+      <ReferrersAdmin initialReferrers={referrers} policies={policies} canViewTaxDocs={session?.user?.isAdmin === true} />
     </PageContainer>
   );
 }

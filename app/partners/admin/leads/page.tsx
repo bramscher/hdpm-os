@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { hasSection } from '@/lib/require-role';
 import { PageContainer, PageHeader } from '@/components/ui/page-header';
 import { listLeads } from '@/lib/referrals/leads';
 import LeadsAdmin from './leads-admin';
@@ -14,7 +15,8 @@ export const metadata = { title: 'HDPM-OS — Referral pipeline' };
  */
 export default async function LeadsPage() {
   const session = await auth();
-  if (!session?.user?.isAdmin) redirect('/');
+  // Admins, or staff an admin has given the Partners section (tax documents stay admin-only).
+  if (!(await hasSection('referrals_admin')).ok) redirect('/');
 
   const leads = await listLeads();
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getLatestFinancials } from '@/lib/quickbooks';
 import { getDashboardConfig } from '@/lib/dashboard-config';
-import { requireAdmin } from '@/lib/require-admin';
+import { requireSection } from '@/lib/require-role';
 
 export const maxDuration = 30;
 
@@ -16,7 +16,8 @@ export const maxDuration = 30;
  * it's set, the NOI-derived fields are null and `needsStaffCost` is true.
  */
 export async function GET() {
-  const guard = await requireAdmin();
+  // Company KPIs viewers (admins, or anyone granted the section). Read-only.
+  const guard = await requireSection('kpis');
   if (!guard.ok) return guard.response;
 
   try {

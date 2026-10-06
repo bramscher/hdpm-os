@@ -1,4 +1,5 @@
 "use client";
+import { useSession } from "next-auth/react";
 
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import Link from "next/link";
@@ -1618,6 +1619,9 @@ export default function DashboardPage() {
   const [refreshingKeys, setRefreshingKeys] = useState<Set<string>>(new Set());
   const [config, setConfig] = useState<DashboardConfig | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  // KPI settings (money inputs, internal vendors) are admin-only; delegated viewers just read.
+  const { data: session } = useSession();
+  const canEditConfig = session?.user?.isAdmin === true;
   const [financials, setFinancials] = useState<FinancialsResponse | null>(null);
   const [financialsLoading, setFinancialsLoading] = useState(true);
 
@@ -1920,13 +1924,15 @@ export default function DashboardPage() {
               <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
               {refreshing ? "Refreshing..." : "Refresh Live"}
             </button>
-            <button
-              onClick={() => setConfigOpen(true)}
-              title="Dashboard config"
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-charcoal-600 bg-white border border-sand-200 rounded-lg hover:bg-sand-50 hover:border-sand-300 transition-all duration-150 shadow-sm"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+            {canEditConfig && (
+              <button
+                onClick={() => setConfigOpen(true)}
+                title="Dashboard config"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-charcoal-600 bg-white border border-sand-200 rounded-lg hover:bg-sand-50 hover:border-sand-300 transition-all duration-150 shadow-sm"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
