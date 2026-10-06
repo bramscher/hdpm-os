@@ -7,7 +7,7 @@
 
 import type { RentAnalysis } from '@/types/comps';
 
-const PHONE = '(541) 406-6409';
+const PHONE = '(541) 548-0383';
 
 export function rentNotesSources(analysis: Pick<RentAnalysis, 'comparable_comps' | 'competing_listings' | 'baselines' | 'rentcast_rent_estimate'>): string[] {
   const comps = analysis.comparable_comps ?? [];
