@@ -22,6 +22,10 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     accessToken?: string;
+    /** Microsoft refresh token (offline_access) and when the access token expires. */
+    refreshToken?: string;
+    accessTokenExpires?: number;
+    tokenError?: string;
     isAdmin?: boolean;
     role?: AccessRole;
     deniedSections?: string[];
