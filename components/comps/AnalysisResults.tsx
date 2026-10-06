@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { NearbyRentals } from "./NearbyRentals";
 import { listingSourceLabel } from "@/lib/competing-listings";
 import type { RentAnalysis, RentalComp } from "@/types/comps";
+import { standardRentNotes } from "@/lib/rent-notes-template";
 
 interface AnalysisResultsProps {
   analysis: RentAnalysis;
@@ -398,14 +399,27 @@ export function AnalysisResults({
 
       {/* Notes from HDPM */}
       <div className="glass-heavy rounded-xl p-4">
-        <h4 className="text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-3">
-          Notes from High Desert Property Management
-        </h4>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h4 className="text-xs font-medium text-charcoal-400 uppercase tracking-wider">
+            Notes from High Desert Property Management
+          </h4>
+          <button
+            type="button"
+            onClick={() => {
+              const template = standardRentNotes(analysis);
+              onManagerNotesChange(managerNotes.trim() ? `${managerNotes.trimEnd()}\n\n${template}` : template);
+            }}
+            className="text-xs font-medium text-terra-700 hover:text-terra-800 hover:underline"
+            title="Our methodology, where we looked, and why a conversation and visit sharpen the price. Edit it after inserting."
+          >
+            Insert standard notes
+          </button>
+        </div>
         <textarea
           placeholder="Add any notes about the property, market conditions, or recommendations for the owner..."
           value={managerNotes}
           onChange={(e) => onManagerNotesChange(e.target.value)}
-          rows={4}
+          rows={managerNotes.length > 400 ? 14 : 4}
           className="w-full rounded-lg border border-charcoal-200 bg-white/60 px-3 py-2 text-sm text-charcoal-900 placeholder-charcoal-400 focus:outline-none focus:ring-2 focus:ring-terra-500/30 focus:border-terra-500 resize-y"
         />
         <p className="text-[10px] text-charcoal-400 mt-1.5">
