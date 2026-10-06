@@ -23,6 +23,7 @@ describe('standard rent notes', () => {
   });
   it('explains the method, asks to talk and visit, and lists owner choices', () => {
     const text = standardRentNotes(analysis());
+    expect(text.startsWith('How we arrived at this range:\n\nTo build this range')).toBe(true);
     expect(text).toContain('in Redmond');
     expect(text).toMatch(/walk through it together/);
     expect(text).toMatch(/landscaping/);

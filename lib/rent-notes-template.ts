@@ -36,7 +36,8 @@ export function standardRentNotes(analysis: Pick<RentAnalysis, 'subject' | 'comp
     ? `To build this range we compared your home with ${listSentence(sources)}.`
     : 'To build this range we compared your home with similar rentals in the area.';
   return [
-    'How we arrived at this range',
+    'How we arrived at this range:',
+    '',
     `${where} We give the most weight to homes closest to yours${town ? ` in ${town}` : ''} in bedrooms, bathrooms, size and location, and adjust for square footage and property type.`,
     '',
     'This is a desk estimate from market data and public records. It can\'t see your home\'s condition, updates, finishes, yard or views, and those can move the rent in either direction. To make it more precise, we\'d like to talk with you about the property and, ideally, walk through it together.',
