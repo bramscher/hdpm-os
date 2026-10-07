@@ -1108,14 +1108,14 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
                 <Input id="tenant-unit" value={charge.tenant_unit} onChange={(e) => updateCharge({ tenant_unit: e.target.value })} placeholder="Unit" disabled={isLoading || chargeLocked} className="bg-white" />
               </div>
               <div>
-                <label htmlFor="tenant-reason" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Reason <span className="text-red-500">*</span></label>
+                <label htmlFor="tenant-reason" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Reason <span className="normal-case tracking-normal text-charcoal-400">(optional — the office can add it)</span></label>
                 <select id="tenant-reason" value={charge.tenant_charge_reason} onChange={(e) => updateCharge({ tenant_charge_reason: e.target.value as TenantChargeReason | "" })} disabled={isLoading || chargeLocked} className="h-9 w-full rounded-md border border-sand-300 bg-white px-2 text-sm">
-                  <option value="">Choose a reason…</option>
+                  <option value="">Not sure — office to choose</option>
                   {(Object.keys(TENANT_REASON_LABEL) as TenantChargeReason[]).map((r) => <option key={r} value={r}>{TENANT_REASON_LABEL[r]}</option>)}
                 </select>
               </div>
               <div>
-                <label htmlFor="lease-clause" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Lease clause {charge.tenant_charge_reason === "lease_fee" && <span className="text-red-500">*</span>}</label>
+                <label htmlFor="lease-clause" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Lease clause <span className="normal-case tracking-normal text-charcoal-400">(optional — the office can add it)</span></label>
                 <Input id="lease-clause" value={charge.lease_clause} onChange={(e) => updateCharge({ lease_clause: e.target.value })} placeholder="e.g. Section 14, lockout fee" disabled={isLoading || chargeLocked} className="bg-white" />
               </div>
               <div className="md:col-span-2">

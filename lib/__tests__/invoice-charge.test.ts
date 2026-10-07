@@ -3,6 +3,7 @@ import {
   chargeFieldsFrom,
   chargeLabel,
   chargeProblems,
+  ledgerProblems,
   ChargeValidationError,
   mergeChargeUpdate,
   normalizeChargeFields,
@@ -42,16 +43,21 @@ describe('who pays: owner or tenant, never both', () => {
     expect(chargeProblems(draft, { finalizing: false })).toEqual([]);
     const problems = chargeProblems(draft, { finalizing: true });
     expect(problems.join(' ')).toContain('name and unit');
-    expect(problems.join(' ')).toContain('Choose why');
+    expect(problems.join(' ')).not.toContain('Choose why'); // reason is optional to generate (techs)
     expect(problems.join(' ')).toContain('note');
     expect(chargeProblems(tenant, { finalizing: true })).toEqual([]);
     expect(chargeProblems({ charge_to: 'owner' }, { finalizing: true })).toEqual([]);
   });
 
-  it('needs the lease clause for a lease fee', () => {
+  it('lets techs generate without a reason or lease clause; posting to the ledger needs them', () => {
+    const noBasis = { ...tenant, tenant_charge_reason: null, lease_clause: null };
+    expect(chargeProblems(noBasis, { finalizing: true })).toEqual([]);
+    expect(ledgerProblems(noBasis).join(' ')).toContain('Choose why');
     const fee = { ...tenant, tenant_charge_reason: 'lease_fee' as const };
-    expect(chargeProblems(fee, { finalizing: true }).join(' ')).toContain('lease clause');
-    expect(chargeProblems({ ...fee, lease_clause: 'Section 14' }, { finalizing: true })).toEqual([]);
+    expect(chargeProblems(fee, { finalizing: true })).toEqual([]);
+    expect(ledgerProblems(fee).join(' ')).toContain('lease clause');
+    expect(ledgerProblems({ ...fee, lease_clause: 'Section 14' })).toEqual([]);
+    expect(ledgerProblems({ charge_to: 'owner' })).toHaveLength(1);
   });
 
   it('merges a partial edit so an owner invoice never keeps tenant fields', () => {
