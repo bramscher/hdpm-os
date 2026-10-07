@@ -27,7 +27,7 @@ export function realmxEnabled(): boolean {
 export function noticeDateLine(dateStr: string, windowLabel?: string | null): string {
   return windowLabel ? `${longDate(dateStr)}, ${windowLabel}` : longDate(dateStr);
 }
-export const COMPANY_PHONE = '(541) 406-6409';
+export const COMPANY_PHONE = '(541) 548-0383';
 
 export function longDate(dateStr: string): string {
   return new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-US', {
