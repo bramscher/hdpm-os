@@ -17,7 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { routeArrivals } from './inspection-realmx-request';
 
 const COMPANY_NAME = 'High Desert Property Management';
-const COMPANY_PHONE = '(541) 406-6409';
+const COMPANY_PHONE = '(541) 548-0383';
 
 export interface NoticeInspectionRow {
   id: string;

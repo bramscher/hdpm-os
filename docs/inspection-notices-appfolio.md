@@ -108,11 +108,11 @@ Build two Flows; together they equal `max(move-in, last inspection) + 6 months`.
 > The inspection is a brief walkthrough to check the home's condition and note any
 > maintenance needs — you're welcome to be present but don't need to be.
 >
-> Questions? Call us at (541) 406-6409 or reply to this message.
+> Questions? Call us at (541) 548-0383 or reply to this message.
 >
 > Thank you,
 > High Desert Property Management
-> (541) 406-6409
+> (541) 548-0383
 
 The **exact-date** notice (with the scheduled day) is sent later by the bulk-send
 bridge — its copy lives in `lib/inspection-notify.ts` (`buildNoticeContent`).

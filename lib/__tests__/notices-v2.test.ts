@@ -120,3 +120,10 @@ describe('recordNoticeResults', () => {
     expect(op(update!, 'update')![0]).toMatchObject({ notice_status: 'sent', notice_sent_by: 'craig@highdesertpm.com', notice_previous_target_date: null });
   });
 });
+
+describe('notice contact number', () => {
+  it('tells tenants to call the office, not the AI leasing line', () => {
+    expect(buildRealmxRequest({ routeDate: '2026-10-14', units: [] }).body).toContain('(541) 548-0383');
+    expect(buildRealmxRequest({ routeDate: '2026-10-14', units: [] }).body).not.toContain('406-6409');
+  });
+});
