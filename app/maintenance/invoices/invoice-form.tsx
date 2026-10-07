@@ -148,6 +148,30 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
   const chargeLocked = !!editInvoice && (editInvoice.status === "attached" || !!editInvoice.tenant_ledger_posted_at);
   const updateCharge = (patch: Partial<ChargeState>) => { userHasEdited.current = true; setCharge((c) => ({ ...c, ...patch })); };
 
+  // Tenant charge: prefill tenant name + unit from AppFolio (nightly sync) so the tech doesn't have to know them.
+  type TenantMatch = { tenantName: string; unit: string; address: string; syncedAt: string | null };
+  const [tenantMatches, setTenantMatches] = useState<TenantMatch[] | null>(null);
+  const [tenantLookupBusy, setTenantLookupBusy] = useState(false);
+  const tenantLookupKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (charge.charge_to !== "tenant" || chargeLocked || charge.tenant_name.trim() || !propertyAddress.trim()) return;
+    const key = `${propertyAddress}|${charge.tenant_unit}`;
+    if (tenantLookupKey.current === key) return;
+    tenantLookupKey.current = key;
+    setTenantLookupBusy(true);
+    fetch(`/api/invoices/tenant-lookup?address=${encodeURIComponent(propertyAddress)}&unit=${encodeURIComponent(charge.tenant_unit)}`)
+      .then((r) => (r.ok ? r.json() : { matches: [] }))
+      .then((data: { matches?: TenantMatch[] }) => {
+        const matches = data.matches ?? [];
+        setTenantMatches(matches);
+        if (matches.length === 1) {
+          setCharge((c) => (c.tenant_name.trim() ? c : { ...c, tenant_name: matches[0].tenantName, tenant_unit: c.tenant_unit.trim() || matches[0].unit }));
+        }
+      })
+      .catch(() => setTenantMatches([]))
+      .finally(() => setTenantLookupBusy(false));
+  }, [charge.charge_to, charge.tenant_name, charge.tenant_unit, chargeLocked, propertyAddress]);
+
   // Line items
   const [lineItems, setLineItems] = useState<FormLineItem[]>([blankLineItem(initialLineType)]);
 
@@ -1046,6 +1070,33 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
             </div>
           </div>
           {chargeLocked && <p className="text-xs text-charcoal-500">Who pays is fixed because this invoice is attached in AppFolio or its tenant charge is posted. Void it and issue a new one to change it.</p>}
+          {charge.charge_to === "tenant" && !chargeLocked && (tenantLookupBusy || tenantMatches) && (
+            <div className="rounded-lg bg-sand-50 border border-sand-200 px-3 py-2 text-xs text-charcoal-600">
+              {tenantLookupBusy ? (
+                "Looking up the current tenant in AppFolio…"
+              ) : tenantMatches && tenantMatches.length === 1 ? (
+                <>Tenant and unit filled from AppFolio{tenantMatches[0].syncedAt ? ` (synced ${new Date(tenantMatches[0].syncedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })})` : ""}. Check them against the work order.</>
+              ) : tenantMatches && tenantMatches.length > 1 ? (
+                <div>
+                  <p className="mb-1.5">Several households at this address — pick the one this charge is for:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tenantMatches.map((m) => (
+                      <button
+                        key={`${m.unit}|${m.tenantName}`}
+                        type="button"
+                        onClick={() => updateCharge({ tenant_name: m.tenantName, tenant_unit: m.unit || charge.tenant_unit })}
+                        className={`rounded-md border px-2 py-1 text-left ${charge.tenant_name === m.tenantName ? "border-terra-500 bg-white" : "border-sand-300 bg-white hover:bg-sand-100"}`}
+                      >
+                        <span className="font-medium text-charcoal-800">{m.unit ? `Unit ${m.unit}` : m.address}</span> · {m.tenantName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                "No current tenant found for this address in AppFolio — enter the name as on the lease."
+              )}
+            </div>
+          )}
           {charge.charge_to === "tenant" && (
             <div className="grid md:grid-cols-2 gap-3">
               <div>
