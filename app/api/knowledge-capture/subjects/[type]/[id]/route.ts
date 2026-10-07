@@ -25,7 +25,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     db.from('kc_profile').select('profile_md, recording_count, generated_at').eq('org_id', ORG).eq('subject_type', type).eq('subject_id', id).maybeSingle(),
     db
       .from('kc_recording')
-      .select('id, speaker_email, speaker_name, storage_path, duration_sec, status, error, transcript, notes_md, chunk_count, created_at')
+      .select('id, speaker_email, speaker_name, storage_path, duration_sec, status, error, transcript, transcript_original, transcript_edited_at, transcript_edited_by, notes_md, chunk_count, created_at')
       .eq('org_id', ORG)
       .eq('subject_type', type)
       .eq('subject_id', id)
@@ -58,6 +58,9 @@ export async function GET(_request: NextRequest, { params }: Params) {
       status: r.status,
       error: r.error,
       transcript: r.transcript,
+      originalTranscript: r.transcript_original,
+      editedAt: r.transcript_edited_at,
+      editedBy: r.transcript_edited_by,
       notes: r.notes_md,
       chunkCount: r.chunk_count,
       createdAt: r.created_at,

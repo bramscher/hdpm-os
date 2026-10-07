@@ -172,15 +172,28 @@ interface RecordingRow {
   speaker_name: string | null;
   storage_path: string;
   mime_type: string;
+  transcript: string | null;
+  transcript_original: string | null;
   created_at: string;
 }
 
-/** Transcribe → notes → brain → profile. Leaves the row 'done' or 'error'. */
-export async function processRecording(recordingId: string): Promise<void> {
+/**
+ * Transcribe → notes → brain → profile. Leaves the row 'done' or 'error'.
+ *
+ * With `edit`, the corrected transcript replaces the stored one (the first
+ * machine transcript is kept in transcript_original) and everything
+ * downstream is rebuilt from it. Without it, an existing transcript is reused
+ * (retries never re-bill transcription or undo an edit); only a take with no
+ * transcript yet goes to Whisper.
+ */
+export async function processRecording(
+  recordingId: string,
+  edit?: { transcript: string; editedBy: string }
+): Promise<void> {
   const db = getSupabaseAdmin();
   const { data: rec, error } = await db
     .from('kc_recording')
-    .select('id, subject_type, subject_id, subject_name, speaker_email, speaker_name, storage_path, mime_type, created_at')
+    .select('id, subject_type, subject_id, subject_name, speaker_email, speaker_name, storage_path, mime_type, transcript, transcript_original, created_at')
     .eq('org_id', ORG)
     .eq('id', recordingId)
     .maybeSingle<RecordingRow>();
@@ -203,13 +216,26 @@ export async function processRecording(recordingId: string): Promise<void> {
         related: [],
       } satisfies ResolvedSubject);
 
-    const { data: audio, error: dlErr } = await db.storage.from(BUCKET).download(rec.storage_path);
-    if (dlErr || !audio) throw new Error(`Audio download failed: ${dlErr?.message ?? 'missing'}`);
-
     const speaker = rec.speaker_name || rec.speaker_email;
-    const { text: transcript, durationSec } = await transcribeAudio(audio, rec.mime_type, subject.name);
-    if (!transcript) throw new Error('Transcription came back empty — was the microphone muted?');
-    await setRow({ transcript, transcript_model: TRANSCRIBE_MODEL, duration_sec: durationSec, size_bytes: audio.size });
+    let transcript: string;
+    if (edit) {
+      transcript = edit.transcript.trim();
+      await setRow({
+        transcript,
+        transcript_original: rec.transcript_original ?? rec.transcript,
+        transcript_edited_at: new Date().toISOString(),
+        transcript_edited_by: edit.editedBy,
+      });
+    } else if (rec.transcript) {
+      transcript = rec.transcript;
+    } else {
+      const { data: audio, error: dlErr } = await db.storage.from(BUCKET).download(rec.storage_path);
+      if (dlErr || !audio) throw new Error(`Audio download failed: ${dlErr?.message ?? 'missing'}`);
+      const result = await transcribeAudio(audio, rec.mime_type, subject.name);
+      transcript = result.text;
+      if (!transcript) throw new Error('Transcription came back empty — was the microphone muted?');
+      await setRow({ transcript, transcript_model: TRANSCRIBE_MODEL, duration_sec: result.durationSec, size_bytes: audio.size });
+    }
 
     const notes = await distillNotes(subject.context, transcript, speaker, recordedOn(rec.created_at));
     const nodeId = await ensureGraph(db, subject);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronDown, ChevronRight, ExternalLink, RefreshCw, RotateCcw, Search, Trash2, User } from "lucide-react";
+import { Building2, ChevronDown, ChevronRight, ExternalLink, Pencil, RefreshCw, RotateCcw, Search, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,9 @@ interface Recording {
   status: "uploaded" | "processing" | "done" | "error";
   error: string | null;
   transcript: string | null;
+  originalTranscript: string | null;
+  editedAt: string | null;
+  editedBy: string | null;
   notes: string | null;
   chunkCount: number;
   createdAt: string;
@@ -348,6 +351,25 @@ function SubjectPanel({
     onChanged();
   }
 
+  async function saveTranscript(r: Recording, transcript: string): Promise<boolean> {
+    setDetail((d) => d && { ...d, recordings: d.recordings.map((x) => (x.id === r.id ? { ...x, transcript, status: "processing" } : x)) });
+    let ok = true;
+    try {
+      const res = await call<{ unchanged?: boolean }>(`/recordings/${r.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript }),
+      });
+      toast.success(res.unchanged ? "No changes to save." : "Transcript saved — notes, brain and profile rebuilt.");
+    } catch (err) {
+      ok = false;
+      toast.error(err instanceof Error ? err.message : "Could not save the transcript");
+    }
+    await loadDetail();
+    onChanged();
+    return ok;
+  }
+
   async function rebuild() {
     setRebuilding(true);
     try {
@@ -470,6 +492,7 @@ function SubjectPanel({
                 r={r}
                 canDelete={r.mine || detail.canDeleteAny}
                 onRetry={() => process(r.id)}
+                onSaveTranscript={(t) => saveTranscript(r, t)}
                 onDelete={() => remove(r)}
               />
             ))}
@@ -480,9 +503,34 @@ function SubjectPanel({
   );
 }
 
-function RecordingRow({ r, canDelete, onRetry, onDelete }: { r: Recording; canDelete: boolean; onRetry: () => void; onDelete: () => void }) {
-  const [open, setOpen] = useState<"notes" | "transcript" | null>(null);
+function RecordingRow({
+  r,
+  canDelete,
+  onRetry,
+  onDelete,
+  onSaveTranscript,
+}: {
+  r: Recording;
+  canDelete: boolean;
+  onRetry: () => void;
+  onDelete: () => void;
+  onSaveTranscript: (transcript: string) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState<"notes" | "transcript" | "original" | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const status = STATUS[r.status];
+  const editing = draft !== null;
+  // Edits share the delete permission: your own takes, or any take as an admin.
+  const canEdit = canDelete && !!r.transcript && r.status !== "processing";
+
+  async function save() {
+    if (draft === null) return;
+    setSaving(true);
+    if (await onSaveTranscript(draft)) setDraft(null);
+    setSaving(false);
+  }
+
   return (
     <li className="rounded-md border border-sand-200 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -503,6 +551,12 @@ function RecordingRow({ r, canDelete, onRetry, onDelete }: { r: Recording; canDe
               Retry
             </Button>
           )}
+          {canEdit && !editing && (
+            <Button variant="ghost" size="sm" onClick={() => setDraft(r.transcript ?? "")} aria-label="Edit transcript">
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit
+            </Button>
+          )}
           {canDelete && (
             <Button variant="ghost" size="sm" onClick={onDelete} aria-label="Delete recording">
               <Trash2 className="h-4 w-4" />
@@ -512,21 +566,66 @@ function RecordingRow({ r, canDelete, onRetry, onDelete }: { r: Recording; canDe
       </div>
       {r.error && <p className="mt-2 text-sm text-red-700">{r.error}</p>}
       {r.audioUrl && <audio controls preload="none" src={r.audioUrl} className="mt-2 w-full" />}
-      <div className="mt-2 flex gap-3 text-sm">
-        {r.notes && (
-          <button onClick={() => setOpen(open === "notes" ? null : "notes")} className="font-medium text-blue-600 hover:underline">
-            {open === "notes" ? "Hide notes" : "Notes"}
-          </button>
-        )}
-        {r.transcript && (
-          <button onClick={() => setOpen(open === "transcript" ? null : "transcript")} className="font-medium text-blue-600 hover:underline">
-            {open === "transcript" ? "Hide transcript" : "Transcript"}
-          </button>
-        )}
-      </div>
-      {open === "notes" && r.notes && <MarkdownLite md={r.notes} className="mt-2 text-sm text-charcoal-700" />}
-      {open === "transcript" && r.transcript && (
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-charcoal-600">{r.transcript}</p>
+
+      {editing ? (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-charcoal-500">
+            Fix misheard names, numbers and places, or add something you forgot. Saving rebuilds this take&apos;s notes, its
+            brain entries and the profile. The original transcript is kept.
+          </p>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={14}
+            autoFocus
+            className="w-full rounded-md border border-sand-300 p-3 text-sm leading-relaxed text-charcoal-800 focus:border-terra-400 focus:outline-none"
+          />
+          <div className="flex gap-2">
+            <Button onClick={save} disabled={saving || !draft.trim()}>
+              {saving ? "Saving & rebuilding…" : "Save & rebuild"}
+            </Button>
+            <Button variant="outline" onClick={() => setDraft(null)} disabled={saving}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="mt-2 flex flex-wrap gap-3 text-sm">
+            {r.notes && (
+              <button onClick={() => setOpen(open === "notes" ? null : "notes")} className="font-medium text-blue-600 hover:underline">
+                {open === "notes" ? "Hide notes" : "Notes"}
+              </button>
+            )}
+            {r.transcript && (
+              <button onClick={() => setOpen(open === "transcript" ? null : "transcript")} className="font-medium text-blue-600 hover:underline">
+                {open === "transcript" ? "Hide transcript" : "Transcript"}
+              </button>
+            )}
+            {r.editedAt && (
+              <span className="text-charcoal-500">
+                Edited by {r.editedBy ?? "someone"} · {formatDate(r.editedAt)}
+                {r.originalTranscript && (
+                  <>
+                    {" · "}
+                    <button onClick={() => setOpen(open === "original" ? null : "original")} className="text-blue-600 hover:underline">
+                      {open === "original" ? "Hide original" : "Show original"}
+                    </button>
+                  </>
+                )}
+              </span>
+            )}
+          </div>
+          {open === "notes" && r.notes && <MarkdownLite md={r.notes} className="mt-2 text-sm text-charcoal-700" />}
+          {open === "transcript" && r.transcript && (
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-charcoal-600">{r.transcript}</p>
+          )}
+          {open === "original" && r.originalTranscript && (
+            <p className="mt-2 whitespace-pre-wrap rounded-md bg-sand-50 p-3 text-sm leading-relaxed text-charcoal-500">
+              {r.originalTranscript}
+            </p>
+          )}
+        </>
       )}
     </li>
   );

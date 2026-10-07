@@ -68,3 +68,9 @@ END $$;
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('knowledge-capture', 'knowledge-capture', false)
 ON CONFLICT (id) DO NOTHING;
+
+-- Transcript corrections: the first machine transcript is kept for reference;
+-- notes, brain chunks and the profile are rebuilt from the edited text.
+ALTER TABLE kc_recording ADD COLUMN IF NOT EXISTS transcript_original TEXT;
+ALTER TABLE kc_recording ADD COLUMN IF NOT EXISTS transcript_edited_at TIMESTAMPTZ;
+ALTER TABLE kc_recording ADD COLUMN IF NOT EXISTS transcript_edited_by TEXT;

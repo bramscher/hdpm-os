@@ -26,6 +26,7 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
      - distilled notes: `kind=summary`, author `agent:knowledge-capture`
    - **Rebuild** the subject's profile from all of its recordings. The profile is stored in `kc_profile`, written to the subject's `brain_node.summary_md`, and ingested as a salience-1.2 chunk.
 5. **Read.** Each subject page shows the profile, every take (audio, transcript, notes), retry for failed takes, delete (your own takes; admins can delete any), and "Rebuild profile".
+6. **Correct.** **Edit** on a take opens its transcript in a text box under the audio player (`PATCH /api/knowledge-capture/recordings/:id`). Saving keeps the first machine transcript in `transcript_original`, records who edited it and when, and rebuilds that take's notes, its brain chunks and the profile from the corrected text. The audio is not re-transcribed, and Retry never overwrites an edit. Same permission as delete.
 
 Dez and agents find this knowledge through ordinary brain retrieval (`searchBrain` / `think`).
 
@@ -50,5 +51,5 @@ Re-processing a recording replaces its chunks. Deleting a recording removes its 
 
 ## Not yet
 
-- Editing a transcript or profile by hand. For now, record a correction take ("Correction on the water heater: …"); the profile prefers newer notes and flags disagreements.
+- Editing the profile directly. Correct the transcript instead, or record a correction take; the profile prefers newer notes and flags disagreements.
 - Unit-level subjects and vendor profiles.
