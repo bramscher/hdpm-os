@@ -76,7 +76,10 @@ export function normalizeChargeFields(input: ChargeFields): ChargeValues {
 
 /**
  * Problems that stop an invoice from being generated, in plain language.
- * Drafts may be incomplete; pass finalizing to check the full basis.
+ * Drafts may be incomplete; pass finalizing to check what generating needs:
+ * the tenant, unit and what happened. The reason and lease clause are optional
+ * here (techs often don't know them) — the office adds them when posting the
+ * charge to the tenant ledger (see ledgerProblems).
  */
 export function chargeProblems(inv: ChargeFields, { finalizing }: { finalizing: boolean }): string[] {
   const charge = inv.charge_to ?? 'owner';
@@ -84,8 +87,19 @@ export function chargeProblems(inv: ChargeFields, { finalizing }: { finalizing: 
   if (charge === 'owner' || !finalizing) return [];
   const problems: string[] = [];
   if (blank(inv.tenant_name) || blank(inv.tenant_unit)) problems.push('A tenant charge needs the tenant’s name and unit.');
-  if (!isTenantReason(inv.tenant_charge_reason)) problems.push('Choose why the tenant is being charged: tenant damage, lease fee or other.');
   if (blank(inv.tenant_charge_note)) problems.push('Add a note explaining the tenant charge (what happened, and the evidence).');
+  return problems;
+}
+
+/**
+ * The full basis needed before a charge is posted to the tenant's ledger
+ * (ORS 90): everything generating needs, plus the reason, and the lease
+ * clause for a lease fee.
+ */
+export function ledgerProblems(inv: ChargeFields): string[] {
+  if (inv.charge_to !== 'tenant') return ['This is an owner charge; there is no tenant ledger charge to post.'];
+  const problems = chargeProblems(inv, { finalizing: true });
+  if (!isTenantReason(inv.tenant_charge_reason)) problems.push('Choose why the tenant is being charged: tenant damage, lease fee or other.');
   if (inv.tenant_charge_reason === 'lease_fee' && blank(inv.lease_clause)) problems.push('A lease fee needs the lease clause that allows it.');
   return problems;
 }
