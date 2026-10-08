@@ -98,7 +98,9 @@ describe('effective access', () => {
   });
 
   it('admins default to everything but can be restricted — except User settings', () => {
-    expect(deniedSections('admin', {})).toEqual([]);
+    // Fixed-list sections (allowedEmails) are the one thing an admin role doesn't grant.
+    const fixed = APP_SECTIONS.filter((s) => s.allowedEmails).map((s) => s.key);
+    expect(deniedSections('admin', {})).toEqual(fixed);
     expect(sectionAllowed(S('fee_management'), 'admin', { fee_management: false })).toBe(false);
     expect(sectionAllowed(S('user_settings'), 'admin', { user_settings: false })).toBe(true);
     expect(sectionAllowed(S('home'), 'staff', { home: false })).toBe(true);
@@ -124,7 +126,7 @@ describe('effective access', () => {
     expect(on('front_desk')).toEqual(['home', 'activities', 'rent_comps', 'craigslist', 'keys', 'haven', 'property_map', 'company', 'timekeeping'].sort());
     expect(on('finance')).toEqual(['home', 'activities', 'work_billing', 'maintos', 'owner_reports', 'company', 'timekeeping'].sort());
     expect(on('read_only')).toEqual(['home', 'activities', 'company'].sort());
-    expect(on('admin')).toEqual(APP_SECTIONS.map((s) => s.key).sort());
+    expect(on('admin')).toEqual(APP_SECTIONS.filter((s) => !s.allowedEmails).map((s) => s.key).sort());
   });
 
   it('admin-edited role defaults override code defaults; person overrides win over both', () => {
@@ -173,3 +175,32 @@ describe('delegated admin sections', () => {
   });
 });
 
+
+describe('fixed people list (allowedEmails)', () => {
+  const kc = S('knowledge_capture');
+
+  it('sits in the Admin menu', () => {
+    expect(kc.group).toBe('Admin');
+    expect(kc.nav).toBeDefined();
+  });
+
+  it('allows only Matt, Penny and Craig, whatever their role or switches', () => {
+    for (const email of ['matt@highdesertpm.com', 'Penny@HighDesertPM.com', 'craig@highdesertpm.com']) {
+      expect(sectionAllowed(kc, 'pm', {}, undefined, email)).toBe(true);
+      expect(deniedSections('staff', {}, undefined, email)).not.toContain('knowledge_capture');
+    }
+    // Other admins and people switched on in User settings still don't get it.
+    expect(sectionAllowed(kc, 'admin', {}, undefined, 'lisa@highdesertpm.com')).toBe(false);
+    expect(sectionAllowed(kc, 'pm', { knowledge_capture: true }, undefined, 'lisa@highdesertpm.com')).toBe(false);
+    expect(sectionAllowed(kc, 'admin', {}, undefined, undefined)).toBe(false);
+    expect(deniedSections('admin', {}, undefined, 'someone@highdesertpm.com')).toContain('knowledge_capture');
+  });
+
+  it('is enforced by the proxy for anyone it denies (admins included)', () => {
+    const denied = deniedSections('admin', {}, undefined, 'someone@highdesertpm.com');
+    expect(checkPath('/knowledge-capture', denied).allowed).toBe(false);
+    expect(checkPath('/api/knowledge-capture/recordings', denied).allowed).toBe(false);
+    const craig = deniedSections('admin', {}, undefined, 'craig@highdesertpm.com');
+    expect(checkPath('/knowledge-capture', craig).allowed).toBe(true);
+  });
+});

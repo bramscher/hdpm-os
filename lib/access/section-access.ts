@@ -52,9 +52,9 @@ export async function getDeniedSections(email: string | null | undefined, role: 
   if (!email) return deniedSections(role, {}, roleDefaults);
   try {
     const overrides = (await loadAll()).get(email.toLowerCase()) ?? {};
-    return deniedSections(role, overrides, roleDefaults);
+    return deniedSections(role, overrides, roleDefaults, email);
   } catch (err) {
     console.error('[access] section overrides unavailable; using role defaults', err);
-    return deniedSections(role, {}, roleDefaults);
+    return deniedSections(role, {}, roleDefaults, email);
   }
 }

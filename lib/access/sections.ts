@@ -45,6 +45,11 @@ export interface AppSection {
    * role defaults). Its pages/APIs check the section, not the admin role.
    */
   delegable?: boolean;
+  /**
+   * Fixed list of people (company emails) who may use this section, and nobody
+   * else — not other admins, not role defaults, not User settings switches.
+   */
+  allowedEmails?: string[];
 }
 
 /** Human names for access roles (staff.access_role). */
@@ -275,17 +280,6 @@ export const APP_SECTIONS: AppSection[] = [
     pages: ['/brain-2'],
   },
   {
-    key: 'knowledge_capture',
-    label: 'Knowledge Capture',
-    description: 'Record what you know about each AppFolio owner and property; transcripts become owner and property profiles in the brain.',
-    group: 'Company',
-    // Admins by default; switch on for Matt and Penny (and whoever reads the profiles) in User settings.
-    defaultRoles: [],
-    pages: ['/knowledge-capture'],
-    apis: ['/api/knowledge-capture'],
-    nav: { href: '/knowledge-capture', icon: 'mic', order: 32.6 },
-  },
-  {
     key: 'desk_demo',
     label: 'The Desk (demo)',
     description: 'Clickable demo of per-person desks with circulating colored folders and paper-form tracking. Sample data only.',
@@ -391,6 +385,18 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/partners/admin', icon: 'handshake', order: 42.5 },
   },
   {
+    key: 'knowledge_capture',
+    label: 'Knowledge Capture',
+    description: 'Record what you know about each AppFolio owner and property; transcripts become owner and property profiles in the brain.',
+    group: 'Admin',
+    defaultRoles: [],
+    // Outside /admin on purpose: the proxy's admin-role gate would block Matt and Penny.
+    pages: ['/knowledge-capture'],
+    apis: ['/api/knowledge-capture'],
+    nav: { href: '/knowledge-capture', icon: 'mic', order: 43.5 },
+    allowedEmails: ['matt@highdesertpm.com', 'penny@highdesertpm.com', 'craig@highdesertpm.com'],
+  },
+  {
     key: 'habu_paper',
     label: 'Paper Workflows',
     description: 'HABU paper workflow forms (Craig only).',
@@ -478,8 +484,10 @@ export function sectionAllowed(
   section: AppSection,
   role: string | undefined,
   overrides: SectionOverrides,
-  roleOverrides?: RoleDefaultOverrides
+  roleOverrides?: RoleDefaultOverrides,
+  email?: string | null
 ): boolean {
+  if (section.allowedEmails) return isAllowListed(section, email);
   if (section.alwaysOn) return true;
   if (section.adminLocked && role === 'admin') return true;
   if (section.group === 'Admin' && role !== 'admin') return section.delegable === true && overrides[section.key] === true;
@@ -497,9 +505,20 @@ export function forbiddenAdminGrants(role: string | undefined, overrides: Sectio
     .map(([key]) => key);
 }
 
+/** Is this email on the section's fixed people list (see `allowedEmails`)? */
+export function isAllowListed(section: AppSection, email: string | null | undefined): boolean {
+  const e = email?.trim().toLowerCase();
+  return !!e && !!section.allowedEmails?.includes(e);
+}
+
 /** Keys of sections this person is denied — small list, stamped into the session token. */
-export function deniedSections(role: string | undefined, overrides: SectionOverrides, roleOverrides?: RoleDefaultOverrides): string[] {
-  return APP_SECTIONS.filter((s) => !sectionAllowed(s, role, overrides, roleOverrides)).map((s) => s.key);
+export function deniedSections(
+  role: string | undefined,
+  overrides: SectionOverrides,
+  roleOverrides?: RoleDefaultOverrides,
+  email?: string | null
+): string[] {
+  return APP_SECTIONS.filter((s) => !sectionAllowed(s, role, overrides, roleOverrides, email)).map((s) => s.key);
 }
 
 /** Validate a role-defaults payload: known role, known non-admin, non-always-on sections, booleans. */

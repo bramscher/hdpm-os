@@ -512,8 +512,11 @@ function SectionRow({
   const effective = sectionAllowed(section, role, draft, roleOv);
   const delegated = section.group === "Admin" && role !== "admin" && section.delegable === true;
   const adminOnlyForNonAdmin = section.group === "Admin" && role !== "admin" && !delegated;
-  const locked = section.alwaysOn || (section.adminLocked && role === "admin") || adminOnlyForNonAdmin;
-  const lockNote = section.alwaysOn
+  const fixedList = !!section.allowedEmails;
+  const locked = fixedList || section.alwaysOn || (section.adminLocked && role === "admin") || adminOnlyForNonAdmin;
+  const lockNote = fixedList
+    ? `Only ${section.allowedEmails!.map((e) => e.split("@")[0]).join(", ")} (set in code)`
+    : section.alwaysOn
     ? "Always on"
     : section.adminLocked && role === "admin"
       ? "Always on for admins"
