@@ -86,7 +86,7 @@ Plus the tools: inspections + route builder, invoice generation + trust-payment 
 
 ## What's new (Sep 24 – Oct 8, 2026)
 
-PRs #69–#147. Details live in each feature's section below.
+PRs #69–#149. Details live in each feature's section below.
 
 **Knowledge Capture (headline)**
 - New [Knowledge Capture](#knowledge-capture) page: Matt and Penny record what they know about each AppFolio owner and property; Whisper transcript → Claude notes → company brain → living profiles (#140)
@@ -94,6 +94,7 @@ PRs #69–#147. Details live in each feature's section below.
 - Link duplicate and related owner records: same person (merge), related, not the same, with suggestions (#142)
 - Both Matt's and Penny's take: "Who's talking", M/P dots, *Needs Matt's / Penny's take* filters, Perspectives on the profile (#143)
 - Type or paste notes as a third input; iPhone Safari pass (#144)
+- Review the transcript before it goes to the brain: audio stops at **Review transcript** until someone clicks **Add to brain**; "N to review" badge and **To review** filter (#149)
 - Hardened after a multi-reviewer pass: atomic processing claims, timeouts surface as Retry, safer profile rebuilds, confirm before discarding an in-progress recording (#147)
 
 **Home, Activities & look**
@@ -459,6 +460,7 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
 1. **Pick a subject** — every active AppFolio **owner** (owner sets split into people) and **property**, from the same cached daily AppFolio pull as Fee Management (`lib/fee-management/facts-cache.ts`). Coverage progress bars and a "Not captured yet" filter show what's left.
 2. **Add knowledge three ways:** **record in the browser** (pause/resume, 45-minute cap per take), **attach a voice memo** (25 MB max), or **Type or paste** (#144) emails, text threads or old notes in a popup. A typed note is a take with no audio (`mime_type = text/plain`, the text as its transcript) and runs through the same pipeline. Interview prompts sit beside the recorder.
 3. **Upload** straight to the private `knowledge-capture` Supabase bucket with a signed upload URL (no API body limit).
+   - **Review the transcript (#149):** audio is transcribed first and waits as **Review transcript** — an editable box under the audio player. Nothing reaches the brain, notes or profile until **Add to brain** (machine transcript kept as the original if changed). Takes awaiting review show a "N to review" badge and a **To review** filter. Typed notes skip review.
 4. **Process** (`POST /api/knowledge-capture/recordings/:id/process`):
    - **Transcribe** with OpenAI Whisper (`whisper-1`, prompted with local place names; override with `KC_TRANSCRIBE_MODEL`)
    - **Distill** into structured notes with Claude — only what the speaker said; anything unclear goes under "Open questions"
