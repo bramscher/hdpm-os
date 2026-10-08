@@ -107,12 +107,15 @@ export async function distillNotes(
   subject: SubjectContext,
   transcript: string,
   speakers: string[],
-  recordedOn: string
+  recordedOn: string,
+  written = false
 ): Promise<string> {
   const sections = PROFILE_SECTIONS[subject.type].filter((s) => s !== 'At a glance');
   const who = joinNames(speakers);
   const together = speakers.length > 1;
-  const intro = together
+  const intro = written
+    ? `${who} ${together ? 'are long-time HDPM employees' : 'is a long-time HDPM employee'} leaving the company. This is a note they typed or pasted about a ${SUBJECT_LABEL[subject.type]} (it may include copied emails or documents), saved so the team keeps what they know.`
+    : together
     ? `${who} are long-time HDPM employees leaving the company. This is a conversation between them about a ${SUBJECT_LABEL[subject.type]}, recorded so the team keeps what they know.`
     : `${who} is a long-time HDPM employee leaving the company, recording what they know about a ${SUBJECT_LABEL[subject.type]} so the team keeps that knowledge.`;
   const attribution = together
@@ -132,7 +135,7 @@ ${attribution}
 AppFolio facts:
 ${subject.facts}
 
-Recorded ${recordedOn}, speaking: ${who}. Transcript:
+${written ? 'Written' : 'Recorded'} ${recordedOn}, by: ${who}. ${written ? 'Note' : 'Transcript'}:
 """
 ${transcript}
 """`;

@@ -176,7 +176,7 @@ export function OwnerLinks({
             onChange={(e) => setNote(e.target.value)}
             maxLength={200}
             placeholder="Optional note for Related, e.g. their family trust, spouse, LLC partner"
-            className="w-full rounded-md border border-sand-300 px-3 py-2 text-sm focus:border-terra-400 focus:outline-none"
+            className="w-full rounded-md border border-sand-300 px-3 py-2 text-base focus:border-terra-400 focus:outline-none sm:text-sm"
           />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" disabled={busy} onClick={() => link(picked, "same")}>
@@ -197,7 +197,7 @@ export function OwnerLinks({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Link another owner — search by name or email"
-            className="w-full rounded-md border border-sand-300 py-2 pl-8 pr-3 text-sm focus:border-terra-400 focus:outline-none"
+            className="w-full rounded-md border border-sand-300 py-2 pl-8 pr-3 text-base focus:border-terra-400 focus:outline-none sm:text-sm"
           />
           {matches.length > 0 && (
             <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-sand-200 bg-white shadow-md">

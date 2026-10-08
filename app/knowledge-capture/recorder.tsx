@@ -9,6 +9,26 @@ import { Button } from "@/components/ui/button";
 const MAX_SECONDS = 45 * 60;
 const MAX_BYTES = 25 * 1024 * 1024;
 
+// iPhone Files/Voice Memos exports sometimes arrive with an empty MIME type.
+const AUDIO_EXT: Record<string, string> = {
+  m4a: "audio/mp4",
+  mp4: "audio/mp4",
+  aac: "audio/aac",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  webm: "audio/webm",
+  ogg: "audio/ogg",
+};
+
+/** The file as audio with a usable type, or null if it isn't audio we can transcribe. */
+function asAudio(file: File): Blob | null {
+  if (file.type.startsWith("audio/") || file.type === "video/mp4") {
+    return file.type === "video/mp4" ? new Blob([file], { type: "audio/mp4" }) : file;
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return AUDIO_EXT[ext] ? new Blob([file], { type: AUDIO_EXT[ext] }) : null;
+}
+
 function pickMime(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
   return ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find((m) =>
@@ -25,7 +45,16 @@ type State = "idle" | "recording" | "paused" | "review";
  * Record in the browser (or attach a phone voice memo), review, then hand the
  * blob to `onSave`. Owns the microphone for the duration of a take only.
  */
-export function Recorder({ onSave, busy }: { onSave: (audio: Blob) => Promise<boolean>; busy: boolean }) {
+export function Recorder({
+  onSave,
+  busy,
+  extraActions,
+}: {
+  onSave: (audio: Blob) => Promise<boolean>;
+  busy: boolean;
+  /** More ways to add knowledge, shown beside the idle buttons (e.g. Type or paste). */
+  extraActions?: React.ReactNode;
+}) {
   const [state, setState] = useState<State>("idle");
   const [seconds, setSeconds] = useState(0);
   const [take, setTake] = useState<{ blob: Blob; url: string } | null>(null);
@@ -120,16 +149,17 @@ export function Recorder({ onSave, busy }: { onSave: (audio: Blob) => Promise<bo
 
   function attach(file: File | undefined) {
     if (!file) return;
-    if (!file.type.startsWith("audio/")) {
-      toast.error("That file isn't audio.");
+    const audio = asAudio(file);
+    if (!audio) {
+      toast.error("That file isn't audio we can transcribe (m4a, mp3, wav, aac, webm).");
       return;
     }
-    if (file.size > MAX_BYTES) {
+    if (audio.size > MAX_BYTES) {
       toast.error("That file is over 25 MB — split it into shorter recordings.");
       return;
     }
     setSeconds(0);
-    setTake({ blob: file, url: URL.createObjectURL(file) });
+    setTake({ blob: audio, url: URL.createObjectURL(audio) });
     setState("review");
   }
 
@@ -172,10 +202,11 @@ export function Recorder({ onSave, busy }: { onSave: (audio: Blob) => Promise<bo
             <Upload className="mr-2 h-4 w-4" />
             Attach voice memo
           </Button>
+          {extraActions}
           <input
             ref={fileInput}
             type="file"
-            accept="audio/*"
+            accept="audio/*,.m4a,.mp3,.wav,.aac,.mp4,.webm"
             className="hidden"
             onChange={(e) => {
               attach(e.target.files?.[0]);
@@ -206,6 +237,9 @@ export function Recorder({ onSave, busy }: { onSave: (audio: Blob) => Promise<bo
             <Square className="mr-2 h-4 w-4" />
             Stop
           </Button>
+          <p className="w-full text-xs text-charcoal-500">
+            Keep this screen open while recording — on iPhone, locking the phone or switching apps pauses the microphone.
+          </p>
         </>
       )}
     </div>

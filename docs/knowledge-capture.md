@@ -16,7 +16,7 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
 ## Flow
 
 1. **Pick a subject.** The list is every active AppFolio owner (owner sets split into people) and property. It comes from the same cached daily AppFolio pull as Fee Management (`lib/fee-management/facts-cache.ts`). Progress bars and the "Not captured yet" filter show what's left.
-2. **Record.** Record in the browser (pause, resume, 45-minute cap per take) or attach a phone voice memo (25 MB max). Interview prompts sit beside the recorder (`lib/knowledge-capture/prompts.ts`).
+2. **Add knowledge** three ways: record in the browser (pause, resume, 45-minute cap per take), attach a voice memo (25 MB max), or **Type or paste** in a popup (`POST /api/knowledge-capture/entries`). A typed note is stored as a take with no audio (`mime_type = text/plain`, empty `storage_path`, the text as its transcript) and then processed exactly like a recording, so notes, brain ingest, editing, voices and Perspectives all apply. Interview prompts sit beside the recorder (`lib/knowledge-capture/prompts.ts`).
 3. **Upload.** The browser uploads straight to the private `knowledge-capture` Supabase bucket with a signed upload URL, so audio never passes through the API body limit.
 4. **Process** (`POST /api/knowledge-capture/recordings/:id/process`):
    - **Transcribe** with OpenAI `whisper-1`, prompted with local place names. Override with `KC_TRANSCRIBE_MODEL`.
@@ -39,6 +39,12 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
    - Notes attribute judgment calls to the person. In a joint take, statements are attributed only when it's clear who said them.
    - Once more than one person has contributed, the profile adds **Perspectives**: each person's take, plus where they differ. One view never overwrites the other.
    - Anyone whose voice is in a take, or who recorded it, can edit or delete it.
+
+9. **iPhone.** Everything works in Safari on iPhone:
+   - Recording uses `audio/mp4`. Keep the screen open, because iOS pauses the mic when the phone locks or you switch apps.
+   - Voice memos attach from Files; Share → Save to Files first. Files with no MIME type are recognized by extension.
+   - Inputs are 16px on phones, so iOS doesn't zoom in on focus.
+   - On phones the list and the profile are separate screens, with an "All owners" back link.
 
 Dez and agents find this knowledge through ordinary brain retrieval (`searchBrain` / `think`).
 
