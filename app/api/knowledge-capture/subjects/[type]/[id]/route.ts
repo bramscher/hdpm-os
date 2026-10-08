@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { BUCKET, ORG, isTextEntry, regenerateProfile, subjectIds } from '@/lib/knowledge-capture/pipeline';
+import { BUCKET, ORG, STALE_PROCESSING_MS, isTextEntry, loadOwnerLinks, regenerateProfile, subjectIds } from '@/lib/knowledge-capture/pipeline';
+import { aliasMap, canonicalOwner } from '@/lib/knowledge-capture/links';
 import type { SubjectType } from '@/lib/knowledge-capture/roster';
 import { rowVoices, voicesLabel } from '@/lib/knowledge-capture/voices';
 
@@ -27,7 +28,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     db.from('kc_profile').select('profile_md, recording_count, generated_at').eq('org_id', ORG).eq('subject_type', type).eq('subject_id', id).maybeSingle(),
     db
       .from('kc_recording')
-      .select('id, speaker_email, speaker_name, voices, storage_path, mime_type, duration_sec, status, error, transcript, transcript_original, transcript_edited_at, transcript_edited_by, notes_md, chunk_count, created_at')
+      .select('id, speaker_email, speaker_name, voices, storage_path, mime_type, duration_sec, status, error, transcript, transcript_original, transcript_edited_at, transcript_edited_by, notes_md, chunk_count, created_at, updated_at')
       .eq('org_id', ORG)
       .eq('subject_type', type)
       .in('subject_id', ids)
@@ -42,7 +43,13 @@ export async function GET(_request: NextRequest, { params }: Params) {
   const staleBefore = Date.now() - 10 * 60 * 1000;
   const rows = (recs.data ?? [])
     .filter((r) => r.status !== 'pending_upload' || new Date(r.created_at).getTime() < staleBefore)
-    .map((r) => (r.status === 'pending_upload' ? { ...r, status: 'uploaded' } : r));
+    .map((r) => (r.status === 'pending_upload' ? { ...r, status: 'uploaded' } : r))
+    // A run past the 300s function limit died without recording why: offer Retry.
+    .map((r) =>
+      r.status === 'processing' && Date.now() - new Date(r.updated_at).getTime() > STALE_PROCESSING_MS
+        ? { ...r, status: 'error', error: 'Timed out while processing — Retry.' }
+        : r
+    );
   const audioPaths = rows.filter((r) => !isTextEntry(r)).map((r) => r.storage_path);
   const signed = audioPaths.length
     ? await db.storage.from(BUCKET).createSignedUrls(audioPaths, 60 * 60)
@@ -84,7 +91,9 @@ export async function POST(_request: NextRequest, { params }: Params) {
   const type = subjectType(rawType);
   if (!type) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   try {
-    const markdown = await regenerateProfile(type, id);
+    // A merged-away record's profile lives on the record it merged into.
+    const target = type === 'owner' ? canonicalOwner(aliasMap(await loadOwnerLinks(getSupabaseAdmin())), id) : id;
+    const markdown = await regenerateProfile(type, target);
     return NextResponse.json({ ok: true, hasProfile: markdown != null });
   } catch (err) {
     console.error('[knowledge-capture] profile rebuild failed:', err);

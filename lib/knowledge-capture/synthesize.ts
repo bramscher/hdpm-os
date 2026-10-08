@@ -54,16 +54,18 @@ export async function transcribeAudio(
 ): Promise<{ text: string; durationSec: number | null }> {
   const file = await toFile(await audio.arrayBuffer(), `recording.${audioExtension(mime)}`, { type: mime.split(';')[0] });
   // The prompt biases spelling toward local names and terms.
+  // Only whisper-1 returns verbose_json (with duration); newer models take json.
+  const verbose = TRANSCRIBE_MODEL === 'whisper-1';
   const res = await openai().audio.transcriptions.create({
     file,
     model: TRANSCRIBE_MODEL,
-    response_format: 'verbose_json',
+    response_format: verbose ? 'verbose_json' : 'json',
     prompt: `High Desert Property Management (HDPM), Central Oregon — Bend, Redmond, Prineville, Sisters, La Pine. AppFolio. Talking about ${subjectName}.`,
   });
-  const verbose = res as unknown as { text: string; duration?: number };
+  const out = res as unknown as { text: string; duration?: number };
   return {
-    text: verbose.text.trim(),
-    durationSec: verbose.duration != null ? Math.round(verbose.duration) : null,
+    text: out.text.trim(),
+    durationSec: out.duration != null ? Math.round(out.duration) : null,
   };
 }
 
@@ -80,6 +82,8 @@ async function complete(system: string, user: string, maxTokens: number): Promis
     })
     .finalMessage();
   if (message.stop_reason === 'refusal') throw new Error('Synthesis was declined by the model');
+  // Half a set of notes would be saved as if complete.
+  if (message.stop_reason === 'max_tokens') throw new Error('The notes were too long to finish — split this into shorter takes');
   const text = message.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
     .map((b) => b.text)

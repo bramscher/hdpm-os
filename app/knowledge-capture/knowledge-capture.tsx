@@ -109,7 +109,15 @@ export function KnowledgeCapture() {
     load();
   }, [load]);
 
+  // A take being recorded or awaiting Save lives in the subject panel; switching
+  // subjects remounts it, so ask before throwing the take away.
+  const takeInProgress = useRef(false);
+  const onTakeChange = useCallback((v: boolean) => {
+    takeInProgress.current = v;
+  }, []);
   const select = useCallback((s: Selected) => {
+    if (takeInProgress.current && !window.confirm("You have a recording that isn't saved. Leave it and discard it?")) return;
+    takeInProgress.current = false;
     setSelected(s);
     if (s) setTab(s.type);
     const url = s ? `?${s.type}=${encodeURIComponent(s.id)}` : window.location.pathname;
@@ -200,7 +208,10 @@ export function KnowledgeCapture() {
             {(["owner", "property"] as const).map((t) => (
               <button
                 key={t}
-                onClick={() => setTab(t)}
+                onClick={() => {
+                  setTab(t);
+                  if (t === "property" && filter === "dupes") setFilter("all");
+                }}
                 className={`flex-1 px-3 py-2.5 text-sm font-medium ${tab === t ? "border-b-2 border-terra-500 text-charcoal-900" : "text-charcoal-500 hover:text-charcoal-800"}`}
               >
                 {t === "owner" ? `Owners (${data?.owners.length ?? "…"})` : `Properties (${data?.properties.length ?? "…"})`}
@@ -292,6 +303,7 @@ export function KnowledgeCapture() {
               data={data}
               onSelect={select}
               onChanged={() => load()}
+              onTakeChange={onTakeChange}
             />
           ) : (
             <EmptyState
@@ -335,11 +347,13 @@ function SubjectPanel({
   data,
   onSelect,
   onChanged,
+  onTakeChange,
 }: {
   selected: { type: SubjectType; id: string };
   data: Overview;
   onSelect: (s: Selected) => void;
   onChanged: () => Promise<void> | void;
+  onTakeChange: (inProgress: boolean) => void;
 }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [saving, setSaving] = useState(false);
@@ -398,7 +412,11 @@ function SubjectPanel({
       const { error } = await getSupabaseClient()
         .storage.from(BUCKET)
         .uploadToSignedUrl(storagePath, token, audio, { contentType: mimeType.split(";")[0] });
-      if (error) throw new Error(`Upload failed: ${error.message}`);
+      if (error) {
+        // Don't leave a row with no audio behind (it could only ever fail).
+        await fetch(`/api/knowledge-capture/recordings/${id}`, { method: "DELETE" }).catch(() => undefined);
+        throw new Error(`Upload failed: ${error.message}`);
+      }
       toast.info("Saved. Transcribing — this takes a minute or two for a long take.");
       setSaving(false);
       // Processing runs on; the take is safely stored, so the recorder can reset.
@@ -554,6 +572,7 @@ function SubjectPanel({
         <Recorder
           onSave={save}
           busy={saving}
+          onTakeChange={onTakeChange}
           extraActions={
             <Button variant="outline" onClick={() => setTyping(true)} disabled={saving}>
               <Keyboard className="mr-2 h-4 w-4" />
@@ -672,28 +691,23 @@ function TypedNote({
     setSaving(false);
     if (ok) onClose();
   };
-  // The modal reports one close up to twice (button + open-change); ask once.
-  const closing = useRef(false);
-  const close = () => {
-    if (closing.current) return;
-    closing.current = true;
-    if (text.trim() && !window.confirm("Discard this note?")) {
-      setTimeout(() => (closing.current = false), 0);
-      return;
-    }
+  // With text in the box, tapping outside or Escape does nothing (the Modal
+  // treats it as busy); only Cancel closes, and it asks first.
+  const cancel = () => {
+    if (text.trim() && !window.confirm("Discard this note?")) return;
     onClose();
   };
   return (
     <Modal
       title={`Note on ${subjectName}`}
-      onClose={close}
-      busy={saving}
+      onClose={onClose}
+      busy={saving || !!text.trim()}
       wide
       footer={
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-charcoal-500">{who.length ? `From ${who.join(" & ")}` : ""}</span>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={close} disabled={saving}>
+            <Button variant="outline" onClick={cancel} disabled={saving}>
               Cancel
             </Button>
             <Button onClick={save} disabled={saving || !text.trim()}>

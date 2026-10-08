@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { BUCKET, ORG, deleteRecordingChunks, isTextEntry, loadOwnerLinks, processRecording, regenerateProfile } from '@/lib/knowledge-capture/pipeline';
+import {
+  BUCKET,
+  ORG,
+  STALE_PROCESSING_MS,
+  claimRecording,
+  deleteRecordingChunks,
+  isTextEntry,
+  loadOwnerLinks,
+  processRecording,
+  regenerateProfile,
+} from '@/lib/knowledge-capture/pipeline';
 import { aliasMap, canonicalOwner } from '@/lib/knowledge-capture/links';
 import { rowVoices } from '@/lib/knowledge-capture/voices';
 
@@ -46,10 +56,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!canChange(rec, guard)) {
     return NextResponse.json({ error: 'Only the person who recorded this can edit it' }, { status: 403 });
   }
-  if (rec.status === 'processing' && Date.now() - new Date(rec.updated_at).getTime() < 6 * 60 * 1000) {
+  if (transcript === (rec.transcript ?? '').trim()) return NextResponse.json({ ok: true, unchanged: true });
+  if (!(await claimRecording(db, id))) {
     return NextResponse.json({ error: 'Still processing — try again in a minute' }, { status: 409 });
   }
-  if (transcript === (rec.transcript ?? '').trim()) return NextResponse.json({ ok: true, unchanged: true });
 
   try {
     await processRecording(id, { transcript, editedBy: guard.email });
@@ -75,13 +85,18 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const db = getSupabaseAdmin();
   const { data: rec } = await db
     .from('kc_recording')
-    .select('id, subject_type, subject_id, storage_path, mime_type, speaker_email, voices')
+    .select('id, subject_type, subject_id, storage_path, mime_type, speaker_email, voices, status, updated_at')
     .eq('org_id', ORG)
     .eq('id', id)
     .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
   if (!canChange(rec, guard)) {
     return NextResponse.json({ error: 'Only the person who recorded this can delete it' }, { status: 403 });
+  }
+
+  // A live run would re-ingest this take's brain entries after it's gone.
+  if (rec.status === 'processing' && Date.now() - new Date(rec.updated_at).getTime() < STALE_PROCESSING_MS) {
+    return NextResponse.json({ error: 'Still processing — delete it once it finishes' }, { status: 409 });
   }
 
   if (!isTextEntry(rec)) await db.storage.from(BUCKET).remove([rec.storage_path]);

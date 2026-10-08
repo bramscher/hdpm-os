@@ -4,7 +4,8 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { ORG, TEXT_MIME, loadRoster, resolveSubject } from '@/lib/knowledge-capture/pipeline';
 import { normalizeVoices, voicesLabel } from '@/lib/knowledge-capture/voices';
 
-const MAX_CHARS = 200_000;
+// ~35 brain entries: keeps processing well inside the 300s function limit.
+const MAX_CHARS = 60_000;
 
 /**
  * POST /api/knowledge-capture/entries
