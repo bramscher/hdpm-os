@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   }
 
   const [recs, profiles] = await Promise.all([
-    db.from('kc_recording').select('subject_type, subject_id, speaker_name, speaker_email, voices, created_at').eq('org_id', ORG).neq('status', 'pending_upload'),
+    db.from('kc_recording').select('subject_type, subject_id, speaker_name, speaker_email, voices, created_at, status, mime_type, transcript_model').eq('org_id', ORG).neq('status', 'pending_upload'),
     db.from('kc_profile').select('subject_type, subject_id').eq('org_id', ORG),
   ]);
   if (recs.error || profiles.error) {
@@ -42,7 +42,16 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ...loaded.roster,
     capturedAt: loaded.capturedAt,
-    coverage: buildCoverage((recs.data ?? []).map(toProfile), (profiles.data ?? []).map(toProfile)),
+    coverage: buildCoverage(
+      (recs.data ?? []).map((r) =>
+        toProfile({
+          ...r,
+          // Transcribed audio not yet added to the brain (see transcribeRecording).
+          awaiting_review: r.status === 'uploaded' && !!r.transcript_model && r.mime_type !== 'text/plain',
+        })
+      ),
+      (profiles.data ?? []).map(toProfile)
+    ),
     suggestions: suggestOwnerLinks(loaded.raw.owners, loaded.links),
     me: { email: guard.email.toLowerCase(), name: guard.name },
     voices: VOICES,

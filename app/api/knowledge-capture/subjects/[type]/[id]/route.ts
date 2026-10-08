@@ -44,6 +44,8 @@ export async function GET(_request: NextRequest, { params }: Params) {
   const rows = (recs.data ?? [])
     .filter((r) => r.status !== 'pending_upload' || new Date(r.created_at).getTime() < staleBefore)
     .map((r) => (r.status === 'pending_upload' ? { ...r, status: 'uploaded' } : r))
+    // Transcribed audio not yet added to the brain: waiting for a person to review it.
+    .map((r) => (r.status === 'uploaded' && r.transcript && !isTextEntry(r) ? { ...r, status: 'review' } : r))
     // A run past the 300s function limit died without recording why: offer Retry.
     .map((r) =>
       r.status === 'processing' && Date.now() - new Date(r.updated_at).getTime() > STALE_PROCESSING_MS

@@ -80,9 +80,25 @@ describe('buildCoverage', () => {
       lastAt: '2026-10-03T00:00:00Z',
       speakers: ['Matt', 'Penny'],
       voices: ['matt@highdesertpm.com', 'penny@highdesertpm.com'],
+      toReview: 0,
       hasProfile: false,
     });
     expect(cov[coverageKey('property', 'p1')].hasProfile).toBe(true);
+  });
+});
+
+describe('takes awaiting review', () => {
+  it('counts transcribed takes not yet added to the brain', () => {
+    const base = { subject_type: 'owner' as const, subject_id: 'o9', speaker_name: 'Matt', speaker_email: 'matt@highdesertpm.com' };
+    const cov = buildCoverage(
+      [
+        { ...base, created_at: '2026-10-01T00:00:00Z', awaiting_review: true },
+        { ...base, created_at: '2026-10-02T00:00:00Z', awaiting_review: false },
+        { ...base, created_at: '2026-10-03T00:00:00Z' },
+      ],
+      []
+    );
+    expect(cov[coverageKey('owner', 'o9')]).toMatchObject({ recordings: 3, toReview: 1 });
   });
 });
 

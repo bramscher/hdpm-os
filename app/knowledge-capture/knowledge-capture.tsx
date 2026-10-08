@@ -36,7 +36,7 @@ interface Recording {
   kind: "audio" | "text";
   mine: boolean;
   durationSec: number | null;
-  status: "uploaded" | "processing" | "done" | "error";
+  status: "uploaded" | "review" | "processing" | "done" | "error";
   error: string | null;
   transcript: string | null;
   originalTranscript: string | null;
@@ -54,7 +54,7 @@ interface Detail {
   canDeleteAny: boolean;
 }
 
-type Filter = "all" | "todo" | "done" | "dupes" | `needs:${string}`;
+type Filter = "all" | "todo" | "done" | "review" | "dupes" | `needs:${string}`;
 type Selected = { type: SubjectType; id: string } | null;
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -69,7 +69,8 @@ const formatDate = (iso: string) =>
 
 const STATUS: Record<Recording["status"], { label: string; tone: "success" | "warning" | "danger" | "info" }> = {
   uploaded: { label: "Uploaded", tone: "info" },
-  processing: { label: "Processing…", tone: "warning" },
+  review: { label: "Review transcript", tone: "warning" },
+  processing: { label: "Working…", tone: "warning" },
   done: { label: "In the brain", tone: "success" },
   error: { label: "Failed", tone: "danger" },
 };
@@ -124,6 +125,15 @@ export function KnowledgeCapture() {
     window.history.replaceState(null, "", url);
   }, []);
 
+  // Takes waiting for review on this tab.
+  const reviewCount = useMemo(
+    () =>
+      Object.entries(data?.coverage ?? {})
+        .filter(([k]) => k.startsWith(`${tab}:`))
+        .reduce((n, [, c]) => n + c.toReview, 0),
+    [data, tab]
+  );
+
   // Owners with an undecided duplicate/related suggestion.
   const flagged = useMemo(
     () => new Set((data?.suggestions ?? []).flatMap((s) => [s.a.id, s.b.id])),
@@ -146,6 +156,7 @@ export function KnowledgeCapture() {
       const c = data.coverage[coverageKey(tab, r.id)];
       if (filter === "todo" && c?.recordings) return false;
       if (filter === "done" && !c?.recordings) return false;
+      if (filter === "review" && !c?.toReview) return false;
       // Someone has covered it, but not this person yet.
       if (filter.startsWith("needs:") && (!c?.recordings || c.voices.includes(filter.slice(6)))) return false;
       return !q || r.name.toLowerCase().includes(q) || r.sub.toLowerCase().includes(q);
@@ -234,6 +245,7 @@ export function KnowledgeCapture() {
                   ["all", "All"],
                   ["todo", "Not captured yet"],
                   ["done", "Captured"],
+                  ...(reviewCount ? ([["review", `To review (${reviewCount})`]] as const) : []),
                   ...(data?.voices ?? [])
                     .filter((v) => v.source)
                     .map((v) => [`needs:${v.email}`, `Needs ${v.name}'s take`] as const),
@@ -266,6 +278,11 @@ export function KnowledgeCapture() {
                       <span className="block truncate text-sm font-medium text-charcoal-900">{r.name}</span>
                       <span className="block truncate text-xs text-charcoal-500">{r.sub}</span>
                     </span>
+                    {c?.toReview ? (
+                      <Badge tone="warning" variant="soft" className="shrink-0">
+                        {c.toReview} to review
+                      </Badge>
+                    ) : null}
                     {tab === "owner" && flagged.has(r.id) && (
                       <Badge tone="warning" variant="soft" className="shrink-0">
                         Check
@@ -388,17 +405,44 @@ function SubjectPanel({
     loadDetail();
   }, [loadDetail]);
 
-  async function process(id: string) {
+  const markWorking = (id: string) =>
     setDetail((d) => d && { ...d, recordings: d.recordings.map((r) => (r.id === id ? { ...r, status: "processing" } : r)) });
+
+  /** Step 2: notes → brain → profile, with the reviewed transcript if one is given. */
+  async function process(id: string, transcript?: string): Promise<boolean> {
+    markWorking(id);
+    let ok = true;
     try {
-      await call(`/recordings/${id}/process`, { method: "POST" });
+      await call(`/recordings/${id}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(transcript !== undefined ? { transcript } : {}),
+      });
       toast.success(`Added to ${name}'s profile.`);
     } catch (err) {
+      ok = false;
       toast.error(err instanceof Error ? err.message : "Processing failed");
     }
     await loadDetail();
     onChanged();
+    return ok;
   }
+
+  /** Step 1 for audio: transcribe only; the take then waits for review. */
+  async function transcribe(id: string) {
+    markWorking(id);
+    try {
+      await call(`/recordings/${id}/transcribe`, { method: "POST" });
+      toast.success("Transcript ready — check it below, then Add to brain.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Transcription failed");
+    }
+    await loadDetail();
+    onChanged();
+  }
+
+  /** Retry picks up where the take stopped: no transcript yet → transcribe, else → brain. */
+  const retry = (r: Recording) => (r.kind === "audio" && !r.transcript ? transcribe(r.id) : process(r.id));
 
   async function save(audio: Blob): Promise<boolean> {
     setSaving(true);
@@ -417,10 +461,10 @@ function SubjectPanel({
         await fetch(`/api/knowledge-capture/recordings/${id}`, { method: "DELETE" }).catch(() => undefined);
         throw new Error(`Upload failed: ${error.message}`);
       }
-      toast.info("Saved. Transcribing — this takes a minute or two for a long take.");
+      toast.info("Saved. Transcribing — you'll review the transcript before it goes to the brain.");
       setSaving(false);
-      // Processing runs on; the take is safely stored, so the recorder can reset.
-      void process(id);
+      // Transcription runs on; the take is safely stored, so the recorder can reset.
+      void transcribe(id);
       await loadDetail();
       return true;
     } catch (err) {
@@ -659,7 +703,8 @@ function SubjectPanel({
                 key={r.id}
                 r={r}
                 canDelete={r.mine || detail.canDeleteAny}
-                onRetry={() => process(r.id)}
+                onRetry={() => void retry(r)}
+                onApprove={(t) => process(r.id, t)}
                 onSaveTranscript={(t) => saveTranscript(r, t)}
                 onDelete={() => remove(r)}
               />
@@ -734,12 +779,15 @@ function RecordingRow({
   onRetry,
   onDelete,
   onSaveTranscript,
+  onApprove,
 }: {
   r: Recording;
   canDelete: boolean;
   onRetry: () => void;
   onDelete: () => void;
   onSaveTranscript: (transcript: string) => Promise<boolean>;
+  /** Review step: add the (possibly corrected) transcript to the brain. */
+  onApprove: (transcript: string) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState<"notes" | "transcript" | "original" | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
@@ -747,7 +795,17 @@ function RecordingRow({
   const status = STATUS[r.status];
   const editing = draft !== null;
   // Edits share the delete permission: your own takes, or any take as an admin.
-  const canEdit = canDelete && !!r.transcript && r.status !== "processing";
+  const canEdit = canDelete && !!r.transcript && r.status !== "processing" && r.status !== "review";
+  const [reviewText, setReviewText] = useState(r.transcript ?? "");
+  const [approving, setApproving] = useState(false);
+  useEffect(() => {
+    if (r.status === "review") setReviewText(r.transcript ?? "");
+  }, [r.status, r.transcript]);
+  async function approve() {
+    setApproving(true);
+    await onApprove(reviewText);
+    setApproving(false);
+  }
 
   async function save() {
     if (draft === null) return;
@@ -792,7 +850,33 @@ function RecordingRow({
       {r.error && <p className="mt-2 text-sm text-red-700">{r.error}</p>}
       {r.audioUrl && <audio controls preload="none" src={r.audioUrl} className="mt-2 w-full" />}
 
-      {editing ? (
+      {r.status === "review" ? (
+        <div className="mt-3 space-y-2 rounded-md bg-amber-50 p-3">
+          <p className="text-sm text-charcoal-700">
+            <strong className="font-medium">Check the transcript before it goes to the brain.</strong> Fix misheard names,
+            numbers and addresses — play the audio above if something looks off. Nothing is shared until you add it.
+          </p>
+          <textarea
+            value={reviewText}
+            onChange={(e) => setReviewText(e.target.value)}
+            rows={12}
+            className="w-full rounded-md border border-sand-300 bg-white p-3 text-base leading-relaxed text-charcoal-800 focus:border-terra-400 focus:outline-none sm:text-sm"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={approve} disabled={approving || !reviewText.trim()}>
+              {approving ? "Adding…" : "Add to brain"}
+            </Button>
+            {canDelete && (
+              <Button variant="outline" onClick={onDelete} disabled={approving}>
+                Discard take
+              </Button>
+            )}
+            {reviewText.trim() !== (r.transcript ?? "").trim() && (
+              <span className="self-center text-xs text-charcoal-500">Edited — the original transcript is kept.</span>
+            )}
+          </div>
+        </div>
+      ) : editing ? (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-charcoal-500">
             Fix misheard names, numbers and places, or add something you forgot. Saving rebuilds this take&apos;s notes, its
