@@ -19,6 +19,15 @@ import { ingestChunk } from '@/lib/brain/ingest';
 import { chunkMarkdown } from '@/lib/brain/chunk';
 import { buildRoster, type Roster, type SubjectType } from './roster';
 import {
+  aliasMap,
+  applyOwnerLinks,
+  canonicalOwner,
+  ownerIdsFor,
+  type LinkedRoster,
+  type LinkedRosterOwner,
+  type OwnerLink,
+} from './links';
+import {
   SYNTH_MODEL,
   TRANSCRIBE_MODEL,
   distillNotes,
@@ -58,9 +67,36 @@ export function splitTranscript(text: string, maxChars = 1800): string[] {
   return out;
 }
 
-export async function loadRoster(db: SupabaseClient, refresh = false): Promise<{ roster: Roster; capturedAt: string }> {
-  const { facts, capturedAt } = await loadFeeFacts(db, { refresh });
-  return { roster: buildRoster(facts), capturedAt };
+/** Owner record links (empty until the 20261015 migration is applied). */
+export async function loadOwnerLinks(db: SupabaseClient): Promise<OwnerLink[]> {
+  const { data, error } = await db
+    .from('kc_owner_link')
+    .select('owner_id, linked_owner_id, kind, note')
+    .eq('org_id', ORG);
+  if (error) {
+    console.error('[knowledge-capture] owner links unavailable:', error.message);
+    return [];
+  }
+  return (data ?? []) as OwnerLink[];
+}
+
+/**
+ * The roster with owner links applied (duplicates folded into their kept
+ * profile), plus the raw per-record roster and links for suggestions.
+ */
+export async function loadRoster(
+  db: SupabaseClient,
+  refresh = false
+): Promise<{ roster: LinkedRoster; raw: Roster; links: OwnerLink[]; aliases: Map<string, string>; capturedAt: string }> {
+  const [{ facts, capturedAt }, links] = await Promise.all([loadFeeFacts(db, { refresh }), loadOwnerLinks(db)]);
+  const raw = buildRoster(facts);
+  return { roster: applyOwnerLinks(raw, links), raw, links, aliases: aliasMap(links), capturedAt };
+}
+
+/** Owner ids whose recordings feed this subject's profile (merged duplicates included). */
+export async function subjectIds(db: SupabaseClient, type: SubjectType, id: string): Promise<string[]> {
+  if (type !== 'owner') return [id];
+  return ownerIdsFor(aliasMap(await loadOwnerLinks(db)), id);
 }
 
 export interface ResolvedSubject {
@@ -75,12 +111,18 @@ export interface ResolvedSubject {
 /** Find a subject in the AppFolio roster; null if it is not an active owner/property. */
 export function resolveSubject(roster: Roster, type: SubjectType, id: string): ResolvedSubject | null {
   if (type === 'owner') {
-    const o = roster.owners.find((x) => x.id === id);
+    const o = roster.owners.find((x) => x.id === id) as Partial<LinkedRosterOwner> & Roster['owners'][number] | undefined;
     if (!o) return null;
     const facts = [
       `- Owner: ${o.name}`,
       `- Properties managed by HDPM (${o.properties.length}, ${o.doors} doors): ${o.properties.map((p) => p.name).join('; ') || 'none'}`,
-    ].join('\n');
+      o.aliases?.length ? `- Also a separate AppFolio owner record as: ${o.aliases.map((a) => a.name).join('; ')} (same person)` : null,
+      o.related?.length
+        ? `- Related owners (separate profiles): ${o.related.map((r) => (r.note ? `${r.name} (${r.note})` : r.name)).join('; ')}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
     return {
       type,
       id,
@@ -204,9 +246,11 @@ export async function processRecording(
 
   await setRow({ status: 'processing', error: null });
   try {
-    const { roster } = await loadRoster(db);
+    const { roster, aliases } = await loadRoster(db);
+    // A take recorded on a since-merged duplicate feeds the kept profile.
+    const subjectId = rec.subject_type === 'owner' ? canonicalOwner(aliases, rec.subject_id) : rec.subject_id;
     const subject =
-      resolveSubject(roster, rec.subject_type, rec.subject_id) ??
+      resolveSubject(roster, rec.subject_type, subjectId) ??
       // Subject left AppFolio's active list since recording: keep the knowledge anyway.
       ({
         type: rec.subject_type,
@@ -294,12 +338,13 @@ export async function regenerateProfile(
   resolved?: ResolvedSubject
 ): Promise<string | null> {
   const db = getSupabaseAdmin();
+  const ids = await subjectIds(db, type, id);
   const { data: recs, error } = await db
     .from('kc_recording')
     .select('subject_name, speaker_email, speaker_name, notes_md, created_at')
     .eq('org_id', ORG)
     .eq('subject_type', type)
-    .eq('subject_id', id)
+    .in('subject_id', ids)
     .eq('status', 'done')
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
@@ -365,4 +410,124 @@ export async function regenerateProfile(
   );
   if (upErr) throw new Error(upErr.message);
   return profile;
+}
+
+/** Ids are interpolated into PostgREST or() filters below — plain ids only. */
+function assertOwnerIds(...ids: string[]) {
+  if (!ids.every((id) => /^[A-Za-z0-9-]{1,64}$/.test(id))) throw new Error('Invalid owner id');
+}
+
+async function hasProfile(db: SupabaseClient, ownerId: string): Promise<boolean> {
+  const { data } = await db
+    .from('kc_profile')
+    .select('subject_id')
+    .eq('org_id', ORG)
+    .eq('subject_type', 'owner')
+    .eq('subject_id', ownerId)
+    .maybeSingle();
+  return !!data;
+}
+
+/** Drop a profile row and its brain chunk (a duplicate that merged away). */
+async function dropProfile(db: SupabaseClient, ownerId: string): Promise<void> {
+  await db.from('kc_profile').delete().eq('org_id', ORG).eq('subject_type', 'owner').eq('subject_id', ownerId);
+  await db.from('brain_chunk').delete().eq('org_id', ORG).eq('source_key', `kc:profile:owner:${ownerId}`);
+}
+
+async function ownerNode(db: SupabaseClient, raw: Roster, id: string): Promise<string> {
+  const name = raw.owners.find((o) => o.id === id)?.name ?? `Owner ${id}`;
+  return upsertNode(db, { type: 'owner', id, name });
+}
+
+async function setEdge(db: SupabaseClient, src: string, dst: string, relation: 'supersedes' | 'related_to') {
+  const { error } = await db
+    .from('brain_edge')
+    .upsert({ src_node_id: src, dst_node_id: dst, relation }, { onConflict: 'src_node_id,dst_node_id,relation', ignoreDuplicates: true });
+  if (error) console.error('[knowledge-capture] edge upsert failed:', error.message);
+}
+
+/**
+ * Link two owner records. `keepId` is the profile being viewed; for 'same',
+ * `otherId` (and anything already merged into it) folds into it. Replaces any
+ * earlier decision about the pair.
+ */
+export async function linkOwners(
+  keepId: string,
+  otherId: string,
+  kind: 'same' | 'related' | 'distinct',
+  createdBy: string,
+  note?: string | null
+): Promise<void> {
+  assertOwnerIds(keepId, otherId);
+  const db = getSupabaseAdmin();
+  const { raw, aliases } = await loadRoster(db);
+  const keep = canonicalOwner(aliases, keepId);
+  const other = canonicalOwner(aliases, otherId);
+  if (keep === other) throw new Error('These are already one profile');
+
+  const { error: delErr } = await db
+    .from('kc_owner_link')
+    .delete()
+    .eq('org_id', ORG)
+    .or(`and(owner_id.eq.${keep},linked_owner_id.eq.${other}),and(owner_id.eq.${other},linked_owner_id.eq.${keep})`);
+  if (delErr) throw new Error(delErr.message);
+
+  if (kind === 'same') {
+    // Duplicates already merged into `other` now point straight at `keep`.
+    const { error: moveErr } = await db
+      .from('kc_owner_link')
+      .update({ linked_owner_id: keep })
+      .eq('org_id', ORG)
+      .eq('kind', 'same')
+      .eq('linked_owner_id', other);
+    if (moveErr) throw new Error(moveErr.message);
+  }
+
+  const { error } = await db.from('kc_owner_link').insert(
+    kind === 'same'
+      ? { org_id: ORG, owner_id: other, linked_owner_id: keep, kind, note: note ?? null, created_by: createdBy }
+      : { org_id: ORG, owner_id: keep, linked_owner_id: other, kind, note: note ?? null, created_by: createdBy }
+  );
+  if (error) throw new Error(error.message);
+  if (kind === 'distinct') return;
+
+  const [keepNode, otherNode] = [await ownerNode(db, raw, keep), await ownerNode(db, raw, other)];
+  if (kind === 'same') {
+    await setEdge(db, keepNode, otherNode, 'supersedes');
+    await dropProfile(db, other);
+    await regenerateProfile('owner', keep);
+    return;
+  }
+  await setEdge(db, keepNode, otherNode, 'related_to');
+  await setEdge(db, otherNode, keepNode, 'related_to');
+  // Profiles mention related owners; refresh the ones that exist.
+  for (const id of [keep, other]) if (await hasProfile(db, id)) await regenerateProfile('owner', id);
+}
+
+/** Remove whatever link joins two owner records and rebuild both profiles. */
+export async function unlinkOwners(aId: string, bId: string): Promise<void> {
+  assertOwnerIds(aId, bId);
+  const db = getSupabaseAdmin();
+  const { raw } = await loadRoster(db);
+  const { data: removed, error } = await db
+    .from('kc_owner_link')
+    .delete()
+    .eq('org_id', ORG)
+    .or(`and(owner_id.eq.${aId},linked_owner_id.eq.${bId}),and(owner_id.eq.${bId},linked_owner_id.eq.${aId})`)
+    .select('kind');
+  if (error) throw new Error(error.message);
+  if (!removed?.length) throw new Error('Those owners are not linked');
+  if (removed.every((r) => r.kind === 'distinct')) return;
+
+  const [aNode, bNode] = [await ownerNode(db, raw, aId), await ownerNode(db, raw, bId)];
+  await db
+    .from('brain_edge')
+    .delete()
+    .or(`and(src_node_id.eq.${aNode},dst_node_id.eq.${bNode}),and(src_node_id.eq.${bNode},dst_node_id.eq.${aNode})`)
+    .in('relation', ['supersedes', 'related_to']);
+  // Split profiles rebuild from their own recordings (or vanish if they have none).
+  const aliases = aliasMap(await loadOwnerLinks(db));
+  for (const id of new Set([canonicalOwner(aliases, aId), canonicalOwner(aliases, bId)])) {
+    await regenerateProfile('owner', id);
+  }
 }

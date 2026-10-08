@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { BUCKET, ORG, regenerateProfile } from '@/lib/knowledge-capture/pipeline';
+import { BUCKET, ORG, regenerateProfile, subjectIds } from '@/lib/knowledge-capture/pipeline';
 import type { SubjectType } from '@/lib/knowledge-capture/roster';
 
 export const maxDuration = 300;
@@ -21,6 +21,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
   if (!type) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const db = getSupabaseAdmin();
+  const ids = await subjectIds(db, type, id);
   const [profile, recs] = await Promise.all([
     db.from('kc_profile').select('profile_md, recording_count, generated_at').eq('org_id', ORG).eq('subject_type', type).eq('subject_id', id).maybeSingle(),
     db
@@ -28,7 +29,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
       .select('id, speaker_email, speaker_name, storage_path, duration_sec, status, error, transcript, transcript_original, transcript_edited_at, transcript_edited_by, notes_md, chunk_count, created_at')
       .eq('org_id', ORG)
       .eq('subject_type', type)
-      .eq('subject_id', id)
+      .in('subject_id', ids)
       .order('created_at', { ascending: false }),
   ]);
   if (profile.error || recs.error) {

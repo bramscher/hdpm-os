@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { BUCKET, ORG, deleteRecordingChunks, processRecording, regenerateProfile } from '@/lib/knowledge-capture/pipeline';
+import { BUCKET, ORG, deleteRecordingChunks, loadOwnerLinks, processRecording, regenerateProfile } from '@/lib/knowledge-capture/pipeline';
+import { aliasMap, canonicalOwner } from '@/lib/knowledge-capture/links';
 
 // An edit re-runs notes, brain ingest and the profile (two synthesis passes).
 export const maxDuration = 300;
@@ -81,7 +82,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   try {
-    await regenerateProfile(rec.subject_type, rec.subject_id);
+    const subjectId =
+      rec.subject_type === 'owner' ? canonicalOwner(aliasMap(await loadOwnerLinks(db)), rec.subject_id) : rec.subject_id;
+    await regenerateProfile(rec.subject_type, subjectId);
   } catch (err) {
     console.error('[knowledge-capture] profile rebuild after delete failed:', err);
     return NextResponse.json({ ok: true, warning: 'Deleted, but the profile could not be rebuilt — use Rebuild profile.' });

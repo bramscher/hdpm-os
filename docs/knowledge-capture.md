@@ -28,6 +28,12 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
 5. **Read.** Each subject page shows the profile, every take (audio, transcript, notes), retry for failed takes, delete (your own takes; admins can delete any), and "Rebuild profile".
 6. **Correct.** **Edit** on a take opens its transcript in a text box under the audio player (`PATCH /api/knowledge-capture/recordings/:id`). Saving keeps the first machine transcript in `transcript_original`, records who edited it and when, and rebuilds that take's notes, its brain chunks and the profile from the corrected text. The audio is not re-transcribed, and Retry never overwrites an edit. Same permission as delete.
 
+7. **Link owner records.** AppFolio can hold one person as several owner records. Profiles are already per person, not per ownership group, so someone in {John, Mary} and in {John, Bob} is one John profile, and a partner unique to a group (Bob) keeps their own. Nothing to link there. The **Linked records** card on each owner handles the rest (`lib/knowledge-capture/links.ts`, table `kc_owner_link`):
+   - **Same person**: duplicate records merge into the profile being viewed. Recordings stay on their original record id and resolve to the kept profile when read, so **Unlink** restores both exactly. Brain edge: kept `supersedes` duplicate.
+   - **Related**: a different person or entity that belongs with this one (their trust or LLC, a spouse, a partner), with an optional note. Separate profiles that name each other. Brain edges: `related_to` both ways.
+   - **Not the same**: dismisses a suggestion.
+   - **Suggestions**: same email, phone or exact name → likely the same person; one name's words all inside another's (John Smith ↔ John Smith Family Trust) → likely related. The list has a "Possible duplicates" filter and a **Check** badge. A person always decides.
+
 Dez and agents find this knowledge through ordinary brain retrieval (`searchBrain` / `think`).
 
 ## Brain identity
@@ -45,7 +51,7 @@ Re-processing a recording replaces its chunks. Deleting a recording removes its 
 
 ## Setup
 
-1. Apply `supabase/migrations/20261014_knowledge_capture.sql` in the Supabase SQL Editor. It creates `kc_recording`, `kc_profile` and the private bucket.
+1. Apply `supabase/migrations/20261014_knowledge_capture.sql` in the Supabase SQL Editor. It creates `kc_recording`, `kc_profile` and the private bucket. Then apply `20261015_kc_owner_links.sql` (owner record links). Until that's applied, linking errors but everything else works.
 2. Admin → User settings: switch **Knowledge Capture** on for Matt and Penny, and for anyone who should read the profiles. It's off by default because owner contact details and candid notes live here.
 3. Production already has the env vars this needs: `OPENAI_API_KEY` (brain embeddings) and `ANTHROPIC_API_KEY` (brain think).
 
