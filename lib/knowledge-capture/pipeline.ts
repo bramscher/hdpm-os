@@ -18,6 +18,7 @@ import { loadFeeFacts } from '@/lib/fee-management/facts-cache';
 import { ingestChunk } from '@/lib/brain/ingest';
 import { chunkMarkdown } from '@/lib/brain/chunk';
 import { buildRoster, type Roster, type SubjectType } from './roster';
+import { rowVoices, voiceName, voicesLabel } from './voices';
 import {
   aliasMap,
   applyOwnerLinks,
@@ -212,6 +213,7 @@ interface RecordingRow {
   subject_name: string;
   speaker_email: string;
   speaker_name: string | null;
+  voices: string[] | null;
   storage_path: string;
   mime_type: string;
   transcript: string | null;
@@ -235,7 +237,7 @@ export async function processRecording(
   const db = getSupabaseAdmin();
   const { data: rec, error } = await db
     .from('kc_recording')
-    .select('id, subject_type, subject_id, subject_name, speaker_email, speaker_name, storage_path, mime_type, transcript, transcript_original, created_at')
+    .select('id, subject_type, subject_id, subject_name, speaker_email, speaker_name, voices, storage_path, mime_type, transcript, transcript_original, created_at')
     .eq('org_id', ORG)
     .eq('id', recordingId)
     .maybeSingle<RecordingRow>();
@@ -260,7 +262,8 @@ export async function processRecording(
         related: [],
       } satisfies ResolvedSubject);
 
-    const speaker = rec.speaker_name || rec.speaker_email;
+    const voices = rowVoices(rec);
+    const speaker = voicesLabel(voices);
     let transcript: string;
     if (edit) {
       transcript = edit.transcript.trim();
@@ -281,7 +284,7 @@ export async function processRecording(
       await setRow({ transcript, transcript_model: TRANSCRIBE_MODEL, duration_sec: result.durationSec, size_bytes: audio.size });
     }
 
-    const notes = await distillNotes(subject.context, transcript, speaker, recordedOn(rec.created_at));
+    const notes = await distillNotes(subject.context, transcript, voices.map(voiceName), recordedOn(rec.created_at));
     const nodeId = await ensureGraph(db, subject);
 
     await deleteRecordingChunks(db, rec.id);
@@ -304,7 +307,7 @@ export async function processRecording(
           content: `${header} — transcript part ${i + 1}/${windows.length}\n\n${w}`,
           kind: 'fact',
           sourceKey: `kc:rec:${rec.id}:t${i}`,
-          author: `human:${rec.speaker_email}`,
+          author: `human:${voices.join('+')}`,
         },
         'knowledge-capture'
       );
@@ -341,7 +344,7 @@ export async function regenerateProfile(
   const ids = await subjectIds(db, type, id);
   const { data: recs, error } = await db
     .from('kc_recording')
-    .select('subject_name, speaker_email, speaker_name, notes_md, created_at')
+    .select('subject_name, speaker_email, speaker_name, voices, notes_md, created_at')
     .eq('org_id', ORG)
     .eq('subject_type', type)
     .in('subject_id', ids)
@@ -365,13 +368,15 @@ export async function regenerateProfile(
   const name = subject?.name ?? withNotes[withNotes.length - 1].subject_name;
   const context = subject?.context ?? { type, name, facts: `- ${name} (no longer active in AppFolio)` };
 
+  const contributors = [...new Set(withNotes.flatMap((r) => rowVoices(r)))].map(voiceName);
   const profile = await synthesizeProfile(
     context,
     withNotes.map((r) => ({
-      speaker: r.speaker_name || r.speaker_email,
+      speaker: voicesLabel(rowVoices(r)),
       recordedOn: recordedOn(r.created_at),
       notes: r.notes_md as string,
-    }))
+    })),
+    contributors
   );
 
   // Edges were laid down when the recordings were processed.

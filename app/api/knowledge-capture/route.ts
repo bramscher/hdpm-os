@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { ORG, loadRoster } from '@/lib/knowledge-capture/pipeline';
 import { buildCoverage } from '@/lib/knowledge-capture/roster';
 import { canonicalOwner, suggestOwnerLinks } from '@/lib/knowledge-capture/links';
+import { VOICES } from '@/lib/knowledge-capture/voices';
 
 export const maxDuration = 120;
 
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
   }
 
   const [recs, profiles] = await Promise.all([
-    db.from('kc_recording').select('subject_type, subject_id, speaker_name, speaker_email, created_at').eq('org_id', ORG).neq('status', 'pending_upload'),
+    db.from('kc_recording').select('subject_type, subject_id, speaker_name, speaker_email, voices, created_at').eq('org_id', ORG).neq('status', 'pending_upload'),
     db.from('kc_profile').select('subject_type, subject_id').eq('org_id', ORG),
   ]);
   if (recs.error || profiles.error) {
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
     capturedAt: loaded.capturedAt,
     coverage: buildCoverage((recs.data ?? []).map(toProfile), (profiles.data ?? []).map(toProfile)),
     suggestions: suggestOwnerLinks(loaded.raw.owners, loaded.links),
-    me: { email: guard.email, name: guard.name },
+    me: { email: guard.email.toLowerCase(), name: guard.name },
+    voices: VOICES,
   });
 }

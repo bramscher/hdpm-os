@@ -3,6 +3,14 @@ import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { BUCKET, ORG, deleteRecordingChunks, loadOwnerLinks, processRecording, regenerateProfile } from '@/lib/knowledge-capture/pipeline';
 import { aliasMap, canonicalOwner } from '@/lib/knowledge-capture/links';
+import { rowVoices } from '@/lib/knowledge-capture/voices';
+
+/** The person who recorded it, anyone whose voice is in it, or an admin. */
+function canChange(rec: { speaker_email: string; voices: string[] | null }, guard: { role: string; email: string }): boolean {
+  if (guard.role === 'admin') return true;
+  const me = guard.email.toLowerCase();
+  return rec.speaker_email.toLowerCase() === me || rowVoices(rec).includes(me);
+}
 
 // An edit re-runs notes, brain ingest and the profile (two synthesis passes).
 export const maxDuration = 300;
@@ -30,12 +38,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const db = getSupabaseAdmin();
   const { data: rec } = await db
     .from('kc_recording')
-    .select('id, status, updated_at, transcript, speaker_email')
+    .select('id, status, updated_at, transcript, speaker_email, voices')
     .eq('org_id', ORG)
     .eq('id', id)
     .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
-  if (guard.role !== 'admin' && rec.speaker_email.toLowerCase() !== guard.email.toLowerCase()) {
+  if (!canChange(rec, guard)) {
     return NextResponse.json({ error: 'Only the person who recorded this can edit it' }, { status: 403 });
   }
   if (rec.status === 'processing' && Date.now() - new Date(rec.updated_at).getTime() < 6 * 60 * 1000) {
@@ -67,12 +75,12 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const db = getSupabaseAdmin();
   const { data: rec } = await db
     .from('kc_recording')
-    .select('id, subject_type, subject_id, storage_path, speaker_email')
+    .select('id, subject_type, subject_id, storage_path, speaker_email, voices')
     .eq('org_id', ORG)
     .eq('id', id)
     .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
-  if (guard.role !== 'admin' && rec.speaker_email.toLowerCase() !== guard.email.toLowerCase()) {
+  if (!canChange(rec, guard)) {
     return NextResponse.json({ error: 'Only the person who recorded this can delete it' }, { status: 403 });
   }
 

@@ -3,10 +3,11 @@ import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { BUCKET, ORG, loadRoster, resolveSubject } from '@/lib/knowledge-capture/pipeline';
 import { MAX_AUDIO_BYTES, audioExtension } from '@/lib/knowledge-capture/synthesize';
+import { normalizeVoices, voicesLabel } from '@/lib/knowledge-capture/voices';
 
 /**
  * POST /api/knowledge-capture/recordings
- * Body: { subjectType: 'owner'|'property', subjectId, mimeType, sizeBytes }
+ * Body: { subjectType: 'owner'|'property', subjectId, mimeType, sizeBytes, voices?: emails of who is talking }
  * Creates the recording row and a signed upload URL; the browser uploads the
  * audio straight to storage (bypassing the API body limit), then calls
  * POST /recordings/:id/process.
@@ -16,7 +17,8 @@ export async function POST(request: NextRequest) {
   if (!guard.ok) return guard.response;
 
   const body = await request.json().catch(() => ({}));
-  const { subjectType, subjectId, mimeType, sizeBytes } = body as Record<string, unknown>;
+  const { subjectType, subjectId, mimeType, sizeBytes, voices: rawVoices } = body as Record<string, unknown>;
+  const voices = normalizeVoices(rawVoices, guard.email);
   if ((subjectType !== 'owner' && subjectType !== 'property') || typeof subjectId !== 'string' || !subjectId) {
     return NextResponse.json({ error: 'Pick an owner or property first' }, { status: 400 });
   }
@@ -41,7 +43,8 @@ export async function POST(request: NextRequest) {
     subject_id: subjectId,
     subject_name: subject.name,
     speaker_email: guard.email,
-    speaker_name: guard.name,
+    speaker_name: voicesLabel(voices),
+    voices,
     storage_path: path,
     mime_type: mimeType,
     size_bytes: typeof sizeBytes === 'number' ? sizeBytes : null,

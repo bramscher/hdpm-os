@@ -12,6 +12,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { INTERVIEW_PROMPTS } from "@/lib/knowledge-capture/prompts";
 import { coverageKey, type Coverage, type RosterProperty, type SubjectType } from "@/lib/knowledge-capture/roster";
 import type { LinkSuggestion, LinkedRosterOwner } from "@/lib/knowledge-capture/links";
+import type { Voice } from "@/lib/knowledge-capture/voices";
 import { Recorder, formatClock } from "./recorder";
 import { OwnerLinks } from "./owner-links";
 
@@ -24,11 +25,13 @@ interface Overview {
   suggestions: LinkSuggestion[];
   capturedAt: string;
   me: { email: string; name: string | null };
+  voices: Voice[];
 }
 
 interface Recording {
   id: string;
   speaker: string;
+  voices: string[];
   mine: boolean;
   durationSec: number | null;
   status: "uploaded" | "processing" | "done" | "error";
@@ -49,7 +52,7 @@ interface Detail {
   canDeleteAny: boolean;
 }
 
-type Filter = "all" | "todo" | "done" | "dupes";
+type Filter = "all" | "todo" | "done" | "dupes" | `needs:${string}`;
 type Selected = { type: SubjectType; id: string } | null;
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -133,6 +136,8 @@ export function KnowledgeCapture() {
       const c = data.coverage[coverageKey(tab, r.id)];
       if (filter === "todo" && c?.recordings) return false;
       if (filter === "done" && !c?.recordings) return false;
+      // Someone has covered it, but not this person yet.
+      if (filter.startsWith("needs:") && (!c?.recordings || c.voices.includes(filter.slice(6)))) return false;
       return !q || r.name.toLowerCase().includes(q) || r.sub.toLowerCase().includes(q);
     });
   }, [data, tab, filter, query, flagged]);
@@ -210,14 +215,17 @@ export function KnowledgeCapture() {
                 className="w-full rounded-md border border-sand-300 py-2 pl-8 pr-3 text-sm focus:border-terra-400 focus:outline-none"
               />
             </div>
-            <div className="flex gap-1 text-xs">
+            <div className="flex flex-wrap gap-1 text-xs">
               {(
                 [
                   ["all", "All"],
                   ["todo", "Not captured yet"],
                   ["done", "Captured"],
+                  ...(data?.voices ?? [])
+                    .filter((v) => v.source)
+                    .map((v) => [`needs:${v.email}`, `Needs ${v.name}'s take`] as const),
                   ...(tab === "owner" && flagged.size ? ([["dupes", `Possible duplicates (${flagged.size})`]] as const) : []),
-                ] as const
+                ] as [Filter, string][]
               ).map(([k, label]) => (
                 <button
                   key={k}
@@ -251,9 +259,12 @@ export function KnowledgeCapture() {
                       </Badge>
                     )}
                     {c?.recordings ? (
-                      <Badge tone="success" variant="soft" className="shrink-0">
-                        {c.recordings} {c.recordings === 1 ? "take" : "takes"}
-                      </Badge>
+                      <span className="flex shrink-0 items-center gap-1">
+                        <VoiceDots voices={data?.voices ?? []} present={c.voices} />
+                        <Badge tone="success" variant="soft">
+                          {c.recordings} {c.recordings === 1 ? "take" : "takes"}
+                        </Badge>
+                      </span>
                     ) : null}
                   </button>
                 </li>
@@ -284,6 +295,30 @@ export function KnowledgeCapture() {
   );
 }
 
+/** One initial per source voice: filled when their take is recorded, hollow when not yet. */
+function VoiceDots({ voices, present }: { voices: Voice[]; present: string[] }) {
+  return (
+    <>
+      {voices
+        .filter((v) => v.source || present.includes(v.email))
+        .map((v) => {
+          const has = present.includes(v.email);
+          return (
+            <span
+              key={v.email}
+              title={has ? `${v.name}'s take recorded` : `No take from ${v.name} yet`}
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${
+                has ? "bg-terra-500 text-white" : "border border-dashed border-charcoal-300 text-charcoal-400"
+              }`}
+            >
+              {v.name[0]}
+            </span>
+          );
+        })}
+    </>
+  );
+}
+
 function SubjectPanel({
   selected,
   data,
@@ -299,6 +334,11 @@ function SubjectPanel({
   const [saving, setSaving] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
   const [showPrompts, setShowPrompts] = useState(true);
+  // Who is talking in the next take — defaults to whoever is signed in.
+  const myVoice = data.voices.find((v) => v.email === data.me.email);
+  const [talking, setTalking] = useState<string[]>(myVoice ? [myVoice.email] : []);
+  const toggleTalking = (email: string) =>
+    setTalking((t) => (t.includes(email) ? (t.length > 1 ? t.filter((e) => e !== email) : t) : [...t, email]));
 
   const owner = selected.type === "owner" ? data.owners.find((o) => o.id === selected.id) : undefined;
   // A link to a record that has since merged lands on the profile it merged into.
@@ -341,7 +381,7 @@ function SubjectPanel({
       const { id, path: storagePath, token } = await call<{ id: string; path: string; token: string }>("/recordings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subjectType: selected.type, subjectId: selected.id, mimeType, sizeBytes: audio.size }),
+        body: JSON.stringify({ subjectType: selected.type, subjectId: selected.id, mimeType, sizeBytes: audio.size, voices: talking }),
       });
       const { error } = await getSupabaseClient()
         .storage.from(BUCKET)
@@ -465,6 +505,23 @@ function SubjectPanel({
         <p className="mb-4 text-sm text-charcoal-500">
           Talk naturally — stories, quirks, names, numbers. Several short takes are fine. Use the prompts below if you get stuck.
         </p>
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-charcoal-600">Who&apos;s talking?</span>
+          {data.voices.map((v) => {
+            const on = talking.includes(v.email);
+            return (
+              <button
+                key={v.email}
+                onClick={() => toggleTalking(v.email)}
+                aria-pressed={on}
+                className={`rounded-full px-3 py-1 ${on ? "bg-charcoal-800 text-white" : "bg-sand-100 text-charcoal-600 hover:bg-sand-200"}`}
+              >
+                {v.name}
+              </button>
+            );
+          })}
+          {talking.length > 1 && <span className="text-xs text-charcoal-500">Recording together — say names when you hand off.</span>}
+        </div>
         <Recorder onSave={save} busy={saving} />
         <button onClick={() => setShowPrompts((s) => !s)} className="mt-4 flex items-center gap-1 text-sm font-medium text-charcoal-700">
           {showPrompts ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -496,6 +553,17 @@ function SubjectPanel({
               <p className="text-xs text-charcoal-500">
                 Built from {detail.profile.recordingCount} {detail.profile.recordingCount === 1 ? "recording" : "recordings"} · updated{" "}
                 {formatDate(detail.profile.generatedAt)}
+              </p>
+            )}
+            {detail && detail.recordings.length > 0 && (
+              <p className="mt-1 text-xs text-charcoal-500">
+                {data.voices
+                  .filter((v) => v.source || detail.recordings.some((r) => r.voices.includes(v.email)))
+                  .map((v) => {
+                    const n = detail.recordings.filter((r) => r.voices.includes(v.email)).length;
+                    return n ? `${v.name}: ${n} ${n === 1 ? "take" : "takes"}` : `No take from ${v.name} yet`;
+                  })
+                  .join(" · ")}
               </p>
             )}
           </div>

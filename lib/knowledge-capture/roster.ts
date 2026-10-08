@@ -5,6 +5,7 @@
  */
 
 import type { FeeFacts } from '@/lib/fee-management/model';
+import { rowVoices, voiceName } from './voices';
 
 export type SubjectType = 'owner' | 'property';
 
@@ -30,7 +31,10 @@ export interface Coverage {
   recordings: number;
   /** Most recent recording, ISO. */
   lastAt: string | null;
+  /** Display names of everyone whose knowledge is recorded here. */
   speakers: string[];
+  /** Their emails — drives "Needs Penny's take". */
+  voices: string[];
   hasProfile: boolean;
 }
 
@@ -80,6 +84,7 @@ export interface CoverageRow {
   subject_id: string;
   speaker_name: string | null;
   speaker_email: string;
+  voices?: string[] | null;
   created_at: string;
 }
 
@@ -93,13 +98,16 @@ export function buildCoverage(
 ): Record<string, Coverage> {
   const out: Record<string, Coverage> = {};
   const get = (key: string) =>
-    (out[key] ??= { recordings: 0, lastAt: null, speakers: [], hasProfile: false });
+    (out[key] ??= { recordings: 0, lastAt: null, speakers: [], voices: [], hasProfile: false });
   for (const r of recordings) {
     const c = get(coverageKey(r.subject_type, r.subject_id));
     c.recordings++;
     if (!c.lastAt || r.created_at > c.lastAt) c.lastAt = r.created_at;
-    const who = r.speaker_name || r.speaker_email;
-    if (!c.speakers.includes(who)) c.speakers.push(who);
+    for (const email of rowVoices(r)) {
+      if (c.voices.includes(email)) continue;
+      c.voices.push(email);
+      c.speakers.push(voiceName(email));
+    }
   }
   for (const p of profiles) get(coverageKey(p.subject_type, p.subject_id)).hasProfile = true;
   return out;
