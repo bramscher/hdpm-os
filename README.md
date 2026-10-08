@@ -11,18 +11,20 @@ Four layers on one Supabase spine, over the systems of record (AppFolio, M365, S
 3. **Agent layer** — Morning Card, Estimate Chaser, Ops Brief, Escalation Ladder, Scorecard, Meeting Prep: proposal-first, audited, autonomy earned per action.
 4. **Company brain** — pgvector memory over SOPs, decisions, and minutes; every answer cited.
 
-Plus the tools: inspections + route builder, invoice generation + trust-payment reconciliation, rent comps, Craigslist ads, key manager, owner reports, and the KPI dashboard.
+Plus the tools: inspections + route builder, invoice generation + trust-payment reconciliation, rent comps, Craigslist ads, key manager, owner reports, the KPI dashboard, fee management, Knowledge Capture, and the referral partner portal.
 
-**Stack:** Next.js 16 / React 18 / TypeScript 5.7 / Supabase (PostgreSQL + pgvector) / Tailwind CSS 3.4 / Recharts 3 / Anthropic SDK / Vercel
+**Stack:** Next.js 16 / React 18 / TypeScript 5.7 / Supabase (PostgreSQL + pgvector) / Tailwind CSS 3.4 / Recharts 3 / three.js / Anthropic SDK / Vercel
 **Auth:** Microsoft Azure AD (@highdesertpm.com only)
-**Domain:** hdpmchat.highdesertpm.com
+**Domain:** os.highdesertpm.com (staff app) · partners.highdesertpm.com (referral partner portal)
   
 ---
 
 ## Table of Contents
 
+- [What's new (Sep 24 – Oct 8, 2026)](#whats-new-sep-24--oct-8-2026)
 - [Getting Started](#getting-started)
 - [Home (Quick Actions)](#home-quick-actions)
+- [Activities](#activities)
 - [Maintenance OS (Live Board)](#maintenance-os-live-board)
   - [Open Board](#open-board)
   - [✦ Triage Review](#-triage-review)
@@ -34,9 +36,17 @@ Plus the tools: inspections + route builder, invoice generation + trust-payment 
   - [Monday Review](#monday-review)
   - [Work Order Detail](#work-order-detail)
   - [Tripwires & Email Digests](#tripwires--email-digests)
+  - [Chase Board](#chase-board)
+  - [Parts Orders](#parts-orders)
+  - [Price Book & Turn Templates](#price-book--turn-templates)
 - [Agent-OS (the Agent Team)](#agent-os-the-agent-team)
+  - [Agents Page, Routine Calendar & Activity Feed](#agents-page-routine-calendar--activity-feed)
 - [Company — the EOS Layer](#company--the-eos-layer)
+- [Company — Timekeeping](#company--timekeeping)
+- [Company — The Desk (demo)](#company--the-desk-demo)
 - [Company Brain](#company-brain)
+  - [Brain Map](#brain-map)
+- [Knowledge Capture](#knowledge-capture)
 - [KPI Dashboard](#kpi-dashboard)
   - [KPI Cards](#kpi-cards)
   - [KPI Trends](#kpi-trends)
@@ -46,13 +56,21 @@ Plus the tools: inspections + route builder, invoice generation + trust-payment 
   - [CSV / XLSX Import](#csv--xlsx-import)
   - [Geocoding](#geocoding)
   - [Route Builder](#route-builder)
+  - [Inspection Candidates](#inspection-candidates)
+  - [Send Notices](#send-notices)
 - [Craigslist Ad Creator](#craigslist-ad-creator)
 - [Invoice Generator](#invoice-generator)
+  - [Owner vs Tenant Charges](#owner-vs-tenant-charges)
 - [Rent Comps](#rent-comps)
   - [Comps Dashboard](#comps-dashboard)
   - [Comps Analysis Wizard](#comps-analysis-wizard)
+  - [Rent Analysis Reports](#rent-analysis-reports)
 - [Key Manager](#key-manager)
 - [Owner Reports](#owner-reports)
+- [Admin](#admin)
+  - [User Settings & Delegated Admin](#user-settings--delegated-admin)
+  - [Fee Management](#fee-management)
+  - [Hiring, Website & Leads](#hiring-website--leads)
 - [Referral Partner Portal](#referral-partner-portal)
 - [Haven (Leasing & Reception)](#haven-leasing--reception)
 - [Properties Map](#properties-map)
@@ -62,6 +80,64 @@ Plus the tools: inspections + route builder, invoice generation + trust-payment 
 - [Environment Variables](#environment-variables)
 - [Database](#database)
 - [Deployment](#deployment)
+  - [Builds (self-hosted fonts)](#builds-self-hosted-fonts)
+
+---
+
+## What's new (Sep 24 – Oct 8, 2026)
+
+PRs #69–#146. Details live in each feature's section below.
+
+**Knowledge Capture (headline)**
+- New [Knowledge Capture](#knowledge-capture) page: Matt and Penny record what they know about each AppFolio owner and property; Whisper transcript → Claude notes → company brain → living profiles (#140)
+- Moved to the Admin menu and limited to Matt, Penny and Craig by a fixed email list (#141)
+- Link duplicate and related owner records: same person (merge), related, not the same, with suggestions (#142)
+- Both Matt's and Penny's take: "Who's talking", M/P dots, *Needs Matt's / Penny's take* filters, Perspectives on the profile (#143)
+- Type or paste notes as a third input; iPhone Safari pass (#144)
+
+**Home, Activities & look**
+- `/activities` page plus weekday Slack DMs for pending AppFolio activities (#69); admin dropdown lists every staff member, grouped into staff / former staff / not matched (#97, #98)
+- Monochrome HDPM OS re-skin: new login page, compact Notion-style home dashboard (#71)
+- Home: Admin tiles for every admin, not just Craig (#82); a "My activities" card for every employee, Activities on for every role (#95)
+
+**Admin**
+- Admin → User settings: per-person section switches (#83), roles with editable defaults (#84), delegated admin areas for non-admins (KPIs, Fee Management, Hiring, Partners) + Lisa Coffey (#130)
+- Fee Management: Fee Index moved from the KPI dashboard (#70, #72); Owner Fee Opportunity campaign (#72); door-count schedule, raise steps and 0–100 opportunity grade (#73); owner contact card (#74); Fee Schedule tab (#75, #77) with market reference (#76); fee fatigue & churn (#78, #79, #80); Agreements tab (#112); Proposed Structure tab (#131)
+- Hiring and Website sections (#122, #123); Leads section (#124); Partners in the sidebar, home tiles and `/admin` (#96)
+
+**Referral Partner Portal**
+- Served on partners.highdesertpm.com (#101); one-time bounty ledger + admin approval (#99); payouts, QuickBooks CSV and 1099 readiness (#100); escaped partner-typed values in emails (#103); admin-only management-fee income probe and findings (#104, #105)
+
+**Maintenance**
+- Chase board replaces the follow-up list: aging × action snapshot, today's focus, lanes, by-vendor batch chase (#89)
+- Parts orders tracked and chased from the board (#90)
+- Routine run log, routine calendar at `/agents/routines`, live activity feed on `/agents` (#91)
+- Price Book: every line editable (#81); dump run ($95/hr, 1 hr) + dump fee ($10 default, at cost), cost-plus price = default line cost, Standard unit turn template v3 (#145)
+- Improve with AI on invoice lines, work order notes and estimate scopes (#114)
+- Daily Billing Review defaults to pay periods (#110)
+- Invoices: Owner charge or Tenant charge, never both (#111); tenant name/unit prefill (#138); reason and lease clause optional for techs, required to post (#139)
+
+**Inspections**
+- Route Builder greys out picks that can't be routed, with the reason (#120); Route Builder routes show up in Send Notices (#126)
+- Candidates: release units stuck as "marked scheduled" (#127); link unmatched completions; add Ready units to the queue (#128)
+- Notices v2: change route dates, re-check recipients, per-unit sent; letter-first, Realm-X behind `NEXT_PUBLIC_REALMX_ENABLED` (#129)
+- Route sheets show the property name, not AppFolio's internal id (#135); notices give the office phone (541) 548-0383 (#137); SOP refreshed (#121)
+
+**Rent comps / rent analysis reports**
+- Long notes, real page numbers, no duplicated listings (#115); Nearby Rentals page in the PDF (#116) and on screen (#117)
+- Owner `/r/` links open without login; no same-day overwrites (#118); Data Sources lists only contributing sources (#119)
+- Standard owner notes: insert button (#132), auto-fill when empty (#133), office phone (#134)
+
+**Brain, agents & demos**
+- Brain map: nightly snapshot + 3D `/brain` (#92, #93, #94); rebuilt as an anatomical brain, galaxy kept as Brain 2 (#107, #108, #109); Brain 2 hidden from the menu (#124)
+- Agents page: plain-English catalog of what each agent does and why (#86)
+- The Desk (demo) at `/desk-demo`: gold vacancy, green new tenant setup and blue owner onboarding folders (#85, #87, #88)
+
+**Timekeeping, auth & builds**
+- Timekeeping: edit earlier days while clocked in (#125)
+- Auth: Microsoft token refresh so Outlook publishing works all session (#136)
+- Fonts self-hosted; builds no longer fetch Google Fonts (#146)
+- Docs: field time & recovery plan (#111) with the GPS plan kept as its phase 2 reference (#113); parts-orders review checklist (#102)
 
 ---
 
@@ -73,7 +149,9 @@ cp .env.example .env.local   # Fill in all required env vars
 npm run dev                   # http://localhost:3000
 ```
 
-Login requires a `@highdesertpm.com` Microsoft account. All pages and API endpoints are protected behind Azure AD authentication.
+Login requires a `@highdesertpm.com` Microsoft account. All pages and API endpoints are protected behind Azure AD authentication, and each page area belongs to a section in `lib/access/sections.ts` (see [Admin → User settings](#user-settings--delegated-admin)).
+
+**Microsoft token refresh (#136):** sign-in requests the `offline_access` scope, so the session cookie (encrypted, never exposed to the browser session) keeps a Microsoft refresh token and swaps in a new access token ~5 minutes before expiry. Outlook publishing (route calendars) now works for the whole 8-hour session; if a refresh fails, publishing shows the "sign out and back in" message. Sessions from before the deploy need one sign-out/sign-in.
 
 ---
 
@@ -81,11 +159,28 @@ Login requires a `@highdesertpm.com` Microsoft account. All pages and API endpoi
 
 **Path:** `/`
 
-Landing page with a time-aware greeting, live portfolio stats, and one-click entries into every tool.
+Landing page with a time-aware greeting, live portfolio stats, and one-click entries into every tool. Re-skinned in **monochrome** (#71): black-and-white neutrals (token names kept, so every page picked it up), a new black-panel login page ("HDPM OS · os.highdesertpm.com"), compact Notion-style rows instead of colored tiles, and red count pills as the only color.
 
+- **My activities** card (#95): every signed-in employee sees Overdue / Due today / Next 7 days / Later counts and their 5 most urgent AppFolio activities, each with an AppFolio link; **See all →** opens [Activities](#activities). Hidden if Activities is switched off for the person.
+- **Admin tiles** for every admin (`staff.access_role = 'admin'`), not just Craig (#82), including Fee Management and Partners. Tiles and sidebar items follow the person's section switches.
 - **Live stats strip:** total inspections, overdue count, inspections this week, active routes, dispatched stops, vacant units
-- **Quick-action cards:** Inspections, Route Builder, Invoice Generator, Rent Comps, Craigslist Ad Creator, KPI Dashboard
+- **Quick-action rows:** Inspections, Route Builder, Invoice Generator, Rent Comps, Craigslist Ad Creator, KPI Dashboard
 - **System status bar:** connection indicators for AppFolio and Rentometer
+
+---
+
+## Activities
+
+**Path:** `/activities` (sidebar, under Dashboard) · **Section:** `activities` — on for every role (#69, #95)
+
+Each person's pending **AppFolio activities**, plus weekday Slack DMs so nothing due slips.
+
+- **Page:** the signed-in user's activities grouped into Overdue, Due today, Next 7 days and Later, with count tiles and an "Open in AppFolio" link per row (to the tenant's Upcoming Activities panel, or the property page when there's no tenant).
+- **Admin "View activities for" dropdown** (#97, #98): grouped into **Staff** (every active staff member, `— 0` when nothing is pending), **Former staff — reassign in AppFolio** (departed or AppFolio-deactivated users who still hold activities), and **Not matched to staff** (including unassigned). Staff with the Activities section switched off are left out.
+- **Slack DMs (weekdays, via `agent_outbox`):** 7 AM everything due today + overdue count; hourly 8:30 AM–4:30 PM for newly-due items (each announced once, via `alerted_keys` fingerprints); 1 PM reminder for anything still due today.
+- **Data:** Reports API v2 `upcoming_activities` (pending only, including overdue), 5-minute in-memory cache for the page; DM passes run fresh.
+- **Matching:** AppFolio `assigned_user` → active `staff` by `name`, then `person` ("(Hidden)" suffix stripped). An employee's activities show only if their staff name matches their AppFolio user name.
+- **Off switches:** the global agent kill switch, or `agent_config` row `activities / daily_dm` with `enabled=false`. Cron test flags: `dryRun=1`, `only=<person>`, `previewAs=<assignee>&to=<staff>&asOf=YYYY-MM-DD&kind=morning|new|nudge`.
 
 ---
 
@@ -187,6 +282,7 @@ Click any card. The left panel is the workflow; the right panel is the closure g
 - **Closure gate:** live six-condition checklist — verification, invoice linked, recommendations resolved, tenant ping sent, incidents documented, preventive scheduled. CLOSED is unreachable until all six pass (the Close button enables itself)
 - **Failed access:** log what happened + a new date — the WO auto-returns to SCHEDULED (tripwire #5)
 - **Timeline:** append-only history of every change, who made it, and when — including sync and tripwire activity
+- **Add parts order** (see [Parts Orders](#parts-orders)) and **Improve with AI** on work order notes (#114): suggests clearer wording you review and apply; nothing changes until you accept (`POST /api/maintenance/improve-copy`, also used by invoice line descriptions and estimate scope descriptions)
 - **Open in AppFolio ↗** for anything AppFolio owns (status, scheduling, vendor)
 
 ### Tripwires & Email Digests
@@ -203,6 +299,44 @@ Twelve if-then rules run every weekday at 6 AM PT; each person gets **one email 
 | 11 | Approval or **AppFolio estimate** pending > 3 business days | Jen |
 
 (#1 and #9 await the Haven.AI integration. Full rule table: `docs/maintenance-os/02-functional-spec.md` §5.)
+
+### Chase Board
+
+**Path:** `/maintenance/estimate-followups` (sidebar: Chase board) · **Section:** `chase_board` (admins by default; switch on per person) · **Logic:** `lib/agents/chase-board.ts` (#89)
+
+Replaced the uncapped follow-up list — same URL, so Slack "Open shared queue" links and the `/company/issues` embed still work.
+
+- **Aging × Action snapshot:** one-sentence summary (stuck / need cleanup / over 45 days), a stage × age grid, and a "What they need next" bar (Fix first, Decide, Chase, Check). Clicking a cell, stage, total or step filters the cards.
+- **Next step on every card and drawer** in plain words (e.g. "Assign a vendor in AppFolio — no one has been asked for this bid"); the email form folds away when cleanup must come first.
+- **Today's focus:** at most 7 cards, round-robin across lanes, beside sends this week vs the gate of 15, a countdown to Oct 15 and an 8-week chart.
+- **Lanes:** Vendor estimate, Owner approval, Needs scheduling, Waiting on parts, Needs help — 8 cards each then "show more"; a **Parked** tray for work waiting on replies and closed work.
+- **By vendor:** "Chase all N in one email" for 2–25 WOs per vendor (`decideVendorBatch`). Every WO passes the same checks as a single send (data ≤2 hours old, matching context version, 8-day block against the old chaser) and gets its own claim + history; if any claim fails nothing is sent.
+- Dez now logs which sources it cited (`dez_activity.detail.cited`), feeding the [Brain Map](#brain-map).
+
+### Parts Orders
+
+**Migration:** `20261001_parts_orders.sql` (`supplier`, `parts_order`, `parts_order_event`; seeds Lowe's Bend Pro desk, Home Depot, Ferguson) · **Logic:** `lib/maintenance/parts.ts` (#90)
+
+- **Add parts order** on the work order page and in the chase drawer. Saving sets the WO to WAITING_ON / PARTS in HDPM (no AppFolio write); if that stage change is blocked, the order still saves with a warning.
+- **Chase due (`partsChaseDue`):** >1 business day past the expected date; no expected date and ordered >5 business days ago; delivered but no service date after >2 business days; or status `issue`.
+- On the chase board: a **Waiting on parts** lane with supplier next steps and a supplier draft; not-yet-due orders sit in Parked; an `issue` or 3+ contacts moves the card to Needs help; a WO with an open order shows only in the parts lane.
+- **Contacts** (call, email, text, note) logged with minutes spent; supplier sends from the drawer log automatically. Missing tables are treated as no orders.
+
+### Price Book & Turn Templates
+
+**Path:** `/turn-estimator/price-book` · **Section:** `price_book` (editing is admin-only)
+
+- **Every line fully editable** (#81): name, category, charging method (fixed, hourly, minimum visit, package, per item, cost plus, quote, allowance), price, unit, included / block minutes and price, standard minutes, markup %, GL code, trade, owner-facing description, internal instructions, "can be charged to tenant", "needs pricing review". **Add item** uses the same form; the internal reference is fixed at creation. Search + category filter.
+- **Version-on-change:** saving closes the current row and writes a new one effective today, so issued estimates keep their price; every save is audit-logged. Server-side validation in `lib/turn-estimator/price-book-input.ts`.
+- **Dump run + dump fee** (#145, migration `20261017_dump_run_price_book.sql`):
+
+  | Item | Charged as | Default | Editable |
+  |---|---|---|---|
+  | `DUMP_RUN` Dump run | Hourly labor, $95/hr | 1 hour = $95.00 | Hours on the estimate line; rate in the Price Book |
+  | `DUMP_FEE` Dump fee | Cost-plus at 0% markup (owner pays exactly the receipt) | $10.00 | Amount on each line; default in the Price Book |
+
+- **Cost-plus default cost:** a cost-plus item's price-book price now pre-fills the cost on new lines (picking the item or applying a template) — labelled "Default cost on new lines (0 = none)". Materials and Appliance stay at 0.
+- **Standard unit turn template v3:** *Dump run* and *Dump fee* follow *Haul-away* (unchecked by default), replacing the old Materials-based *Dump fees* line. The migration publishes a new version of every non-archived saved "unit turn" template with both lines appended (old versions kept, audited).
 
 ---
 
@@ -236,7 +370,16 @@ Per [`docs/agent-os/10-restart-2026-08-20.md`](docs/agent-os/10-restart-2026-08-
 
 Delivery is env-driven (`ESTIMATE_CHASER_OWNER` sets the owner; the pilot `AGENT_PILOT_RECIPIENTS` / `AGENT_PILOT_SHADOW` flags still exist for reroute/shadow). The Outlook draft path requires the app-only Graph `ApplicationAccessPolicy` (`agent-mail` group) to include the owner's mailbox, and `AGENT_GRAPH_DRYRUN` unset. `?pilotSeed=N&seedChannel=sms|email` (via `scripts/pilot-fire.sh`) is a **test tool only** — it re-drafts the same oldest WOs and inflates chase rounds, so it is not used against the live owner.
 
-**Adoption gate (restart §8):** ≥15 estimate-chase sends/week for 2 consecutive weeks (baseline ~0) and the owner says "keep it," else stop by 2026-10-01. Metrics captured daily in `metrics_snapshot`; baseline frozen pre-agents.
+**Adoption gate (restart §8):** ≥15 estimate-chase sends/week for 2 consecutive weeks (baseline ~0) and the owner says "keep it," else stop. The gate date moved from 2026-10-01 to **2026-10-15** (§8 amended) so the follow-up queue could be rebuilt as the [Chase Board](#chase-board) first (#89). Metrics captured daily in `metrics_snapshot`; baseline frozen pre-agents.
+
+### Agents Page, Routine Calendar & Activity Feed
+
+**Paths:** `/agents` · `/agents/routines` · **Catalog:** `lib/agents/catalog.ts` · **Registry:** `lib/routines/registry.ts`
+
+- **Agents & automations catalog** (#86): `/agents` opens with plain-English cards — **Running now / Built but not running** — giving name, what it does, **why**, who it helps, when it runs and what it delivers. Status (Running / Off / Trial · off / Halted) is live from `agent_config`, the kill switch and env gates, with the reason shown. Below: a **Scheduled reports** table and a collapsed **Planned, not built** list. Display names (code keys unchanged): Dez: Ask HDPM · Daily Ops Brief · Activity Reminders · Stuck Estimate Chaser · Maintenance Follow-up Queue · Estimate Drafter · Open Estimates Card · AppFolio Form Filler · Inspection Notice Card · Cheryl's Morning Seven.
+- **Run log** (#91): every cron route exports `GET = withCronRun(handleGET)` (`lib/cron/run.ts`), recording each cron-bearer call in `routine_run`; `{halted}` / `{skipped}` / `{disabled}` responses are recorded as such, so silent no-ops are visible. The wrapper only observes — each route keeps its own auth, and crons run unchanged if `routine_run` is missing. `registry.test.ts` fails if the registry and `vercel.json` drift or a cron isn't wrapped.
+- **Routine calendar** at `/agents/routines`: Monday–Sunday grid in Pacific time, coloured by last run; click a block for owner, recipients, next run and the last 20 runs.
+- **Activity feed** (`GET /api/agents/activity?since=`): merges routine runs, proposals, outbox sends, chase and parts events, human `wo_event`s, `dez_activity` and `brain_ingest_log` (each source fails soft). The `/agents` hero shows the motion number (human actions, last 7 days vs prior week), the gate countdown, the feed (polled every 20s) and agent cards with status orb, L0–L4 ladder, last/next run and recipients.
 
 ---
 
@@ -266,19 +409,89 @@ Staff use **Company → Timekeeping** for live timesheets. Every new period fill
 
 Employee sheets cover the 1st–15th and 16th–month-end, with personal schedule defaults, live clock/breaks, manual exceptions, leave, miles and notes. Hourly and salary employees both enter time. Employees digitally sign using their Microsoft company session; the app records their identity, server timestamp and signed version. A separate assigned manager approves before admins export a saved Excel payroll package. Admins retain all historical detail and export versions; employees see one active sheet plus their submitted timecards in **My history**, with approval status and read-only detail.
 
+**Editing while clocked in (#125):** a running clock no longer locks the whole sheet. Days before today stay editable; today and later stay read-only (dimmed) until clock-out, and the database rejects changes to them. Submit and "Apply defaults" still require clocking out. Every save writes a `timekeeping_event` row; clocked-in edits are labelled "Edited earlier days while clocked in" in *Change and approval history*. Migration: `20261008_timekeeping_edit_past_days_while_clocked_in.sql`.
+
+---
+
+## Company — The Desk (demo)
+
+**Path:** `/desk-demo` (sidebar: Company → *The Desk (demo)*) · **Section:** `desk_demo` (admins by default; switch on per person or role) · **Plan:** `docs/habu-desk-plan.md`
+
+Stage 0 of the Desk plan: a clickable demo for team buy-in — **sample data only; nothing is saved, printed, uploaded, sent or written to AppFolio** (#85). Each guided step shows *"Today on paper"* next to *"With the Desk"*. Screens: a desk per person (**In**, **Waiting on**, **Passed on**), an office view of where every folder is, a folder panel (documents by stage Prefilled → On paper → Scanned back → Filed in AppFolio, routing slip, back of the sheet, history), and print-preview / QR scan-back / file-to-AppFolio dialogs.
+
+- **Gold · Vacancy** (VT-118) — 12 steps, using the real form names (30 Day Notice to Vacate, Confirmation, Vacancy Tracking) (#85, #87)
+- **Green · New tenant setup** (NT-219) — 12 steps from the setup packet to eight filed documents (#87)
+- **Blue · Owner onboarding** (OW-14) — 13 steps following the New Owner Information Packet, with a required-items gate before the home is released to advertise; routing is still a draft for the team to correct (#88)
+
 ---
 
 ## Company Brain
 
 **Docs:** `docs/hdpm-os/04-gbrain-company-brain.md` · **Tables:** `brain_chunk`, `brain_node`, `brain_ingest_log` (pgvector)
 
-Institutional memory with citations. Content flows in from the Notion SOP corpus (weekly sync), EOS decisions (`decision:<id>`, ingested at solve time), and meeting minutes (`meeting:<id>#n`, ingested at conclude) — all idempotent on `source_key`. A nightly consolidation cron ("dream cycle") summarizes, reconciles contradictions, and decays stale salience. Retrieval is hybrid (vector + full-text); `think()` produces cited syntheses and powers the Knowledge Chat, the Ops Brief's memory context, and the Monday meeting-prep packet. Humans correct the record via `human_correction` chunks that supersede the old fact.
+Institutional memory with citations. Content flows in from the Notion SOP corpus (weekly sync), EOS decisions (`decision:<id>`, ingested at solve time), and meeting minutes (`meeting:<id>#n`, ingested at conclude) — all idempotent on `source_key`. A nightly consolidation cron ("dream cycle") summarizes, reconciles contradictions, and decays stale salience. Retrieval is hybrid (vector + full-text); `think()` produces cited syntheses and powers the Knowledge Chat, the Ops Brief's memory context, and the Monday meeting-prep packet. Humans correct the record via `human_correction` chunks that supersede the old fact. [Knowledge Capture](#knowledge-capture) adds owner and property knowledge as brain nodes and chunks.
+
+### Brain Map
+
+**Path:** `/brain` (sidebar: Brain map) · **Section:** `brain` (PM roles by default) · **Brief:** `docs/agent-os/15-brain-anatomy-rebuild.md`
+
+A 3D map of everything Dez knows (policies, SOPs, Oregon law, company memory) and how often each piece is cited. Plain three.js (no react-three-fiber — Next 16's App Router runs its bundled React 19).
+
+- **Nightly snapshot** (#92, #93): `/api/brain/cron/snapshot` at 10:30 UTC builds a JSON snapshot in the private `brain-viz` storage bucket. Each document's chunk embeddings are averaged (`brain_viz_doc_emb`) and its top neighbours found in pages, so the run fits the database statement timeout (it writes what it has if paging passes 200s). Citation heat comes from the last 90 days of `dez_activity.detail.cited`; routine nodes take their colour from their last `routine_run`. Restricted chunks, nodes and their edges are excluded in SQL. Migrations `20261003_brain_viz.sql`, `20261004_brain_viz_paged_knn.sql`.
+- **Anatomical layout** (#108, #109): one lobe per layer — Core → frontal, Skills → parietal/motor, Memory → temporal, Routines → cerebellum, Integrations → brainstem, Dez → thalamus (vision reserved). Left half = **Taught** (knowledge docs and intake routines), right half = **Learned** (brain docs and routines where Dez acts). Opens exploded and settles inside a faint skull; explode slider and view presets; citation beams pulse from Dez to the most-cited documents. Layout runs in the browser (`lib/brain/anatomy.ts`) from the same snapshot.
+- **Search / Ask:** title search filters as you type; Enter runs a meaning search (`/api/brain/search`); **Ask** goes through `askRAG` (`/api/brain/viz/ask`). Results light up a relevance scan by score, everything else goes nearly dark, and a results list shows each match's score and region. Click a node for its title, source link, excerpt, citation count and neighbours.
+- **Access** (#94): `/api/brain/viz*` goes through the normal session + section gate; only `/api/brain/cron`, `/api/brain/search` and `/api/brain/think` stay public (they guard themselves with `CRON_SECRET` or a service token).
+- **Brain 2:** the original galaxy view lives at `/brain-2` (section `brain_2`), off the menu since #124.
+
+---
+
+## Knowledge Capture
+
+**Path:** `/knowledge-capture` (sidebar: **Admin** → Knowledge Capture) · **Section:** `knowledge_capture` · **Spec:** [`docs/knowledge-capture.md`](docs/knowledge-capture.md) · **Code:** `lib/knowledge-capture/` (#140–#144)
+
+Matt and Penny carry years of knowledge about owners and properties that isn't written down anywhere — who to call, what an owner will and won't pay for, which vendor knows the crawlspace. Knowledge Capture lets them talk it through one owner or property at a time, so it stays in the company brain. Dez and agents pick it up through ordinary brain retrieval (`searchBrain` / `think`).
+
+**Access (#141):** only **matt@, penny@ and craig@highdesertpm.com**, via a fixed `allowedEmails` list in `lib/access/sections.ts` that beats every role, role default and User settings switch — other admins don't see it either. Enforced in the proxy, `requireSection` (page + all APIs) and the sidebar; User settings shows it locked with the three names. The page lives outside `/admin` so the proxy's admin-role gate doesn't apply.
+
+**Flow**
+1. **Pick a subject** — every active AppFolio **owner** (owner sets split into people) and **property**, from the same cached daily AppFolio pull as Fee Management (`lib/fee-management/facts-cache.ts`). Coverage progress bars and a "Not captured yet" filter show what's left.
+2. **Add knowledge three ways:** **record in the browser** (pause/resume, 45-minute cap per take), **attach a voice memo** (25 MB max), or **Type or paste** (#144) emails, text threads or old notes in a popup. A typed note is a take with no audio (`mime_type = text/plain`, the text as its transcript) and runs through the same pipeline. Interview prompts sit beside the recorder.
+3. **Upload** straight to the private `knowledge-capture` Supabase bucket with a signed upload URL (no API body limit).
+4. **Process** (`POST /api/knowledge-capture/recordings/:id/process`):
+   - **Transcribe** with OpenAI Whisper (`whisper-1`, prompted with local place names; override with `KC_TRANSCRIBE_MODEL`)
+   - **Distill** into structured notes with Claude — only what the speaker said; anything unclear goes under "Open questions"
+   - **Ingest** into the brain (`brain_chunk`, domain `company`, sensitivity `internal`): transcript windows as `kind=fact` (author `human:<email>`), notes as `kind=summary` (author `agent:knowledge-capture`), on `owner:appfolio:<id>` / `property:appfolio:<id>` brain nodes linked by `owns` edges
+   - **Rebuild the living profile** from all of the subject's takes: stored in `kc_profile`, written to the node's `brain_node.summary_md`, and ingested as a high-salience chunk
+5. **Read** — each subject shows the profile and every take (audio, transcript, notes), retry for failed takes, delete, and **Rebuild profile**.
+
+**Transcript editor (#140):** **Edit** on a take opens its transcript under the audio player. Saving keeps the first machine transcript in `transcript_original`, records who edited it and when, and rebuilds that take's notes, brain chunks and the profile from the corrected text. Audio isn't re-transcribed, and Retry never overwrites an edit.
+
+**Both Matt's and Penny's take (#143):**
+- **Who's talking?** chips (Matt / Penny / Craig, multi-select, default = whoever is signed in) stored as `kc_recording.voices`, separate from who pressed record — so joint conversations and takes recorded on someone else's laptop are attributed correctly.
+- **M/P dots** per owner and property (filled = that person's take exists), plus **Needs Matt's take** / **Needs Penny's take** filters (covered by someone, not yet by that person). The profile header reads e.g. "Matt: 3 takes · No take from Penny yet".
+- Notes attribute judgment calls to the person; in a joint take only when it's clear who said them.
+- Once more than one person has contributed, the profile adds **Perspectives** — each person's take plus "Where they differ"; one view never overwrites the other.
+- Anyone whose voice is in a take, or who recorded it, can edit or delete it (admins: any).
+
+**Owner record linking (#142, `kc_owner_link`):** profiles are already per person, not per ownership group ({John, Mary} and {John, Bob} → one John profile; Bob keeps his own). The **Linked records** card handles the rest:
+- **Same person** — duplicate records merge into the viewed profile. Recordings keep their original record id and resolve to the kept profile when read, so **Unlink** restores both exactly. Brain edge: kept `supersedes` duplicate.
+- **Related** — a trust or LLC, spouse or partner: separate profiles that name each other, optional note, `related_to` edges both ways.
+- **Not the same** — dismisses a suggestion.
+- **Suggestions** — same email, phone or exact name → likely the same person; overlapping names (John Smith ↔ John Smith Family Trust) → likely related. Shown as a "Possible duplicates" filter, a **Check** badge and a "Possible matches" list. A person always decides; nothing merges automatically.
+
+**iPhone (#144):** works in Safari on iPhone — recording uses `audio/mp4` (keep the screen open; iOS pauses the mic on lock or app switch); voice memos attach from Files and are recognised by extension when there's no MIME type (m4a, mp3, wav, aac, mp4, webm); inputs are 16px so Safari doesn't zoom; on phones the list and profile are separate screens with an "All owners / All properties" back link; the Type-or-paste box stays above the keyboard and asks once before discarding unsaved text.
+
+**Setup:** apply `20261014_knowledge_capture.sql` (creates `kc_recording`, `kc_profile` and the private bucket), `20261015_kc_owner_links.sql` and `20261016_kc_voices.sql` (apply before deploying code that reads `voices`). Uses the existing `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
+
+**Not yet:** editing the profile directly (correct the transcript or record a correction take instead), unit-level subjects, vendor profiles.
 
 ---
 
 ## KPI Dashboard
 
-**Path:** `/dashboard`
+**Path:** `/dashboard` · **Section:** `kpis` (Admin group, admins by default; delegable — see [Delegated admin](#user-settings--delegated-admin))
+
+The **Management Fee Index** (doors per fee band, potential-revenue scenarios) added in #70 now lives in [Fee Management](#fee-management); the Annual Mgmt Fees tile stays here. KPI settings writes (`PUT /api/config`) remain admin-only.
 
 Executive operations dashboard surfacing thirteen KPI cards that track the health of the portfolio. Every card shows a primary metric, a secondary context metric, a 40px sparkline of recent history, a delta arrow (direction + sentiment), and a data-source tag (`live`, `mock`, `estimated`). Cards are clickable for drill-down detail.
 
@@ -338,7 +551,7 @@ The main inspections page shows all properties with their inspection status, due
 5. 12-Month Summary tab shows a calendar view of inspection volume
 
 **Key rules:**
-- Inspections require **7 days minimum lead time** before the scheduled date (Oregon tenant notice law). Tenant notices themselves are handled manually, outside the app.
+- Inspections require **7 days minimum lead time** before the scheduled date (Oregon tenant notice law). The notices themselves go out from AppFolio (no send API); the app tracks them — see [Send Notices](#send-notices). Operator SOP: `docs/inspection-creation-sop.md` (refreshed to match the app in #121).
 - When an inspection is completed, the system automatically creates the next biannual inspection due 6 months later
 - Unit numbers are tracked and displayed for multi-unit properties
 
@@ -376,6 +589,12 @@ Creates optimized driving routes for inspectors. Groups properties geographicall
 3. Assign an inspector
 4. Click **Generate** — the system auto-selects the most urgent inspections and builds an optimized route
 
+**Pick Properties — unroutable picks (#120):** inspections the Candidates review holds back are greyed out and can't be ticked, each with its reason (*Needs confirmation*, *Already handled / not due*, *Excluded from routine inspections*, *Not matched to an AppFolio unit*) and "resolve on the Candidates page", sorted last. City chips and **Select all** count only routable rows. If route creation still finds a blocker (it re-checks with fresh evidence), the 409 names the addresses and reasons (`lib/inspection-route-blockers.ts`, `GET /api/inspections/routes/blocked`).
+
+**Routes feed Send Notices (#126):** scheduling from Route Builder now saves `target_date`, `route_plan_id` and `assigned_to` on each inspection, like the Candidates scheduler, so its tenants appear in Send Notices (migration `20261009_route_builder_inspection_target_dates.sql` backfills upcoming routes).
+
+**Outlook route sheets (#135):** each stop shows the property name (or a legacy short code), never AppFolio's internal UUID. Events published earlier keep the old text until **Republish to Outlook**.
+
 **Routing algorithm:**
 - **Address clustering:** All units at the same physical address are always grouped on the same route day. A 16-unit apartment complex at 2796 SW 23rd becomes one day's work, not spread across weeks.
 - **Dedicated days:** If a single address has enough units to fill a route (>= max stops), it gets its own dedicated route day automatically.
@@ -395,6 +614,26 @@ Creates optimized driving routes for inspectors. Groups properties geographicall
 4. Click **Complete** when done, or **Skip** to return it to the queue
 5. Use **Flag Issue** to mark problems found during inspection
 6. When all stops are done, the route auto-completes
+
+### Inspection Candidates
+
+The AppFolio candidate sync (daily) proposes which units are due; the Candidates review groups them (Ready to schedule, Needs confirmation, Already handled, …).
+
+- **Release on removal (#127):** deleting a route, clearing a day or skipping a stop now resets the unit from `'scheduled'` back to `'eligible'` (`lib/inspection-candidate-release.ts`), so it regroups normally. A **Return to queue** button handles scheduled rows that need confirmation; migration `20261010_release_stale_scheduled_candidates.sql` released units already stuck.
+- **Link to unit (#128):** a completed routine inspection that matched no AppFolio unit can be linked to the right one (unit search prefilled with the street number). Linking moves the inspection, deletes the stray never-scheduled follow-up, re-runs the completion cascade (last inspected, next due +6 months), moves the unit's open routine inspections to the new due date, and writes an audit entry.
+- **Add Ready units to the queue (#128):** checkboxes, select-all, **Add N to queue** and a per-row **Add to queue** create (or reuse) a queued inspection without scheduling, after a fresh AppFolio check — so the units show up in Route Builder → Pick Properties. Never duplicates; units already on a route are left alone.
+
+### Send Notices
+
+**Notices v2 (#129) — letter-first.** Tenant notices are still sent from AppFolio (no API); the app makes that step fast and hard to get wrong.
+
+- **Change date** on a route (7–21 days out, only before any stop starts) moves the route, its inspections' `target_date`, stop arrival times and the Outlook event. Tenants already told the old date return to Send Notices with a **Date changed (was …)** badge and "Updated" notice text; the same re-queue applies whenever an already-noticed inspection lands on a new route.
+- **Grouped by route:** date, arrival window (e.g. "between 8:30 AM and 1:00 PM"), assignee and each unit's estimated arrival.
+- **Re-check tenants:** pulls live tenants from AppFolio and warns about a changed tenant, a move-out on or before the visit, a vacant unit, or no email. Each unit lists who to tick in AppFolio (financially responsible occupants).
+- **Per-unit sent:** checkboxes + **Mark selected sent** replace mark-all; records `notice_sent_by` and warns if marked less than 7 days before the visit (migration `20261011_inspection_notice_tracking.sql`).
+- **Letter first, Realm-X behind a switch:** notices go through the AppFolio letter template. The **Copy Realm-X request** (paste-ready text for Realm-X Assistant) stays hidden until `NEXT_PUBLIC_REALMX_ENABLED=1`, since Realm-X isn't on HDPM's AppFolio plan yet.
+- **Office phone (#137):** notice text, the letter and the Realm-X message give **(541) 548-0383** (the office), not the AI leasing line.
+- **Dez card** (behind `DEZ_INSPECTION_NOTICES=1`): one Slack card per route with the window and request text; reposts as "Date changed" after a move; Route Builder triggers it too.
 
 ---
 
@@ -457,13 +696,14 @@ Creates maintenance invoices from three input sources:
 - Line items with Type (Labor/Materials/Appliance/Other), Qty, Price, Extended (auto-calculated)
 - Internal cost + markup model: materials/appliance lines carry internal cost with default markup (**25% materials, 10% appliances**); the owner-facing PDF is cost-blind (shows only the marked-up price)
 - Default labor rate $95/hr with after-hours/emergency toggle (1.5x = $142.50/hr)
-- Claude AI rewrites work descriptions into professional invoice language
+- Claude AI rewrites work descriptions into professional invoice language — now the shared **Improve with AI** control (#114): a reviewable suggestion you apply or ignore (`/api/invoices/rewrite-description` re-exports `/api/maintenance/improve-copy`)
 - Auto-extracts materials and line items from descriptions
 - PDF export with HDMS branding (Qty/Price/Extended columns, subtotals, totals)
 - Auto-save with 2-second debounce
 - Internal notes pre-populated with full work order reference data
 - Status tracking: Draft → Generated → Attached (Void to cancel); "paid" is separate — an invoice is paid once it's linked to a payment in the Reconcile tab
 - **Invoice reporting periods** — the invoice list, Billable report, and Daily Labor & Markup report share a **Period preset** selector for the three most recent payroll periods (1–15 / 16–month end) and Monday–Sunday weeks, using Pacific calendar dates. Custom date ranges remain available.
+- **Daily Billing Review** (Work & Billing → Reports, `/maintenance/daily-billing`) opens on the **current pay period** (1–15 / 16–month end, Pacific) with **This pay period / Last pay period** buttons; weeks remain in the dropdown and `?date=` still opens a single day (#110)
 - **Markup report** — select invoices on the Invoices tab → "Report from selection" for an internal cost/markup/charged breakdown (materials vs appliances), with CSV export and print
 
 ### Payment Reconciliation (Reconcile tab)
@@ -478,6 +718,21 @@ AppFolio pays HDMS out of the Client Trust Account as lump ACHs covering many in
 
 One-time backfill after schema changes: `npx tsx scripts/recompute-payment-snapshots.ts` re-splits every payment's snapshot from its linked invoices' line items (idempotent).
 
+### Owner vs Tenant Charges
+
+Every HDMS invoice says who pays — **Owner charge** or **Tenant charge** — and never both (#111). First piece of the field time & recovery plan ([`docs/field-time-recovery-plan.md`](docs/field-time-recovery-plan.md); the GPS plan is kept as its phase 2 reference, #113).
+
+- **One payer per invoice:** `charge_to` is an invoice column, so a job with both is billed as two invoices. Existing invoices default to Owner charge (migration `20261006_invoice_charge_to.sql`).
+- **Invoice form:** required **Charge to** control. Tenant shows name, unit, reason (Tenant damage / Lease fee / Other), lease clause and an internal note on what happened and the evidence.
+- **Tenant prefill (#138):** `GET /api/invoices/tenant-lookup?address=&unit=` matches the WO's address and unit against `inspection_properties` (kept current by the nightly AppFolio sync) and fills the financially responsible occupants' names and the unit — one match fills, several households show pick buttons, no match asks for the name as on the lease. Never overwrites a typed name or a locked/posted charge.
+- **Basis rules (#139, migration `20261013_tenant_charge_basis_at_posting.sql`):** generating a tenant invoice needs only tenant, unit and what happened — Reason and Lease clause are "(optional — the office can add it)". **Posting** to the tenant ledger requires the reason, plus the lease clause for a lease fee (ORS 90 basis); the Daily Billing card asks for missing items inline. A reason or clause already set is never rewritten.
+- **Locks:** a credit memo must charge the same party as the invoice it corrects; the payer is fixed once the invoice is attached in AppFolio or the tenant charge is posted — after that, void and reissue.
+- **PDF:** **OWNER CHARGE** / **TENANT CHARGE** label plus a "Charged to tenant" block; the internal note stays off the PDF.
+- **Invoice list:** Owner/Tenant badge, an **Owner + tenant / Owner / Tenant** filter, search by tenant name.
+- **Daily Billing Review:** a **"Post tenant ledger charge in AppFolio"** item per generated tenant invoice with **Mark tenant charge posted**. The owner pays HDMS's bill as usual; the tenant ledger charge reimburses the owner.
+- **HDMS reconciliation:** a WO with two invoices now sums every live invoice and labels it owner, tenant or both.
+- **Not yet:** automatic owner + tenant split of one workspace job, an AppFolio tenant picker, owner/tenant columns in billable reports.
+
 ---
 
 ## Rent Comps
@@ -487,6 +742,7 @@ One-time backfill after schema changes: `npx tsx scripts/recompute-payment-snaps
 Rental market analysis combining three data sources:
 
 - **AppFolio** — current portfolio rental rates and vacancy data
+- **RentCast** — advertised rental comparables (with similarity, distance and listed dates) and a rent estimate
 - **Rentometer** — market comparison data by address
 - **HUD Fair Market Rent** — government baseline rates by area (synced annually)
 - **Zillow** (via `/api/comps/zillow`) — supplemental public-listing data when available
@@ -504,6 +760,17 @@ A three-step wizard that produces a shareable comp report for owner presentation
 1. **Enter subject property** (address, beds/baths, sqft, current rent)
 2. **Pull comparables** from AppFolio, Rentometer, Zillow, and HUD; the system applies weighted similarity scoring on bedrooms, bathrooms, sqft, and distance
 3. **Generate report** — produces a branded PDF with summary stats, comp table, and recommended rent range; saved analyses are accessible from the "Saved reports" list for re-use
+
+### Rent Analysis Reports
+
+Owner-facing PDFs from the analysis wizard (`lib/rent-report-pdf.ts`).
+
+- **Owner links (#118):** `/r/<id>` short links open **without a staff login** (`/r/` is a public proxy prefix — the trailing slash keeps `/reports`, `/routes` gated). Each link has a random 8-character id, expires after 30 days (`report_links.expires_at`) and redirects to a 1-hour signed storage URL. Generated PDFs get a timestamp + random suffix (`lib/rent-report-files.ts`), so regenerating the same property on the same day never overwrites a file already sent.
+- **Nearby Rentals (#116, #117):** modelled on AppFolio's *Nearby Advertised Units*, built from RentCast comparables: a rent histogram ($50 bins, median shaded, **your rent** as a dashed column with a house marker on a low → high band) and a table ranked by similarity with ▲▼ sq-ft and rent differences, distance and last advertised date. A page in the PDF and a panel on the Analysis step that updates as you type a rent override (`lib/rent-report-nearby.ts`). Skipped when RentCast returns fewer than 3 comps.
+- **Layout fixes (#115):** long notes continue onto the next page ("Notes (continued)"), Market Snapshot stays together, page numbers use the real page count. Competing listings are de-duplicated by address and price and labelled with their real source (RentCast / Zillow / both) — previously RentCast comps were re-appended on each regeneration.
+- **Data Sources (#119):** lists only sources that contributed (no "0 data points"), counts RentCast database comps, labels "Advertised rental comps" vs "nearby listings" separately, and shows the one HUD figure used (e.g. "Redmond 3BR Fair Market Rent, $2,336/mo").
+- **Standard owner notes (#132, #133, #134):** **Insert standard notes** above "Notes from High Desert Property Management" adds editable text covering how the range was reached (naming only the sources this analysis used), why it's a desk estimate, owner choices that change the rent, and a call to action — "Give us a call at (541) 548-0383". A new analysis auto-fills it when the box is empty; an untouched draft regenerates after a Zillow search, edited notes are never replaced, and reopened saved reports keep their notes.
+- The analysis page footer now credits AppFolio, RentCast and HUD Fair Market Rent (#117).
 
 ---
 
@@ -551,16 +818,78 @@ Per-owner portfolio report builder used for owner statements, quarterly reviews,
 
 ---
 
+## Admin
+
+**Sidebar:** Admin group · **Landing:** `/admin` (cards for each area) · **Registry:** `lib/access/sections.ts`
+
+| Area | Path | Default access |
+|------|------|----------------|
+| **User settings** | `/admin/user-settings` | Admins (an admin can never lose it) |
+| **Company KPIs** | `/dashboard` | Admins · delegable |
+| **Fee Management** | `/admin/fee-management` | Admins · delegable |
+| **Partners** (referral program) | `/partners/admin` | Admins · delegable |
+| **Leads** | `/admin/leads` | Admins only |
+| **Hiring** | `/admin/hiring` | Admins · delegable |
+| **Website** | `/admin/website` | Admins only |
+| **Zoom Sync** | `/admin/zoom-sync` | Admins only |
+| **Knowledge Capture** | `/knowledge-capture` | Matt, Penny, Craig only (fixed list) — see [Knowledge Capture](#knowledge-capture) |
+| Paper Workflows · HABU Demo | `/admin/habu-paper` · `/admin/habu-demo` | Craig only |
+
+### User Settings & Delegated Admin
+
+**Path:** `/admin/user-settings` (replaces Staff permissions; `/admin/staff-permissions` redirects) (#83, #84, #130)
+
+- **One registry** — every page area is a section in `lib/access/sections.ts` (menu item, page + API prefixes, default roles). The sidebar is built from it, User settings lists it, and the proxy enforces it: switched-off sections drop out of the sidebar and home tiles, pages redirect home with a notice, and their APIs return 403 (shared APIs stay open if the person has *any* owning section). `lib/access/__tests__/sections.test.ts` fails on unregistered pages.
+- **People tab:** each person's **Role** picker (confirmed and audited in `staff_role_audit`; you can't change your own role or demote the last admin) plus a **Role default / On / Off** switch per section, with an optional reason and change history (`staff_section_access`, `staff_section_access_audit`).
+- **Roles tab:** toggle each role's default sections, with an **All roles at a glance** grid, "edited" tags and "Reset to built-in" (`role_section_defaults`). Built-in defaults: Admin = everything; Property Manager / Manager / Staff (general) = every non-admin section; Maintenance, Field tech, Inspector, Front Desk, Finance and Read only get role-specific subsets (see `defaultRoles` in the registry).
+- **Invoice & estimate abilities** tab: the former Staff permissions page, unchanged.
+- **Guardrails:** Dashboard is always on; nobody can be locked out of User settings; only an active DB admin can save (re-checked server-side); optimistic versioning. If the access tables are unreachable, everyone gets role defaults (fails open).
+- **Delegated admin areas (#130):** **Company KPIs, Fee Management, Hiring and Partners** are `delegable` — an admin can switch them on for one non-admin person (never via role defaults; shown as "Delegated admin area"). Their pages and APIs check the section live (`requireSection()` / `hasSection()` in `lib/require-role.ts`, 60s cache) instead of the admin role. Still admin-only for delegates: User settings, Leads, Website, Zoom Sync, Partners tax documents (1099/TIN export and W-9 files, tax-ID last-4), and KPI settings writes. First delegate: **Lisa Coffey** (Property Manager), added by migration `20261012_staff_lisa_coffey.sql`.
+
+### Fee Management
+
+**Path:** `/admin/fee-management` · **Section:** `fee_management` (delegable) · **Code:** `lib/fee-management/` · **Tables:** `fee_campaign_config`, `property_agreement`, `fee_campaign`
+
+Read-only AppFolio v0 data (`/properties`, `/units`, `/owner_groups`, `/owners`), cached daily in `kpi_snapshots` (`fee_management_facts`, latest copy only) with a Refresh button. Five tabs:
+
+| Tab | What it does |
+|-----|--------------|
+| **Owner Fee Opportunity** (#72, #73, #74, #77, #79) | One row per **owner set** (co-owned properties count once). Blended fee % weighted by occupied market rent; target from the editable **door-count schedule** (1 door 10% → 50+ doors 7%, portfolio review) with size-based **max raise steps** and an under-7% floor of at least 1 pt; **Opportunity grade 0–100** (default sort), **Next raise** (one step + raises to schedule), **Priority 0–100** (added $/yr, agreement-end urgency, fee gap), segments (Personal call / Letter / Renewal-timed), campaign editor and funnel, **Fatigue** column, owner **Contact** card first in the expanded row, search by name/email/phone, CSV export. |
+| **Fee Index** (#70, #72) | Doors per whole-point fee range with share, occupied, est. fees /mo and /yr; potential revenue from raising the average and minimum-fee floors. Moved here from the KPI dashboard. |
+| **Fee Schedule** (#75, #76, #77, #78, #79, #80) | Current vs Proposed values for HDPM's standard fees (lease-up, renewal, setup, maintenance markup, accounting, inspection, eviction coordination, early termination, custom rows) as $ flat, % of a month's rent or % of spend; trailing-12-month AppFolio volumes; cash-flow summary. **Market reference:** regional summary (Central Oregon / rest of Oregon / PNW), 37 sourced company fee schedules, and Oregon rules on tenant-paid fees (not legal advice). **Fee fatigue & churn:** per-owner fatigue index, expected fee-driven churn loss, net-after-churn, break-even doors, size-based churn sensitivity and a large-owner stress test. |
+| **Agreements** (#112) | Every owner management agreement, one row per property: Renews (day + month), next expiration (projected from AppFolio's management start when no end date is entered), auto-renew / notice, last renewed, and an "Open ↗" link to the signed agreement in AppFolio (staff paste the link; only `https://highdesertpm.appfolio.com/` links are accepted). Filters for expiring within 30/60/90 days and missing links/dates. Click **Refresh** once after deploy. |
+| **Proposed Structure** (#131) | Editable door bands (range, fee %, max step, review flag; validated for gaps/overlaps). Shows the fully-implemented impact per band and portfolio (owners above their band keep their rate), with headline cards for management fees, other fees, total fee revenue and gain after expected churn. **Save schedule** writes the door schedule Owner Fee Opportunity uses. |
+
+### Hiring, Website & Leads
+
+- **Hiring** (`/admin/hiring`, #122, #123): website job applications (résumé/video via short-lived links, **Email again**; unsent ones show "Not emailed"), job availability (open / closed / draft), and application email recipients + "resend since date". Served through an allowlisted proxy `app/api/admin/hiring/[...path]` → hdpm-web `/api/os/hiring` (`lib/hdpm-web-admin.ts`, `HDPM_OS_ADMIN_TOKEN`), sending the staff email as `x-hdpm-actor`.
+- **Website** (`/admin/website`, #122): one-click shortcuts into www.highdesertpm.com/admin (posts, pages, jobs, market areas, team, testimonials, media, CRM, campaigns, automations).
+- **Leads** (`/admin/leads`, #124): website CRM leads with filters (open / all / status, type, search), overdue follow-ups highlighted, and a detail panel to change status (valid pipeline moves only), owner and next follow-up, add notes and read history. Allowlisted proxy `app/api/admin/leads/[...path]` → hdpm-web `/api/os/leads`.
+
+---
+
 ## Referral Partner Portal
 
-**Paths:** `/partners` (referrer-facing) · `/partners/admin` (staff)
+**Paths:** `/partners` (referrer-facing, served at **partners.highdesertpm.com**) · `/partners/admin` (staff, sidebar Admin → **Partners**) · **Plan:** `docs/partners/00-referral-portal-plan.md`
 
 A self-service portal for referral partners to send HDPM new-owner leads, plus a staff console to work the pipeline.
 
-- **`/partners`** — partners refer an owner, track the status of their referrals, and sign in through a **secure emailed magic-link** (no password).
-- **`/partners/admin`** — staff manage referral partners, the lead pipeline, the fee policy, and W-9 / referral-agreement tracking.
+- **`/partners`** — partners refer an owner, track the status of their referrals, see their bounty earnings (Earned / Pending approval / Approved / Paid, read through RLS), and sign in through a **secure emailed magic-link** (no password).
+- **`/partners/admin`** — staff manage referral partners, the lead pipeline, the fee policy, W-9 / referral-agreement tracking, bounties and payouts. Linked from the sidebar, home Admin tiles and `/admin` (#96); section key stays `referrals_admin`.
+
+**Partner host (#101):** on `partners.highdesertpm.com` (`lib/referrals/partner-host.ts`, applied first in `proxy.ts`), `/` serves the partner dashboard, `/login`, `/leads…`, `/invite/…`, `/auth/…` rewrite to `/partners/…`, staff pages and `/partners/admin` redirect to `os.highdesertpm.com`, and staff APIs return 404. Invite links use `PARTNERS_BASE_URL` when set.
+
+**Bounty ledger (#99, migration `20261005_referral_bounty_ledger.sql`):** the first time a lead reaches **agreement_signed**, a one-time bounty is earned only if it's a referral lead, the referrer is active, the lead isn't a duplicate, the referrer has active bounty terms, and **the fee policy allows that partner type** (every type is still off — the Oregon gate). `fixed` or `per_door` amounts; terms frozen in `referral_fee_agreement`; the append-only `referral_ledger` records `earned` → `approved` (a person) → `paid` (with a reference) or `voided` (with a reason); skipped bounties are recorded with their reason. Admin lead page **Bounty** card; "Bounties to approve" / "Bounties paid" tiles; emails to the referrer when earned and paid.
+
+**Payouts & 1099s (#100):** `/partners/admin/payouts` lists approved, unpaid bounties with a 1099-readiness badge (warning only), downloads a **QuickBooks CSV** (no tax IDs), and **Mark paid** for a batch (`PAY-YYYYMMDD-xxxx`), with payment history by batch. `/partners/admin/payouts/1099` totals paid bounties per referrer per tax year (threshold $600 through 2025, $2,000 from 2026 — "confirm with your accountant") and exports an Excel worksheet with tax IDs masked unless explicitly included (each decrypt logged as `tin_decrypted`). The Referrers page adds a W-9 column with a 2-minute signed **View** link (`w9_viewed`) and **Verify** (`w9_verified`). Tax-document routes stay admin-only even for delegates.
+
+**Fee-income probe (#104, #105):** admin-only `GET /api/partners/admin/spike/fee-income?month=YYYY-MM[&property=…]` tests which AppFolio reports return management-fee income per property (nothing stored, no owner names). Findings in `docs/partners/01-batch-6a-fee-income-spike.md`: **GO, provisionally** — `general_ledger` (GL 5010 "Mgmt: Management Fee") returns per-property fees, pending one owner-statement reconciliation.
+
+**Email safety (#103):** every person-supplied value in the referral email templates is HTML-escaped, and subjects with names are stripped of line breaks.
 
 **Oregon compliance:** paying referral compensation for real-estate activity is restricted to licensed persons. The fee policy enforces this — the compensation model available to a partner depends on their license status (e.g. credit vs. cash + 1099).
+
+**Fonts:** the referrer portal's Plus Jakarta Sans and Inter are self-hosted (#146) — see [Builds](#builds-self-hosted-fonts).
 
 ---
 
@@ -585,7 +914,7 @@ Managed properties plotted on a map: **green** = active under management, **yell
 
 ---
 
-> **Admin-gated pages:** `/dashboard` (KPI Dashboard) and `/admin/zoom-sync` appear only for admins (gated via `ADMIN_EMAILS`).
+> **Admin-gated pages:** admin status comes from `staff.access_role = 'admin'`; `ADMIN_EMAILS` survives only as a bootstrap fallback. Which Admin pages a person sees is set in [Admin → User settings](#user-settings--delegated-admin).
 
 ---
 
@@ -633,7 +962,7 @@ An AI assistant trained on Oregon Revised Statutes Chapter 90 (landlord-tenant l
 **Proactive Routines.** Scheduled jobs that read and post as Dez (the cron layer). First one live:
 - **ORS 90 new-section watch** (`/api/sync/ors-watch`): the weekly knowledge sync only re-fetches a fixed list of ORS 90 section numbers, so a section the legislature *adds* is invisible until the list grows. This probes plausible not-yet-known numbers monthly and DMs Craig if a real new section appears (oregon.public.law serves soft-404s as HTTP 200, so detection keys on real article content, not status). `?sessionReview=1` (Apr/Aug crons, after Oregon sessions adjourn) also posts a "review the list" reminder.
 
-**Not yet built (fast-follow / gated):** scoped live-data subagent tools and write verbs (Phase 2 — gated behind the restart plan's Oct-1 Loop-1 gate + the Sep-4 write-path decision).
+**Not yet built (fast-follow / gated):** scoped live-data subagent tools and write verbs (Phase 2 — gated behind the restart plan's Loop-1 gate (moved from Oct 1 to Oct 15) + the Sep-4 write-path decision).
 
 ---
 
@@ -647,32 +976,40 @@ Configured in `vercel.json`. All times are UTC.
 | **Every 30 min** | `/api/maintenance/cron/appfolio-webhook-resolve` | Resolve webhook-logged WO events against the mirror |
 | **Hourly** | `/api/sync/work-orders?days=7` | Work-order deep pass (webhook safety net) |
 | **Hourly at :45** | `/api/sync/keys` | Key Manager ↔ AppFolio sync: tenants, owners, occupancy, flags |
+| **15:30–23:30 hourly, Mon–Fri** | `/api/agents/cron/activities?kind=new` | Activity Reminders: Slack DM for newly-due AppFolio activities (8:30 AM–4:30 PM PT) |
+| **08:10 daily** | `/api/timekeeping/cron` | Timekeeping: ensure each employee's pay-period sheets exist |
 | **9:00 daily** | `/api/sync/appfolio` | Full AppFolio sync: properties, vacancies, comps |
 | **9:15 daily** | `/api/sync/af-reports` | AppFolio Reports API pulls (mgmt end dates, …) |
 | **9:30 daily** | `/api/inspections/candidates/sync` | Refresh inspection candidates (move-in-anchored cadence) |
-| **10:00 daily** | `/api/brain/cron/evolve` | Company-brain nightly consolidation (dream cycle) |
+| **10:00 daily** | `/api/brain/cron/evolve` | Company-brain nightly consolidation (Knowledge Nightly Review / dream cycle) |
+| **10:30 daily** | `/api/brain/cron/snapshot` | Brain map nightly snapshot for `/brain` |
 | **10:00 Sunday** | `/api/sync/knowledge` | Knowledge base refresh: ORS 90 + Notion SOPs + OneDrive docs |
 | **11:00 Sunday** | `/api/sync/knowledge?target=onedrive` | OneDrive/SharePoint docs re-sync (eTag-incremental) |
 | **12:00 1st of month** | `/api/sync/ors-watch` | Dez: probe for newly-added ORS 90 sections; DM Craig on a find |
 | **13:00 Apr 5 & Aug 5** | `/api/sync/ors-watch?sessionReview=1` | Dez: post-Oregon-session "review the ORS 90 list" reminder |
 | **11:00 daily** | `/api/sync/zoom-contacts` | AppFolio → Zoom Phone contact sync |
 | **13:00 Mon–Fri** | `/api/maintenance/cron/tripwires` | Run the 12 tripwires; per-owner exception digests (6 AM PT) |
-| **13:30 daily** | `/api/maintenance/cron/metrics` | Daily `metrics_snapshot` capture (agent-layer KPIs) |
+| **13:30 & 21:30 daily** | `/api/maintenance/cron/metrics` | `metrics_snapshot` capture (agent-layer KPIs + dashboard pipeline) |
 | **13:45 Mon–Fri** | `/api/agents/cron/estimate-chaser` | Estimate Chaser: Outlook drafts + SMS queue + escalations (6:45 AM PT) |
 | **13:45 daily** | `/api/haven/sync` | Haven.AI conversation sync |
 | **14:00 daily** | `/api/kpi/cron` | Capture daily KPI snapshots for the trends page |
+| **14:00 Mon–Fri** | `/api/agents/cron/activities` | Activity Reminders: 7 AM PT DM of everything due today + overdue count |
+| **14:00 Mon–Fri** | `/api/eos/cron/scorecard-daily` | Daily scorecard refresh after the metrics capture (no Friday communications) |
 | **14:00 Monday** | `/api/maintenance/cron/unbilled-report` | Verified-but-unbilled weekly report → Penny |
 | **14:15 Mon–Fri** | `/api/eos/cron/escalation` | Escalation ladder → EOS issues; to-do roll/nudge (7:15 AM PT) |
 | **14:15 Mon–Fri** | `/api/haven/cron/digest` | Haven response-time digest |
 | **14:20 daily** | `/api/reception/sync` | Zoom main-line reception call report sync |
 | **14:30 Monday** | `/api/eos/cron/meeting-prep` | L10 prep packet + facilitator DM (7:30 AM PT) |
 | **15:00 daily** | `/api/sync/vacancies` | AppFolio vacancy cache refresh |
+| **15:00 & 16:00 Mon–Fri** | `/api/maintenance/cron/followups` | Maintenance Follow-up Queue to Slack (runs only at 8 AM Pacific; skipped when the shared trial is off) |
 | **15:00 Monday** | `/api/agents/cron/ops-brief?deep=1` | Monday deep Ops Brief (8 AM PT) |
+| **16:00 Monday** | `/api/agents/cron/operator-canary` | AppFolio Form Filler weekly health check (prepare-mode run; DMs Craig on a real failure) |
+| **20:00 Mon–Fri** | `/api/agents/cron/activities?kind=nudge` | Activity Reminders: 1 PM PT reminder for anything still due today |
 | **22:00 Friday** | `/api/eos/cron/scorecard` | Scorecard auto-fill + owner nudges + Rock check cards (3 PM PT) |
 | **00:00 Tue–Sat** | `/api/agents/cron/ops-brief` | Daily Ops Brief (~5 PM PT) |
-| **Jan 1 annually** | `/api/sync/hud` | HUD Fair Market Rent data refresh |
+| **10:00 Jan 1 annually** | `/api/sync/hud` | HUD Fair Market Rent data refresh |
 
-Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted from Azure AD middleware (Vercel cron sends GET; every cron route's GET delegates to its authenticated POST). AppFolio also pushes updates in real time through `/api/webhooks/appfolio` and `/api/webhooks/appfolio-leads`.
+Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted from Azure AD middleware (Vercel cron sends GET; every cron route's GET delegates to its authenticated POST). AppFolio also pushes updates in real time through `/api/webhooks/appfolio` and `/api/webhooks/appfolio-leads`. Every cron route is wrapped with `withCronRun` and listed in `lib/routines/registry.ts`, so each run lands in `routine_run` and on the [routine calendar](#agents-page-routine-calendar--activity-feed). Pacific-time notes assume daylight time; in winter UTC crons land an hour earlier.
 
 ---
 
@@ -689,7 +1026,7 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `AZURE_AD_CLIENT_SECRET` | Microsoft | Azure AD app secret |
 | `AZURE_AD_TENANT_ID` | Microsoft | Azure AD tenant |
 | `NEXTAUTH_SECRET` | NextAuth | Session encryption key |
-| `NEXTAUTH_URL` | NextAuth | App base URL (e.g. `https://hdpmchat.highdesertpm.com`) |
+| `NEXTAUTH_URL` | NextAuth | App base URL (e.g. `https://os.highdesertpm.com`) |
 | `APPFOLIO_CLIENT_ID` | AppFolio | v0 API client ID |
 | `APPFOLIO_CLIENT_SECRET` | AppFolio | v0 API client secret |
 | `APPFOLIO_DEVELOPER_ID` | AppFolio | Developer ID header value |
@@ -713,6 +1050,9 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `RESEND_API_KEY` | Resend | Maintenance OS tripwire digest emails (skipped when absent) |
 | `MAINT_DIGEST_RECIPIENTS` | Maintenance OS | Fallback JSON map of owner → email. Normally unnecessary — admins manage opt-ins in the app (Maintenance → Exceptions → Digest recipients, backed by `maint_digest_recipient`) |
 | `MAINT_DIGEST_FROM` | Maintenance OS | From address for digests (default `HDMS Maintenance <maintenance@highdesertpm.com>`) |
+| `MAINTENANCE_COPY_MODEL` | Anthropic | Model for **Improve with AI** (`/api/maintenance/improve-copy`; default `claude-sonnet-5`) |
+| `KC_TRANSCRIBE_MODEL` | OpenAI | Knowledge Capture transcription model (default `whisper-1`) |
+| `NEXT_PUBLIC_REALMX_ENABLED` | Inspections | `=1` shows the **Copy Realm-X request** in Send Notices once Realm-X Assistant is on HDPM's AppFolio plan; unset → letter-first only |
 
 ### Integrations
 
@@ -724,9 +1064,13 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `REFERRAL_ADMIN_EMAIL` | Referral portal | Staff address notified of new referral partner activity |
 | `REFERRAL_EMAIL_FROM` | Referral portal | From address for referral invites + magic-link sign-in emails |
 | `REFERRAL_FIELD_KEY` | Referral portal | Field key used when writing referral leads |
-| `HDPM_WEB_BASE_URL` | Referral portal | Public base URL used to build magic-link sign-in URLs |
+| `HDPM_WEB_BASE_URL` | Referral portal / hdpm-web | Public base URL used to build magic-link sign-in URLs; also the server-to-server base for the Hiring and Leads proxies (defaults to `https://www.highdesertpm.com`) |
+| `HDPM_OS_ADMIN_TOKEN` | hdpm-web | Bearer token for hdpm-web's `/api/os/*` admin endpoints (Admin → Hiring, Leads); same value on both apps, separate from `HDPM_SERVICE_TOKEN` |
+| `PARTNERS_BASE_URL` | Referral portal | Base URL for partner invite links (e.g. `https://partners.highdesertpm.com`); unset → the admin's own origin |
+| `PARTNERS_HOST` | Referral portal | Host that serves only the referrer portal (default `partners.highdesertpm.com`) |
+| `STAFF_ORIGIN` | Referral portal | Where staff paths on the partner host redirect (default `https://os.highdesertpm.com`) |
 | `NOTION_API_KEY` | Notion | Notion SOP corpus sync into the knowledge base / company brain |
-| `ADMIN_EMAILS` | HDPM-OS | Comma-separated emails that get the admin nav (`/dashboard`, `/admin/zoom-sync`) |
+| `ADMIN_EMAILS` | HDPM-OS | Bootstrap / disaster-recovery admin allowlist only — admin status normally comes from `staff.access_role` |
 | `APPFOLIO_REPORTS_CLIENT_ID` | AppFolio | Reports API client ID — distinct credential from the v0 API |
 | `APPFOLIO_REPORTS_CLIENT_SECRET` | AppFolio | Reports API client secret |
 | `APPFOLIO_HDMS_VENDOR_ID` | AppFolio | HDMS vendor id used to filter `af_bills` for invoice auto-matching |
@@ -740,6 +1084,8 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `SLACK_BOT_USER_ID` | Slack (Dez) | Dez's own bot user id (`U…`, from `auth.test`) — loop guard so Dez never answers its own messages |
 | `SLACK_DEZ_ACTIVITY_CHANNEL` | Slack (Dez) | Optional `#dez-activity` channel id (`C…`) for the visibility feed (unset → no activity log) |
 | `DEZ_CHANNEL_MAP` | Dez | Optional JSON `{channelId: scope}` mapping channels to `maintenance`/`leasing`/`accounting` for the routing breadcrumb |
+| `DEZ_INSPECTION_NOTICES` | Dez | `=1` turns on the per-route inspection-notice Slack card (Send Notices / Route Builder / date changes) |
+| `DEZ_INSPECTION_NOTICE_OWNER` | Dez | Staff name that receives the inspection-notice card (default `Brody`) |
 | `DEZ_KPI_ADMINS` | Dez | Allowlist (comma-separated) for Dez's financial-KPI answers; others get only the operational subset (default `Craig,Matt,Penny`) |
 | `HDPM_SERVICE_TOKEN` | Agent-OS | Service-caller auth for `/api/agents/*` (with `X-Agent-Actor` header) |
 | `AGENT_EMAIL_FROM` | Resend | From address for agent emails (falls back to `MAINT_DIGEST_FROM`) |
@@ -801,6 +1147,15 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `meeting` / `meeting_item` / `decision` | L10 meetings (agenda, prep packet, minutes, rating), per-step outcomes, the decision log |
 | `audit_event` | Append-only EOS audit trail — every scorecard/issue/todo/meeting/rock write |
 | `service_token` | Per-service scoped API tokens for the agent layer |
+| `staff_section_access` / `role_section_defaults` | Per-person section switches + admin-edited role defaults (User settings), each with an `_audit` table; role changes in `staff_role_audit` |
+| `fee_campaign_config` / `fee_campaign` / `property_agreement` | Fee Management: schedule + weights + fee schedule config, per-owner campaign state, agreement dates and AppFolio agreement links |
+| `supplier` / `parts_order` / `parts_order_event` | Parts orders on the chase board, with contact log |
+| `routine_run` | One row per cron run (running / ok / halted / skipped / error) for the routine calendar |
+| `brain_viz_doc_emb` | Cached per-document averaged embeddings for the brain map snapshot |
+| `referral_fee_agreement` / `referral_ledger` | Frozen bounty terms + append-only earned → approved → paid / voided ledger |
+| `kc_recording` / `kc_profile` / `kc_owner_link` | Knowledge Capture takes (audio or typed, transcript, original transcript, voices), living profiles, owner record links |
+
+Added in the Sep 24 – Oct 8 window: `20260924_fee_management` · `20260925_staff_section_access` · `20260925b_role_section_defaults` · `20261001_parts_orders` · `20261002_routine_run` · `20261003_brain_viz` · `20261004_brain_viz_paged_knn` · `20261005_referral_bounty_ledger` · `20261006_invoice_charge_to` (`hdms_invoices.charge_to` + tenant fields) · `20261007_property_agreement_document` · `20261008_timekeeping_edit_past_days_while_clocked_in` · `20261009_route_builder_inspection_target_dates` · `20261010_release_stale_scheduled_candidates` · `20261011_inspection_notice_tracking` · `20261012_staff_lisa_coffey` · `20261013_tenant_charge_basis_at_posting` · `20261014_knowledge_capture` · `20261015_kc_owner_links` · `20261016_kc_voices` · `20261017_dump_run_price_book`.
 
 **Migrations:** Located in `supabase/migrations/`. Run new migrations via the [Supabase SQL Editor](https://supabase.com/dashboard).
 
@@ -816,8 +1171,12 @@ git push origin main  # Starts the production deployment
 vercel list hdpm-chatbot --environment production  # Check deployment status
 ```
 
-**Production URL:** `hdpmchat.highdesertpm.com` (Vercel alias `hdpm-chatbot.vercel.app`)
+**Production URL:** `os.highdesertpm.com` (Vercel project `hdpm-chatbot`, alias `hdpm-chatbot.vercel.app`) · referral partner portal on `partners.highdesertpm.com` (same project; needs the domain in Vercel, a DNS CNAME, the Supabase auth redirect URL and `PARTNERS_BASE_URL` — see #101)
 
 **Branch strategy:**
 - `main` — production source; pushes trigger Vercel production builds
 - `feature/*` — feature branches, merged via `--no-ff`
+
+### Builds (self-hosted fonts)
+
+Builds make **no network calls for fonts** (#146). `next/font/google` used to download fonts from Google during `next build`, so a hiccup on Google's side failed production deploys. The referrer portal's **Plus Jakarta Sans** and **Inter** are now committed as variable Latin woff2 files (Fontsource, SIL OFL, licenses alongside) in `app/partners/(referrer)/fonts/` and loaded with `next/font/local`; CSS variables (`--font-brand-heading`, `--font-brand-body`) are unchanged. Geist, the main app font, was already local via its npm package. `lib/__tests__/no-remote-fonts.test.ts` fails if anything imports `next/font/google` again.
