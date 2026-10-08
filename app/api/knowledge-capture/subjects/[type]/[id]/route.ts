@@ -3,6 +3,7 @@ import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { BUCKET, ORG, regenerateProfile, subjectIds } from '@/lib/knowledge-capture/pipeline';
 import type { SubjectType } from '@/lib/knowledge-capture/roster';
+import { rowVoices, voicesLabel } from '@/lib/knowledge-capture/voices';
 
 export const maxDuration = 300;
 
@@ -26,7 +27,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     db.from('kc_profile').select('profile_md, recording_count, generated_at').eq('org_id', ORG).eq('subject_type', type).eq('subject_id', id).maybeSingle(),
     db
       .from('kc_recording')
-      .select('id, speaker_email, speaker_name, storage_path, duration_sec, status, error, transcript, transcript_original, transcript_edited_at, transcript_edited_by, notes_md, chunk_count, created_at')
+      .select('id, speaker_email, speaker_name, voices, storage_path, duration_sec, status, error, transcript, transcript_original, transcript_edited_at, transcript_edited_by, notes_md, chunk_count, created_at')
       .eq('org_id', ORG)
       .eq('subject_type', type)
       .in('subject_id', ids)
@@ -53,8 +54,10 @@ export async function GET(_request: NextRequest, { params }: Params) {
       : null,
     recordings: rows.map((r) => ({
       id: r.id,
-      speaker: r.speaker_name || r.speaker_email,
-      mine: r.speaker_email.toLowerCase() === guard.email.toLowerCase(),
+      speaker: voicesLabel(rowVoices(r)),
+      voices: rowVoices(r),
+      // Whoever recorded it, or anyone whose voice is in it, may edit or delete.
+      mine: [r.speaker_email.toLowerCase(), ...rowVoices(r)].includes(guard.email.toLowerCase()),
       durationSec: r.duration_sec,
       status: r.status,
       error: r.error,

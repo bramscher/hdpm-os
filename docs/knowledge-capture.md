@@ -34,6 +34,12 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
    - **Not the same**: dismisses a suggestion.
    - **Suggestions**: same email, phone or exact name → likely the same person; one name's words all inside another's (John Smith ↔ John Smith Family Trust) → likely related. The list has a "Possible duplicates" filter and a **Check** badge. A person always decides.
 
+8. **Both people's knowledge.** Every recording records whose voice is in it (`kc_recording.voices`: Matt, Penny, or both talking together), separate from who pressed record. "Who's talking?" defaults to whoever is signed in.
+   - The list shows an M/P dot per owner and property (filled = their take is recorded), with **Needs Matt's take** and **Needs Penny's take** filters: covered by someone, not yet by that person. Since it'll mostly be Matt, Penny can work down "Needs Penny's take".
+   - Notes attribute judgment calls to the person. In a joint take, statements are attributed only when it's clear who said them.
+   - Once more than one person has contributed, the profile adds **Perspectives**: each person's take, plus where they differ. One view never overwrites the other.
+   - Anyone whose voice is in a take, or who recorded it, can edit or delete it.
+
 Dez and agents find this knowledge through ordinary brain retrieval (`searchBrain` / `think`).
 
 ## Brain identity
@@ -51,7 +57,7 @@ Re-processing a recording replaces its chunks. Deleting a recording removes its 
 
 ## Setup
 
-1. Apply `supabase/migrations/20261014_knowledge_capture.sql` in the Supabase SQL Editor. It creates `kc_recording`, `kc_profile` and the private bucket. Then apply `20261015_kc_owner_links.sql` (owner record links). Until that's applied, linking errors but everything else works.
+1. Apply `supabase/migrations/20261014_knowledge_capture.sql` in the Supabase SQL Editor. It creates `kc_recording`, `kc_profile` and the private bucket. Then apply `20261015_kc_owner_links.sql` (owner record links) and `20261016_kc_voices.sql` (whose voice is in each take; apply **before** deploying the code that uses it). Until that's applied, linking errors but everything else works.
 2. Admin → User settings: switch **Knowledge Capture** on for Matt and Penny, and for anyone who should read the profiles. It's off by default because owner contact details and candid notes live here.
 3. Production already has the env vars this needs: `OPENAI_API_KEY` (brain embeddings) and `ANTHROPIC_API_KEY` (brain think).
 

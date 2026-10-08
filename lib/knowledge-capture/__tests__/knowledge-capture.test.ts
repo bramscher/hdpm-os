@@ -68,9 +68,10 @@ describe('buildCoverage', () => {
   it('counts takes, distinct speakers and profile presence per subject', () => {
     const cov = buildCoverage(
       [
-        { subject_type: 'owner', subject_id: 'o1', speaker_name: 'Matt', speaker_email: 'm@x', created_at: '2026-10-01T00:00:00Z' },
-        { subject_type: 'owner', subject_id: 'o1', speaker_name: 'Penny', speaker_email: 'p@x', created_at: '2026-10-03T00:00:00Z' },
-        { subject_type: 'owner', subject_id: 'o1', speaker_name: 'Matt', speaker_email: 'm@x', created_at: '2026-10-02T00:00:00Z' },
+        { subject_type: 'owner', subject_id: 'o1', speaker_name: 'Matt', speaker_email: 'matt@highdesertpm.com', created_at: '2026-10-01T00:00:00Z' },
+        // Craig recorded a conversation with Matt and Penny: both voices count.
+        { subject_type: 'owner', subject_id: 'o1', speaker_name: null, speaker_email: 'craig@highdesertpm.com', voices: ['matt@highdesertpm.com', 'penny@highdesertpm.com'], created_at: '2026-10-03T00:00:00Z' },
+        { subject_type: 'owner', subject_id: 'o1', speaker_name: 'Matt', speaker_email: 'matt@highdesertpm.com', voices: [], created_at: '2026-10-02T00:00:00Z' },
       ],
       [{ subject_type: 'property', subject_id: 'p1' }]
     );
@@ -78,6 +79,7 @@ describe('buildCoverage', () => {
       recordings: 3,
       lastAt: '2026-10-03T00:00:00Z',
       speakers: ['Matt', 'Penny'],
+      voices: ['matt@highdesertpm.com', 'penny@highdesertpm.com'],
       hasProfile: false,
     });
     expect(cov[coverageKey('property', 'p1')].hasProfile).toBe(true);

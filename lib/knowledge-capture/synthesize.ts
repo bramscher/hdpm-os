@@ -98,27 +98,41 @@ export interface SubjectContext {
   facts: string;
 }
 
+/** "Matt" / "Matt and Penny" / "Matt, Penny and Craig" — for prompts. */
+function joinNames(names: string[]): string {
+  return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
 export async function distillNotes(
   subject: SubjectContext,
   transcript: string,
-  speaker: string,
+  speakers: string[],
   recordedOn: string
 ): Promise<string> {
   const sections = PROFILE_SECTIONS[subject.type].filter((s) => s !== 'At a glance');
-  const system = `You turn recorded interviews into durable notes for High Desert Property Management's company memory. ${speaker} is a long-time HDPM employee leaving the company, recording what they know about a ${SUBJECT_LABEL[subject.type]} so the team keeps that knowledge.
+  const who = joinNames(speakers);
+  const together = speakers.length > 1;
+  const intro = together
+    ? `${who} are long-time HDPM employees leaving the company. This is a conversation between them about a ${SUBJECT_LABEL[subject.type]}, recorded so the team keeps what they know.`
+    : `${who} is a long-time HDPM employee leaving the company, recording what they know about a ${SUBJECT_LABEL[subject.type]} so the team keeps that knowledge.`;
+  const attribution = together
+    ? `- The transcript does not mark who is speaking. Attribute a statement to a person only when it is clear from context (names used, "I handled…" after a question to them); otherwise attribute it to "${speakers.join(' or ')}". Where they disagree, record both views.`
+    : `- Attribute opinions as ${who}'s view ("${speakers[0]} thinks…") when they are judgment calls rather than facts.`;
+  const system = `You turn recorded interviews into durable notes for High Desert Property Management's company memory. ${intro}
 
 Write markdown notes using these H2 sections, skipping any section with nothing said: ${sections.map((s) => `"${s}"`).join(', ')}.
 Rules:
-- Only include what ${speaker} actually said. Do not add advice, assumptions or general property-management knowledge.
+- Only include what was actually said. Do not add advice, assumptions or general property-management knowledge.
 - Keep specifics: names, phone numbers mentioned, amounts, dates, vendor names, locations of shutoffs, codes. Keep them exactly as spoken.
-- Short bullet points. Attribute opinions as ${speaker}'s view ("Matt thinks…") when they are judgment calls rather than facts.
+- Short bullet points.
+${attribution}
 - If something said is unclear or the transcript looks garbled, put it under "Open questions" rather than guessing.
 - No preamble, no closing remarks — just the sections.`;
   const user = `Subject: ${subject.name} (${SUBJECT_LABEL[subject.type]})
 AppFolio facts:
 ${subject.facts}
 
-Recorded ${recordedOn} by ${speaker}. Transcript:
+Recorded ${recordedOn}, speaking: ${who}. Transcript:
 """
 ${transcript}
 """`;
@@ -126,20 +140,33 @@ ${transcript}
 }
 
 export interface NoteSource {
+  /** Who is talking in this take, e.g. "Matt" or "Matt & Penny". */
   speaker: string;
   recordedOn: string;
   notes: string;
 }
 
-export async function synthesizeProfile(subject: SubjectContext, notes: NoteSource[]): Promise<string> {
-  const sections = PROFILE_SECTIONS[subject.type];
+export async function synthesizeProfile(
+  subject: SubjectContext,
+  notes: NoteSource[],
+  contributors: string[]
+): Promise<string> {
+  const many = contributors.length > 1;
+  const sections = [...PROFILE_SECTIONS[subject.type]];
+  // With more than one person's knowledge, each perspective gets its own place.
+  if (many) sections.splice(sections.length - 1, 0, 'Perspectives');
   const system = `You maintain HDPM's living profile of a ${SUBJECT_LABEL[subject.type]}, built from interview notes recorded by departing long-time staff (Matt and Penny). The profile is what a new property manager reads before their first call or visit.
 
 Write markdown with these H2 sections, in order: ${sections.map((s) => `"${s}"`).join(', ')}.
 - "At a glance": 3–5 bullets, the things someone must know first.
 - Merge overlapping notes; keep every concrete specific (names, numbers, vendors, locations, preferences).
-- When notes disagree, keep both and say who said what and when, newer first.
-- Attribute judgment calls to the person ("Penny: …").
+- Attribute judgment calls to the person ("Penny: …"). Keep facts that both people confirm unattributed, or note "Matt and Penny agree".
+- When notes disagree, keep both and say who said what and when, newer first.${
+    many
+      ? `
+- "Perspectives": one H3 per person (${contributors.map((c) => `"### ${c}'s take"`).join(', ')}) with their overall read of this ${SUBJECT_LABEL[subject.type]} in 2–4 bullets: how they see it, what they would warn a new manager about. Then "### Where they differ" listing any disagreements, or "No disagreements recorded." Never let one person's view overwrite the other's.`
+      : ''
+  }
 - "Open questions": what a new manager would still need to find out, including anything flagged unclear.
 - Do not invent anything beyond the notes and the AppFolio facts. Skip a section only if nothing at all applies (write "Nothing recorded yet." instead of dropping it).
 - No title line, no preamble.`;
@@ -149,6 +176,8 @@ Write markdown with these H2 sections, in order: ${sections.map((s) => `"${s}"`)
   const user = `Subject: ${subject.name} (${SUBJECT_LABEL[subject.type]})
 AppFolio facts:
 ${subject.facts}
+
+Knowledge from: ${joinNames(contributors)}.
 
 Interview notes (oldest first):
 
