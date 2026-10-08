@@ -1,10 +1,23 @@
 import type { ReactNode } from 'react';
 import Image from 'next/image';
-import { Plus_Jakarta_Sans, Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 
 // hdpm-web brand fonts, scoped to the referrer portal via CSS variables.
-const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], weight: ['700', '800'], variable: '--font-brand-heading', display: 'swap' });
-const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-brand-body', display: 'swap' });
+// Self-hosted (variable latin woff2 from Fontsource, SIL OFL — licenses in
+// ./fonts) so builds never fetch from Google Fonts: next/font/google failed
+// production deploys whenever that download hiccuped.
+const jakarta = localFont({
+  src: './fonts/plus-jakarta-sans-latin-wght-normal.woff2',
+  weight: '200 800',
+  variable: '--font-brand-heading',
+  display: 'swap',
+});
+const inter = localFont({
+  src: './fonts/inter-latin-wght-normal.woff2',
+  weight: '100 900',
+  variable: '--font-brand-body',
+  display: 'swap',
+});
 
 // noindex while piloting — belt-and-suspenders with app/robots.ts (Craig, 2026-08-29).
 export const metadata = {
