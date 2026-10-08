@@ -86,7 +86,7 @@ Plus the tools: inspections + route builder, invoice generation + trust-payment 
 
 ## What's new (Sep 24 – Oct 8, 2026)
 
-PRs #69–#146. Details live in each feature's section below.
+PRs #69–#147. Details live in each feature's section below.
 
 **Knowledge Capture (headline)**
 - New [Knowledge Capture](#knowledge-capture) page: Matt and Penny record what they know about each AppFolio owner and property; Whisper transcript → Claude notes → company brain → living profiles (#140)
@@ -94,6 +94,7 @@ PRs #69–#146. Details live in each feature's section below.
 - Link duplicate and related owner records: same person (merge), related, not the same, with suggestions (#142)
 - Both Matt's and Penny's take: "Who's talking", M/P dots, *Needs Matt's / Penny's take* filters, Perspectives on the profile (#143)
 - Type or paste notes as a third input; iPhone Safari pass (#144)
+- Hardened after a multi-reviewer pass: atomic processing claims, timeouts surface as Retry, safer profile rebuilds, confirm before discarding an in-progress recording (#147)
 
 **Home, Activities & look**
 - `/activities` page plus weekday Slack DMs for pending AppFolio activities (#69); admin dropdown lists every staff member, grouped into staff / former staff / not matched (#97, #98)
@@ -137,6 +138,7 @@ PRs #69–#146. Details live in each feature's section below.
 - Timekeeping: edit earlier days while clocked in (#125)
 - Auth: Microsoft token refresh so Outlook publishing works all session (#136)
 - Fonts self-hosted; builds no longer fetch Google Fonts (#146)
+- **Security (#147):** browser roles (`anon`/`authenticated`) lose access to ~50 server-only tables whose “service role” policies applied to every role (`20261018_harden_table_grants.sql`); `MarkdownLite` escapes quotes and only links plain URLs; Price Book template cleanup removes a duplicate marked-up “Dump fees” line (`20261019_dump_template_cleanup.sql`)
 - Docs: field time & recovery plan (#111) with the GPS plan kept as its phase 2 reference (#113); parts-orders review checklist (#102)
 
 ---
@@ -328,7 +330,7 @@ Replaced the uncapped follow-up list — same URL, so Slack "Open shared queue" 
 
 - **Every line fully editable** (#81): name, category, charging method (fixed, hourly, minimum visit, package, per item, cost plus, quote, allowance), price, unit, included / block minutes and price, standard minutes, markup %, GL code, trade, owner-facing description, internal instructions, "can be charged to tenant", "needs pricing review". **Add item** uses the same form; the internal reference is fixed at creation. Search + category filter.
 - **Version-on-change:** saving closes the current row and writes a new one effective today, so issued estimates keep their price; every save is audit-logged. Server-side validation in `lib/turn-estimator/price-book-input.ts`.
-- **Dump run + dump fee** (#145, migration `20261017_dump_run_price_book.sql`):
+- **Dump run + dump fee** (#145, migration `20261017_dump_run_price_book.sql`; follow-up `20261019_dump_template_cleanup.sql` in #147 removes the old duplicate “Dump fees” materials line from saved unit-turn templates and lets the fee's cost come from the Price Book default):
 
   | Item | Charged as | Default | Editable |
   |---|---|---|---|
@@ -474,12 +476,14 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
 - Anyone whose voice is in a take, or who recorded it, can edit or delete it (admins: any).
 
 **Owner record linking (#142, `kc_owner_link`):** profiles are already per person, not per ownership group ({John, Mary} and {John, Bob} → one John profile; Bob keeps his own). The **Linked records** card handles the rest:
-- **Same person** — duplicate records merge into the viewed profile. Recordings keep their original record id and resolve to the kept profile when read, so **Unlink** restores both exactly. Brain edge: kept `supersedes` duplicate.
+- **Same person** — duplicate records merge into the viewed profile. Recordings keep their original record id and resolve to the kept profile when read, so **Unlink** splits them back into two profiles. (Merging a record that already had its own duplicates moves those onto the kept profile; unlinking undoes only the record you unlink.) Brain edge: kept `supersedes` duplicate.
 - **Related** — a trust or LLC, spouse or partner: separate profiles that name each other, optional note, `related_to` edges both ways.
 - **Not the same** — dismisses a suggestion.
 - **Suggestions** — same email, phone or exact name → likely the same person; overlapping names (John Smith ↔ John Smith Family Trust) → likely related. Shown as a "Possible duplicates" filter, a **Check** badge and a "Possible matches" list. A person always decides; nothing merges automatically.
 
 **iPhone (#144):** works in Safari on iPhone — recording uses `audio/mp4` (keep the screen open; iOS pauses the mic on lock or app switch); voice memos attach from Files and are recognised by extension when there's no MIME type (m4a, mp3, wav, aac, mp4, webm); inputs are 16px so Safari doesn't zoom; on phones the list and profile are separate screens with an "All owners / All properties" back link; the Type-or-paste box stays above the keyboard and asks once before discarding unsaved text.
+
+**Reliability (#147):** processing claims a take atomically (a double click can't pay twice); runs past Vercel's 300s limit show **Timed out — Retry** instead of hanging; a profile failure never undoes a take that's already in the brain, and a failed brain save fails the take loudly; two takes finishing together can't drop one from the profile; deleting is blocked while a take processes. In the browser, switching to another owner/property mid-recording asks first, recordings auto-stop near 24 MB (iPhone may ignore the bitrate), and typed notes are capped at 60k characters.
 
 **Setup:** apply `20261014_knowledge_capture.sql` (creates `kc_recording`, `kc_profile` and the private bucket), `20261015_kc_owner_links.sql` and `20261016_kc_voices.sql` (apply before deploying code that reads `voices`). Uses the existing `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`.
 
@@ -1155,7 +1159,7 @@ Cron endpoints are authenticated via `CRON_SECRET` bearer token and exempted fro
 | `referral_fee_agreement` / `referral_ledger` | Frozen bounty terms + append-only earned → approved → paid / voided ledger |
 | `kc_recording` / `kc_profile` / `kc_owner_link` | Knowledge Capture takes (audio or typed, transcript, original transcript, voices), living profiles, owner record links |
 
-Added in the Sep 24 – Oct 8 window: `20260924_fee_management` · `20260925_staff_section_access` · `20260925b_role_section_defaults` · `20261001_parts_orders` · `20261002_routine_run` · `20261003_brain_viz` · `20261004_brain_viz_paged_knn` · `20261005_referral_bounty_ledger` · `20261006_invoice_charge_to` (`hdms_invoices.charge_to` + tenant fields) · `20261007_property_agreement_document` · `20261008_timekeeping_edit_past_days_while_clocked_in` · `20261009_route_builder_inspection_target_dates` · `20261010_release_stale_scheduled_candidates` · `20261011_inspection_notice_tracking` · `20261012_staff_lisa_coffey` · `20261013_tenant_charge_basis_at_posting` · `20261014_knowledge_capture` · `20261015_kc_owner_links` · `20261016_kc_voices` · `20261017_dump_run_price_book`.
+Added in the Sep 24 – Oct 8 window: `20260924_fee_management` · `20260925_staff_section_access` · `20260925b_role_section_defaults` · `20261001_parts_orders` · `20261002_routine_run` · `20261003_brain_viz` · `20261004_brain_viz_paged_knn` · `20261005_referral_bounty_ledger` · `20261006_invoice_charge_to` (`hdms_invoices.charge_to` + tenant fields) · `20261007_property_agreement_document` · `20261008_timekeeping_edit_past_days_while_clocked_in` · `20261009_route_builder_inspection_target_dates` · `20261010_release_stale_scheduled_candidates` · `20261011_inspection_notice_tracking` · `20261012_staff_lisa_coffey` · `20261013_tenant_charge_basis_at_posting` · `20261014_knowledge_capture` · `20261015_kc_owner_links` · `20261016_kc_voices` · `20261017_dump_run_price_book` · `20261018_harden_table_grants` (revokes browser-role access on server-only tables) · `20261019_dump_template_cleanup`.
 
 **Migrations:** Located in `supabase/migrations/`. Run new migrations via the [Supabase SQL Editor](https://supabase.com/dashboard).
 
