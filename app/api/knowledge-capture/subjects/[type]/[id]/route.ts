@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { BUCKET, ORG, regenerateProfile, subjectIds } from '@/lib/knowledge-capture/pipeline';
+import { BUCKET, ORG, isTextEntry, regenerateProfile, subjectIds } from '@/lib/knowledge-capture/pipeline';
 import type { SubjectType } from '@/lib/knowledge-capture/roster';
 import { rowVoices, voicesLabel } from '@/lib/knowledge-capture/voices';
 
@@ -27,7 +27,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     db.from('kc_profile').select('profile_md, recording_count, generated_at').eq('org_id', ORG).eq('subject_type', type).eq('subject_id', id).maybeSingle(),
     db
       .from('kc_recording')
-      .select('id, speaker_email, speaker_name, voices, storage_path, duration_sec, status, error, transcript, transcript_original, transcript_edited_at, transcript_edited_by, notes_md, chunk_count, created_at')
+      .select('id, speaker_email, speaker_name, voices, storage_path, mime_type, duration_sec, status, error, transcript, transcript_original, transcript_edited_at, transcript_edited_by, notes_md, chunk_count, created_at')
       .eq('org_id', ORG)
       .eq('subject_type', type)
       .in('subject_id', ids)
@@ -43,8 +43,9 @@ export async function GET(_request: NextRequest, { params }: Params) {
   const rows = (recs.data ?? [])
     .filter((r) => r.status !== 'pending_upload' || new Date(r.created_at).getTime() < staleBefore)
     .map((r) => (r.status === 'pending_upload' ? { ...r, status: 'uploaded' } : r));
-  const signed = rows.length
-    ? await db.storage.from(BUCKET).createSignedUrls(rows.map((r) => r.storage_path), 60 * 60)
+  const audioPaths = rows.filter((r) => !isTextEntry(r)).map((r) => r.storage_path);
+  const signed = audioPaths.length
+    ? await db.storage.from(BUCKET).createSignedUrls(audioPaths, 60 * 60)
     : { data: [] };
   const urlByPath = new Map((signed.data ?? []).map((s) => [s.path, s.signedUrl]));
 
@@ -56,6 +57,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
       id: r.id,
       speaker: voicesLabel(rowVoices(r)),
       voices: rowVoices(r),
+      kind: isTextEntry(r) ? ('text' as const) : ('audio' as const),
       // Whoever recorded it, or anyone whose voice is in it, may edit or delete.
       mine: [r.speaker_email.toLowerCase(), ...rowVoices(r)].includes(guard.email.toLowerCase()),
       durationSec: r.duration_sec,

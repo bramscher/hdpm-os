@@ -39,6 +39,9 @@ import {
 
 export const ORG = 'hdpm';
 export const BUCKET = 'knowledge-capture';
+/** Typed/pasted notes are takes with no audio: this mime and an empty storage_path. */
+export const TEXT_MIME = 'text/plain';
+export const isTextEntry = (row: { mime_type: string }) => row.mime_type === TEXT_MIME;
 const AUTHOR = 'agent:knowledge-capture';
 
 export function nodeSlug(type: SubjectType, id: string): string {
@@ -284,12 +287,13 @@ export async function processRecording(
       await setRow({ transcript, transcript_model: TRANSCRIBE_MODEL, duration_sec: result.durationSec, size_bytes: audio.size });
     }
 
-    const notes = await distillNotes(subject.context, transcript, voices.map(voiceName), recordedOn(rec.created_at));
+    const written = isTextEntry(rec);
+    const notes = await distillNotes(subject.context, transcript, voices.map(voiceName), recordedOn(rec.created_at), written);
     const nodeId = await ensureGraph(db, subject);
 
     await deleteRecordingChunks(db, rec.id);
     const label = subject.type === 'owner' ? 'Owner' : 'Property';
-    const header = `${label}: ${subject.name} — ${speaker}, recorded ${recordedOn(rec.created_at)}`;
+    const header = `${label}: ${subject.name} — ${speaker}, ${written ? 'written' : 'recorded'} ${recordedOn(rec.created_at)}`;
     const common = {
       sourceTable: 'kc_recording',
       sourceId: rec.id,
@@ -304,7 +308,7 @@ export async function processRecording(
       const action = await ingestChunk(
         {
           ...common,
-          content: `${header} — transcript part ${i + 1}/${windows.length}\n\n${w}`,
+          content: `${header} — ${written ? 'note' : 'transcript'} part ${i + 1}/${windows.length}\n\n${w}`,
           kind: 'fact',
           sourceKey: `kc:rec:${rec.id}:t${i}`,
           author: `human:${voices.join('+')}`,

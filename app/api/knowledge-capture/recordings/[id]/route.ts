@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { BUCKET, ORG, deleteRecordingChunks, loadOwnerLinks, processRecording, regenerateProfile } from '@/lib/knowledge-capture/pipeline';
+import { BUCKET, ORG, deleteRecordingChunks, isTextEntry, loadOwnerLinks, processRecording, regenerateProfile } from '@/lib/knowledge-capture/pipeline';
 import { aliasMap, canonicalOwner } from '@/lib/knowledge-capture/links';
 import { rowVoices } from '@/lib/knowledge-capture/voices';
 
@@ -75,7 +75,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const db = getSupabaseAdmin();
   const { data: rec } = await db
     .from('kc_recording')
-    .select('id, subject_type, subject_id, storage_path, speaker_email, voices')
+    .select('id, subject_type, subject_id, storage_path, mime_type, speaker_email, voices')
     .eq('org_id', ORG)
     .eq('id', id)
     .maybeSingle();
@@ -84,7 +84,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     return NextResponse.json({ error: 'Only the person who recorded this can delete it' }, { status: 403 });
   }
 
-  await db.storage.from(BUCKET).remove([rec.storage_path]);
+  if (!isTextEntry(rec)) await db.storage.from(BUCKET).remove([rec.storage_path]);
   await deleteRecordingChunks(db, rec.id);
   const { error } = await db.from('kc_recording').delete().eq('id', rec.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

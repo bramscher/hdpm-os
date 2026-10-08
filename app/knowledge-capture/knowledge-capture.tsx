@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, ChevronDown, ChevronRight, ExternalLink, Pencil, RefreshCw, RotateCcw, Search, Trash2, User } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Building2, ChevronDown, ChevronRight, ExternalLink, Keyboard, Pencil, RefreshCw, RotateCcw, Search, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Modal } from "@/components/ui/dialog";
 import MarkdownLite from "@/components/eos/MarkdownLite";
 import { getSupabaseClient } from "@/lib/supabase";
 import { INTERVIEW_PROMPTS } from "@/lib/knowledge-capture/prompts";
@@ -32,6 +33,7 @@ interface Recording {
   id: string;
   speaker: string;
   voices: string[];
+  kind: "audio" | "text";
   mine: boolean;
   durationSec: number | null;
   status: "uploaded" | "processing" | "done" | "error";
@@ -193,7 +195,7 @@ export function KnowledgeCapture() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-        <aside className="rounded-lg border border-sand-200 bg-white">
+        <aside className={`rounded-lg border border-sand-200 bg-white ${selected ? "hidden lg:block" : ""}`}>
           <div className="flex border-b border-sand-200">
             {(["owner", "property"] as const).map((t) => (
               <button
@@ -212,7 +214,7 @@ export function KnowledgeCapture() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={tab === "owner" ? "Search owners or properties" : "Search properties or owners"}
-                className="w-full rounded-md border border-sand-300 py-2 pl-8 pr-3 text-sm focus:border-terra-400 focus:outline-none"
+                className="w-full rounded-md border border-sand-300 py-2 pl-8 pr-3 text-base focus:border-terra-400 focus:outline-none sm:text-sm"
               />
             </div>
             <div className="flex flex-wrap gap-1 text-xs">
@@ -273,7 +275,16 @@ export function KnowledgeCapture() {
           </ul>
         </aside>
 
-        <main className="min-w-0">
+        <main className={`min-w-0 ${selected ? "" : "hidden lg:block"}`}>
+          {selected && (
+            <button
+              onClick={() => select(null)}
+              className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-charcoal-600 lg:hidden"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              All {selected.type === "owner" ? "owners" : "properties"}
+            </button>
+          )}
           {selected && data ? (
             <SubjectPanel
               key={`${selected.type}:${selected.id}`}
@@ -337,6 +348,7 @@ function SubjectPanel({
   // Who is talking in the next take — defaults to whoever is signed in.
   const myVoice = data.voices.find((v) => v.email === data.me.email);
   const [talking, setTalking] = useState<string[]>(myVoice ? [myVoice.email] : []);
+  const [typing, setTyping] = useState(false);
   const toggleTalking = (email: string) =>
     setTalking((t) => (t.includes(email) ? (t.length > 1 ? t.filter((e) => e !== email) : t) : [...t, email]));
 
@@ -366,7 +378,7 @@ function SubjectPanel({
     setDetail((d) => d && { ...d, recordings: d.recordings.map((r) => (r.id === id ? { ...r, status: "processing" } : r)) });
     try {
       await call(`/recordings/${id}/process`, { method: "POST" });
-      toast.success(`Transcribed and added to ${name}'s profile.`);
+      toast.success(`Added to ${name}'s profile.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Processing failed");
     }
@@ -396,6 +408,23 @@ function SubjectPanel({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save the recording");
       setSaving(false);
+      return false;
+    }
+  }
+
+  async function saveTyped(text: string): Promise<boolean> {
+    try {
+      const { id } = await call<{ id: string }>("/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subjectType: selected.type, subjectId: selected.id, text, voices: talking }),
+      });
+      toast.info("Saved. Adding it to the brain — about a minute.");
+      void process(id);
+      await loadDetail();
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save the note");
       return false;
     }
   }
@@ -501,12 +530,12 @@ function SubjectPanel({
       )}
 
       <section className="rounded-lg border border-sand-200 bg-white p-5">
-        <h3 className="mb-1 font-semibold text-charcoal-900">Record what you know</h3>
+        <h3 className="mb-1 font-semibold text-charcoal-900">Add what you know</h3>
         <p className="mb-4 text-sm text-charcoal-500">
-          Talk naturally — stories, quirks, names, numbers. Several short takes are fine. Use the prompts below if you get stuck.
+          Record, attach a voice memo, or type and paste (emails, old notes). Stories, quirks, names, numbers — several short entries are fine. Use the prompts below if you get stuck.
         </p>
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-charcoal-600">Who&apos;s talking?</span>
+          <span className="text-charcoal-600">Whose knowledge?</span>
           {data.voices.map((v) => {
             const on = talking.includes(v.email);
             return (
@@ -522,7 +551,24 @@ function SubjectPanel({
           })}
           {talking.length > 1 && <span className="text-xs text-charcoal-500">Recording together — say names when you hand off.</span>}
         </div>
-        <Recorder onSave={save} busy={saving} />
+        <Recorder
+          onSave={save}
+          busy={saving}
+          extraActions={
+            <Button variant="outline" onClick={() => setTyping(true)} disabled={saving}>
+              <Keyboard className="mr-2 h-4 w-4" />
+              Type or paste
+            </Button>
+          }
+        />
+        {typing && (
+          <TypedNote
+            subjectName={name}
+            who={data.voices.filter((v) => talking.includes(v.email)).map((v) => v.name)}
+            onSave={saveTyped}
+            onClose={() => setTyping(false)}
+          />
+        )}
         <button onClick={() => setShowPrompts((s) => !s)} className="mt-4 flex items-center gap-1 text-sm font-medium text-charcoal-700">
           {showPrompts ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           Prompts
@@ -606,6 +652,68 @@ function SubjectPanel({
   );
 }
 
+/** Popup for a typed or pasted note. Save closes it; processing continues in the background. */
+function TypedNote({
+  subjectName,
+  who,
+  onSave,
+  onClose,
+}: {
+  subjectName: string;
+  who: string[];
+  onSave: (text: string) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    const ok = await onSave(text);
+    setSaving(false);
+    if (ok) onClose();
+  };
+  // The modal reports one close up to twice (button + open-change); ask once.
+  const closing = useRef(false);
+  const close = () => {
+    if (closing.current) return;
+    closing.current = true;
+    if (text.trim() && !window.confirm("Discard this note?")) {
+      setTimeout(() => (closing.current = false), 0);
+      return;
+    }
+    onClose();
+  };
+  return (
+    <Modal
+      title={`Note on ${subjectName}`}
+      onClose={close}
+      busy={saving}
+      wide
+      footer={
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-charcoal-500">{who.length ? `From ${who.join(" & ")}` : ""}</span>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={close} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={save} disabled={saving || !text.trim()}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        autoFocus
+        placeholder="Type what you know, or paste an email, text thread or old notes…"
+        className="h-[38dvh] w-full resize-none rounded-md border border-sand-300 p-3 text-base leading-relaxed text-charcoal-800 focus:border-terra-400 focus:outline-none sm:h-72 sm:text-sm"
+      />
+    </Modal>
+  );
+}
+
 function RecordingRow({
   r,
   canDelete,
@@ -642,7 +750,7 @@ function RecordingRow({
           <span className="text-charcoal-500">
             {" "}
             · {formatDate(r.createdAt)}
-            {r.durationSec != null && ` · ${formatClock(r.durationSec)}`}
+            {r.kind === "text" ? " · typed" : r.durationSec != null && ` · ${formatClock(r.durationSec)}`}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -681,7 +789,7 @@ function RecordingRow({
             onChange={(e) => setDraft(e.target.value)}
             rows={14}
             autoFocus
-            className="w-full rounded-md border border-sand-300 p-3 text-sm leading-relaxed text-charcoal-800 focus:border-terra-400 focus:outline-none"
+            className="w-full rounded-md border border-sand-300 p-3 text-base leading-relaxed text-charcoal-800 focus:border-terra-400 focus:outline-none sm:text-sm"
           />
           <div className="flex gap-2">
             <Button onClick={save} disabled={saving || !draft.trim()}>
@@ -702,7 +810,7 @@ function RecordingRow({
             )}
             {r.transcript && (
               <button onClick={() => setOpen(open === "transcript" ? null : "transcript")} className="font-medium text-blue-600 hover:underline">
-                {open === "transcript" ? "Hide transcript" : "Transcript"}
+                {open === "transcript" ? (r.kind === "text" ? "Hide text" : "Hide transcript") : r.kind === "text" ? "Text" : "Transcript"}
               </button>
             )}
             {r.editedAt && (
