@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ImproveWithAI from "@/components/ImproveWithAI";
 import EstimateReview from "./EstimateReview";
-import { needsPriceReview, priceBookName } from "@/lib/turn-estimator/price-book-display";
+import { needsPriceReview, priceBookName, defaultLineCost } from "@/lib/turn-estimator/price-book-display";
 import { STARTER_TEMPLATES, type EstimateTemplate } from "@/lib/turn-estimator/templates";
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 
@@ -225,7 +225,7 @@ export default function EstimateBuilder({
     // saveDraft captures this render's values; busy serializes saves and issue.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[rows,propertyName,unitName,authLimit,templateId,loaded,busy,drafting,issued]);
-  function useTemplate(id:string){const t=templates.find(t=>t.id===id);if(!t)return;setTemplateId(id);setTemplateName(t.name);setRows(t.entries.map(e=>({...e,key:newRow().key})));setSaveStatus('Unsaved changes');}
+  function useTemplate(id:string){const t=templates.find(t=>t.id===id);if(!t)return;setTemplateId(id);setTemplateName(t.name);setRows(t.entries.map(e=>({...e,material_cost:e.material_cost||defaultLineCost(itemByCode.get(e.item_code)),key:newRow().key})));setSaveStatus('Unsaved changes');}
   async function saveTemplate(revision=false){
     if(!templateName.trim())return setError('Enter a template name');setBusy('template');
     try{const current=templates.find(t=>t.id===templateId);const r=await fetch('/api/turn-estimator/templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:templateName,entries:rows.map(r=>({...r,description:r.description||itemByCode.get(r.item_code)?.owner_description||itemByCode.get(r.item_code)?.name||'Scope check',included:r.included!==false})),family_id:revision&&!current?.id.startsWith('starter-')?current?.family_id:null,version:revision&&!current?.id.startsWith('starter-')?current?.version:0})});const d=await r.json();if(!r.ok)throw new Error(d.error);setTemplates(ts=>[d.template,...ts]);setTemplateId(d.template.id);setSaveStatus('Template version published');}catch(e){setError((e as Error).message);}finally{setBusy(null);}
@@ -382,7 +382,7 @@ export default function EstimateBuilder({
                     <label className="flex gap-2 mb-2 text-xs"><input type="checkbox" checked={r.included!==false} onChange={e=>setRow(r.key,{included:e.target.checked})}/>Include in charge</label>
                     <select className={`${input} w-full min-w-0`} value={r.item_code} onChange={(e) => {
                       const next = itemByCode.get(e.target.value);
-                      setRow(r.key, { item_code: e.target.value, ...(next?.pricing_method === 'hourly' ? {qty: '1', minutes: r.minutes || '60'} : {}) });
+                      setRow(r.key, { item_code: e.target.value, ...(next?.pricing_method === 'hourly' ? {qty: '1', minutes: r.minutes || '60'} : {}), ...(next?.pricing_method === 'cost_plus' && !r.material_cost ? {material_cost: defaultLineCost(next)} : {}) });
                     }}>
                       <option value="">— select —</option>
                       {items.map((it) => (

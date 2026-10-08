@@ -300,7 +300,7 @@ const PRICE_LABEL: Record<PricingMethod, string> = {
   service_min: "Minimum charge",
   package: "Package price",
   per_qty: "Price per unit",
-  cost_plus: "Base price (usually 0)",
+  cost_plus: "Default cost on new lines (0 = none)",
   quoted: "Starting price",
   allowance: "Allowance amount",
 };

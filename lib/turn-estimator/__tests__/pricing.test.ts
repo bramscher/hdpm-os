@@ -139,3 +139,18 @@ describe('changeOrderRequired (acceptance #6)', () => {
     expect(changeOrderRequired(200, 305)).toBe(true);
   });
 });
+
+describe('dump run + dump fee (20261017 price book items)', () => {
+  const dumpRun = item({ item_code: 'DUMP_RUN', pricing_method: 'hourly', base_price: 95, standard_minutes: 60, uom: 'hour' });
+  const dumpFee = item({ item_code: 'DUMP_FEE', pricing_method: 'cost_plus', base_price: 10, markup_pct: 0 });
+
+  it('charges $95 for the default 1-hour dump run, and scales with edited hours', () => {
+    expect(ownerChargeForLine(dumpRun, { item: dumpRun, minutes: 60 })).toBe(95);
+    expect(ownerChargeForLine(dumpRun, { item: dumpRun, minutes: 90 })).toBe(142.5);
+  });
+
+  it('bills the dump fee at exactly the entered cost (no markup)', () => {
+    expect(ownerChargeForLine(dumpFee, { item: dumpFee, estMaterialCost: 10 })).toBe(10);
+    expect(ownerChargeForLine(dumpFee, { item: dumpFee, estMaterialCost: 23.5 })).toBe(23.5);
+  });
+});

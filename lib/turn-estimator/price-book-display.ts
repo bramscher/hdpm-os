@@ -5,6 +5,10 @@ export const PRICING_LABELS: Record<PricingMethod, string> = {
   package: 'Package price', per_qty: 'Price per item', cost_plus: 'Cost plus markup',
   quoted: 'Custom quote', allowance: 'Estimated allowance',
 };
+/** A cost-plus item's default cost for a new estimate line (its base_price; 0 = none). Editable on the line. */
+export function defaultLineCost(item: Pick<PriceBookItem, 'pricing_method' | 'base_price'> | undefined): string {
+  return item?.pricing_method === 'cost_plus' && item.base_price > 0 ? String(item.base_price) : '';
+}
 export const needsPriceReview = (item: Pick<PriceBookItem, 'name'>) => /placeholder/i.test(item.name);
 export function priceBookName(item: Pick<PriceBookItem, 'name'>): string {
   const name = item.name.replace(/\s*\[PLACEHOLDER\]/gi, '').trim();
@@ -29,7 +33,7 @@ export function priceBookRate(item: PriceBookItem): string {
   switch (item.pricing_method) {
     case 'hourly': return `${money(item.base_price)} per hour`;
     case 'service_min': return `${money(item.base_price)} includes ${item.included_minutes ?? 0} minutes; then ${money(item.increment_price ?? 0)} per additional ${item.increment_minutes ?? 15} minutes`;
-    case 'cost_plus': return `Purchase cost plus ${item.markup_pct ?? 0}%`;
+    case 'cost_plus': return `Purchase cost plus ${item.markup_pct ?? 0}%${item.base_price > 0 ? ` · default ${money(item.base_price)}` : ''}`;
     case 'per_qty': return `${money(item.base_price)} per ${item.uom}`;
     default: return money(item.base_price);
   }
