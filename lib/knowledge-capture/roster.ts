@@ -35,6 +35,8 @@ export interface Coverage {
   speakers: string[];
   /** Their emails — drives "Needs Penny's take". */
   voices: string[];
+  /** Transcribed takes waiting for someone to review them before they go to the brain. */
+  toReview: number;
   hasProfile: boolean;
 }
 
@@ -86,6 +88,8 @@ export interface CoverageRow {
   speaker_email: string;
   voices?: string[] | null;
   created_at: string;
+  /** True for a transcribed audio take not yet added to the brain. */
+  awaiting_review?: boolean;
 }
 
 export function coverageKey(type: SubjectType, id: string): string {
@@ -98,10 +102,11 @@ export function buildCoverage(
 ): Record<string, Coverage> {
   const out: Record<string, Coverage> = {};
   const get = (key: string) =>
-    (out[key] ??= { recordings: 0, lastAt: null, speakers: [], voices: [], hasProfile: false });
+    (out[key] ??= { recordings: 0, lastAt: null, speakers: [], voices: [], toReview: 0, hasProfile: false });
   for (const r of recordings) {
     const c = get(coverageKey(r.subject_type, r.subject_id));
     c.recordings++;
+    if (r.awaiting_review) c.toReview++;
     if (!c.lastAt || r.created_at > c.lastAt) c.lastAt = r.created_at;
     for (const email of rowVoices(r)) {
       if (c.voices.includes(email)) continue;

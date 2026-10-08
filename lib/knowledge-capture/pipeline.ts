@@ -259,6 +259,51 @@ interface RecordingRow {
 }
 
 /**
+ * Step 1 of 2 for audio: transcribe only. The take is left 'uploaded' with its
+ * transcript — "awaiting review" — so a person can read and correct it before
+ * anything reaches the brain. processRecording (step 2) runs on approval.
+ * Callers claim the row first (claimRecording).
+ */
+export async function transcribeRecording(recordingId: string): Promise<string> {
+  const db = getSupabaseAdmin();
+  const { data: rec, error } = await db
+    .from('kc_recording')
+    .select('id, subject_name, storage_path, mime_type')
+    .eq('org_id', ORG)
+    .eq('id', recordingId)
+    .maybeSingle();
+  if (error || !rec) throw new Error('Recording not found');
+  const setRow = async (patch: Record<string, unknown>) => {
+    const { error: upErr } = await db
+      .from('kc_recording')
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', rec.id);
+    if (upErr) throw new Error(`Could not update the take: ${upErr.message}`);
+  };
+  try {
+    if (isTextEntry(rec)) throw new Error('Typed notes have nothing to transcribe');
+    const { data: audio, error: dlErr } = await db.storage.from(BUCKET).download(rec.storage_path);
+    if (dlErr || !audio) throw new Error(`Audio download failed: ${dlErr?.message ?? 'missing'}`);
+    const result = await transcribeAudio(audio, rec.mime_type, rec.subject_name);
+    if (!result.text) throw new Error('Transcription came back empty — was the microphone muted?');
+    await setRow({
+      status: 'uploaded',
+      error: null,
+      transcript: result.text,
+      transcript_model: TRANSCRIBE_MODEL,
+      duration_sec: result.durationSec,
+      size_bytes: audio.size,
+    });
+    return result.text;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[knowledge-capture] transcribing ${rec.id} failed:`, message);
+    await setRow({ status: 'error', error: message.slice(0, 500) }).catch(() => undefined);
+    throw err;
+  }
+}
+
+/**
  * Transcribe → notes → brain → profile. Leaves the row 'done' or 'error'.
  *
  * With `edit`, the corrected transcript replaces the stored one (the first
