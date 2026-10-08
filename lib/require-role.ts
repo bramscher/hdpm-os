@@ -59,6 +59,10 @@ export async function requireRole(...roles: AccessRole[]): Promise<Guard> {
 export async function requireSection(sectionKey: string): Promise<Guard> {
   const guard = await requireCompanySession();
   if (!guard.ok) return guard;
+  // A fixed people list beats every role, admins included.
+  const { sectionByKey, isAllowListed } = await import('@/lib/access/sections');
+  const section = sectionByKey(sectionKey);
+  if (section?.allowedEmails) return isAllowListed(section, guard.email) ? guard : deny(403, 'Insufficient permissions');
   if (guard.role === 'admin') return guard;
   const { getDeniedSections } = await import('@/lib/access/section-access');
   const denied = await getDeniedSections(guard.email, guard.role);

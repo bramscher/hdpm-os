@@ -16,6 +16,7 @@ interface NavItem {
   key: string;
   ownerOnly?: boolean;
   delegable?: boolean;
+  allowListed?: boolean;
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -39,7 +40,7 @@ const NAV_SECTIONS: NavSection[] = (["main", "Maintenance", "Leasing", "Company"
   adminOnly: group === "Admin",
   items: APP_SECTIONS.filter((s) => s.group === group && s.nav)
     .sort((x, y) => x.nav!.order - y.nav!.order)
-    .map((s) => ({ key: s.key, label: s.label, href: s.nav!.href, icon: NAV_ICONS[s.nav!.icon] ?? FileText, ownerOnly: s.ownerOnly, delegable: s.delegable })),
+    .map((s) => ({ key: s.key, label: s.label, href: s.nav!.href, icon: NAV_ICONS[s.nav!.icon] ?? FileText, ownerOnly: s.ownerOnly, delegable: s.delegable, allowListed: !!s.allowedEmails })),
 }));
 
 function isItemActive(item: NavItem, pathname: string): boolean {
@@ -65,7 +66,9 @@ function SidebarContent({ onNavigate }: SidebarContentProps) {
   const deniedList = session?.user?.deniedSections;
   const denied = new Set(deniedList ?? []);
   // Non-admins see an Admin item only when an admin delegated it to them.
-  const delegatedOk = (item: NavItem) => isAdmin || (item.delegable === true && Array.isArray(deniedList));
+  // Fixed-list sections are decided entirely by the denied list (old tokens without one: hidden).
+  const delegatedOk = (item: NavItem) =>
+    item.allowListed ? Array.isArray(deniedList) : isAdmin || (item.delegable === true && Array.isArray(deniedList));
   const sections = NAV_SECTIONS
     .map((s) => ({
       ...s,

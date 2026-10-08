@@ -50,7 +50,7 @@ export async function GET() {
           access_role: s.access_role,
           overrides,
           version: (row?.version as number | undefined) ?? 0,
-          denied: deniedSections(s.access_role, overrides, roleDefaults),
+          denied: deniedSections(s.access_role, overrides, roleDefaults, s.email),
         };
       }),
     audit: audit.error ? [] : audit.data ?? [],
