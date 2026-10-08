@@ -3,6 +3,7 @@ import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { ORG, loadRoster } from '@/lib/knowledge-capture/pipeline';
 import { buildCoverage } from '@/lib/knowledge-capture/roster';
+import { canonicalOwner, suggestOwnerLinks } from '@/lib/knowledge-capture/links';
 
 export const maxDuration = 120;
 
@@ -33,10 +34,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Knowledge capture tables are not set up yet (run the 20261014 migration).' }, { status: 503 });
   }
 
+  // Takes recorded on a since-merged duplicate count toward the kept profile.
+  const toProfile = <T extends { subject_type: string; subject_id: string }>(r: T): T =>
+    r.subject_type === 'owner' ? { ...r, subject_id: canonicalOwner(loaded.aliases, r.subject_id) } : r;
+
   return NextResponse.json({
     ...loaded.roster,
     capturedAt: loaded.capturedAt,
-    coverage: buildCoverage(recs.data ?? [], profiles.data ?? []),
+    coverage: buildCoverage((recs.data ?? []).map(toProfile), (profiles.data ?? []).map(toProfile)),
+    suggestions: suggestOwnerLinks(loaded.raw.owners, loaded.links),
     me: { email: guard.email, name: guard.name },
   });
 }

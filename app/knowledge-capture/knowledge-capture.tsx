@@ -10,15 +10,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import MarkdownLite from "@/components/eos/MarkdownLite";
 import { getSupabaseClient } from "@/lib/supabase";
 import { INTERVIEW_PROMPTS } from "@/lib/knowledge-capture/prompts";
-import { coverageKey, type Coverage, type RosterOwner, type RosterProperty, type SubjectType } from "@/lib/knowledge-capture/roster";
+import { coverageKey, type Coverage, type RosterProperty, type SubjectType } from "@/lib/knowledge-capture/roster";
+import type { LinkSuggestion, LinkedRosterOwner } from "@/lib/knowledge-capture/links";
 import { Recorder, formatClock } from "./recorder";
+import { OwnerLinks } from "./owner-links";
 
 const BUCKET = "knowledge-capture";
 
 interface Overview {
-  owners: RosterOwner[];
+  owners: LinkedRosterOwner[];
   properties: RosterProperty[];
   coverage: Record<string, Coverage>;
+  suggestions: LinkSuggestion[];
   capturedAt: string;
   me: { email: string; name: string | null };
 }
@@ -46,7 +49,7 @@ interface Detail {
   canDeleteAny: boolean;
 }
 
-type Filter = "all" | "todo" | "done";
+type Filter = "all" | "todo" | "done" | "dupes";
 type Selected = { type: SubjectType; id: string } | null;
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -101,12 +104,18 @@ export function KnowledgeCapture() {
     load();
   }, [load]);
 
-  const select = (s: Selected) => {
+  const select = useCallback((s: Selected) => {
     setSelected(s);
     if (s) setTab(s.type);
     const url = s ? `?${s.type}=${encodeURIComponent(s.id)}` : window.location.pathname;
     window.history.replaceState(null, "", url);
-  };
+  }, []);
+
+  // Owners with an undecided duplicate/related suggestion.
+  const flagged = useMemo(
+    () => new Set((data?.suggestions ?? []).flatMap((s) => [s.a.id, s.b.id])),
+    [data]
+  );
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -120,12 +129,13 @@ export function KnowledgeCapture() {
         : data.properties.map((p) => ({ id: p.id, name: p.name, sub: p.owners.map((o) => o.name).join(" & ") || "No owner on file" }));
     const q = query.trim().toLowerCase();
     return list.filter((r) => {
+      if (filter === "dupes" && (tab !== "owner" || !flagged.has(r.id))) return false;
       const c = data.coverage[coverageKey(tab, r.id)];
       if (filter === "todo" && c?.recordings) return false;
       if (filter === "done" && !c?.recordings) return false;
       return !q || r.name.toLowerCase().includes(q) || r.sub.toLowerCase().includes(q);
     });
-  }, [data, tab, filter, query]);
+  }, [data, tab, filter, query, flagged]);
 
   const progress = (type: SubjectType) => {
     if (!data) return { done: 0, total: 0 };
@@ -206,6 +216,7 @@ export function KnowledgeCapture() {
                   ["all", "All"],
                   ["todo", "Not captured yet"],
                   ["done", "Captured"],
+                  ...(tab === "owner" && flagged.size ? ([["dupes", `Possible duplicates (${flagged.size})`]] as const) : []),
                 ] as const
               ).map(([k, label]) => (
                 <button
@@ -234,6 +245,11 @@ export function KnowledgeCapture() {
                       <span className="block truncate text-sm font-medium text-charcoal-900">{r.name}</span>
                       <span className="block truncate text-xs text-charcoal-500">{r.sub}</span>
                     </span>
+                    {tab === "owner" && flagged.has(r.id) && (
+                      <Badge tone="warning" variant="soft" className="shrink-0">
+                        Check
+                      </Badge>
+                    )}
                     {c?.recordings ? (
                       <Badge tone="success" variant="soft" className="shrink-0">
                         {c.recordings} {c.recordings === 1 ? "take" : "takes"}
@@ -277,7 +293,7 @@ function SubjectPanel({
   selected: { type: SubjectType; id: string };
   data: Overview;
   onSelect: (s: Selected) => void;
-  onChanged: () => void;
+  onChanged: () => Promise<void> | void;
 }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [saving, setSaving] = useState(false);
@@ -285,6 +301,12 @@ function SubjectPanel({
   const [showPrompts, setShowPrompts] = useState(true);
 
   const owner = selected.type === "owner" ? data.owners.find((o) => o.id === selected.id) : undefined;
+  // A link to a record that has since merged lands on the profile it merged into.
+  const mergedInto =
+    selected.type === "owner" && !owner ? data.owners.find((o) => o.aliases.some((a) => a.id === selected.id)) : undefined;
+  useEffect(() => {
+    if (mergedInto) onSelect({ type: "owner", id: mergedInto.id });
+  }, [mergedInto, onSelect]);
   const property = selected.type === "property" ? data.properties.find((p) => p.id === selected.id) : undefined;
   const name = owner?.name ?? property?.name ?? "Unknown";
   const path = `/subjects/${selected.type}/${encodeURIComponent(selected.id)}`;
@@ -424,6 +446,19 @@ function SubjectPanel({
           ))}
         </div>
       </section>
+
+      {owner && (
+        <OwnerLinks
+          owner={owner}
+          owners={data.owners}
+          suggestions={data.suggestions}
+          onSelect={(id) => onSelect({ type: "owner", id })}
+          onChanged={async () => {
+            await onChanged();
+            await loadDetail();
+          }}
+        />
+      )}
 
       <section className="rounded-lg border border-sand-200 bg-white p-5">
         <h3 className="mb-1 font-semibold text-charcoal-900">Record what you know</h3>
