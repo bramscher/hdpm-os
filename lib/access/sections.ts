@@ -275,6 +275,17 @@ export const APP_SECTIONS: AppSection[] = [
     pages: ['/brain-2'],
   },
   {
+    key: 'knowledge_capture',
+    label: 'Knowledge Capture',
+    description: 'Record what you know about each AppFolio owner and property; transcripts become owner and property profiles in the brain.',
+    group: 'Company',
+    // Admins by default; switch on for Matt and Penny (and whoever reads the profiles) in User settings.
+    defaultRoles: [],
+    pages: ['/knowledge-capture'],
+    apis: ['/api/knowledge-capture'],
+    nav: { href: '/knowledge-capture', icon: 'mic', order: 32.6 },
+  },
+  {
     key: 'desk_demo',
     label: 'The Desk (demo)',
     description: 'Clickable demo of per-person desks with circulating colored folders and paper-form tracking. Sample data only.',

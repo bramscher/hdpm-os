@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { fetchFeeFacts } from '@/lib/fee-management/appfolio';
+import { loadFeeFacts } from '@/lib/fee-management/facts-cache';
 import {
   DEFAULT_DOOR_SCHEDULE,
   DEFAULT_RAISE_FLOOR,
@@ -19,8 +19,6 @@ import { DEFAULT_FEE_SCHEDULE, parseFeeSchedule } from '@/lib/fee-management/fee
 export const maxDuration = 120;
 
 const ORG = 'hdpm';
-const FACTS_KEY = 'fee_management_facts';
-const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
  * GET /api/admin/fee-management[?refresh=1]
@@ -33,36 +31,13 @@ export async function GET(request: NextRequest) {
   const db = getSupabaseAdmin();
   const refresh = request.nextUrl.searchParams.get('refresh') === '1';
 
-  let facts: FeeFacts | null = null;
-  let capturedAt: string | null = null;
-  if (!refresh) {
-    const { data } = await db
-      .from('kpi_snapshots')
-      .select('value, captured_at')
-      .eq('kpi_name', FACTS_KEY)
-      .order('captured_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data && Date.now() - new Date(data.captured_at).getTime() < MAX_AGE_MS) {
-      facts = data.value as FeeFacts;
-      capturedAt = data.captured_at;
-    }
-  }
-  if (!facts) {
-    try {
-      facts = await fetchFeeFacts();
-    } catch (err) {
-      console.error('[fee-management] AppFolio pull failed:', err);
-      return NextResponse.json({ error: 'Could not load AppFolio data. Try again in a minute.' }, { status: 502 });
-    }
-    const { data } = await db
-      .from('kpi_snapshots')
-      .insert({ kpi_name: FACTS_KEY, value: facts })
-      .select('captured_at')
-      .single();
-    capturedAt = data?.captured_at ?? new Date().toISOString();
-    // Owner contact info lives in this payload — keep only the latest copy.
-    if (data) await db.from('kpi_snapshots').delete().eq('kpi_name', FACTS_KEY).lt('captured_at', data.captured_at);
+  let facts: FeeFacts;
+  let capturedAt: string;
+  try {
+    ({ facts, capturedAt } = await loadFeeFacts(db, { refresh }));
+  } catch (err) {
+    console.error('[fee-management] AppFolio pull failed:', err);
+    return NextResponse.json({ error: 'Could not load AppFolio data. Try again in a minute.' }, { status: 502 });
   }
 
   const [config, agreements, campaign] = await Promise.all([
