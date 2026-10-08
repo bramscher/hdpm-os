@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { ORG, processRecording } from '@/lib/knowledge-capture/pipeline';
+import { ORG, claimRecording, processRecording } from '@/lib/knowledge-capture/pipeline';
 
 // Transcribing a long take plus two synthesis passes can take a few minutes.
 export const maxDuration = 300;
@@ -18,15 +18,14 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   const db = getSupabaseAdmin();
   const { data: rec } = await db
     .from('kc_recording')
-    .select('id, status, updated_at')
+    .select('id')
     .eq('org_id', ORG)
     .eq('id', id)
     .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
-  // A second click while a run is live would double-spend; a run older than
-  // the function limit is dead and may be retried.
-  const live = rec.status === 'processing' && Date.now() - new Date(rec.updated_at).getTime() < 6 * 60 * 1000;
-  if (live) return NextResponse.json({ error: 'Already processing' }, { status: 409 });
+  // Atomic: a second click while a run is live gets 409 instead of paying twice;
+  // a run older than the function limit is dead and may be retried.
+  if (!(await claimRecording(db, id))) return NextResponse.json({ error: 'Already processing' }, { status: 409 });
 
   try {
     await processRecording(id);

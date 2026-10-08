@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 // Keeps a take under the 25 MB transcription limit at any browser's default bitrate.
 const MAX_SECONDS = 45 * 60;
 const MAX_BYTES = 25 * 1024 * 1024;
+// iPhone Safari may ignore the requested bitrate, so also stop on size.
+const STOP_AT_BYTES = 24 * 1024 * 1024;
 
 // iPhone Files/Voice Memos exports sometimes arrive with an empty MIME type.
 const AUDIO_EXT: Record<string, string> = {
@@ -49,9 +51,12 @@ export function Recorder({
   onSave,
   busy,
   extraActions,
+  onTakeChange,
 }: {
   onSave: (audio: Blob) => Promise<boolean>;
   busy: boolean;
+  /** True while a take is being recorded or waiting to be saved (unsaved work). */
+  onTakeChange?: (inProgress: boolean) => void;
   /** More ways to add knowledge, shown beside the idle buttons (e.g. Type or paste). */
   extraActions?: React.ReactNode;
 }) {
@@ -62,6 +67,14 @@ export function Recorder({
   const parts = useRef<Blob[]>([]);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const bytes = useRef(0);
+  const starting = useRef(false);
+  const urls = useRef<string[]>([]);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    onTakeChange?.(state !== "idle");
+  }, [state, onTakeChange]);
 
   const stopTimer = () => {
     if (timer.current) clearInterval(timer.current);
@@ -72,14 +85,24 @@ export function Recorder({
     timer.current = setInterval(() => setSeconds((s) => s + 1), 1000);
   };
 
-  // Release the mic and timer if the page unmounts mid-take.
-  useEffect(
-    () => () => {
+  // Release the mic, timer and preview URLs if the page unmounts mid-take.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       stopTimer();
       recorder.current?.stream.getTracks().forEach((t) => t.stop());
-    },
-    []
-  );
+      urls.current.forEach((u) => URL.revokeObjectURL(u));
+      onTakeChange?.(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const preview = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    urls.current.push(url);
+    return url;
+  };
 
   // Warn before leaving with an unsaved take.
   useEffect(() => {
@@ -98,27 +121,53 @@ export function Recorder({
   }, [seconds, state]);
 
   async function start() {
+    if (starting.current) return; // a double tap would open two microphones
     if (!navigator.mediaDevices?.getUserMedia) {
       toast.error("This browser can't record audio. Attach a voice memo instead.");
       return;
     }
+    starting.current = true;
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     } catch {
+      starting.current = false;
       toast.error("Microphone access was blocked. Allow it in the browser's site settings.");
       return;
     }
     const mimeType = pickMime();
-    const rec = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 48000 });
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 48000 });
+    } catch {
+      stream.getTracks().forEach((t) => t.stop());
+      starting.current = false;
+      toast.error("This browser can't record here. Attach a voice memo instead.");
+      return;
+    }
     parts.current = [];
-    rec.ondataavailable = (e) => e.data.size && parts.current.push(e.data);
+    bytes.current = 0;
+    rec.ondataavailable = (e) => {
+      if (!e.data.size) return;
+      parts.current.push(e.data);
+      bytes.current += e.data.size;
+      if (bytes.current >= STOP_AT_BYTES && rec.state === "recording") {
+        toast.info("This take is nearly 25 MB — stopping it. Save it, then start another.");
+        stop();
+      }
+    };
+    rec.onerror = () => {
+      toast.error("Recording stopped unexpectedly. Whatever was captured is ready to review.");
+      stop();
+    };
     rec.onstop = () => {
       stream.getTracks().forEach((t) => t.stop());
+      if (!mounted.current) return;
       const blob = new Blob(parts.current, { type: rec.mimeType || mimeType || "audio/webm" });
-      setTake({ blob, url: URL.createObjectURL(blob) });
+      setTake({ blob, url: preview(blob) });
       setState("review");
     };
+    starting.current = false;
     rec.start(1000);
     recorder.current = rec;
     setSeconds(0);
@@ -159,7 +208,7 @@ export function Recorder({
       return;
     }
     setSeconds(0);
-    setTake({ blob: audio, url: URL.createObjectURL(audio) });
+    setTake({ blob: audio, url: preview(audio) });
     setState("review");
   }
 

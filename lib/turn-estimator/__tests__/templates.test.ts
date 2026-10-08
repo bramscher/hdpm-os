@@ -6,12 +6,13 @@ import type { PriceBookItem } from '@/lib/turn-estimator/types';
 describe('Standard unit turn template', () => {
   const turn = STARTER_TEMPLATES.find((t) => t.id === 'starter-turn')!;
 
-  it('includes a 1-hour dump run and a $10 dump fee after haul-away', () => {
+  it('includes a 1-hour dump run and a dump fee after haul-away', () => {
     const codes = turn.entries.map((e) => e.item_code);
     const haul = codes.indexOf('HAUL_LOAD');
     expect(codes.slice(haul, haul + 3)).toEqual(['HAUL_LOAD', 'DUMP_RUN', 'DUMP_FEE']);
     expect(turn.entries.find((e) => e.item_code === 'DUMP_RUN')).toMatchObject({ minutes: '60', qty: '1' });
-    expect(turn.entries.find((e) => e.item_code === 'DUMP_FEE')).toMatchObject({ material_cost: '10' });
+    // The $10 comes from the price book default (defaultLineCost), not the template.
+    expect(turn.entries.find((e) => e.item_code === 'DUMP_FEE')).toMatchObject({ material_cost: '' });
     expect(turn.version).toBe(3);
   });
 

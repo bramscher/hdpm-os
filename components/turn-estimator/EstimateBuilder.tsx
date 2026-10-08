@@ -382,7 +382,7 @@ export default function EstimateBuilder({
                     <label className="flex gap-2 mb-2 text-xs"><input type="checkbox" checked={r.included!==false} onChange={e=>setRow(r.key,{included:e.target.checked})}/>Include in charge</label>
                     <select className={`${input} w-full min-w-0`} value={r.item_code} onChange={(e) => {
                       const next = itemByCode.get(e.target.value);
-                      setRow(r.key, { item_code: e.target.value, ...(next?.pricing_method === 'hourly' ? {qty: '1', minutes: r.minutes || '60'} : {}), ...(next?.pricing_method === 'cost_plus' && !r.material_cost ? {material_cost: defaultLineCost(next)} : {}) });
+                      setRow(r.key, { item_code: e.target.value, ...(next?.pricing_method === 'hourly' ? {qty: '1', minutes: r.minutes || '60'} : {}), material_cost: next?.pricing_method !== 'cost_plus' ? '' : !r.material_cost || r.material_cost === defaultLineCost(itemByCode.get(r.item_code)) ? defaultLineCost(next) : r.material_cost });
                     }}>
                       <option value="">— select —</option>
                       {items.map((it) => (
