@@ -3,7 +3,6 @@ import { gatherFollowups, validateFollowupMessage, type FollowupCandidate, type 
 import { BATCH_MAX } from './chase-board';
 import { getAdapter } from './channels';
 import { getAgentConfig, isGloballyKilled } from './config';
-import { getPilotConfig } from './pilot';
 import { isZoomSmsConfigured, smsSenderEmail } from '@/lib/zoom-phone';
 import { canReviewFollowups, followupTeam, FOLLOWUP_REVIEWERS_DENIED } from './followup-access';
 import type { OutboxMessage } from './types';
@@ -14,6 +13,14 @@ import { logPartsContact } from '@/lib/maintenance/parts-db';
 export function followupSenders() {
   return { email: process.env.AGENT_EMAIL_FROM || process.env.MAINT_DIGEST_FROM || 'HDPM Agents <maintenance@highdesertpm.com>',
     sms: `${smsSenderEmail()}${process.env.ZOOM_SMS_SENDER_NUMBER ? ` (${process.env.ZOOM_SMS_SENDER_NUMBER})` : ''}` };
+}
+/**
+ * Reviewed follow-ups have their own preview switch. The pilot's shadow mode and the Outlook
+ * dry-run hold back the automatic chaser; they don't apply to messages a person approves one
+ * at a time. Only production sends; FOLLOWUP_SENDS_DRYRUN=1 pauses it there too.
+ */
+export function followupPreview() {
+  return process.env.VERCEL_ENV !== 'production' || process.env.FOLLOWUP_SENDS_DRYRUN === '1';
 }
 export function followupDue(review?: FollowupReview, now = new Date()) {
   return !review || review.status === 'review' || (['snoozed','sent'].includes(review.status) && !!review.next_review_at && new Date(review.next_review_at) <= now);
@@ -43,7 +50,7 @@ export async function loadFollowupQueue() {
     if(error)throw new Error(error.message);
     for(const w of data||[]) candidates.push({id:w.id,property:w.property_name,unit:w.unit_name||'',woNumber:w.wo_number||'',vendor:w.vendor_name||'',description:w.description||'',age:0,kind:'decision',reason:'No longer overdue in the estimate or unscheduled-work queue. History is retained.',email:'',phone:'',subject:'',emailBody:'',smsBody:'',eligible:false,owner:w.owner_name,sourceStatus:w.appfolio_status,sourceUpdatedAt:w.synced_at});
   }
-  const preview=getPilotConfig().shadow || process.env.AGENT_GRAPH_DRYRUN==='1';
+  const preview=followupPreview();
   const enabled=!!config?.enabled && !killed && !preview;
   return {candidates,staff:(staff.data||[]).map(s=>s.person as string),team:(await followupTeam()).map(s=>s.person),reviews:reviews as FollowupReview[],events:events.sort((a,b)=>b.id-a.id),legacy:legacy.data||[],senders:followupSenders(),
     available:{email:enabled && !!process.env.RESEND_API_KEY,sms:enabled && isZoomSmsConfigured() && process.env.AGENT_ZOOM_SMS_DRYRUN!=='1'},
@@ -83,7 +90,7 @@ async function assertSendingOpen(channel:'email'|'sms_zoom',sender:unknown) {
   if(sender!==(channel==='email'?followupSenders().email:followupSenders().sms))throw new Error('Sending account changed. Reopen the review before sending.');
   if(!(await getAgentConfig('estimate_chaser','team_review'))?.enabled)throw new Error('The shared trial is not activated');
   if(await isGloballyKilled())throw new Error('Messaging is paused');
-  if(getPilotConfig().shadow || process.env.AGENT_GRAPH_DRYRUN==='1' || (channel==='sms_zoom' && process.env.AGENT_ZOOM_SMS_DRYRUN==='1'))throw new Error('Preview mode: no message sent');
+  if(followupPreview() || (channel==='sms_zoom' && process.env.AGENT_ZOOM_SMS_DRYRUN==='1'))throw new Error('Preview mode: no message sent');
   if(channel==='email' ? !process.env.RESEND_API_KEY : !isZoomSmsConfigured())throw new Error('Sending channel is not configured');
 }
 function assertSendable(candidate:FollowupCandidate|undefined,contextVersion:unknown):asserts candidate is FollowupCandidate {
