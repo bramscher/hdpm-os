@@ -1,7 +1,7 @@
 import { after, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { loadFollowupQueue, followupDue, decideFollowup, fileFollowupHelp } from './followup-service';
-import { FOLLOWUP_REVIEWERS, canReviewFollowups } from './followup-access';
+import { FOLLOWUP_REVIEWERS, FOLLOWUP_REVIEWERS_DENIED, canReviewFollowups } from './followup-access';
 import { resolveStaffBySlackId, resolveStaffByPersonOrEmail } from './staff';
 import { sendSlackMessage, updateSlackMessage, splitSlackMessageId } from './channels/slack';
 import { getAgentConfig, isGloballyKilled } from './config';
@@ -27,6 +27,7 @@ export function followupCard(c:FollowupCandidate,r?:FollowupReview) {
     actions.push(button('Review email','mf:email',c.id),button('Review text','mf:sms_zoom',c.id));
   }
   actions.push(button('Update / snooze','mf:manage',c.id),{type:'button',text:plain('Open shared queue'),url:`${HOME}?followup=${c.id}#maintenance-followups`,action_id:'mf:link'});
+  if(c.appfolioLink)actions.push({type:'button',text:plain('Open in AppFolio'),url:c.appfolioLink,action_id:'mf:appfolio'});
   blocks.push({type:'actions',elements:actions});
   blocks.push({type:'context',elements:[plain(`Source synced: ${c.sourceUpdatedAt||'unknown'}. No recorded reply does not prove no reply; check the conversation before sending.`)]});
   return blocks;
@@ -76,8 +77,8 @@ export function isFollowupInteraction(payload:any):boolean {
 export async function handleFollowupInteraction(payload:any) {
   const staff=await resolveStaffBySlackId(payload.user?.id||'');
   if(!staff?.email || !await canReviewFollowups(staff.email)) {
-    if(payload.type==='view_submission')return NextResponse.json({response_action:'errors',errors:{note:'This trial is reviewed by Penny and Craig.'}});
-    if(payload.trigger_id)await slackView('views.open',{trigger_id:payload.trigger_id,view:resultView('This trial is reviewed by Penny and Craig.')});
+    if(payload.type==='view_submission')return NextResponse.json({response_action:'errors',errors:{note:FOLLOWUP_REVIEWERS_DENIED}});
+    if(payload.trigger_id)await slackView('views.open',{trigger_id:payload.trigger_id,view:resultView(FOLLOWUP_REVIEWERS_DENIED)});
     return new NextResponse(null,{status:200});
   }
   if(payload.type==='view_submission') {
@@ -96,7 +97,7 @@ export async function handleFollowupInteraction(payload:any) {
     });
     return NextResponse.json({response_action:'update',view:resultView('Processing your review. This view will show the result; do not resend while it is processing.')});
   }
-  const action=payload.actions?.[0];if(!action||action.action_id==='mf:link')return new NextResponse(null,{status:200});
+  const action=payload.actions?.[0];if(!action||action.action_id==='mf:link'||action.action_id==='mf:appfolio')return new NextResponse(null,{status:200});
   if(!['mf:email','mf:sms_zoom','mf:manage'].includes(action.action_id) || !/^[\da-f-]{36}$/i.test(action.value||''))return new NextResponse(null,{status:200});
   const opened=await slackView('views.open',{trigger_id:payload.trigger_id,view:resultView('Loading current work-order context…')});
   after(async()=>{

@@ -76,9 +76,9 @@ export const AGENT_CATALOG: CatalogAgent[] = [
   {
     id: 'team_review',
     name: 'Maintenance Follow-up Queue',
-    what: 'Each morning, lists up to 7 of the most overdue estimates, owner approvals and unscheduled work orders for Penny and Craig to review. Nothing is sent until one of them approves it.',
+    what: 'Each morning, lists up to 7 of the most overdue estimates, owner approvals and unscheduled work orders for Brody and Craig to review. Nothing is sent until one of them approves it.',
     why: 'One shared, reviewed queue instead of one person chasing everything alone.',
-    helps: 'Penny and Craig',
+    helps: 'Brody and Craig',
     when: 'Weekdays 8 AM',
     output: 'Slack cards + the Company → Issues page',
     status: 'trial',
