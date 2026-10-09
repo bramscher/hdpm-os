@@ -17,7 +17,7 @@ export async function GET() {
       'owner_retention', 'maintenance_cost', 'days_to_lease', 'lease_renewal',
       'net_doors', 'guest_cards', 'leasing_funnel', 'management_fees',
       'occupancy', 'bend_growth', 'lease_expirations', 'work_orders_completed',
-      'maintenance_economics',
+      'maintenance_economics', 'door_movement',
     ];
 
     const cached: Record<string, { value: Record<string, unknown>; capturedAt: string }> = {};
