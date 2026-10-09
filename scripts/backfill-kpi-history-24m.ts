@@ -257,9 +257,65 @@ async function main() {
     console.log(`  ${''.padEnd(14)} ${''.padEnd(10)}  now   ${JSON.stringify(compute[kpi](at))}`);
   }
 
+  // Door drift across the saved weekly history: properties that have since
+  // left AppFolio's directory entirely (e.g. a portfolio sold off) vanish
+  // from every recomputed date, so recomputed doors run low before they left.
+  if (anchors.has('net_doors')) {
+    const { data } = await supabase
+      .from('kpi_snapshots')
+      .select('captured_at, value')
+      .eq('kpi_name', 'net_doors')
+      .lt('captured_at', '2026-05-21T00:00:00Z')
+      .order('captured_at', { ascending: true });
+    console.log('\nnet_doors drift (saved − recomputed now), monthly:');
+    const seen = new Set<string>();
+    for (const r of data || []) {
+      const at = new Date(r.captured_at as string);
+      const ym = at.toISOString().slice(0, 7);
+      if (seen.has(ym)) continue;
+      seen.add(ym);
+      const saved = (r.value as { currentDoors: number }).currentDoors;
+      const now = compute.net_doors(at).currentDoors as number;
+      console.log(`  ${at.toISOString().slice(0, 10)}  saved ${saved}  now ${now}  drift ${saved - now}`);
+    }
+  }
+
+  // net_doors: carry the drift at the earliest saved row back as a constant,
+  // so properties since removed from AppFolio (the ~64-door portfolio sold in
+  // Dec 2025) still count before they left. The drift was a constant 67 doors
+  // across Aug–Nov 2025, which is what makes a constant offset sound.
+  let doorsOffset = { doors: 0, properties: 0 };
+  if (anchors.has('net_doors')) {
+    const { data } = await supabase
+      .from('kpi_snapshots')
+      .select('captured_at, value')
+      .eq('kpi_name', 'net_doors')
+      .order('captured_at', { ascending: true })
+      .limit(1);
+    const saved = data?.[0];
+    if (saved) {
+      const v = saved.value as { currentDoors: number; currentProperties: number };
+      const now = compute.net_doors(new Date(saved.captured_at as string));
+      doorsOffset = {
+        doors: v.currentDoors - (now.currentDoors as number),
+        properties: v.currentProperties - (now.currentProperties as number),
+      };
+      console.log(`
+net_doors offset applied to added rows: +${doorsOffset.doors} doors, +${doorsOffset.properties} properties`);
+    }
+  }
+
   const rows: Array<{ kpi_name: Kpi; captured_at: string; value: Record<string, unknown> }> = [];
   for (const [kpi, list] of anchors) {
-    for (const W of list) rows.push({ kpi_name: kpi, captured_at: W.toISOString(), value: { ...compute[kpi](W), backfill: '24m' } });
+    for (const W of list) {
+      const value: Record<string, unknown> = { ...compute[kpi](W), backfill: '24m' };
+      if (kpi === 'net_doors' && (doorsOffset.doors || doorsOffset.properties)) {
+        value.currentDoors = (value.currentDoors as number) + doorsOffset.doors;
+        value.currentProperties = (value.currentProperties as number) + doorsOffset.properties;
+        value.offset = doorsOffset;
+      }
+      rows.push({ kpi_name: kpi, captured_at: W.toISOString(), value });
+    }
   }
 
   // Monthly sample per KPI so the numbers can be eyeballed before writing.
