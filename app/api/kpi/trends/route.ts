@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { toWeeklyGuestCards, websiteLeadsInWeek } from '@/lib/guest-card-trend';
 
 interface SnapshotRow {
   kpi_name: string;
@@ -95,6 +96,26 @@ export async function GET(request: NextRequest) {
           date,
           value: row.value,
         }));
+    }
+
+    // Guest cards: one point per week (the daily series mixed week-to-date and
+    // trailing windows), plus the website's CRM tenant-lead count per week.
+    if (trends.guest_cards) {
+      const daily = new Map<string, number>();
+      const { data: days, error: daysError } = await supabase.rpc('website_tenant_lead_days', {
+        since: startDate.toISOString(),
+      });
+      if (daysError) {
+        // Migration 20261020_website_tenant_lead_days.sql not applied yet —
+        // chart AppFolio alone rather than failing the page.
+        console.warn('[KPI] Trends: website lead counts unavailable:', daysError.message);
+      }
+      for (const row of (days || []) as Array<{ day: string; leads: number }>) {
+        daily.set(row.day, row.leads);
+      }
+      trends.guest_cards = toWeeklyGuestCards(trends.guest_cards).map((p) =>
+        daysError ? p : { ...p, value: { ...p.value, websiteForm: websiteLeadsInWeek(p.date, daily) } }
+      );
     }
 
     return NextResponse.json(trends, {
