@@ -12,9 +12,12 @@
 
 export const DOOR_SNAPSHOT_KPIS = ['net_doors', 'door_roster', 'door_movement'] as const;
 
-/** Largest believable one-snapshot drop / rise, as a fraction of the last saved count. */
-export const MAX_DROP = 0.1;
-export const MAX_RISE = 0.25;
+/**
+ * Largest believable one-snapshot drop / rise, as a fraction of the last
+ * saved count. The 2026-08-20 bad read was +7.4% (829 → 890), so 5% each way.
+ */
+export const MAX_DROP = 0.05;
+export const MAX_RISE = 0.05;
 
 export function doorSnapshotProblem(previousDoors: number | null | undefined, nextDoors: unknown): string | null {
   if (typeof nextDoors !== 'number' || !Number.isFinite(nextDoors) || nextDoors <= 0) {

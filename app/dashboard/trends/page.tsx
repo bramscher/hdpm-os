@@ -87,19 +87,38 @@ function formatDate(dateStr: string) {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
 }
 
-/** Detect whether data spans multiple calendar years */
-function isMultiYear(data: TrendPoint[]): boolean {
-  if (data.length < 2) return false;
-  const firstYear = new Date(data[0].date + "T12:00:00").getFullYear();
-  const lastYear = new Date(data[data.length - 1].date + "T12:00:00").getFullYear();
-  return firstYear !== lastYear;
+interface AxisSpec {
+  mode: "day" | "dayYear" | "month";
+  /** Explicit ticks for month mode: the first point of each month (thinned). */
+  ticks?: string[];
 }
 
-/** Format tick: include 'YY when data spans multiple years */
-function tickFormat(dateStr: string, multiYear: boolean) {
+/** Pick the x-axis labelling for a series: day labels for short spans, months beyond ~4 months. */
+function axisMode(data: TrendPoint[]): AxisSpec {
+  if (data.length < 2) return { mode: "day" };
+  const first = new Date(data[0].date + "T12:00:00");
+  const last = new Date(data[data.length - 1].date + "T12:00:00");
+  const spanDays = (last.getTime() - first.getTime()) / 86400000;
+  if (spanDays <= 120) return { mode: first.getFullYear() !== last.getFullYear() ? "dayYear" : "day" };
+  const monthStarts: string[] = [];
+  let prev = "";
+  for (const d of data) {
+    const ym = d.date.slice(0, 7);
+    if (ym !== prev) monthStarts.push(d.date);
+    prev = ym;
+  }
+  const step = monthStarts.length > 24 ? 3 : monthStarts.length > 12 ? 2 : 1;
+  return { mode: "month", ticks: monthStarts.filter((_, i) => i % step === 0) };
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Format tick: M/D, M/D/YYYY across a year boundary, or "Mon 'YY" for long spans */
+function tickFormat(dateStr: string, axis: AxisSpec) {
   const d = new Date(dateStr + "T12:00:00");
+  if (axis.mode === "month") return `${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`;
   const base = `${d.getMonth() + 1}/${d.getDate()}`;
-  if (multiYear) return `${base}/${d.getFullYear()}`;
+  if (axis.mode === "dayYear") return `${base}/${d.getFullYear()}`;
   return base;
 }
 
@@ -195,7 +214,7 @@ function EmptyChart({ name }: { name: string }) {
 function DelinquencyChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Delinquency Rate" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     rate: d.value.rate ?? 0,
@@ -224,7 +243,7 @@ function DelinquencyChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis yAxisId="rate" tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v}%`} />
           <YAxis yAxisId="dollars" orientation="right" tick={Y_TICK} axisLine={false} tickLine={false} width={65} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
           <Tooltip
@@ -255,7 +274,7 @@ function DelinquencyChart({ data }: { data: TrendPoint[] }) {
 function VacancyChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Vacancy Rate" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     rate: d.value.rate ?? 0,
@@ -284,7 +303,7 @@ function VacancyChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v}%`} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
@@ -308,7 +327,7 @@ function VacancyChart({ data }: { data: TrendPoint[] }) {
 function WorkOrderChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Work Order Cycle Time" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     avgDays: d.value.avgDaysToClose ?? 0,
@@ -337,7 +356,7 @@ function WorkOrderChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis yAxisId="days" tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v}d`} />
           <YAxis yAxisId="count" orientation="right" tick={Y_TICK} axisLine={false} tickLine={false} width={45} />
           <Tooltip
@@ -373,7 +392,7 @@ function WorkOrderChart({ data }: { data: TrendPoint[] }) {
 function NoticeChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="30-Day Notice Volume" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     thisWeek: d.value.thisWeek ?? 0,
@@ -402,7 +421,7 @@ function NoticeChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={40} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
@@ -437,7 +456,7 @@ function NoticeChart({ data }: { data: TrendPoint[] }) {
 function InsuranceChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Insurance Compliance" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     rate: d.value.rate ?? 0,
@@ -466,7 +485,7 @@ function InsuranceChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
@@ -506,7 +525,7 @@ function InsightLine({ text }: { text: string }) {
 function OwnerRetentionChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Owner Retention Rate" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     rate: d.value.rate ?? 0,
@@ -535,7 +554,7 @@ function OwnerRetentionChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis yAxisId="rate" tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v}%`} domain={[80, 100]} />
           <YAxis yAxisId="cancel" orientation="right" tick={Y_TICK} axisLine={false} tickLine={false} width={40} />
           <Tooltip
@@ -566,7 +585,7 @@ function OwnerRetentionChart({ data }: { data: TrendPoint[] }) {
 function MaintenanceCostChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Maintenance Cost %" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     rate: d.value.rate ?? 0,
@@ -596,7 +615,7 @@ function MaintenanceCostChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis yAxisId="rate" tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v}%`} />
           <YAxis yAxisId="dollars" orientation="right" tick={Y_TICK} axisLine={false} tickLine={false} width={65} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
           <Tooltip
@@ -643,7 +662,7 @@ function MaintenanceCostChart({ data }: { data: TrendPoint[] }) {
 function DaysToLeaseChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Average Days to Lease" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     avgDays: d.value.avgDays ?? 0,
@@ -675,7 +694,7 @@ function DaysToLeaseChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v}d`} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
@@ -720,7 +739,7 @@ function DaysToLeaseChart({ data }: { data: TrendPoint[] }) {
 function LeaseRenewalChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Lease Renewal Rate" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     rate: d.value.rate ?? 0,
@@ -750,7 +769,7 @@ function LeaseRenewalChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis yAxisId="rate" tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `${v}%`} />
           <YAxis yAxisId="count" orientation="right" tick={Y_TICK} axisLine={false} tickLine={false} width={40} />
           <Tooltip
@@ -818,7 +837,7 @@ function computeTargetDate(data: TrendPoint[]): string {
 function NetDoorsChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Properties / Doors" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     currentDoors: d.value.currentDoors ?? 0,
@@ -850,7 +869,7 @@ function NetDoorsChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis yAxisId="doors" tick={Y_TICK} axisLine={false} tickLine={false} width={55} />
           <YAxis yAxisId="net" orientation="right" tick={Y_TICK} axisLine={false} tickLine={false} width={40} />
           <Tooltip
@@ -917,7 +936,7 @@ const WEBSITE_FORM_COLOR = "#7c3aed";
 function GuestCardChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Guest Card Volume" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
   const chartData = data.map((d) => ({
     date: d.date,
     thisWeek: d.value.thisWeek ?? 0,
@@ -995,7 +1014,7 @@ function GuestCardChart({ data }: { data: TrendPoint[] }) {
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
               <CartesianGrid {...GRID_PROPS} />
-              <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+              <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
               <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={40} />
               <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={LABEL_STYLE} />
               {yearBoundaries(data).map((b) => (
@@ -1011,7 +1030,7 @@ function GuestCardChart({ data }: { data: TrendPoint[] }) {
           <ResponsiveContainer width="100%" height={240}>
             <ComposedChart data={sourceBarData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
               <CartesianGrid {...GRID_PROPS} />
-              <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+              <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
               <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={40} />
               <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={LABEL_STYLE} labelFormatter={tooltipLabel} />
               {yearBoundaries(data).map((b) => (
@@ -1100,7 +1119,7 @@ function FunnelBars({ stages, maxCount }: { stages: FunnelStage[]; maxCount: num
 function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Leasing Funnel" />;
 
-  const multi = isMultiYear(data);
+  const multi = axisMode(data);
 
   // Current funnel from latest snapshot
   const latest = data[data.length - 1];
@@ -1179,7 +1198,7 @@ function LeasingFunnelChart({ data }: { data: TrendPoint[] }) {
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
               <CartesianGrid {...GRID_PROPS} />
-              <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+              <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
               <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => (sparse ? `${v}` : `${v}%`)} />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
@@ -1267,7 +1286,7 @@ function ManagementFeesChart({ data }: { data: TrendPoint[] }) {
     );
   }
 
-  const multi = isMultiYear(usable);
+  const multi = axisMode(usable);
   const chartData = usable.map((d) => ({
     date: d.date,
     estAnnualK: Math.round(((d.value.estAnnualFeeRevenue as number) ?? 0) / 1000),
@@ -1298,7 +1317,7 @@ function ManagementFeesChart({ data }: { data: TrendPoint[] }) {
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
           <CartesianGrid {...GRID_PROPS} />
-          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
+          <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} ticks={multi.ticks} tickFormatter={(v) => tickFormat(v, multi)} />
           <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={55} tickFormatter={(v) => `$${v}k`} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}

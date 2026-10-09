@@ -14,9 +14,10 @@ describe('doorSnapshotProblem', () => {
     expect(doorSnapshotProblem(null, NaN)).toMatch(/not a positive number/);
   });
 
-  it('rejects a sudden drop over 10% or rise over 25%', () => {
+  it('rejects a sudden drop or rise over 5%', () => {
     expect(doorSnapshotProblem(1100, 640)).toMatch(/1100 → 640/);
-    expect(doorSnapshotProblem(1100, 1400)).toMatch(/1100 → 1400/);
-    expect(doorSnapshotProblem(1100, 990)).toBeNull(); // exactly −10%
+    expect(doorSnapshotProblem(829, 890)).toMatch(/829 → 890/); // the 2026-08-20 bad read
+    expect(doorSnapshotProblem(1000, 950)).toBeNull(); // exactly −5%
+    expect(doorSnapshotProblem(1000, 1050)).toBeNull(); // exactly +5%
   });
 });
