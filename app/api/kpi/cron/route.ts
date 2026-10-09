@@ -23,6 +23,7 @@ import {
   fetchDoorMovementKpi,
 } from '@/lib/appfolio-kpi';
 import { withCronRun } from '@/lib/cron/run';
+import { DOOR_SNAPSHOT_KPIS, doorSnapshotProblem } from '@/lib/door-snapshot-guard';
 
 /**
  * POST /api/kpi/cron
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  return runSnapshot();
+  return runSnapshot(request.nextUrl.searchParams.get('allowDoorJump') === '1');
 }
 
 // Vercel Cron sends GET, so we expose both verbs; GET delegates to POST.
@@ -45,7 +46,7 @@ async function handleGET(request: NextRequest) {
   return POST(request);
 }
 
-async function runSnapshot() {
+async function runSnapshot(allowDoorJump = false) {
 
   console.log('[KPI Cron] Starting daily snapshot...');
   const supabase = getSupabaseAdmin();
@@ -79,6 +80,23 @@ async function runSnapshot() {
     kpiFetchers.map(async ({ name, fn }) => {
       try {
         const value = await fn();
+
+        // Skip a door count that looks like a bad AppFolio read (see lib/door-snapshot-guard.ts).
+        if (!allowDoorJump && (DOOR_SNAPSHOT_KPIS as readonly string[]).includes(name)) {
+          const { data: last } = await supabase
+            .from('kpi_snapshots')
+            .select('value')
+            .eq('kpi_name', name)
+            .order('captured_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const problem = doorSnapshotProblem(
+            (last?.value as { currentDoors?: number } | undefined)?.currentDoors,
+            (value as { currentDoors?: unknown }).currentDoors
+          );
+          if (problem) throw new Error(`skipped, ${problem}`);
+        }
+
         const { error } = await supabase
           .from('kpi_snapshots')
           .insert({ kpi_name: name, value });
