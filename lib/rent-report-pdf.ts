@@ -168,10 +168,14 @@ function drawValue(doc: jsPDF, x: number, y: number, value: string, size = 11): 
 // Nearby Rentals (modelled on AppFolio's Nearby Advertised Units)
 // ============================================
 
-const BAR = '#efd3c1';
-const BAR_MEDIAN = '#d9ad91';
+// Monochrome to match the HDPM OS theme; HDPM green marks only "your rent".
+const BAR = '#d6d6d6';
+const BAR_MEDIAN = '#363636';
+const BAR_YOURS = '#9fc29f';
 const YOUR_FILL = '#e6f1e6';
-const YOUR_COLUMN = '#f2f8f2';
+const YOUR_COLUMN = '#eef5ee';
+const BAND_LOW = '#f4f4f4';
+const BAND_HIGH = '#8a8a8a';
 const UP = '#2f7d32';
 const DOWN = '#b3261e';
 
@@ -260,7 +264,7 @@ function drawNearbyRentals(doc: jsPDF, startY: number, m: NearbyRentals): number
   m.bins.forEach((b, i) => {
     if (!b.count) return;
     const h = (b.count / maxCount) * chartH;
-    doc.setFillColor(i === m.medianBin ? BAR_MEDIAN : BAR);
+    doc.setFillColor(i === m.medianBin ? BAR_MEDIAN : i === m.yourBin ? BAR_YOURS : BAR);
     doc.rect(barX(i) + 1.5, base - h, binW - 3, h, 'F');
   });
 
@@ -284,12 +288,12 @@ function drawNearbyRentals(doc: jsPDF, startY: number, m: NearbyRentals): number
   doc.setTextColor(BLACK);
   doc.text(medLabel, medLeft + 5, top - 13);
 
-  // Axis band: low (green) to high (red)
+  // Axis band: low (light) to high (dark)
   const bandY = base + 2;
   const steps = 48;
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1);
-    doc.setFillColor(t < 0.5 ? mix('#9fca9f', '#f3f3f3', t * 2) : mix('#f3f3f3', '#e7a3a3', (t - 0.5) * 2));
+    doc.setFillColor(mix(BAND_LOW, BAND_HIGH, t));
     doc.rect(chartX + (i * chartW) / steps, bandY, chartW / steps + 0.5, 6, 'F');
   }
 

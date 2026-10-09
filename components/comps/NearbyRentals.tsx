@@ -66,9 +66,8 @@ export function NearbyRentals({ analysis, rentOverride }: { analysis: RentAnalys
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={`Rent distribution of ${model.rows.length} nearby rentals from ${money(model.low)} to ${money(model.high)}, median ${money(model.median)}, your rent ${money(model.unit.rent)}`}>
           <defs>
             <linearGradient id="nearby-band" x1="0" x2="1" y1="0" y2="0">
-              <stop offset="0%" stopColor="#9fca9f" />
-              <stop offset="50%" stopColor="#f3f3f3" />
-              <stop offset="100%" stopColor="#e7a3a3" />
+              <stop offset="0%" stopColor="#f4f4f4" />
+              <stop offset="100%" stopColor="#8a8a8a" />
             </linearGradient>
           </defs>
           {Array.from({ length: maxCount }, (_, c) => {
@@ -81,7 +80,7 @@ export function NearbyRentals({ analysis, rentOverride }: { analysis: RentAnalys
             );
           })}
           {/* your rent column */}
-          <rect x={x(model.yourBin) + 1} y={top - 8} width={binW - 2} height={chartH + 8} fill="#f2f8f2" stroke="#3d7a3d" strokeDasharray="3 3" />
+          <rect x={x(model.yourBin) + 1} y={top - 8} width={binW - 2} height={chartH + 8} fill="#eef5ee" stroke="#3d7a3d" strokeDasharray="3 3" />
           {model.bins.map((b, i) =>
             b.count ? (
               <rect
@@ -90,7 +89,7 @@ export function NearbyRentals({ analysis, rentOverride }: { analysis: RentAnalys
                 y={base - (b.count / maxCount) * chartH}
                 width={binW - 4}
                 height={(b.count / maxCount) * chartH}
-                fill={i === model.medianBin ? "#d9ad91" : "#efd3c1"}
+                fill={i === model.medianBin ? "#363636" : i === model.yourBin ? "#9fc29f" : "#d6d6d6"}
               >
                 <title>{`${money(b.from)}–${money(b.to)}: ${b.count} rental${b.count === 1 ? "" : "s"}`}</title>
               </rect>
