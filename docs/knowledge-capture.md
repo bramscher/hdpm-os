@@ -11,7 +11,7 @@ discovered: 2026-10-07
 
 # Knowledge Capture
 
-Matt and Penny carry years of knowledge about owners and properties that isn't written down anywhere: who to call, what an owner will and won't pay for, which vendor knows the crawlspace. They're transitioning out. **Knowledge Capture** (`/knowledge-capture`, Company menu) lets them talk it through, one owner or property at a time, so that knowledge stays in the company brain.
+Matt and Penny carry years of knowledge about owners and properties that isn't written down anywhere: who to call, what an owner will and won't pay for, which vendor knows the crawlspace. They're transitioning out. **Knowledge Capture** (`/knowledge-capture`, Admin menu; only Matt, Penny and Craig — a fixed list in `lib/access/sections.ts`) lets them talk it through, one owner or property at a time, so that knowledge stays in the company brain.
 
 ## Flow
 
@@ -30,7 +30,7 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
 6. **Correct.** **Edit** on a take opens its transcript in a text box under the audio player (`PATCH /api/knowledge-capture/recordings/:id`). Saving keeps the first machine transcript in `transcript_original`, records who edited it and when, and rebuilds that take's notes, its brain chunks and the profile from the corrected text. The audio is not re-transcribed, and Retry never overwrites an edit. Same permission as delete.
 
 7. **Link owner records.** AppFolio can hold one person as several owner records. Profiles are already per person, not per ownership group, so someone in {John, Mary} and in {John, Bob} is one John profile, and a partner unique to a group (Bob) keeps their own. Nothing to link there. The **Linked records** card on each owner handles the rest (`lib/knowledge-capture/links.ts`, table `kc_owner_link`):
-   - **Same person**: duplicate records merge into the profile being viewed. Recordings stay on their original record id and resolve to the kept profile when read, so **Unlink** restores both exactly. Brain edge: kept `supersedes` duplicate.
+   - **Same person**: duplicate records merge into the profile being viewed. Recordings stay on their original record id and resolve to the kept profile when read, so **Unlink** splits them back into two profiles. (Merging a record that already had its own duplicates moves those onto the kept profile; unlinking undoes only the record you unlink.) Brain edge: kept `supersedes` duplicate.
    - **Related**: a different person or entity that belongs with this one (their trust or LLC, a spouse, a partner), with an optional note. Separate profiles that name each other. Brain edges: `related_to` both ways.
    - **Not the same**: dismisses a suggestion.
    - **Suggestions**: same email, phone or exact name → likely the same person; one name's words all inside another's (John Smith ↔ John Smith Family Trust) → likely related. The list has a "Possible duplicates" filter and a **Check** badge. A person always decides.
@@ -65,7 +65,8 @@ Re-processing a recording replaces its chunks. Deleting a recording removes its 
 ## Setup
 
 1. Apply `supabase/migrations/20261014_knowledge_capture.sql` in the Supabase SQL Editor. It creates `kc_recording`, `kc_profile` and the private bucket. Then apply `20261015_kc_owner_links.sql` (owner record links) and `20261016_kc_voices.sql` (whose voice is in each take; apply **before** deploying the code that uses it). Until that's applied, linking errors but everything else works.
-2. Admin → User settings: switch **Knowledge Capture** on for Matt and Penny, and for anyone who should read the profiles. It's off by default because owner contact details and candid notes live here.
+2. Access is fixed in code: only matt@, penny@ and craig@highdesertpm.com (`allowedEmails` on the `knowledge_capture` section). User settings shows it locked; to add someone, edit that list. What they capture is readable by anyone using the brain (Dez, agents), at `internal` sensitivity.
+4. Also apply `20261018_harden_table_grants.sql` (sets the audio bucket's 25 MB / audio-only limit, among other hardening).
 3. Production already has the env vars this needs: `OPENAI_API_KEY` (brain embeddings) and `ANTHROPIC_API_KEY` (brain think).
 
 ## Not yet
