@@ -17,7 +17,7 @@ const invoke=(overrides:Record<string,unknown>={})=>POST(new NextRequest('http:/
 beforeEach(()=>{
  vi.clearAllMocks();m.guard.mockResolvedValue({ok:true,email:'penny@highdesertpm.com'});m.allowed.mockResolvedValue(true);m.killed.mockResolvedValue(false);m.config.mockResolvedValue({enabled:true});m.shadow=false;m.prior=[];m.outbox=[];
  m.gather.mockResolvedValue([candidate()]);m.rpc.mockResolvedValue({data:{attempt_id:'attempt-1'},error:null});m.send.mockResolvedValue({status:'sent',message_id:'msg-1'});
- vi.stubEnv('RESEND_API_KEY','test');vi.stubEnv('AGENT_GRAPH_DRYRUN','0');vi.stubEnv('AGENT_ZOOM_SMS_DRYRUN','0');
+ vi.stubEnv('RESEND_API_KEY','test');vi.stubEnv('AGENT_GRAPH_DRYRUN','0');vi.stubEnv('VERCEL_ENV','production');vi.stubEnv('FOLLOWUP_SENDS_DRYRUN','');vi.stubEnv('AGENT_ZOOM_SMS_DRYRUN','0');
 });
 describe('shared reviewed send',()=>{
  it('blocks an unauthorized website request',async()=>{m.guard.mockResolvedValue({ok:false,response:NextResponse.json({error:'Forbidden'},{status:403})});expect((await invoke()).status).toBe(403);expect(m.send).not.toHaveBeenCalled();});
@@ -26,7 +26,8 @@ describe('shared reviewed send',()=>{
  it('does not chase resolved work',async()=>{m.gather.mockResolvedValue([]);expect((await invoke()).status).toBe(409);expect(m.rpc).not.toHaveBeenCalled();});
  it('does not guess the decision-maker',async()=>{m.gather.mockResolvedValue([{...candidate(),kind:'decision'}]);expect((await invoke()).status).toBe(409);expect(m.send).not.toHaveBeenCalled();});
  it('blocks stale source data',async()=>{m.gather.mockResolvedValue([{...candidate(),sourceUpdatedAt:'2020-01-01'}]);expect((await invoke()).status).toBe(409);expect(m.send).not.toHaveBeenCalled();});
- it('respects preview and kill switches',async()=>{m.shadow=true;expect((await invoke()).status).toBe(409);m.shadow=false;m.killed.mockResolvedValue(true);expect((await invoke()).status).toBe(409);expect(m.send).not.toHaveBeenCalled();});
+ it('respects preview and kill switches',async()=>{vi.stubEnv('VERCEL_ENV','preview');expect((await invoke()).status).toBe(409);vi.stubEnv('VERCEL_ENV','production');vi.stubEnv('FOLLOWUP_SENDS_DRYRUN','1');expect((await invoke()).status).toBe(409);vi.stubEnv('FOLLOWUP_SENDS_DRYRUN','');m.killed.mockResolvedValue(true);expect((await invoke()).status).toBe(409);expect(m.send).not.toHaveBeenCalled();});
+ it('sends a reviewed follow-up while the automatic chaser stays in shadow mode',async()=>{m.shadow=true;vi.stubEnv('AGENT_GRAPH_DRYRUN','1');expect((await invoke()).status).toBe(200);expect(m.send).toHaveBeenCalledTimes(1);});
  it('blocks duplicate approval before dispatch',async()=>{m.rpc.mockResolvedValue({data:null,error:{message:'Another teammate updated this item'}});expect((await invoke()).status).toBe(409);expect(m.send).not.toHaveBeenCalled();});
  it.each(['email','sms_zoom'])('claims, sends once, and records %s',async channel=>{
   expect((await invoke({channel,sender:channel==='email'?followupSenders().email:followupSenders().sms,recipient:channel==='email'?'vendor@example.test':'+15415551234'})).status).toBe(200);
@@ -60,5 +61,5 @@ describe('vendor batch send',()=>{
   expect((await batch()).status).toBe(409);expect(m.send).not.toHaveBeenCalled();
   expect(m.rpc).toHaveBeenLastCalledWith('estimate_followup_finish',{request:{id,attempt_id:'a-1',status:'skipped',error:'Batch cancelled before sending'}});
  });
- it('respects preview mode',async()=>{m.gather.mockResolvedValue(two());m.shadow=true;expect((await batch()).status).toBe(409);expect(m.rpc).not.toHaveBeenCalled();});
+ it('respects preview mode',async()=>{m.gather.mockResolvedValue(two());vi.stubEnv('VERCEL_ENV','preview');expect((await batch()).status).toBe(409);expect(m.rpc).not.toHaveBeenCalled();});
 });
