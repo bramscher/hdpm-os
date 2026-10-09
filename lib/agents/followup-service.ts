@@ -5,7 +5,7 @@ import { getAdapter } from './channels';
 import { getAgentConfig, isGloballyKilled } from './config';
 import { getPilotConfig } from './pilot';
 import { isZoomSmsConfigured, smsSenderEmail } from '@/lib/zoom-phone';
-import { canReviewFollowups } from './followup-access';
+import { canReviewFollowups, FOLLOWUP_REVIEWERS_DENIED } from './followup-access';
 import type { OutboxMessage } from './types';
 import { businessDaysBetween } from '@/lib/maintenance/business-days';
 import { logAudit } from '@/lib/audit';
@@ -50,7 +50,7 @@ export async function loadFollowupQueue() {
     messagingStatus:killed?'Messaging paused':!config?.enabled?'Trial not activated':preview?'Preview mode — outbound sends disabled':'Human-reviewed sends enabled', loadedAt:new Date().toISOString()};
 }
 export async function decideFollowup(actor: string,input: Record<string,any>) {
-  if(!await canReviewFollowups(actor)) throw new Error('This trial is reviewed by Penny and Craig.');
+  if(!await canReviewFollowups(actor)) throw new Error(FOLLOWUP_REVIEWERS_DENIED);
   if(!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(input.id||'') || !Number.isInteger(input.version) || input.version<0 || !['send','snooze','dismiss','reopen','verified_sent','verified_unsent','note','help','reassign'].includes(input.op)) throw new Error('Invalid review action');
   if(typeof input.note!=='string' || input.note.length>2000)throw new Error('Team note must be under 2,000 characters');
   if(input.next_review_date && (!/^\d{4}-\d{2}-\d{2}$/.test(input.next_review_date) || input.next_review_date <= new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}).format(new Date())))throw new Error('Choose a future review date.');
@@ -106,7 +106,7 @@ async function assertNoRecentLegacySend(db:ReturnType<typeof getSupabaseAdmin>,i
  * message goes out once. A failed claim releases the ones already taken.
  */
 export async function decideVendorBatch(actor:string,input:Record<string,any>) {
-  if(!await canReviewFollowups(actor)) throw new Error('This trial is reviewed by Penny and Craig.');
+  if(!await canReviewFollowups(actor)) throw new Error(FOLLOWUP_REVIEWERS_DENIED);
   if(input.confirmed!==true)throw new Error('Confirm the recipient and message before sending');
   const items:{id:string;version:number;contextVersion:string}[]=Array.isArray(input.items)?input.items:[];
   if(items.length<2||items.length>BATCH_MAX||new Set(items.map(i=>i.id)).size!==items.length||items.some(i=>!/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(i?.id||'')||!Number.isInteger(i.version)||i.version<0))throw new Error(`Choose 2 to ${BATCH_MAX} work orders for one vendor`);
