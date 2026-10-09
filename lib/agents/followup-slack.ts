@@ -1,8 +1,9 @@
 import { after, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { loadFollowupQueue, followupDue, decideFollowup, fileFollowupHelp } from './followup-service';
-import { FOLLOWUP_REVIEWERS, FOLLOWUP_REVIEWERS_DENIED, canReviewFollowups } from './followup-access';
-import { resolveStaffBySlackId, resolveStaffByPersonOrEmail } from './staff';
+import { FOLLOWUP_REVIEWERS_DENIED, canReviewFollowups, followupTeam } from './followup-access';
+import { morningSeven } from './chase-board';
+import { resolveStaffBySlackId } from './staff';
 import { sendSlackMessage, updateSlackMessage, splitSlackMessageId } from './channels/slack';
 import { getAgentConfig, isGloballyKilled } from './config';
 import type { FollowupCandidate, FollowupReview } from './estimate-followups';
@@ -15,7 +16,7 @@ const safe=(text:string)=>text.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':
 const button=(text:string,id:string,value:string)=>({type:'button',text:plain(text),action_id:id,value});
 type Queue=Awaited<ReturnType<typeof loadFollowupQueue>>;
 
-export function followupCard(c:FollowupCandidate,r?:FollowupReview) {
+export function followupCard(c:FollowupCandidate,r?:FollowupReview,team:string[]=[]) {
   const waiting=r?.next_review_at?`Next review: ${new Date(r.next_review_at).toLocaleString('en-US',{timeZone:'America/Los_Angeles'})} PT`:'';
   const status=c.eligible===false?'No longer overdue':c.newEpisode?'New work-order episode — reopen review':r?.status||'Needs review';
   const blocks:any[]=[section(`WO ${c.woNumber||'—'} · ${c.property}${c.unit?` · ${c.unit}`:''}\n${c.description.slice(0,500)}`),section(`${c.reason}\nHDPM owner: ${c.owner||'Unassigned'} · Vendor: ${c.vendor||'Unassigned'}\n${c.sourceStatus||'Unknown source status'} · ${c.age} business days in this step\nReview: ${status}${waiting?` · ${waiting}`:''}`)];
@@ -28,6 +29,7 @@ export function followupCard(c:FollowupCandidate,r?:FollowupReview) {
   }
   actions.push(button('Update / snooze','mf:manage',c.id),{type:'button',text:plain('Open shared queue'),url:`${HOME}?followup=${c.id}#maintenance-followups`,action_id:'mf:link'});
   if(c.appfolioLink)actions.push({type:'button',text:plain('Open in AppFolio'),url:c.appfolioLink,action_id:'mf:appfolio'});
+  if(c.eligible!==false)for(const person of team)if(person.toLowerCase()!==(c.owner||'').toLowerCase())actions.push(button(`Assign to ${person}`,'mf:assign',`${c.id}|${person}`));
   blocks.push({type:'actions',elements:actions});
   blocks.push({type:'context',elements:[plain(`Source synced: ${c.sourceUpdatedAt||'unknown'}. No recorded reply does not prove no reply; check the conversation before sending.`)]});
   return blocks;
@@ -98,6 +100,19 @@ export async function handleFollowupInteraction(payload:any) {
     return NextResponse.json({response_action:'update',view:resultView('Processing your review. This view will show the result; do not resend while it is processing.')});
   }
   const action=payload.actions?.[0];if(!action||action.action_id==='mf:link'||action.action_id==='mf:appfolio')return new NextResponse(null,{status:200});
+  if(action.action_id==='mf:assign') {
+    const [id,person]=String(action.value||'').split('|');
+    if(!/^[\da-f-]{36}$/i.test(id||'')||!person)return new NextResponse(null,{status:200});
+    after(async()=>{
+      try {
+        if(!(await followupTeam()).some(s=>s.person===person))throw new Error(`${person} is not on the follow-up team`);
+        const q=await loadFollowupQueue();const review=q.reviews.find(r=>r.work_order_id===id);
+        await decideFollowup(staff.email!,{id,version:review?.version||0,op:'reassign',owner_person:person,note:`Assigned to ${person} from Slack by ${staff.person}`});
+      }catch(e){await sendSlackMessage({channel:payload.user.id,text:`Could not assign this follow-up: ${(e as Error).message}`}).catch(()=>{});}
+      await refreshFollowupSlack(id);
+    });
+    return new NextResponse(null,{status:200});
+  }
   if(!['mf:email','mf:sms_zoom','mf:manage'].includes(action.action_id) || !/^[\da-f-]{36}$/i.test(action.value||''))return new NextResponse(null,{status:200});
   const opened=await slackView('views.open',{trigger_id:payload.trigger_id,view:resultView('Loading current work-order context…')});
   after(async()=>{
@@ -128,27 +143,29 @@ async function putMessage(email:string,userId:string,key:string,text:string,bloc
 }
 export async function refreshFollowupSlack(id:string) {
   try {
-    const q=await loadFollowupQueue();const c=q.candidates.find(c=>c.id===id);if(!c)return;
+    const [q,team]=await Promise.all([loadFollowupQueue(),followupTeam()]);const c=q.candidates.find(c=>c.id===id);if(!c)return;
     const {data,error}=await getSupabaseAdmin().from('maintenance_followup_slack').select('*').eq('work_order_id',id).eq('state','sent');if(error)throw error;
     for(const row of data||[]) {const target=splitSlackMessageId(row.message_id);if(!target)continue;
-      const result=await updateSlackMessage({...target,text:`Maintenance follow-up — WO ${c.woNumber}`,blocks:followupCard(c,q.reviews.find(r=>r.work_order_id===id))});
+      const result=await updateSlackMessage({...target,text:`Maintenance follow-up — WO ${c.woNumber}`,blocks:followupCard(c,q.reviews.find(r=>r.work_order_id===id),team.map(s=>s.person))});
       if(result.status!=='sent')console.error('[followup] Slack card refresh failed',result.error);
     }
   }catch(e){console.error('[followup] Slack refresh failed',e);}
 }
 export async function publishFollowupQueue(options:{preview?:boolean;now?:Date}={}) {
-  const now=options.now||new Date();const q=await loadFollowupQueue();
+  const now=options.now||new Date();const [q,team]=await Promise.all([loadFollowupQueue(),followupTeam()]);
   const due=q.candidates.filter(c=>c.eligible!==false && (c.newEpisode || followupDue(q.reviews.find(r=>r.work_order_id===c.id),now)));
-  const selected=due.slice(0,7);
-  if(options.preview)return {preview:true,total:due.length,reviewers:FOLLOWUP_REVIEWERS,cards:selected.map(c=>followupCard(c,q.reviews.find(r=>r.work_order_id===c.id))),messagingStatus:q.messagingStatus};
+  const reviews=new Map(q.reviews.map(r=>[r.work_order_id,r])),people=team.map(s=>s.person);
+  // The Morning 7: each teammate's own work first, then an even share of what nobody on the team owns.
+  const plan=team.map(staff=>({staff,selected:morningSeven(staff.person,people,due,reviews,now)}));
+  if(options.preview)return {preview:true,total:due.length,reviewers:plan.map(p=>({person:p.staff.person,cards:p.selected.map(c=>followupCard(c,reviews.get(c.id),people))})),messagingStatus:q.messagingStatus};
   if(!(await getAgentConfig('estimate_chaser','team_review'))?.enabled || await isGloballyKilled())throw new Error('Shared trial is not activated or messaging is paused');
+  if(!team.length)throw new Error('Nobody with a Slack identity is assigned to the follow-up queue');
   const results=[];
-  for(const email of FOLLOWUP_REVIEWERS) {
-    const staff=await resolveStaffByPersonOrEmail(email);
-    if(!staff?.slack_user_id)throw new Error(`No active Slack identity for ${email}`);
+  for(const {staff,selected} of plan) {
+    const email=staff.email||staff.person,mine=selected.filter(c=>c.owner?.toLowerCase()===staff.person.toLowerCase()).length;
     const links:string[]=[];
     for(const c of selected) {
-      const saved=await putMessage(email,staff.slack_user_id,`wo:${c.id}`,`Maintenance follow-up — WO ${c.woNumber}`,followupCard(c,q.reviews.find(r=>r.work_order_id===c.id)),c.id);
+      const saved=await putMessage(email,staff.slack_user_id!,`wo:${c.id}`,`Maintenance follow-up — WO ${c.woNumber}`,followupCard(c,reviews.get(c.id),people),c.id);
       const target=saved?splitSlackMessageId(saved):null;
       if(target)links.push(`<${HOME}?followup=${c.id}#maintenance-followups|WO ${safe(c.woNumber||'—')}> · ${safe(c.property)} · ${safe(c.reason)}`);
     }
@@ -156,8 +173,8 @@ export async function publishFollowupQueue(options:{preview?:boolean;now?:Date}=
     const {data:posted,error}=await getSupabaseAdmin().from('maintenance_followup_slack').select('work_order_id').eq('reviewer_email',email).eq('state','sent').not('work_order_id','is',null);
     if(error)throw error;
     for(const row of posted||[])if(!selected.some(c=>c.id===row.work_order_id))await refreshFollowupSlack(row.work_order_id);
-    const text=`Maintenance follow-ups — ${due.length} need action. Showing ${selected.length}; ${Math.max(0,due.length-selected.length)} more in Company Issues.`;
-    await putMessage(email,staff.slack_user_id,`summary:${todayPacific(now)}`,text,[section(text),...(links.length?[{type:'section',text:{type:'mrkdwn',text:links.join('\n').slice(0,2900)}}]:[]),{type:'actions',elements:[{type:'button',text:plain('Open full queue'),url:`${HOME}#maintenance-followups`,action_id:'mf:link'}]}]);
+    const text=`The Morning 7 — ${selected.length} for you today (${mine} assigned to you, ${selected.length-mine} from the unassigned pool). ${due.length} need action across the team.`;
+    await putMessage(email,staff.slack_user_id!,`summary:${todayPacific(now)}`,text,[section(text),...(links.length?[{type:'section',text:{type:'mrkdwn',text:links.join('\n').slice(0,2900)}}]:[]),{type:'actions',elements:[{type:'button',text:plain('Open full queue'),url:`${HOME}#maintenance-followups`,action_id:'mf:link'}]}]);
     results.push({email,items:selected.length});
   }
   for(const review of q.reviews.filter(r=>r.status==='help'))await fileFollowupHelp(review.work_order_id,review.updated_by,review.note);

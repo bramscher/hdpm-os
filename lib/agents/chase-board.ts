@@ -65,13 +65,27 @@ export function chaseCounts(events: ChaseEvent[]) {
  * Up to FOCUS_CAP items worth doing now. Delivery checks come first, then lanes take
  * turns (each lane ordered P1, then longest stuck) so one lane's backlog can't fill the list.
  */
-export function focusQueue(items: FollowupCandidate[], reviews: Map<string, FollowupReview>, now = new Date()) {
+export function focusQueue(items: FollowupCandidate[], reviews: Map<string, FollowupReview>, now = new Date(), cap = FOCUS_CAP) {
   const rank = (a: FollowupCandidate, b: FollowupCandidate) => Number(b.priority === 'P1') - Number(a.priority === 'P1') || daysStuck(b, now) - daysStuck(a, now);
   const open = items.filter(c => bucketFor(c, reviews.get(c.id), now) === 'active' && laneFor(c, reviews.get(c.id)) !== 'help');
   const queue = open.filter(c => isLocked(reviews.get(c.id))).sort(rank);
   const lanes = LANES.map(l => open.filter(c => !isLocked(reviews.get(c.id)) && laneFor(c, reviews.get(c.id)) === l.key).sort(rank)).filter(l => l.length);
-  for (let i = 0; queue.length < FOCUS_CAP && lanes.some(l => i < l.length); i++) for (const l of lanes) if (i < l.length && queue.length < FOCUS_CAP) queue.push(l[i]);
-  return queue;
+  for (let i = 0; queue.length < cap && lanes.some(l => i < l.length); i++) for (const l of lanes) if (i < l.length && queue.length < cap) queue.push(l[i]);
+  return queue.slice(0, cap);
+}
+
+/**
+ * The Morning 7 for one teammate: work they own first, then their share of work owned by
+ * nobody on the team, dealt out in focus order so no two teammates get the same item.
+ * Someone off the team gets the plain focus list.
+ */
+export function morningSeven(person: string, team: string[], items: FollowupCandidate[], reviews: Map<string, FollowupReview>, now = new Date()) {
+  const key = (s?: string | null) => (s || '').trim().toLowerCase();
+  const seats = team.map(key), seat = seats.indexOf(key(person));
+  if (seat < 0) return focusQueue(items, reviews, now);
+  const mine = focusQueue(items.filter(c => key(c.owner) === key(person)), reviews, now);
+  const shared = focusQueue(items.filter(c => !seats.includes(key(c.owner))), reviews, now, Infinity).filter((_, i) => i % seats.length === seat);
+  return [...mine, ...shared].slice(0, FOCUS_CAP);
 }
 
 const ptDay = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(d);

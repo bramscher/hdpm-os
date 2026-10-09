@@ -4,14 +4,14 @@ import Link from 'next/link';
 import {useSession} from 'next-auth/react';
 import {useRouter} from 'next/navigation';
 import type {FollowupCandidate,FollowupReview} from '@/lib/agents/estimate-followups';
-import {LANES,GATE,AGE_BUCKETS,agingSnapshot,matchesSnapshot,chasesFor,type SnapshotFilter,bucketFor,laneFor,focusQueue,chaseCounts,weeklySends,clearedToday,daysUntil,daysStuck,groupByVendor,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
+import {LANES,GATE,AGE_BUCKETS,agingSnapshot,matchesSnapshot,chasesFor,type SnapshotFilter,bucketFor,laneFor,morningSeven,chaseCounts,weeklySends,clearedToday,daysUntil,daysStuck,groupByVendor,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
 import ChaseCard,{STEP} from './ChaseCard';
 import ChaseDrawer,{button,field,date} from './ChaseDrawer';
 import FocusStrip from './FocusStrip';
 import AgingSnapshot from './AgingSnapshot';
 import VendorView from './VendorView';
 
-type Data={staff:string[];candidates:FollowupCandidate[];reviews:FollowupReview[];events:ChaseEvent[];legacy:LegacyChase[];senders:{email:string;sms:string};available:{email:boolean;sms:boolean};messagingStatus:string;loadedAt:string};
+type Data={staff:string[];team:string[];candidates:FollowupCandidate[];reviews:FollowupReview[];events:ChaseEvent[];legacy:LegacyChase[];senders:{email:string;sms:string};available:{email:boolean;sms:boolean};messagingStatus:string;loadedAt:string};
 const LANE_PREVIEW=8;
 /** When a parked item comes back: its review date, or for a parts order not yet due, its chase date. */
 const backOn=(c:FollowupCandidate,reviews:Map<string,FollowupReview>)=>c.parts&&!c.parts.due?c.parts.dueAt||'':reviews.get(c.id)?.next_review_at||'';
@@ -47,7 +47,9 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
   const shown=candidates.filter(c=>(scope==='all'||c.owner?.toLowerCase()===me)&&(!q||`${c.property} ${c.unit} ${c.woNumber} ${c.vendor} ${c.owner} ${c.description}`.toLowerCase().includes(q)));
   const bucket=(c:FollowupCandidate)=>bucketFor(c,reviews.get(c.id),now);
   const active=shown.filter(c=>bucket(c)==='active');
-  const focus=focusQueue(active,reviews,now),inFocus=new Set(focus.map(c=>c.id));
+  // The Morning 7 is per person: work you own, then your share of what nobody on the team owns.
+  const person=data?.team.find(p=>p.toLowerCase()===me)||me||'';
+  const focus=morningSeven(person,data?.team||[],candidates.filter(c=>bucket(c)==='active'),reviews,now),inFocus=new Set(focus.map(c=>c.id));
   const snap=agingSnapshot(active,reviews,now);
   const filtered=active.filter(c=>matchesSnapshot(c,reviews.get(c.id),snapFilter,now));
   const lanes=LANES.map(l=>{const all=filtered.filter(c=>laneFor(c,reviews.get(c.id))===l.key).sort((a,b)=>daysStuck(b,now)-daysStuck(a,now));return {...l,all,rest:Object.keys(snapFilter).length?all:all.filter(c=>!inFocus.has(c.id)),oldest:all[0]?daysStuck(all[0],now):0};});
@@ -60,11 +62,11 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
 
  const current=data?.candidates.find(c=>c.id===selected);
  const drawer=current&&data&&<ChaseDrawer key={current.id} c={current} r={model.reviews.get(current.id)} legacy={data.legacy.find(p=>p.subject_id===current.id)} events={data.events.filter(e=>e.work_order_id===current.id)} chases={chasesFor(current,model.chases)}
-  staff={data.staff} senders={data.senders} available={data.available} busy={busy} onAct={act(current.id)} onClose={()=>setSelected(null)} onPartsChanged={()=>void load()}/>;
+  staff={data.staff} team={data.team} senders={data.senders} available={data.available} busy={busy} onAct={act(current.id)} onClose={()=>setSelected(null)} onPartsChanged={()=>void load()}/>;
  const card=(c:FollowupCandidate,showLane=false)=><ChaseCard key={c.id} c={c} r={model.reviews.get(c.id)} chases={chasesFor(c,model.chases)} onOpen={()=>setSelected(c.id)} showLane={showLane?laneLabel[laneFor(c,model.reviews.get(c.id))]:undefined}/>;
  const alerts=<>{error&&<p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-800">{error}</p>}{notice&&<p role="status" className="rounded-lg bg-green-50 p-4 text-sm">{notice}</p>}</>;
  const focusList=<section aria-labelledby="focus-heading" className="space-y-2">
-  <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 id="focus-heading" className="text-sm font-semibold">Do these first</h3>
+  <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 id="focus-heading" className="text-sm font-semibold">The Morning 7</h3>
    <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-charcoal-500">Each card says its next step:{(['fix','decide','chase','check'] as const).map(k=><span key={k} className="inline-flex items-center gap-1"><span className={`h-1.5 w-1.5 rounded-full ${STEP[k].dot}`}/>{STEP[k].label}</span>)}</p></div>
   {model.focus.length?<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">{model.focus.map(c=>card(c,true))}</div>
    :<p className="rounded-xl border border-dashed border-sand-200 p-6 text-center text-sm text-charcoal-500">{loading&&!data?'Loading…':'Nothing needs a follow-up right now.'}</p>}

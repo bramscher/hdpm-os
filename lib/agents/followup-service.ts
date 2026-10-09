@@ -5,7 +5,7 @@ import { getAdapter } from './channels';
 import { getAgentConfig, isGloballyKilled } from './config';
 import { getPilotConfig } from './pilot';
 import { isZoomSmsConfigured, smsSenderEmail } from '@/lib/zoom-phone';
-import { canReviewFollowups, FOLLOWUP_REVIEWERS_DENIED } from './followup-access';
+import { canReviewFollowups, followupTeam, FOLLOWUP_REVIEWERS_DENIED } from './followup-access';
 import type { OutboxMessage } from './types';
 import { businessDaysBetween } from '@/lib/maintenance/business-days';
 import { logAudit } from '@/lib/audit';
@@ -45,7 +45,7 @@ export async function loadFollowupQueue() {
   }
   const preview=getPilotConfig().shadow || process.env.AGENT_GRAPH_DRYRUN==='1';
   const enabled=!!config?.enabled && !killed && !preview;
-  return {candidates,staff:(staff.data||[]).map(s=>s.person as string),reviews:reviews as FollowupReview[],events:events.sort((a,b)=>b.id-a.id),legacy:legacy.data||[],senders:followupSenders(),
+  return {candidates,staff:(staff.data||[]).map(s=>s.person as string),team:(await followupTeam()).map(s=>s.person),reviews:reviews as FollowupReview[],events:events.sort((a,b)=>b.id-a.id),legacy:legacy.data||[],senders:followupSenders(),
     available:{email:enabled && !!process.env.RESEND_API_KEY,sms:enabled && isZoomSmsConfigured() && process.env.AGENT_ZOOM_SMS_DRYRUN!=='1'},
     messagingStatus:killed?'Messaging paused':!config?.enabled?'Trial not activated':preview?'Preview mode — outbound sends disabled':'Human-reviewed sends enabled', loadedAt:new Date().toISOString()};
 }

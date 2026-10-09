@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { requireCompanySession } from '@/lib/require-role';
 import { resolveStaffByPersonOrEmail } from './staff';
+import { getNotifyRecipients } from './config';
 
-export const FOLLOWUP_REVIEWERS = ['brody@highdesertpm.com', 'craig@highdesertpm.com'];
-export const FOLLOWUP_REVIEWERS_DENIED = 'This trial is reviewed by Brody and Craig.';
+/** Used until people are assigned to the Maintenance Follow-up Queue on the Agents page. */
+export const FOLLOWUP_DEFAULT_TEAM = ['Brody', 'Craig'];
+export const FOLLOWUP_REVIEWERS_DENIED = 'Only people assigned to the Maintenance Follow-up Queue on the Agents page can review it.';
+/** The follow-up team, in order: team_review's assigned people (Agents page), else the default. */
+export async function followupTeam() {
+  return getNotifyRecipients('estimate_chaser', 'team_review', FOLLOWUP_DEFAULT_TEAM);
+}
 export async function canReviewFollowups(email: string): Promise<boolean> {
   const staff = await resolveStaffByPersonOrEmail(email);
-  return !!staff?.email && FOLLOWUP_REVIEWERS.includes(staff.email.toLowerCase());
+  if (!staff?.email) return false;
+  return (await followupTeam()).some(s => s.email?.toLowerCase() === staff.email!.toLowerCase());
 }
 export async function requireFollowupReviewer() {
   const guard = await requireCompanySession();
