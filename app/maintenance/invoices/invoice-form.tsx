@@ -19,7 +19,7 @@ import {
 
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 import { needsPriceReview, priceBookName, priceBookRate } from "@/lib/turn-estimator/price-book-display";
-import { chargeProblems, TENANT_REASON_LABEL, type ChargeTo, type TenantChargeReason } from "@/lib/invoice-charge";
+import { chargeProblems, isPlaceholderName, ownerCostSignals, TENANT_REASON_LABEL, type ChargeTo, type TenantChargeReason } from "@/lib/invoice-charge";
 
 interface InvoiceFormProps {
   initialLineType?: "labor" | "appliance";
@@ -1052,6 +1052,9 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
             <div>
               <p className="text-xs font-medium text-charcoal-400 uppercase tracking-wider">Charge to <span className="text-red-500">*</span></p>
               <p className="text-xs text-charcoal-400">An invoice charges the owner or the tenant, never both. Bill a split job as two invoices.</p>
+              <p className="text-xs text-charcoal-500">
+                <strong className="font-medium">Tenant charge</strong> = damage the tenant caused, or a lease fee. Pre-existing damage, move-in repairs and normal wear are an <strong className="font-medium">Owner charge</strong>.
+              </p>
             </div>
             <div role="radiogroup" aria-label="Charge to" className="inline-flex rounded-lg border border-sand-300 p-0.5">
               {(["owner", "tenant"] as const).map((who) => (
@@ -1102,6 +1105,9 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
               <div>
                 <label htmlFor="tenant-name" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Tenant name <span className="text-red-500">*</span></label>
                 <Input id="tenant-name" value={charge.tenant_name} onChange={(e) => updateCharge({ tenant_name: e.target.value })} placeholder="As on the lease" disabled={isLoading || chargeLocked} className="bg-white" />
+                {charge.tenant_name.trim() !== "" && isPlaceholderName(charge.tenant_name) && (
+                  <p className="mt-1 text-xs text-red-700">Enter the tenant’s name as on the lease. If no tenant caused this, switch to Owner charge.</p>
+                )}
               </div>
               <div>
                 <label htmlFor="tenant-unit" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">Unit <span className="text-red-500">*</span></label>
@@ -1121,6 +1127,16 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
               <div className="md:col-span-2">
                 <label htmlFor="tenant-note" className="block text-xs font-medium text-charcoal-400 uppercase tracking-wider mb-1.5">What happened, and the evidence <span className="text-red-500">*</span></label>
                 <textarea id="tenant-note" value={charge.tenant_charge_note} onChange={(e) => updateCharge({ tenant_charge_note: e.target.value })} rows={2} placeholder="e.g. Tenant-caused damage to bathroom door; photos on WO" disabled={isLoading || chargeLocked} className="w-full rounded-md border border-sand-300 bg-white px-3 py-2 text-sm" />
+                {ownerCostSignals(charge.tenant_charge_note).length > 0 && !chargeLocked && (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <span>
+                      This note mentions {ownerCostSignals(charge.tenant_charge_note).join(", ")} — that’s usually the <strong>owner’s</strong> cost, not the tenant’s.
+                    </span>
+                    <button type="button" onClick={() => updateCharge({ charge_to: "owner" })} className="rounded-md border border-amber-400 bg-white px-2 py-1 font-medium hover:bg-amber-100">
+                      Make it an Owner charge
+                    </button>
+                  </div>
+                )}
                 <p className="mt-1 text-xs text-charcoal-400">The owner pays this invoice as usual; the office then posts the charge to the tenant’s ledger to reimburse the owner. The note stays internal.</p>
               </div>
             </div>

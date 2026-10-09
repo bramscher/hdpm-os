@@ -45,6 +45,38 @@ const TENANT_KEYS = ['tenant_name', 'tenant_unit', 'tenant_charge_reason', 'tena
 export class ChargeValidationError extends Error {}
 
 const blank = (v: unknown) => typeof v !== 'string' || v.trim() === '';
+
+/**
+ * A tenant name typed only to get past the required field ("na", "n/a",
+ * "none", "tbd", "?"). A real tenant charge needs the person on the lease;
+ * typing a placeholder usually means nobody meant to charge a tenant.
+ */
+export function isPlaceholderName(v: unknown): boolean {
+  if (typeof v !== 'string') return false;
+  const t = v.trim().toLowerCase().replace(/[\s.\-_/\\?!*]+/g, '');
+  return t === '' || ['na', 'none', 'tbd', 'tba', 'unknown', 'nobody', 'tenant', 'x', 'xx', 'xxx', 'test', 'nil', 'null'].includes(t);
+}
+
+// Wording that describes damage the tenant didn't cause — usually the owner's cost.
+const PRE_EXISTING: { re: RegExp; phrase: string }[] = [
+  { re: /\b(old|prior|previous|existing|pre[-\s]?existing)\s+(damage|issue|problem|repair)s?\b/i, phrase: 'pre-existing damage' },
+  { re: /\b(previous|prior|old|former|last)\s+(tenant|resident|occupant)s?\b/i, phrase: 'a previous tenant' },
+  { re: /\bnew\s+(tenant|resident|move[-\s]?in)\b/i, phrase: 'a new tenant' },
+  { re: /\bmove[-\s]?in\b|\bbefore\s+(she|he|they|the tenant)\s+(moves?|moved|settles?|settled)\b/i, phrase: 'move-in' },
+  { re: /\b(normal|ordinary|regular)\s+wear\b|\bwear\s+(and|&)\s+tear\b/i, phrase: 'normal wear and tear' },
+  { re: /\b(age|aged|old age|end of (its )?life|worn out)\b/i, phrase: 'age or wear' },
+  { re: /\balready\s+(broken|damaged|cracked|there)\b|\bwhen (she|he|they) moved in\b/i, phrase: 'damage that was already there' },
+];
+
+/**
+ * Phrases in a tenant-charge note suggesting the damage wasn't the tenant's
+ * doing (pre-existing, move-in, normal wear). A warning only — the office
+ * decides — but it catches charges marked Tenant by mistake.
+ */
+export function ownerCostSignals(note: unknown): string[] {
+  if (typeof note !== 'string' || !note.trim()) return [];
+  return [...new Set(PRE_EXISTING.filter((p) => p.re.test(note)).map((p) => p.phrase))];
+}
 const clean = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
 
 export function isChargeTo(v: unknown): v is ChargeTo {
@@ -87,6 +119,9 @@ export function chargeProblems(inv: ChargeFields, { finalizing }: { finalizing: 
   if (charge === 'owner' || !finalizing) return [];
   const problems: string[] = [];
   if (blank(inv.tenant_name) || blank(inv.tenant_unit)) problems.push('A tenant charge needs the tenant’s name and unit.');
+  else if (isPlaceholderName(inv.tenant_name)) {
+    problems.push(`“${String(inv.tenant_name).trim()}” isn’t a tenant’s name. Enter the name on the lease — or, if no tenant caused this, make it an Owner charge.`);
+  }
   if (blank(inv.tenant_charge_note)) problems.push('Add a note explaining the tenant charge (what happened, and the evidence).');
   return problems;
 }

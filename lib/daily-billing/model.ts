@@ -1,7 +1,7 @@
 import {normalizeTechnician,type HdmsInvoice} from '@/lib/invoices';
 import {invoiceServiceDate,recordedLaborHours} from '@/lib/invoice-labor';
 import {shiftDay} from '@/lib/maintenance-workspace/model';
-import {chargeLabel} from '@/lib/invoice-charge';
+import {chargeLabel,isPlaceholderName,ownerCostSignals} from '@/lib/invoice-charge';
 export interface WorkOrder {id:string;wo_number:string|null;property_name:string|null;description:string|null;assigned_tech:string|null;assigned_to:string|null;completed_date:string|null;status:string|null;appfolio_status:string|null;stage:string|null;canceled_date:string|null;appfolio_link:string|null;vendor_name?:string|null;vendor_id?:string|null}
 export interface WorkRecord {id:string;task_id:string|null;work_order_id?:string|null;technician:string;work_date:string;minutes:number;activity_kind?:string;progress:string;note:string;materials:string;status:string;billability?:string;review_note:string;review_owner:string|null;review_due?:string|null;version:number}
 export interface Bill {id:string;hdms_invoice_id:string|null;reference:string|null;total_amount:number;synced_at:string}
@@ -36,7 +36,12 @@ export function buildDailyBilling(input:Input){
   else {const matched=input.bills.filter(b=>b.hdms_invoice_id===invoice.id);const billed=matched.reduce((n,b)=>n+Number(b.total_amount),0);
    if(!input.billsFresh||!matched.length||Math.abs(billed-Number(invoice.total_amount))>.01)add({...base,key:`invoice:${invoice.id}:posting`,kind:'posting',title:!input.billsFresh?'AppFolio verification unavailable':!matched.length?'Verify AppFolio posting':'AppFolio amount differs',detail:!input.billsFresh?'Refresh the AppFolio source before deciding this is unbilled.':!matched.length?'No matched bill found. Check for an existing direct bill before entering another.':`Invoice $${Number(invoice.total_amount).toFixed(2)}; matched AppFolio bills $${billed.toFixed(2)}.`});
    // Option (a): the owner pays HDMS's bill; the office also posts the charge to the tenant's ledger to reimburse the owner.
-   if(invoice.charge_to==='tenant'&&!invoice.tenant_ledger_posted_at)add({...base,key:`invoice:${invoice.id}:tenant_charge`,kind:'tenant_charge',title:'Post tenant ledger charge in AppFolio',detail:`${chargeLabel(invoice)} · ${invoice.invoice_code}. Post this charge to the tenant’s ledger to reimburse the owner, then mark it posted on the invoice.`});
+   if(invoice.charge_to==='tenant'&&!invoice.tenant_ledger_posted_at){
+    // Flag charges that read like the owner's cost (pre-existing / move-in / wear) or carry a placeholder tenant.
+    const signals=ownerCostSignals(invoice.tenant_charge_note);
+    const check=[isPlaceholderName(invoice.tenant_name)?'no real tenant name':null,signals.length?`note mentions ${signals.join(', ')}`:null].filter(Boolean).join('; ');
+    add({...base,key:`invoice:${invoice.id}:tenant_charge`,kind:'tenant_charge',title:check?'Check before posting: tenant charge may be the owner’s cost':'Post tenant ledger charge in AppFolio',detail:`${chargeLabel(invoice)} · ${invoice.invoice_code}. ${check?`⚠ ${check} — confirm the tenant caused this, or switch the invoice to Owner charge. `:''}Post this charge to the tenant’s ledger to reimburse the owner, then mark it posted on the invoice.`});
+   }
   }
  }
  const taskById=new Map(input.tasks.map(t=>[t.id,t]));const jobById=new Map(input.jobs.map(j=>[j.id,j]));
