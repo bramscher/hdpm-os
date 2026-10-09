@@ -1093,6 +1093,9 @@ export interface GuestCardKpi {
   monthOverMonthDelta: number;
   sourceBreakdownWeek: Array<{ source: string; count: number }>;
   sourceBreakdownMonth: Array<{ source: string; count: number }>;
+  /** thisWeek/lastWeek/sourceBreakdownWeek are trailing 7-day windows; this
+   * stamp tells lib/guest-card-trend.ts apart from older week-to-date rows. */
+  window: 'trailing_7d';
 }
 
 export async function fetchGuestCardKpi(): Promise<GuestCardKpi> {
@@ -1102,6 +1105,7 @@ export async function fetchGuestCardKpi(): Promise<GuestCardKpi> {
       today: 0, thisWeek: 0, thisMonth: 0, lastWeek: 0, lastMonth: 0,
       weekOverWeekDelta: 0, monthOverMonthDelta: 0,
       sourceBreakdownWeek: [], sourceBreakdownMonth: [],
+      window: 'trailing_7d',
     };
   }
 
@@ -1122,17 +1126,14 @@ export async function fetchGuestCardKpi(): Promise<GuestCardKpi> {
   const todayStart = new Date(now);
   todayStart.setUTCHours(0, 0, 0, 0);
 
-  // This week: Monday 00:00 UTC
-  const dayOfWeek = now.getUTCDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const thisWeekStart = new Date(now);
-  thisWeekStart.setUTCDate(thisWeekStart.getUTCDate() + mondayOffset);
-  thisWeekStart.setUTCHours(0, 0, 0, 0);
-
-  // Last week: prior Monday to prior Sunday
-  const lastWeekStart = new Date(thisWeekStart);
-  lastWeekStart.setUTCDate(lastWeekStart.getUTCDate() - 7);
-  const lastWeekEnd = new Date(thisWeekStart);
+  // This week / last week: trailing 7 days and the 7 days before that. A
+  // Monday-reset week-to-date count made the daily snapshots sawtooth (near
+  // zero every Monday) and was not comparable to the weekly history rebuilt
+  // by scripts/backfill-kpi-history.ts, which uses the same trailing window.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const thisWeekStart = new Date(now.getTime() - 7 * DAY_MS);
+  const lastWeekStart = new Date(now.getTime() - 14 * DAY_MS);
+  const lastWeekEnd = thisWeekStart;
 
   // This month: 1st of current month
   const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -1172,6 +1173,7 @@ export async function fetchGuestCardKpi(): Promise<GuestCardKpi> {
     monthOverMonthDelta: thisMonth - lastMonth,
     sourceBreakdownWeek: getSourceBreakdown(thisWeekLeads),
     sourceBreakdownMonth: getSourceBreakdown(thisMonthLeads),
+    window: 'trailing_7d',
   };
 }
 

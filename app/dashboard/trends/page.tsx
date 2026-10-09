@@ -6,7 +6,6 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  BarChart,
   Bar,
   ComposedChart,
   Line,
@@ -913,6 +912,8 @@ const SOURCE_COLORS: Record<string, string> = {
   'Other': '#9ca3af',
 };
 
+const WEBSITE_FORM_COLOR = "#7c3aed";
+
 function GuestCardChart({ data }: { data: TrendPoint[] }) {
   if (data.length === 0) return <EmptyChart name="Guest Card Volume" />;
 
@@ -937,8 +938,13 @@ function GuestCardChart({ data }: { data: TrendPoint[] }) {
     }
   }
 
+  // websiteForm: website tenant leads from the CRM (see /api/kpi/trends).
+  // Drawn as a line, not stacked — some are also keyed into AppFolio.
+  const hasWebsiteForm = data.some((d) => typeof d.value.websiteForm === "number");
+
   const sourceBarData = data.map((d) => {
     const row: Record<string, string | number> = { date: d.date };
+    if (hasWebsiteForm) row.websiteForm = d.value.websiteForm ?? 0;
     const breakdown = d.value.sourceBreakdownWeek;
     if (Array.isArray(breakdown)) {
       for (const item of breakdown as Array<{ source: string; count: number }>) {
@@ -977,6 +983,9 @@ function GuestCardChart({ data }: { data: TrendPoint[] }) {
           { label: "Worst Week", value: `${stats.low}` },
           { label: "Weekly Avg", value: `${stats.avg.toFixed(0)}` },
           { label: "Best Source", value: bestSource },
+          ...(hasWebsiteForm
+            ? [{ label: "Website Forms (CRM)", value: `${data[data.length - 1]?.value.websiteForm ?? 0}` }]
+            : []),
         ]}
       />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1000,7 +1009,7 @@ function GuestCardChart({ data }: { data: TrendPoint[] }) {
         <div>
           <p className="text-xs font-medium text-charcoal-500 mb-2">Source Breakdown</p>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={sourceBarData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+            <ComposedChart data={sourceBarData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
               <CartesianGrid {...GRID_PROPS} />
               <XAxis dataKey="date" tick={X_TICK} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} tickFormatter={(v) => tickFormat(v, multi)} />
               <YAxis tick={Y_TICK} axisLine={false} tickLine={false} width={40} />
@@ -1019,7 +1028,18 @@ function GuestCardChart({ data }: { data: TrendPoint[] }) {
                   name={source}
                 />
               ))}
-            </BarChart>
+              {hasWebsiteForm && (
+                <Line
+                  type="monotone"
+                  dataKey="websiteForm"
+                  stroke={WEBSITE_FORM_COLOR}
+                  strokeWidth={2}
+                  strokeDasharray="4 3"
+                  dot={false}
+                  name="Website forms (CRM)"
+                />
+              )}
+            </ComposedChart>
           </ResponsiveContainer>
           <div className="flex flex-wrap gap-2 mt-2 justify-center">
             {sourceKeys.map((source) => (
@@ -1028,10 +1048,16 @@ function GuestCardChart({ data }: { data: TrendPoint[] }) {
                 <span>{source}</span>
               </div>
             ))}
+            {hasWebsiteForm && (
+              <div className="flex items-center gap-1 text-[10px] text-charcoal-500">
+                <div className="w-3 border-t-2 border-dashed" style={{ borderColor: WEBSITE_FORM_COLOR }} />
+                <span>Website forms (CRM)</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
-      <InsightLine text="Track which sources trend up or down week over week to guide advertising spend. A drop in any single source warrants checking whether that listing is still active and correctly priced." />
+      <InsightLine text="Bars are AppFolio guest cards, one per week (trailing 7 days). The dashed line counts website tenant inquiries saved in the CRM — those are entered into AppFolio by hand, so the purple HDPM Website bar can run below it. A drop in any single source warrants checking whether that listing is still active and correctly priced." />
     </div>
   );
 }
