@@ -10,11 +10,11 @@ export const button='inline-flex min-h-11 items-center justify-center rounded-lg
 export const field='w-full rounded-lg border border-sand-200 bg-white p-3 text-sm';
 export const date=(value?:string|null)=>value?new Date(value).toLocaleString('en-US',{timeZone:'America/Los_Angeles'}):'Not recorded';
 
-type Props={c:FollowupCandidate;r?:FollowupReview;legacy?:LegacyChase;events:ChaseEvent[];chases:number;staff:string[];senders:{email:string;sms:string};available:{email:boolean;sms:boolean};busy:boolean;
+type Props={c:FollowupCandidate;r?:FollowupReview;legacy?:LegacyChase;events:ChaseEvent[];chases:number;staff:string[];team:string[];senders:{email:string;sms:string};available:{email:boolean;sms:boolean};busy:boolean;
  onAct:(op:string,payload:Record<string,unknown>)=>Promise<boolean>;onClose:()=>void;onPartsChanged:()=>void};
 
 /** The shared review editor for one work order, as a right-hand drawer. */
-export default function ChaseDrawer({c,r,legacy,events,chases,staff,senders,available,busy,onAct,onClose,onPartsChanged}:Props) {
+export default function ChaseDrawer({c,r,legacy,events,chases,staff,team,senders,available,busy,onAct,onClose,onPartsChanged}:Props) {
  const [channel,setChannel]=useState<'email'|'sms_zoom'>('email');
  const [recipient,setRecipient]=useState(c.email),[subject,setSubject]=useState(c.subject),[body,setBody]=useState(c.emailBody);
  const [note,setNote]=useState(''),[nextDate,setNextDate]=useState(''),[confirmed,setConfirmed]=useState(false),[owner,setOwner]=useState('');
@@ -59,6 +59,7 @@ export default function ChaseDrawer({c,r,legacy,events,chases,staff,senders,avai
     {!locked&&<label className="block text-sm">Next review date (8 AM Pacific; defaults to 3 business days)<input type="date" className={field} value={nextDate} disabled={busy} onChange={e=>setNextDate(e.target.value)}/></label>}
     <div className="flex flex-wrap gap-2">{(locked?[['verified_sent','Checked: sent'],['verified_unsent','Checked: not sent']]:[['note','Record call / reply'],['snooze','Snooze'],['help','Request help'],['dismiss','No follow-up needed'],...(r&&!isDue(r)?[['reopen','Reopen review']]:[])]).map(([op,label])=><button key={op} className={button} disabled={busy||!note.trim()} onClick={()=>void act(op)}>{label}</button>)}</div>
     {!note.trim()&&<p className="text-xs text-charcoal-500">Add a note to snooze, record a call, request help, or dismiss.</p>}
+    {!locked&&c.eligible!==false&&<div className="flex flex-wrap items-center gap-2 text-sm"><span>Owner: {c.owner||'Unassigned'}</span>{team.filter(p=>p.toLowerCase()!==(c.owner||'').toLowerCase()).map(p=><button key={p} className={button} disabled={busy} onClick={()=>void onAct('reassign',{version:r?.version||0,owner_person:p,note:note.trim()||`Assigned to ${p} from the Chase Board`,next_review_date:nextDate||null})}>Assign to {p}</button>)}</div>}
     {!locked&&<label className="block text-sm">Reassign HDPM owner<select className={field} value={owner} onChange={e=>setOwner(e.target.value)}><option value="">Choose owner</option>{staff.map(person=><option key={person} value={person}>{person}</option>)}</select><button className={`${button} mt-2`} disabled={busy||!owner||!note.trim()} onClick={()=>void act('reassign')}>Save owner and next-action date</button></label>}
     <details open={events.length<=3}><summary className="cursor-pointer text-sm font-medium">Message and review history ({events.length})</summary><ol className="mt-2 space-y-2 border-l-2 border-sand-200 pl-4">{events.map(e=><li key={e.id} className="text-sm"><p className="text-charcoal-500">{date(e.created_at)} PT · {e.actor} · {e.action==='delivery'?e.details.status==='sent'?'Sent':'Delivery uncertain':e.action}</p>{e.details.note&&<p>{e.details.note}</p>}{['send','delivery'].includes(e.action)&&e.details.recipient&&<p className="text-xs text-charcoal-500">{e.details.channel} to {e.details.recipient} · {e.details.subject}</p>}{['send','delivery'].includes(e.action)&&e.details.body&&<p className="mt-1 whitespace-pre-wrap rounded bg-sand-50 p-2 text-xs">{e.details.body}</p>}</li>)}</ol></details>
    </div>

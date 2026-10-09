@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,ageBucket,agingSnapshot,matchesSnapshot,chasesFor,FOCUS_CAP} from '../chase-board';
+import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,morningSeven,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,ageBucket,agingSnapshot,matchesSnapshot,chasesFor,FOCUS_CAP} from '../chase-board';
 import type {FollowupCandidate,FollowupReview} from '../estimate-followups';
 const now=new Date('2026-10-01T18:00:00Z');
 const ago=(d:number)=>new Date(now.getTime()-d*86400_000).toISOString();
@@ -135,4 +135,16 @@ describe('parts lane',()=>{
   expect(focusQueue([...vendors,part],new Map(),now).map(x=>x.id)).toContain(part.id);
  });
  it('adds a parts row to the aging snapshot',()=>{expect(agingSnapshot([p()],new Map(),now).rows.find(x=>x.key==='parts')?.total).toBe(1);});
+});
+describe('the Morning 7',()=>{
+ it('puts your own work first, then deals out the unassigned with no duplicates',()=>{
+  const brody=Array.from({length:3},(_,i)=>c({owner:'Brody',statusSince:ago(i+1)}));
+  const pool=Array.from({length:10},(_,i)=>c({owner:'Cheryl',statusSince:ago(i+20)}));
+  const craigs=c({owner:'Craig'});const all=[...brody,...pool,craigs],reviews=new Map();
+  const b=morningSeven('Brody',['Brody','Craig'],all,reviews,now),k=morningSeven('craig',['Brody','Craig'],all,reviews,now);
+  expect(b).toHaveLength(FOCUS_CAP);expect(b.slice(0,3).every(x=>x.owner==='Brody')).toBe(true);
+  expect(k[0]).toBe(craigs);expect(b.some(x=>x.owner==='Craig')||k.some(x=>x.owner==='Brody')).toBe(false);
+  const shared=[...b,...k].filter(x=>x.owner==='Cheryl').map(x=>x.id);expect(new Set(shared).size).toBe(shared.length);
+ });
+ it('falls back to the plain focus list for someone off the team',()=>{const items=[c(),c()];expect(morningSeven('Penny',['Brody','Craig'],items,new Map(),now)).toEqual(focusQueue(items,new Map(),now));});
 });
