@@ -760,8 +760,11 @@ export interface LeaseRenewalKpi {
 }
 
 /**
- * Uses /leases (RenewedOn field) for renewals and /tenants (Status=Notice
- * with MoveOutOn) for move-outs. Renewal rate = renewals / (renewals + moveOuts).
+ * Trailing 90 days: leases with RenewedOn in the window vs tenants who actually
+ * moved out (MoveOutOn) in the window. Same formula as the saved history
+ * (scripts/backfill-kpi-history*.ts); counting tenants currently on notice,
+ * as this used to, inflated the rate from Aug 2026 on.
+ * Renewal rate = renewals / (renewals + moveOuts).
  */
 export async function fetchLeaseRenewalKpi(): Promise<LeaseRenewalKpi> {
   const config = getKpiConfig();
@@ -769,8 +772,10 @@ export async function fetchLeaseRenewalKpi(): Promise<LeaseRenewalKpi> {
     return { rate: 0, renewals: 0, moveOuts: 0 };
   }
 
-  const ninetyDaysAgo = new Date();
+  const now = new Date();
+  const ninetyDaysAgo = new Date(now);
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const inWindow = (d?: string | null) => !!d && new Date(d) >= ninetyDaysAgo && new Date(d) <= now;
 
   const [leases, tenants] = await Promise.all([
     v0FetchAll<V0Lease>(
@@ -785,16 +790,8 @@ export async function fetchLeaseRenewalKpi(): Promise<LeaseRenewalKpi> {
     ),
   ]);
 
-  // Renewals: leases with RenewedOn in the last 90 days
-  const renewals = leases.filter(
-    (l) => l.RenewedOn && new Date(l.RenewedOn) >= ninetyDaysAgo
-  ).length;
-
-  // Move-outs: tenants with Status=Notice and a MoveOutOn date
-  const moveOuts = tenants.filter((t) => {
-    if (t.HiddenAt || !t.MoveOutOn) return false;
-    return (t.Status || '').toLowerCase() === 'notice';
-  }).length;
+  const renewals = leases.filter((l) => inWindow(l.RenewedOn)).length;
+  const moveOuts = tenants.filter((t) => !t.HiddenAt && inWindow(t.MoveOutOn)).length;
 
   const total = renewals + moveOuts;
   const rate = total > 0 ? Math.round((renewals / total) * 1000) / 10 : 0;
