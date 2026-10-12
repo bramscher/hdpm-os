@@ -78,7 +78,7 @@ export function TurnDetail({ detail }: { detail: Detail }) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1400px] gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_300px]">
+      <div className="mx-auto grid max-w-[1400px] gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-5">
           {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{error}</div>}
 
@@ -137,7 +137,7 @@ export function TurnDetail({ detail }: { detail: Detail }) {
           })}
         </div>
 
-        <aside className="space-y-5">
+        <aside className="min-w-0 space-y-5">
           <section className={`${card} p-4`}>
             <h2 className="font-semibold text-charcoal-900">{closed ? 'Marked complete' : 'Close out'}</h2>
             <p className="mt-1 text-xs text-charcoal-500">
@@ -165,8 +165,8 @@ export function TurnDetail({ detail }: { detail: Detail }) {
                 ['Target turnaround', shortDate(turn.target_ready)],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-3">
-                  <dt className="text-charcoal-500">{k}</dt>
-                  <dd className="text-right font-medium text-charcoal-900">{v}</dd>
+                  <dt className="shrink-0 text-charcoal-500">{k}</dt>
+                  <dd className="min-w-0 break-words text-right font-medium text-charcoal-900">{v}</dd>
                 </div>
               ))}
             </dl>
@@ -260,52 +260,61 @@ function CheckRow({
 
 function WoTable({ wos, disabled, onStatus }: { wos: DetailWo[]; disabled: boolean; onStatus: (id: string, s: WoStatus) => void }) {
   return (
-    <div className="overflow-x-auto border-t border-sand-100">
-      <table className="w-full min-w-[980px] text-left text-sm">
-        <thead className="text-xs text-charcoal-500">
-          <tr>
-            {['Work order', 'Vendor', 'Assigned employee', 'Estimate', 'Approved', 'Status', 'Scheduled', 'Done', 'Invoice', 'Reminder task'].map((h) => (
-              <th key={h} className="px-3 py-2 align-top font-bold text-charcoal-700 first:pl-4">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-sand-100">
-          {wos.map((w) => (
-            <tr key={w.id} className="align-top">
-              <td className="py-2.5 pl-4 pr-3">
-                <div className="font-medium text-charcoal-900">{w.title}</div>
-                <div className="text-xs text-charcoal-500">
-                  {w.category}{w.wo_number ? ` · WO ${w.wo_number}` : ''}
-                  {w.appfolio_link && <> · <a href={w.appfolio_link} target="_blank" rel="noopener noreferrer" className="text-blue-700">AF↗</a></>}
-                </div>
-              </td>
-              <td className="px-3 py-2.5">{w.vendor ?? '—'}</td>
-              <td className="px-3 py-2.5">{w.assigned ?? '—'}</td>
-              <td className="px-3 py-2.5">{money(w.estimate)}</td>
-              <td className="px-3 py-2.5">{w.approved != null ? money(w.approved) : w.estimate != null ? 'Pending' : '—'}</td>
-              <td className="px-3 py-2.5">
-                <select
-                  className={`max-w-[220px] rounded-full border-0 px-2.5 py-1 text-xs font-medium ${WO_TONE[w.status]}`}
-                  value={w.status}
-                  disabled={disabled}
-                  onChange={(e) => onStatus(w.id, e.target.value as WoStatus)}
-                  aria-label="Change status"
-                >
-                  {WO_STATUSES.map((s) => <option key={s} value={s}>{WO_STATUS_LABEL[s]}</option>)}
-                </select>
-                <div className="mt-1 text-xs text-charcoal-500">
-                  {w.source === 'manual' ? `Manual${w.sourceBy ? ` (${w.sourceBy})` : ''}` : 'AppFolio'}
-                  {w.daysInStatus != null ? `, ${w.daysInStatus} day${w.daysInStatus === 1 ? '' : 's'}` : ''}
-                </div>
-              </td>
-              <td className="whitespace-nowrap px-3 py-2.5">{w.scheduled ? shortDate(w.scheduled) : 'Not set'}</td>
-              <td className="whitespace-nowrap px-3 py-2.5">{w.done ? shortDate(w.done) : 'None'}</td>
-              <td className="px-3 py-2.5">{w.invoice}</td>
-              <td className="px-3 py-2.5 text-xs">{w.reminder}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ul className="divide-y divide-sand-100 border-t border-sand-100">
+      {wos.map((w) => <WoRow key={w.id} w={w} disabled={disabled} onStatus={onStatus} />)}
+    </ul>
+  );
+}
+
+/** One work order: title + status on top, its facts in a wrapping grid underneath — no sideways scroll. */
+function WoRow({ w, disabled, onStatus }: { w: DetailWo; disabled: boolean; onStatus: (id: string, s: WoStatus) => void }) {
+  const [open, setOpen] = useState(false);
+  const long = w.title.length > 140;
+  const facts: [string, string][] = [
+    ['Vendor', w.vendor ?? '—'],
+    ['Assigned employee', w.assigned ?? '—'],
+    ['Estimate', money(w.estimate)],
+    ['Approved', w.approved != null ? money(w.approved) : w.estimate != null ? 'Pending' : '—'],
+    ['Scheduled', w.scheduled ? shortDate(w.scheduled) : 'Not set'],
+    ['Done', w.done ? shortDate(w.done) : 'None'],
+    ['Invoice', w.invoice],
+    ['Reminder task', w.reminder],
+  ];
+  return (
+    <li className="px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-72">
+          <div className={`whitespace-pre-line font-medium text-charcoal-900 ${long && !open ? 'line-clamp-2' : ''}`}>{w.title}</div>
+          <div className="mt-0.5 text-xs text-charcoal-500">
+            {w.category}{w.wo_number ? ` · WO ${w.wo_number}` : ''}
+            {w.appfolio_link && <> · <a href={w.appfolio_link} target="_blank" rel="noopener noreferrer" className="text-blue-700">AF↗</a></>}
+            {long && <> · <button type="button" className="text-blue-700" onClick={() => setOpen(!open)}>{open ? 'Less' : 'More'}</button></>}
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <select
+            className={`max-w-[260px] rounded-full border-0 px-2.5 py-1 text-xs font-medium ${WO_TONE[w.status]}`}
+            value={w.status}
+            disabled={disabled}
+            onChange={(e) => onStatus(w.id, e.target.value as WoStatus)}
+            aria-label="Change status"
+          >
+            {WO_STATUSES.map((s) => <option key={s} value={s}>{WO_STATUS_LABEL[s]}</option>)}
+          </select>
+          <div className="mt-1 text-xs text-charcoal-500">
+            {w.source === 'manual' ? `Manual${w.sourceBy ? ` (${w.sourceBy})` : ''}` : 'AppFolio'}
+            {w.daysInStatus != null ? `, ${w.daysInStatus} day${w.daysInStatus === 1 ? '' : 's'}` : ''}
+          </div>
+        </div>
+      </div>
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-4 xl:grid-cols-8">
+        {facts.map(([k, v]) => (
+          <div key={k} className="min-w-0">
+            <dt className="text-[11px] font-bold text-charcoal-500">{k}</dt>
+            <dd className="truncate text-charcoal-900" title={v}>{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </li>
   );
 }
