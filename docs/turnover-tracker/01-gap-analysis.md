@@ -3,6 +3,7 @@ ontology: true
 type: analysis
 domain: maintenance
 status: active
+decided: 2026-10-12
 summary: Gap analysis of Brody's Unit Turnover Tracker spec (2026-10-09) against what HDPM-OS already has
 tags: [turnover, unit-turn, appfolio, reminders, gap-analysis]
 related: [00-README, 10-restart-2026-08-20, HDPM_Chat_Turn_Estimator_Implementation_Plan]
@@ -155,22 +156,27 @@ This is the riskiest part, because it overlaps the existing `stage` machine that
 
 **Overlap with Loop 1:** Estimate requested, Estimated and awaiting owner approval are exactly the pool the chase board and Morning 7 already work for Cheryl (`lib/agents/chase-board.ts`, owner lane). If the tracker also sends Cheryl a daily task for the same work orders, she gets two reminders for one job. **Recommend:** for those statuses, the tracker's task links to the chase-board card instead of duplicating it, or the tracker leaves them to the chase board altogether. This needs settling with you before the build, since the chase board is the gated experiment.
 
-## 7. Suggested answers to Brody's open items
+## 7. Open items: decided by Brody (2026-10-12)
 
-| Open item | Suggested answer |
-|---|---|
-| Reminders start on move-out date | Yes. The turn appears at the same moment. |
-| Grace before "awaiting invoice" reminders | 3 business days, stored as config |
-| What marks a turn complete | All 7 sections complete. Explicit "Mark complete" stays as an override, which sets legacy `status=closed` and `lifecycle_status=CLOSED` together. |
-| How a turn is created | Automatically from AppFolio (already the case), with manual create as a fallback |
-| Deposit slip due = move-out + 30 | Yes. Oregon's deadline is 31 days (ORS 90.300). Confirm with Brody that 30 is a deliberate buffer. |
-| Lockbox pulled only after the move-in date has passed | Yes. Unlock the checkbox on the move-in date. |
-| Category status rollup | Worst status wins, in this order: waiting funding > waiting approval > estimated > in progress > not started. Complete when every checkbox (except optional ones) is ticked and every WO is in a final status. A section with no WOs and no checkboxes counts as complete. |
-| Who the coordinator is | A new `unit_turn.coordinator` (staff.person), defaulting to a configured person (Cheryl?), editable per turn |
-| 7am DST | Follows DST |
-| Walkthrough video link | Optional URL stored on the checkbox |
-| Target turnaround beyond display | Show only for v1. Later, sort tasks by days to target. |
-| Other categories → section 3 | Yes, except confirm Remotes |
+Craig's reply of 2026-10-11 proposed defaults; Brody answered item by item.
+
+| # | Open item | Decision |
+|---|---|---|
+| 1 | When reminders start | **Confirmed:** on the move-out date, when the turn appears |
+| 2 | Grace before "Completed, awaiting invoice" reminders | **Changed: 5 business days** (was 3). Store as config. |
+| 3 | What marks a turn complete | **Confirmed:** all 7 sections complete, plus a manual "Mark complete" override. It sets legacy `status=closed` and `lifecycle_status=CLOSED` together. |
+| 4 | How a turn is created | **Confirmed:** automatically from AppFolio, with manual create as a fallback |
+| 5 | Deposit slip due date | **Confirmed:** move-out + 30 days (a deliberate 1-day buffer inside Oregon's 31) |
+| 6 | Lockbox pulled | **Changed: can be checked at any time**, including before the move-in date (owner close-out and similar). No unlock gate. |
+| 7 | Category status rollup | **Changed: "Estimate requested" goes first.** Worst status wins in this order: estimate requested > waiting on funds > waiting on owner approval > estimated > in progress > not started. Complete when all non-optional checkboxes are ticked and every WO is final (invoice received, no bill needed, cancelled). A section with nothing in it counts as complete. |
+| 8 | Coordinator | **Decided:** new `unit_turn.coordinator` (staff.person), **default Brody Bramscher**, editable per turn |
+| 9 | 7am | **Confirmed:** follows daylight saving (7am local, year-round) |
+| 10 | Walkthrough video | **Confirmed:** optional link field on the checkbox |
+| 11 | Target turnaround | **Confirmed:** shown on each task only for v1 |
+
+**Still open** (asked in the reply, not answered):
+- **Remotes category:** does it go in section 3? Default if unanswered: yes.
+- **Overlap with the estimate follow-up board:** for Estimate requested, Estimated and awaiting owner approval, should the tracker's task link to the follow-up card instead of sending a second reminder? Default if unanswered: link, don't duplicate.
 
 ## 8. Rough size
 
