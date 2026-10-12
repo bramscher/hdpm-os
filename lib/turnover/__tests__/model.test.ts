@@ -99,7 +99,7 @@ describe('buildSections', () => {
   it('section 6 invoices are calculated across every work order', () => {
     const s = buildSections({ ...base, wos: [wo({ appfolio_status: 'Completed', status: 'done' })] });
     expect(s[5].checks.find((c) => c.def.key === 'invoices_received')!.checked).toBe(false);
-    expect(s[5].detail).toBe('Deposit slip due 2026-11-01');
+    expect(s[5].detail).toBe('Deposit slip due Nov 1');
   });
 
   it('the optional walkthrough video never blocks section 4', () => {

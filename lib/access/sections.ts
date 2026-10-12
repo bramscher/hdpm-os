@@ -158,6 +158,19 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/maintenance/inspections/routes', icon: 'navigation', order: 13 },
   },
   {
+    // Test build of Brody's Unit Turnover Tracker (PRD 2026-10-09). Replaces the
+    // board's turnover tab once finalized; until then only Brody and Craig see it.
+    key: 'brody_turnover',
+    label: 'Brody Turnover',
+    description: 'Unit Turnover Tracker (test): every active unit turn, its 7 checklist categories and work order statuses.',
+    group: 'Maintenance',
+    defaultRoles: [],
+    pages: ['/turnover-tracker'],
+    apis: ['/api/turnover-tracker'],
+    nav: { href: '/turnover-tracker', icon: 'clipboard', order: 14.5 },
+    allowedEmails: ['brody@highdesertpm.com', 'craig@highdesertpm.com'],
+  },
+  {
     key: 'turns',
     label: 'Turns',
     description: 'Unit turn planning and estimates.',

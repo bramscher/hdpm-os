@@ -241,6 +241,11 @@ export function addDays(date: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** "Nov 1" from YYYY-MM-DD. */
+export function monthDay(date: string): string {
+  return new Date(`${date.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 export function depositSlipDue(vacatedAt: string): string {
   return addDays(vacatedAt, DEPOSIT_SLIP_DAYS);
 }
@@ -293,14 +298,14 @@ function sectionDetail(
 ): string {
   if (no === 6) {
     const sent = checks.find((c) => c.def.key === 'deposit_slip_sent')?.checked;
-    return sent ? 'Deposit slip sent' : `Deposit slip due ${depositSlipDue(turn.vacated_at)}`;
+    return sent ? 'Deposit slip sent' : `Deposit slip due ${monthDay(depositSlipDue(turn.vacated_at))}`;
   }
   if (no === 1) {
     const showing = checks.find((c) => c.def.key === 'showing_set');
-    if (showing?.checked && showing.state?.value) return `Showing ${showing.state.value}`;
+    if (showing?.checked && showing.state?.value) return `Showing ${/^\d{4}-\d{2}-\d{2}/.test(showing.state.value) ? monthDay(showing.state.value) : showing.state.value}`;
   }
   if (no === 7 && turn.movein_date && !checks.find((c) => c.def.key === 'lockbox_pulled')?.checked) {
-    return `Move-in ${turn.movein_date}`;
+    return `Move-in ${monthDay(turn.movein_date)}`;
   }
   if (woStatuses.length > 0) {
     const done = woStatuses.filter((s) => FINAL_STATUSES.has(s)).length;
