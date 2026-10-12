@@ -89,12 +89,12 @@ export function TurnoverDashboard({ data, view }: { data: Dashboard; view: TurnV
 
       <div className="overflow-x-auto rounded-xl border border-sand-200 bg-white">
         <table className="w-full min-w-[1180px] text-left text-sm">
-          <thead className="bg-sand-50 text-xs text-charcoal-500">
-            <tr>
-              <th className="sticky left-0 bg-sand-50 px-4 py-3 font-medium">Unit</th>
-              <th className="px-3 py-3 font-medium">Move-out</th>
-              <th className="px-3 py-3 font-medium">Move-in</th>
-              {SECTIONS.map((s) => <th key={s.no} className="px-3 py-3 font-medium">{s.short}</th>)}
+          <thead className="bg-sand-50 text-xs text-charcoal-700">
+            <tr className="align-top">
+              <th className="sticky left-0 bg-sand-50 px-4 py-3 align-top font-bold">Unit</th>
+              <th className="px-3 py-3 align-top font-bold">Move-out</th>
+              <th className="px-3 py-3 align-top font-bold">Move-in</th>
+              {SECTIONS.map((s) => <th key={s.no} className="px-3 py-3 align-top font-bold">{s.short}</th>)}
             </tr>
           </thead>
           <tbody className="divide-y divide-sand-100">

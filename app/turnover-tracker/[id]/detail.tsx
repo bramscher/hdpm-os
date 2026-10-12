@@ -265,7 +265,7 @@ function WoTable({ wos, disabled, onStatus }: { wos: DetailWo[]; disabled: boole
         <thead className="text-xs text-charcoal-500">
           <tr>
             {['Work order', 'Vendor', 'Assigned employee', 'Estimate', 'Approved', 'Status', 'Scheduled', 'Done', 'Invoice', 'Reminder task'].map((h) => (
-              <th key={h} className="px-3 py-2 font-medium first:pl-4">{h}</th>
+              <th key={h} className="px-3 py-2 align-top font-bold text-charcoal-700 first:pl-4">{h}</th>
             ))}
           </tr>
         </thead>
