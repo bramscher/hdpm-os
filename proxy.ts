@@ -87,6 +87,16 @@ export function isDelegablePath(pathname: string): boolean {
   return DELEGABLE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+// A top-level GET the user made by clicking a link or typing a URL, as opposed
+// to a fetch() from page code. Sec-Fetch-Mode is sent by every current browser;
+// the Accept fallback covers anything that omits it.
+export function isBrowserNavigation(req: NextRequest): boolean {
+  if (req.method !== "GET") return false;
+  const mode = req.headers.get("sec-fetch-mode");
+  if (mode) return mode === "navigate";
+  return (req.headers.get("accept") ?? "").includes("text/html");
+}
+
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -123,7 +133,9 @@ export default async function proxy(req: NextRequest) {
   });
 
   if (!token || isDepartedStaff(token.email)) {
-    if (pathname.startsWith("/api/")) {
+    // A link opened straight in the browser (e.g. an estimate PDF in a new tab)
+    // goes to sign-in like a page would; fetches from app code still get JSON.
+    if (pathname.startsWith("/api/") && !isBrowserNavigation(req)) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
     // Unauthenticated page hit → sign-in, preserving the destination.
