@@ -9,6 +9,8 @@ export const PRICING_LABELS: Record<PricingMethod, string> = {
 export function defaultLineCost(item: Pick<PriceBookItem, 'pricing_method' | 'base_price'> | undefined): string {
   return item?.pricing_method === 'cost_plus' && item.base_price > 0 ? String(item.base_price) : '';
 }
+/** One cost-plus line for a whole list of materials: a best-guess total, not itemized. */
+export const BULK_MATERIALS_CODE = 'MATERIALS_BULK';
 export const needsPriceReview = (item: Pick<PriceBookItem, 'name'>) => /placeholder/i.test(item.name);
 export function priceBookName(item: Pick<PriceBookItem, 'name'>): string {
   const name = item.name.replace(/\s*\[PLACEHOLDER\]/gi, '').trim();
