@@ -5,18 +5,21 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, Suspense } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { safeCallbackPath } from "@/lib/safe-callback";
 
 function LoginContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
+  const callbackPath = safeCallbackPath(searchParams.get("callbackUrl"));
 
   useEffect(() => {
-    if (session) {
-      router.push("/");
-    }
-  }, [session, router]);
+    if (!session) return;
+    // API links (e.g. an estimate PDF) aren't client-router pages — load them fully.
+    if (callbackPath.startsWith("/api/")) window.location.replace(callbackPath);
+    else router.push(callbackPath);
+  }, [session, router, callbackPath]);
 
   if (status === "loading") {
     return <LoginSpinner />;
@@ -112,7 +115,7 @@ function LoginContent() {
           )}
 
           <Button
-            onClick={() => signIn("azure-ad", { redirectTo: "/" })}
+            onClick={() => signIn("azure-ad", { redirectTo: callbackPath })}
             className="group w-full h-11 rounded-lg bg-black text-sm font-medium text-white hover:bg-charcoal-800 transition-colors"
           >
             <svg className="w-4 h-4 mr-2.5" viewBox="0 0 21 21" fill="currentColor" aria-hidden>
