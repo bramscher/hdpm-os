@@ -4,14 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ImproveWithAI from "@/components/ImproveWithAI";
 import EstimateReview from "./EstimateReview";
-import { needsPriceReview, priceBookName, defaultLineCost } from "@/lib/turn-estimator/price-book-display";
+import { needsPriceReview, priceBookName, defaultLineCost, BULK_MATERIALS_CODE } from "@/lib/turn-estimator/price-book-display";
 import { STARTER_TEMPLATES, type EstimateTemplate } from "@/lib/turn-estimator/templates";
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 
 /** A small labelled input inside a line's Pricing cell. */
-function PriceField({ label, children }: { label: string; children: React.ReactNode }) {
+function PriceField({ label, wide = false, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
   return (
-    <label className="block w-20 shrink-0">
+    <label className={`block shrink-0 ${wide ? "w-32" : "w-20"}`}>
       <span className="mb-1 block text-[11px] font-medium text-charcoal-500">{label}</span>
       {children}
     </label>
@@ -97,7 +97,16 @@ export default function EstimateBuilder({
   const [propertyName, setPropertyName] = useState(seed.property_name ?? "");
   const [unitName, setUnitName] = useState(seed.unit_name ?? "");
   const [authLimit, setAuthLimit] = useState("");
-  const [rows, setRows] = useState<Row[]>([newRow()]);
+  // A blank estimate starts with labor + bulk materials at 0, ready to fill in.
+  // Saved drafts and work-order drafts replace these once they load.
+  const [rows, setRows] = useState<Row[]>(() => {
+    if (seed.resume_id) return [newRow()];
+    const usable = (code: string) => items.some((i) => i.item_code === code && !needsPriceReview(i));
+    const starters: Row[] = [];
+    if (usable("LABOR_STD")) starters.push({ ...newRow(), item_code: "LABOR_STD", minutes: "0", description: "" });
+    if (usable(BULK_MATERIALS_CODE)) starters.push({ ...newRow(), item_code: BULK_MATERIALS_CODE, material_cost: "0.00" });
+    return starters.length ? starters : [newRow()];
+  });
   // Agent-draft state (autoDraft): pre-populate rows from the estimate-drafter.
   const [drafting, setDrafting] = useState(autoDraft);
   const [draftRequested, setDraftRequested] = useState(autoDraft);
@@ -399,7 +408,7 @@ export default function EstimateBuilder({
                     <label className="flex gap-2 mb-2 text-xs"><input type="checkbox" checked={r.included!==false} onChange={e=>setRow(r.key,{included:e.target.checked})}/>Include in charge</label>
                     <select className={`${input} w-full min-w-0`} value={r.item_code} onChange={(e) => {
                       const next = itemByCode.get(e.target.value);
-                      setRow(r.key, { item_code: e.target.value, ...(next?.pricing_method === 'hourly' ? {qty: '1', minutes: r.minutes || '60'} : next?.pricing_method === 'service_min' ? {qty: '1'} : {minutes: ''}), material_cost: next?.pricing_method !== 'cost_plus' ? '' : !r.material_cost || r.material_cost === defaultLineCost(itemByCode.get(r.item_code)) ? defaultLineCost(next) : r.material_cost });
+                      setRow(r.key, { item_code: e.target.value, ...(next?.item_code === BULK_MATERIALS_CODE ? {qty: '1'} : {}), ...(next?.pricing_method === 'hourly' ? {qty: '1', minutes: r.minutes || '60'} : next?.pricing_method === 'service_min' ? {qty: '1'} : {minutes: ''}), material_cost: next?.pricing_method !== 'cost_plus' ? '' : next.item_code === BULK_MATERIALS_CODE ? (r.material_cost || '0.00') : !r.material_cost || r.material_cost === defaultLineCost(itemByCode.get(r.item_code)) ? defaultLineCost(next) : r.material_cost });
                     }}>
                       <option value="">— select —</option>
                       {items.map((it) => (
@@ -408,7 +417,11 @@ export default function EstimateBuilder({
                         </option>
                       ))}
                     </select>
-                    <input aria-label="Scope description" className={`${input} w-full mt-2`} placeholder={method === "hourly" ? "Describe the repair, location and work included" : "Scope / checklist description"} value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
+                    {r.item_code === BULK_MATERIALS_CODE ? (
+                      <textarea aria-label="Materials and supplies list" rows={5} className={`${input} w-full mt-2`} placeholder={"List the materials and supplies, one per line, e.g.\n2 gal interior paint\nCabinet hinges (6)\nCaulk, tape, sandpaper"} value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
+                    ) : (
+                      <input aria-label="Scope description" className={`${input} w-full mt-2`} placeholder={method === "hourly" ? "Describe the repair, location and work included" : "Scope / checklist description"} value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
+                    )}
                     <ImproveWithAI value={r.description} context="estimate" disabled={busy !== null} onApply={text=>setRow(r.key,{description:text})}/>
                   </td>
                   <td className="px-3 py-2">
@@ -422,7 +435,7 @@ export default function EstimateBuilder({
                         <PriceField label="Hours">
                           <input
                             className={`${input} w-full min-w-0`}
-                            type="number" min="0" step="0.25" aria-label="Labor hours"
+                            type="number" min="0" step="0.25" aria-label="Labor hours" placeholder="0.00"
                             value={r.minutes === "0" ? "" : r.minutes !== "" ? String(Number(r.minutes) / 60) : r.qty /* older lines kept hours in qty */}
                             onChange={(e) => setRow(r.key, { qty: "1", minutes: e.target.value === "" ? "0" : String(Math.round(Number(e.target.value) * 60)) })}
                           />
@@ -440,6 +453,13 @@ export default function EstimateBuilder({
                           />
                         </PriceField>
                         <span className="pb-2 text-xs text-charcoal-500">{money(item!.base_price)} min. incl. {item!.included_minutes ?? 0} min</span>
+                      </div>
+                    ) : r.item_code === BULK_MATERIALS_CODE ? (
+                      <div className="flex items-end gap-2">
+                        <PriceField label="Est. total cost $" wide>
+                          <input className={`${input} w-full min-w-0`} type="number" min="0" step="0.01" aria-label="Estimated total materials cost" placeholder="0.00" value={r.material_cost} onChange={(e) => setRow(r.key, { qty: "1", material_cost: e.target.value })} />
+                        </PriceField>
+                        <span className="pb-2 text-xs text-charcoal-500">+{item!.markup_pct ?? 0}%</span>
                       </div>
                     ) : method === "cost_plus" ? (
                       <div className="flex items-end gap-2">
