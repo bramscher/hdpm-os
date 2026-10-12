@@ -48,7 +48,7 @@ Rules:
 - One line per distinct task or material. Combine nothing; split nothing that is one job.
 - Set only the numeric fields a line's pricing method needs:
   - service_min / hourly items: set "minutes" (on-site time) and, when you can estimate it, "est_labor_hours".
-  - cost_plus / materials items: set "est_material_cost" (your best dollar estimate of the parts/vendor cost).
+  - cost_plus / materials items: set "est_material_cost" (your best dollar estimate of the cost of ONE unit) and "qty" when more than one is needed.
   - flat / per_qty / package / allowance items: set "qty" (default 1); leave minutes/material blank.
 - Base everything ONLY on the work-order text. Do not invent facts, rooms, or quantities. If a quantity is unclear, use 1 and lower the confidence.
 - Set "confidence" per line: high = the text clearly calls for this; medium = reasonable inference; low = a guess.

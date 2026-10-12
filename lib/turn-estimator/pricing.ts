@@ -63,7 +63,8 @@ export function ownerChargeForLine(item: PriceBookItem, input: LineInput): numbe
     }
 
     case 'cost_plus': {
-      const cost = input.estMaterialCost ?? 0;
+      // est_material_cost is the cost of ONE unit; markup applies to the line total.
+      const cost = (input.estMaterialCost ?? 0) * qty;
       return chargedFromCost(cost, item.markup_pct ?? 0);
     }
 
@@ -83,7 +84,8 @@ export function internalCostForLine(
 ): number {
   const laborHours = input.estLaborHours ?? (input.minutes != null ? input.minutes / 60 : 0);
   const laborCost = laborHours * cfg.internal_labor_cost_rate;
-  const materialCost = input.estMaterialCost ?? 0;
+  const materialCost =
+    (input.estMaterialCost ?? 0) * (input.item.pricing_method === 'cost_plus' ? input.qty ?? 1 : 1);
   return cents(laborCost + materialCost);
 }
 

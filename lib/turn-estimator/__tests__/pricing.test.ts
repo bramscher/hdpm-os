@@ -100,6 +100,13 @@ describe('other pricing methods', () => {
     const it = item({ pricing_method: 'cost_plus', markup_pct: 25 });
     expect(ownerChargeForLine(it, { item: it, estMaterialCost: 100 })).toBe(125);
   });
+  it('cost_plus = qty × unit cost, then markup', () => {
+    const it = item({ pricing_method: 'cost_plus', markup_pct: 25 });
+    expect(ownerChargeForLine(it, { item: it, qty: 3, estMaterialCost: 20 })).toBe(75);
+    const line = priceLine({ item: it, qty: 3, estMaterialCost: 20 });
+    expect(line.internal_cost).toBe(60);
+    expect(line.owner_unit_price).toBe(25);
+  });
 });
 
 describe('priceLine internal cost + margin', () => {
