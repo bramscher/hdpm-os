@@ -365,8 +365,7 @@ export default function EstimateBuilder({
           <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
               <th className="px-3 py-2">Item</th>
-              <th className="w-16 px-3 py-2">Qty</th>
-              <th className="w-20 px-3 py-2">Hours / minutes</th>
+              <th className="w-24 px-3 py-2">Qty / time</th>
               <th className="w-24 px-3 py-2">Material $</th>
               <th className="w-40 px-3 py-2">Room / note</th>
               <th className="w-8 px-2 py-2"></th>
@@ -382,7 +381,7 @@ export default function EstimateBuilder({
                     <label className="flex gap-2 mb-2 text-xs"><input type="checkbox" checked={r.included!==false} onChange={e=>setRow(r.key,{included:e.target.checked})}/>Include in charge</label>
                     <select className={`${input} w-full min-w-0`} value={r.item_code} onChange={(e) => {
                       const next = itemByCode.get(e.target.value);
-                      setRow(r.key, { item_code: e.target.value, ...(next?.pricing_method === 'hourly' ? {qty: '1', minutes: r.minutes || '60'} : {}), material_cost: next?.pricing_method !== 'cost_plus' ? '' : !r.material_cost || r.material_cost === defaultLineCost(itemByCode.get(r.item_code)) ? defaultLineCost(next) : r.material_cost });
+                      setRow(r.key, { item_code: e.target.value, ...(next?.pricing_method === 'hourly' ? {qty: '1', minutes: r.minutes || '60'} : next?.pricing_method === 'service_min' ? {qty: '1'} : {minutes: ''}), material_cost: next?.pricing_method !== 'cost_plus' ? '' : !r.material_cost || r.material_cost === defaultLineCost(itemByCode.get(r.item_code)) ? defaultLineCost(next) : r.material_cost });
                     }}>
                       <option value="">— select —</option>
                       {items.map((it) => (
@@ -395,19 +394,37 @@ export default function EstimateBuilder({
                     <ImproveWithAI value={r.description} context="estimate" disabled={busy !== null} onApply={text=>setRow(r.key,{description:text})}/>
                   </td>
                   <td className="px-3 py-2">
-                    <input aria-label={method === "hourly" ? "Quantity (use labor hours)" : "Quantity"} disabled={method === "hourly"} className={`${input} w-full min-w-0`} value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      className={`${input} w-full min-w-0`}
-                      type="number" min="0" step={method === "hourly" ? "0.01" : "1"}
-                      aria-label={method === "hourly" ? "Labor hours" : "Minutes"}
-                      value={method === "hourly" && r.minutes === "0" ? "" : method === "hourly" && r.minutes !== "" ? String(Number(r.minutes) / 60) : method === "hourly" ? r.qty : r.minutes}
-                      onChange={(e) => setRow(r.key, { minutes: method === "hourly" ? String(Number(e.target.value) * 60) : e.target.value })}
-                      placeholder={method === "hourly" ? "hours" : method === "service_min" ? "min" : "—"}
-                      disabled={!(method === "service_min" || method === "hourly")}
-                    />
-                    {(method === "hourly" || method === "service_min") && <span className="text-xs text-charcoal-500">{method === "hourly" ? "hours" : "minutes"}</span>}
+                    {/* One amount per line, in whatever unit the item is priced by:
+                        hourly labor → hours, minimum-visit → minutes, cost-plus → none
+                        (priced from material $), everything else → quantity. */}
+                    {method === "hourly" ? (
+                      <input
+                        className={`${input} w-full min-w-0`}
+                        type="number" min="0" step="0.25" aria-label="Labor hours" placeholder="hours"
+                        value={r.minutes === "0" ? "" : r.minutes !== "" ? String(Number(r.minutes) / 60) : r.qty /* older lines kept hours in qty */}
+                        onChange={(e) => setRow(r.key, { qty: "1", minutes: e.target.value === "" ? "0" : String(Math.round(Number(e.target.value) * 60)) })}
+                      />
+                    ) : method === "service_min" ? (
+                      <input
+                        className={`${input} w-full min-w-0`}
+                        type="number" min="0" step="1" aria-label="Minutes" placeholder="min"
+                        value={r.minutes}
+                        onChange={(e) => setRow(r.key, { qty: "1", minutes: e.target.value })}
+                      />
+                    ) : (
+                      <input
+                        className={`${input} w-full min-w-0`}
+                        type="number" min="0" aria-label="Quantity" placeholder="—"
+                        disabled={method === "cost_plus" || !method}
+                        value={method === "cost_plus" ? "" : r.qty}
+                        onChange={(e) => setRow(r.key, { qty: e.target.value })}
+                      />
+                    )}
+                    {method && method !== "cost_plus" && (
+                      <span className="text-xs text-charcoal-500">
+                        {method === "hourly" ? "hours" : method === "service_min" ? "minutes" : item?.uom ?? "qty"}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <input
