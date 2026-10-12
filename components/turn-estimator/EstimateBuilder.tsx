@@ -8,6 +8,18 @@ import { needsPriceReview, priceBookName, defaultLineCost, BULK_MATERIALS_CODE }
 import { STARTER_TEMPLATES, type EstimateTemplate } from "@/lib/turn-estimator/templates";
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 
+/** Starts at two lines and grows with the text (AI rewrites included); still drag-resizable. */
+function AutoGrowTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [props.value]);
+  return <textarea ref={ref} rows={2} {...props} className={`${props.className ?? ""} resize-y leading-snug`} />;
+}
+
 /** A small labelled input inside a line's Pricing cell. */
 function PriceField({ label, wide = false, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
   return (
@@ -420,7 +432,7 @@ export default function EstimateBuilder({
                     {r.item_code === BULK_MATERIALS_CODE ? (
                       <textarea aria-label="Materials and supplies list" rows={5} className={`${input} w-full mt-2`} placeholder={"List the materials and supplies, one per line, e.g.\n2 gal interior paint\nCabinet hinges (6)\nCaulk, tape, sandpaper"} value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
                     ) : (
-                      <input aria-label="Scope description" className={`${input} w-full mt-2`} placeholder={method === "hourly" ? "Describe the repair, location and work included" : "Scope / checklist description"} value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
+                      <AutoGrowTextarea aria-label="Scope description" className={`${input} w-full mt-2`} placeholder={method === "hourly" ? "Describe the repair, location and work included" : "Scope / checklist description"} value={r.description} onChange={e=>setRow(r.key,{description:e.target.value})}/>
                     )}
                     <ImproveWithAI value={r.description} context="estimate" disabled={busy !== null} onApply={text=>setRow(r.key,{description:text})}/>
                   </td>
