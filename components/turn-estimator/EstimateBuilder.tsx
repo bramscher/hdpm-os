@@ -395,8 +395,8 @@ export default function EstimateBuilder({
                   </td>
                   <td className="px-3 py-2">
                     {/* One amount per line, in whatever unit the item is priced by:
-                        hourly labor → hours, minimum-visit → minutes, cost-plus → none
-                        (priced from material $), everything else → quantity. */}
+                        hourly labor → hours, minimum-visit → minutes, everything else
+                        (materials included: qty × unit cost + markup) → quantity. */}
                     {method === "hourly" ? (
                       <input
                         className={`${input} w-full min-w-0`}
@@ -415,12 +415,12 @@ export default function EstimateBuilder({
                       <input
                         className={`${input} w-full min-w-0`}
                         type="number" min="0" aria-label="Quantity" placeholder="—"
-                        disabled={method === "cost_plus" || !method}
-                        value={method === "cost_plus" ? "" : r.qty}
+                        disabled={!method}
+                        value={r.qty}
                         onChange={(e) => setRow(r.key, { qty: e.target.value })}
                       />
                     )}
-                    {method && method !== "cost_plus" && (
+                    {method && (
                       <span className="text-xs text-charcoal-500">
                         {method === "hourly" ? "hours" : method === "service_min" ? "minutes" : item?.uom ?? "qty"}
                       </span>
@@ -431,9 +431,10 @@ export default function EstimateBuilder({
                       className={`${input} w-full min-w-0`}
                       value={r.material_cost}
                       onChange={(e) => setRow(r.key, { material_cost: e.target.value })}
-                      placeholder={method === "cost_plus" ? "cost" : "—"}
+                      placeholder={method === "cost_plus" ? "unit cost" : "—"}
                       disabled={method !== "cost_plus"}
                     />
+                    {method === "cost_plus" && <span className="text-xs text-charcoal-500">each · +{item?.markup_pct ?? 0}% markup</span>}
                   </td>
                   <td className="px-3 py-2">
                     <input className={`${input} w-full min-w-0`} value={r.room} onChange={(e) => setRow(r.key, { room: e.target.value })} />
