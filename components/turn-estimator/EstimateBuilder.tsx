@@ -8,6 +8,16 @@ import { needsPriceReview, priceBookName, defaultLineCost } from "@/lib/turn-est
 import { STARTER_TEMPLATES, type EstimateTemplate } from "@/lib/turn-estimator/templates";
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 
+/** A small labelled input inside a line's Pricing cell. */
+function PriceField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block w-20 shrink-0">
+      <span className="mb-1 block text-[11px] font-medium text-charcoal-500">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 export interface BuilderSeed {
   work_order_id?: string | null;
   property_name?: string;
@@ -97,6 +107,8 @@ export default function EstimateBuilder({
   const [preview, setPreview] = useState<{
     owner_total: number;
     authorization: "auto_approved" | "approval_pending";
+    /** Owner charge per row key, for the Line total column. */
+    lineTotals: Record<string, number>;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,7 +160,13 @@ export default function EstimateBuilder({
           }),
         });
         const data = await res.json();
-        if (res.ok) setPreview({ owner_total: data.totals.owner_total, authorization: data.authorization });
+        if (res.ok) {
+          // Priced lines come back in the order sent; skip the mapping if any code was unknown.
+          const keys = rows.filter((r) => specForRow(r)).map((r) => r.key);
+          const lineTotals: Record<string, number> = {};
+          if (!data.unknown?.length) (data.lines as { owner_extended: number }[]).forEach((l, i) => { if (keys[i]) lineTotals[keys[i]] = l.owner_extended; });
+          setPreview({ owner_total: data.totals.owner_total, authorization: data.authorization, lineTotals });
+        }
       } catch {
         /* ignore preview errors */
       }
@@ -365,8 +383,8 @@ export default function EstimateBuilder({
           <thead className="bg-sand-50 text-left text-xs uppercase tracking-wide text-charcoal-500">
             <tr>
               <th className="px-3 py-2">Item</th>
-              <th className="w-24 px-3 py-2">Qty / time</th>
-              <th className="w-24 px-3 py-2">Material $</th>
+              <th className="w-56 px-3 py-2">Pricing</th>
+              <th className="w-24 px-3 py-2 text-right">Line total</th>
               <th className="w-40 px-3 py-2">Room / note</th>
               <th className="w-8 px-2 py-2"></th>
             </tr>
@@ -394,47 +412,62 @@ export default function EstimateBuilder({
                     <ImproveWithAI value={r.description} context="estimate" disabled={busy !== null} onApply={text=>setRow(r.key,{description:text})}/>
                   </td>
                   <td className="px-3 py-2">
-                    {/* One amount per line, in whatever unit the item is priced by:
-                        hourly labor → hours, minimum-visit → minutes, everything else
-                        (materials included: qty × unit cost + markup) → quantity. */}
-                    {method === "hourly" ? (
-                      <input
-                        className={`${input} w-full min-w-0`}
-                        type="number" min="0" step="0.25" aria-label="Labor hours" placeholder="hours"
-                        value={r.minutes === "0" ? "" : r.minutes !== "" ? String(Number(r.minutes) / 60) : r.qty /* older lines kept hours in qty */}
-                        onChange={(e) => setRow(r.key, { qty: "1", minutes: e.target.value === "" ? "0" : String(Math.round(Number(e.target.value) * 60)) })}
-                      />
+                    {/* Each line asks only for what its item is priced by, with its own labels:
+                        hourly → hours × rate; minimum visit → minutes; materials → qty × unit
+                        cost + markup; fixed / per-unit → qty × price. */}
+                    {!method ? (
+                      <span className="text-xs text-charcoal-400">Select an item</span>
+                    ) : method === "hourly" ? (
+                      <div className="flex items-end gap-2">
+                        <PriceField label="Hours">
+                          <input
+                            className={`${input} w-full min-w-0`}
+                            type="number" min="0" step="0.25" aria-label="Labor hours"
+                            value={r.minutes === "0" ? "" : r.minutes !== "" ? String(Number(r.minutes) / 60) : r.qty /* older lines kept hours in qty */}
+                            onChange={(e) => setRow(r.key, { qty: "1", minutes: e.target.value === "" ? "0" : String(Math.round(Number(e.target.value) * 60)) })}
+                          />
+                        </PriceField>
+                        <span className="pb-2 text-xs text-charcoal-500">× {money(item!.base_price)}/hr</span>
+                      </div>
                     ) : method === "service_min" ? (
-                      <input
-                        className={`${input} w-full min-w-0`}
-                        type="number" min="0" step="1" aria-label="Minutes" placeholder="min"
-                        value={r.minutes}
-                        onChange={(e) => setRow(r.key, { qty: "1", minutes: e.target.value })}
-                      />
+                      <div className="flex items-end gap-2">
+                        <PriceField label="Minutes on site">
+                          <input
+                            className={`${input} w-full min-w-0`}
+                            type="number" min="0" step="1" aria-label="Minutes"
+                            value={r.minutes}
+                            onChange={(e) => setRow(r.key, { qty: "1", minutes: e.target.value })}
+                          />
+                        </PriceField>
+                        <span className="pb-2 text-xs text-charcoal-500">{money(item!.base_price)} min. incl. {item!.included_minutes ?? 0} min</span>
+                      </div>
+                    ) : method === "cost_plus" ? (
+                      <div className="flex items-end gap-2">
+                        <PriceField label="Qty">
+                          <input className={`${input} w-full min-w-0`} type="number" min="0" aria-label="Quantity" value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} />
+                        </PriceField>
+                        <PriceField label="Unit cost $">
+                          <input className={`${input} w-full min-w-0`} type="number" min="0" step="0.01" aria-label="Unit cost" value={r.material_cost} onChange={(e) => setRow(r.key, { material_cost: e.target.value })} />
+                        </PriceField>
+                        <span className="pb-2 text-xs text-charcoal-500">+{item!.markup_pct ?? 0}%</span>
+                      </div>
                     ) : (
-                      <input
-                        className={`${input} w-full min-w-0`}
-                        type="number" min="0" aria-label="Quantity" placeholder="—"
-                        disabled={!method}
-                        value={r.qty}
-                        onChange={(e) => setRow(r.key, { qty: e.target.value })}
-                      />
-                    )}
-                    {method && (
-                      <span className="text-xs text-charcoal-500">
-                        {method === "hourly" ? "hours" : method === "service_min" ? "minutes" : item?.uom ?? "qty"}
-                      </span>
+                      <div className="flex items-end gap-2">
+                        <PriceField label="Qty">
+                          <input className={`${input} w-full min-w-0`} type="number" min="0" aria-label="Quantity" value={r.qty} onChange={(e) => setRow(r.key, { qty: e.target.value })} />
+                        </PriceField>
+                        <span className="pb-2 text-xs text-charcoal-500">× {money(item!.base_price)}{item!.uom && item!.uom !== "each" ? ` / ${item!.uom}` : " each"}</span>
+                      </div>
                     )}
                   </td>
-                  <td className="px-3 py-2">
-                    <input
-                      className={`${input} w-full min-w-0`}
-                      value={r.material_cost}
-                      onChange={(e) => setRow(r.key, { material_cost: e.target.value })}
-                      placeholder={method === "cost_plus" ? "unit cost" : "—"}
-                      disabled={method !== "cost_plus"}
-                    />
-                    {method === "cost_plus" && <span className="text-xs text-charcoal-500">each · +{item?.markup_pct ?? 0}% markup</span>}
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {r.included === false ? (
+                      <span className="text-xs text-charcoal-400">not charged</span>
+                    ) : preview?.lineTotals[r.key] != null ? (
+                      <span className="font-medium text-charcoal-900">{money(preview.lineTotals[r.key])}</span>
+                    ) : (
+                      <span className="text-charcoal-400">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <input className={`${input} w-full min-w-0`} value={r.room} onChange={(e) => setRow(r.key, { room: e.target.value })} />
