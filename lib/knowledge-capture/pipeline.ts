@@ -209,6 +209,10 @@ export async function deleteRecordingChunks(db: SupabaseClient, recordingId: str
   if (error) console.error('[knowledge-capture] chunk cleanup failed:', error.message);
 }
 
+/** Quick capture: a take with no owner or property yet (waiting in the Inbox). */
+export const isTagged = (rec: { subject_type: string | null }) => rec.subject_type != null;
+export const UNTAGGED_ERROR = 'Tag this take with an owner or property first';
+
 /** A run older than this is dead (Vercel stops functions at 300s); it may be retried. */
 export const STALE_PROCESSING_MS = 6 * 60 * 1000;
 
@@ -284,7 +288,7 @@ export async function transcribeRecording(recordingId: string): Promise<string> 
     if (isTextEntry(rec)) throw new Error('Typed notes have nothing to transcribe');
     const { data: audio, error: dlErr } = await db.storage.from(BUCKET).download(rec.storage_path);
     if (dlErr || !audio) throw new Error(`Audio download failed: ${dlErr?.message ?? 'missing'}`);
-    const result = await transcribeAudio(audio, rec.mime_type, rec.subject_name);
+    const result = await transcribeAudio(audio, rec.mime_type, rec.subject_name ?? 'one of our owners or properties');
     if (!result.text) throw new Error('Transcription came back empty — was the microphone muted?');
     await setRow({
       status: 'uploaded',
@@ -332,6 +336,13 @@ export async function processRecording(
       .eq('id', rec.id);
     if (upErr) throw new Error(`Could not update the take: ${upErr.message}`);
   };
+
+  // Quick capture: nothing goes to the brain until the take is tagged. Routes
+  // check this before claiming; this guards anything that slips past.
+  if (!isTagged(rec)) {
+    await setRow({ status: 'uploaded' });
+    throw new Error(UNTAGGED_ERROR);
+  }
 
   // Callers claim the row first (claimRecording); this refresh keeps it fresh.
   await setRow({ status: 'processing', error: null });

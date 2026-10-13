@@ -182,7 +182,7 @@ function OutboxRow({ take: t, online }: { take: Take; online: boolean }) {
   }
 
   async function discard() {
-    if (!window.confirm(`Discard this take about ${t.subjectName}? It hasn't been uploaded, so it will be gone for good.`)) return;
+    if (!window.confirm(`Discard this take${t.subjectName ? ` about ${t.subjectName}` : ""}? It hasn't been uploaded, so it will be gone for good.`)) return;
     await discardTake(t.id).catch(() => toast.error("Could not discard this take"));
   }
 
@@ -190,10 +190,10 @@ function OutboxRow({ take: t, online }: { take: Take; online: boolean }) {
     <li className="rounded-md border border-sand-200 bg-white p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 text-sm">
-          <span className="font-medium text-charcoal-900">{t.subjectName}</span>
+          <span className="font-medium text-charcoal-900">{t.subjectName ?? "Quick capture"}</span>
           <span className="text-charcoal-500">
             {" "}
-            · {t.subjectType === "owner" ? "Owner" : "Property"} · {formatWhen(t.recordedAt)}
+            · {t.subjectType === "owner" ? "Owner" : t.subjectType === "property" ? "Property" : "Tag it once uploaded"} · {formatWhen(t.recordedAt)}
             {t.durationSec ? ` · ${formatClock(t.durationSec)}` : t.size ? ` · ${formatSize(t.size)}` : ""}
           </span>
         </div>

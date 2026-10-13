@@ -9,7 +9,7 @@ import { isTakeId, recordedAtFrom } from '@/lib/knowledge-capture/offline';
 
 /**
  * POST /api/knowledge-capture/recordings
- * Body: { subjectType: 'owner'|'property', subjectId, mimeType, sizeBytes, voices?: emails of who is talking,
+ * Body: { subjectType: 'owner'|'property'|null, subjectId, mimeType, sizeBytes, voices?: emails of who is talking,
  *         id?: the device's take id, recordedAt?: ISO time the take was recorded }
  * Creates the recording row and a signed upload URL; the browser uploads the
  * audio straight to storage (bypassing the API body limit), then calls
@@ -19,6 +19,9 @@ import { isTakeId, recordedAtFrom } from '@/lib/knowledge-capture/offline';
  * once if signal drops mid-upload. With the device's `id` a retry reuses the row:
  * still waiting for audio → a fresh upload URL; audio already in → `uploaded: true`.
  * `recordedAt` becomes created_at, so the take is dated when it was recorded.
+ *
+ * Quick capture: with no subject (subjectType null), the take uploads and
+ * transcribes untagged and waits in the Inbox until someone tags it.
  */
 export async function POST(request: NextRequest) {
   const guard = await requireSection('knowledge_capture');
@@ -27,7 +30,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const { subjectType, subjectId, mimeType, sizeBytes, voices: rawVoices, id: deviceId, recordedAt } = body as Record<string, unknown>;
   const voices = normalizeVoices(rawVoices, guard.email);
-  if ((subjectType !== 'owner' && subjectType !== 'property') || typeof subjectId !== 'string' || !subjectId) {
+  const quick = subjectType == null;
+  if (!quick && ((subjectType !== 'owner' && subjectType !== 'property') || typeof subjectId !== 'string' || !subjectId)) {
     return NextResponse.json({ error: 'Pick an owner or property first' }, { status: 400 });
   }
   if (typeof mimeType !== 'string' || !mimeType.startsWith('audio/')) {
@@ -46,19 +50,22 @@ export async function POST(request: NextRequest) {
     const retry = await resumeUpload(db, deviceId, guard.email);
     if (retry) return retry;
   }
-  const { roster } = await loadRoster(db);
-  const subject = resolveSubject(roster, subjectType, subjectId);
-  if (!subject) return NextResponse.json({ error: 'Not an active AppFolio owner or property' }, { status: 404 });
+  let subject: { name: string } | null = null;
+  if (!quick) {
+    const { roster } = await loadRoster(db);
+    subject = resolveSubject(roster, subjectType as 'owner' | 'property', subjectId as string);
+    if (!subject) return NextResponse.json({ error: 'Not an active AppFolio owner or property' }, { status: 404 });
+  }
 
   const id = deviceId ?? crypto.randomUUID();
-  const path = `${subjectType}/${subjectId}/${id}.${audioExtension(mimeType)}`;
+  const path = quick ? `inbox/${id}.${audioExtension(mimeType)}` : `${subjectType}/${subjectId}/${id}.${audioExtension(mimeType)}`;
   const at = recordedAtFrom(recordedAt);
   const { error } = await db.from('kc_recording').insert({
     id,
     org_id: ORG,
-    subject_type: subjectType,
-    subject_id: subjectId,
-    subject_name: subject.name,
+    subject_type: quick ? null : subjectType,
+    subject_id: quick ? null : subjectId,
+    subject_name: subject?.name ?? null,
     speaker_email: guard.email,
     speaker_name: voicesLabel(voices),
     voices,

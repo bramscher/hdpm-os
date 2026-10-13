@@ -46,3 +46,10 @@ export function normalizeVoices(input: unknown, recorderEmail: string): string[]
 export function rowVoices(row: { voices?: string[] | null; speaker_email: string }): string[] {
   return row.voices?.length ? row.voices : [row.speaker_email.toLowerCase()];
 }
+
+/** May this person edit, tag or delete the take? Whoever recorded it, anyone whose voice is in it, or an admin. */
+export function canChangeTake(rec: { speaker_email: string; voices: string[] | null }, guard: { role: string; email: string }): boolean {
+  if (guard.role === 'admin') return true;
+  const me = guard.email.toLowerCase();
+  return rec.speaker_email.toLowerCase() === me || rowVoices(rec).includes(me);
+}
