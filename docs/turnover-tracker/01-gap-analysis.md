@@ -139,6 +139,12 @@ This is the riskiest part, because it overlaps the existing `stage` machine that
   - **Recommend (a) now and (c) as a dev check.**
 - **In-house (HDMS) invoices do link** through `hdms_invoices.work_order_id` and the daily-billing `work_order_id`, so those can set "invoice received" automatically.
 - "Category 6 = invoices received when every WO is terminal" is a simple calculation once the statuses exist.
+- **Update 2026-10-13: (c) is done.** The Reports API does link them, in two ways:
+  - `work_order.vendor_portal_invoices` counts invoices uploaded to the work order.
+  - `bill_detail.work_order` ties each bill line to a work order number, with paid and unpaid amounts.
+  - `/api/maintenance/cron/af-billing` mirrors both into `wo_af_billing` three times a day (`lib/maintenance/af-wo-billing.ts`, migration `20261026`). A completed work order with an uploaded invoice or a bill counts as **Complete, invoice received**, and each work order row shows what AppFolio has. **Check AppFolio invoices** on the unit page runs the sync on demand.
+  - Limits: the files themselves can't be fetched (no attachments endpoint). The work_order report only covers about the last quarter, while bills cover a year. Saved counts persist once seen.
+  - Dry run on 2026-10-13: 700 of 830 turn work orders at "Completed, awaiting invoice" would become received (204 with an uploaded invoice, 689 with a bill).
 
 ## 6. Reminders and tasks
 

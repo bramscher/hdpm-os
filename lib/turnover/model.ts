@@ -86,6 +86,8 @@ export interface TrackerWo {
   turn_status_af_basis: string | null;
   /** True when one of our own invoices is linked to this work order. */
   has_linked_invoice?: boolean;
+  /** True when AppFolio shows an invoice uploaded or a bill entered (wo_af_billing). */
+  af_invoice_received?: boolean;
 }
 
 /** The tracker status AppFolio's status implies, with nobody overriding it. */
@@ -95,7 +97,7 @@ export function statusFromAppFolio(wo: TrackerWo): WoStatus {
   if (canceled) return 'cancelled';
   const done = wo.status === 'done' || wo.status === 'closed' || s === 'completed' || s === 'work completed' || s === 'work done';
   if (done) {
-    if (wo.has_linked_invoice) return 'complete_invoice_received';
+    if (wo.has_linked_invoice || wo.af_invoice_received) return 'complete_invoice_received';
     // The follow-up inspection defaults to no bill; a user can change it if one arrives.
     if (isFollowUpInspection(wo)) return 'complete_no_bill';
     return 'completed_awaiting_invoice';

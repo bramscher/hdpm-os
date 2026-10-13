@@ -51,6 +51,7 @@ export const ROUTINES: Routine[] = [
   { id: 'timekeeping_periods', path: '/api/timekeeping/cron', schedule: '10 8 * * *', name: 'Timekeeping periods', category: 'sync', owner: 'Craig' },
   { id: 'kpi_snapshot', path: '/api/kpi/cron', schedule: '0 14 * * *', name: 'KPI snapshot', category: 'sync', owner: 'Craig' },
   { id: 'maintenance_metrics', path: '/api/maintenance/cron/metrics', schedule: '30 13,21 * * *', name: 'Maintenance metrics snapshot', category: 'sync', owner: 'Craig' },
+  { id: 'wo_af_billing', path: '/api/maintenance/cron/af-billing', schedule: '10 14,18,22 * * *', name: 'Work order invoices & bills (AppFolio)', category: 'sync', owner: 'Craig' },
 
   // ── Brain / knowledge ─────────────────────────────────────────────────
   { id: 'knowledge_notion', path: '/api/sync/knowledge', schedule: '0 10 * * 0', name: 'Knowledge sync (Notion)', category: 'brain', owner: 'Craig' },

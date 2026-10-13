@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { CalendarRange } from 'lucide-react';
+import { CalendarRange, FileCheck } from 'lucide-react';
 import { SECTIONS, WO_STATUSES, WO_STATUS_LABEL, type CheckDef, type CheckState, type WoStatus } from '@/lib/turnover/model';
 import type { Detail, DetailWo } from '@/lib/turnover/server';
 import { SectionPill, WO_TONE, shortDate } from '../pills';
@@ -57,6 +57,16 @@ export function TurnDetail({ detail }: { detail: Detail }) {
             >
               <CalendarRange className="h-3.5 w-3.5" />
               Schedule
+            </button>
+            <button
+              type="button"
+              onClick={() => post('/api/turnover-tracker/af-billing', {})}
+              disabled={busy}
+              className="ml-2 mt-2 inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs font-medium text-white hover:bg-white/20 disabled:opacity-50"
+              title="Look up uploaded invoices and entered bills in AppFolio now (also runs automatically 3 times a day)"
+            >
+              <FileCheck className="h-3.5 w-3.5" />
+              {busy ? 'Checking…' : 'Check AppFolio invoices'}
             </button>
           </div>
           <dl className="flex flex-wrap gap-6 text-sm">
@@ -277,18 +287,31 @@ function WoTable({ wos, disabled, onStatus }: { wos: DetailWo[]; disabled: boole
   );
 }
 
+/** The Invoice fact, with what AppFolio shows: an invoice uploaded, a bill entered (and paid or not). */
+function invoiceFact(w: DetailWo): [string, string] {
+  const af = w.appfolio;
+  if (!af) return [w.invoice, 'Not checked in AppFolio yet'];
+  const checked = `Checked in AppFolio ${new Date(af.checkedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+  const parts: string[] = [];
+  if (af.invoices > 0) parts.push(af.invoices === 1 ? 'invoice uploaded' : `${af.invoices} invoices uploaded`);
+  if (af.billed > 0) parts.push(`billed ${money(af.billed)}${af.unpaid > 0 ? `, ${money(af.unpaid)} unpaid` : ', paid'}`);
+  const summary = parts.length ? parts.join(' · ') : 'none in AppFolio';
+  return [`${w.invoice} · ${summary}`, `${summary[0].toUpperCase()}${summary.slice(1)}${af.lastBillDate ? ` (last bill ${shortDate(af.lastBillDate)})` : ''}. ${checked}.`];
+}
+
 /** One work order: title + status on top, its facts in a wrapping grid underneath — no sideways scroll. */
 function WoRow({ w, disabled, onStatus }: { w: DetailWo; disabled: boolean; onStatus: (id: string, s: WoStatus) => void }) {
   const [open, setOpen] = useState(false);
   const long = w.title.length > 140;
-  const facts: [string, string][] = [
+  const [invoiceText, invoiceTip] = invoiceFact(w);
+  const facts: [string, string, string?][] = [
     ['Vendor', w.vendor ?? '—'],
     ['Assigned employee', w.assigned ?? '—'],
     ['Estimate', money(w.estimate)],
     ['Approved', w.approved != null ? money(w.approved) : w.estimate != null ? 'Pending' : '—'],
     ['Scheduled', w.scheduled ? shortDate(w.scheduled) : 'Not set'],
     ['Done', w.done ? shortDate(w.done) : 'None'],
-    ['Invoice', w.invoice],
+    ['Invoice', invoiceText, invoiceTip],
     ['Reminder task', w.reminder],
   ];
   return (
@@ -318,11 +341,11 @@ function WoRow({ w, disabled, onStatus }: { w: DetailWo; disabled: boolean; onSt
           </div>
         </div>
       </div>
-      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-4 xl:grid-cols-8">
-        {facts.map(([k, v]) => (
-          <div key={k} className="min-w-0">
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-4 xl:grid-cols-9">
+        {facts.map(([k, v, tip]) => (
+          <div key={k} className={`min-w-0 ${k === 'Invoice' ? 'col-span-2' : ''}`}>
             <dt className="text-[11px] font-bold text-charcoal-500">{k}</dt>
-            <dd className="truncate text-charcoal-900" title={v}>{v}</dd>
+            <dd className="truncate text-charcoal-900" title={tip ?? v}>{v}</dd>
           </div>
         ))}
       </dl>

@@ -143,6 +143,10 @@
     {
       "path": "/api/agents/cron/activities?kind=new",
       "schedule": "30 15-23 * * 1-5"
+    },
+    {
+      "path": "/api/maintenance/cron/af-billing",
+      "schedule": "10 14,18,22 * * *"
     }
   ]
 }
