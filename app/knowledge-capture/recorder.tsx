@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Mic, Pause, Play, Square, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { addFile, appendChunk, beginTake, discardTake, finishTake, queueTake, releaseLive, type TakeMeta } from "@/lib/knowledge-capture/outbox";
+import { useOnline } from "./use-online";
 
 // Keeps a take under the 25 MB transcription limit at any browser's default bitrate.
 const MAX_SECONDS = 45 * 60;
@@ -44,16 +46,24 @@ export const formatClock = (sec: number) =>
 type State = "idle" | "recording" | "paused" | "review";
 
 /**
- * Record in the browser (or attach a phone voice memo), review, then hand the
- * blob to `onSave`. Owns the microphone for the duration of a take only.
+ * Record in the browser (or attach a phone voice memo), review, then save.
+ * Owns the microphone for the duration of a take only.
+ *
+ * Each take is kept on the device as it records (lib/knowledge-capture/outbox),
+ * so Save works with no signal: the take is queued and uploads by itself when
+ * the device is back online. If the device can't store it, Save falls back to
+ * uploading straight away (`onSaveDirect`), which needs signal.
  */
 export function Recorder({
-  onSave,
+  takeMeta,
+  onSaveDirect,
   busy,
   extraActions,
   onTakeChange,
 }: {
-  onSave: (audio: Blob) => Promise<boolean>;
+  /** Who and what the take is about — read when the take starts and when it's saved. */
+  takeMeta: () => TakeMeta;
+  onSaveDirect: (audio: Blob) => Promise<boolean>;
   busy: boolean;
   /** True while a take is being recorded or waiting to be saved (unsaved work). */
   onTakeChange?: (inProgress: boolean) => void;
@@ -71,6 +81,11 @@ export function Recorder({
   const starting = useRef(false);
   const urls = useRef<string[]>([]);
   const mounted = useRef(true);
+  // The device copy of the current take (null if the device can't store it).
+  const takeId = useRef<string | null>(null);
+  const journal = useRef<Promise<void>>(Promise.resolve());
+  const elapsed = useRef(0);
+  const online = useOnline();
 
   useEffect(() => {
     onTakeChange?.(state !== "idle");
@@ -82,10 +97,14 @@ export function Recorder({
   };
   const startTimer = () => {
     stopTimer();
-    timer.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+    timer.current = setInterval(() => {
+      elapsed.current += 1;
+      setSeconds(elapsed.current);
+    }, 1000);
   };
 
-  // Release the mic, timer and preview URLs if the page unmounts mid-take.
+  // Release the mic, timer and preview URLs if the page unmounts mid-take. The
+  // device copy stays: it shows under "On this device" to save or discard.
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -93,6 +112,7 @@ export function Recorder({
       stopTimer();
       recorder.current?.stream.getTracks().forEach((t) => t.stop());
       urls.current.forEach((u) => URL.revokeObjectURL(u));
+      if (takeId.current) releaseLive(takeId.current);
       onTakeChange?.(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,9 +124,9 @@ export function Recorder({
     return url;
   };
 
-  // Warn before leaving with an unsaved take.
+  // Warn before leaving with a take that exists only in this page's memory.
   useEffect(() => {
-    if (state === "idle") return;
+    if (state === "idle" || takeId.current) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
@@ -147,9 +167,31 @@ export function Recorder({
     }
     parts.current = [];
     bytes.current = 0;
+    takeId.current = null;
+    journal.current = Promise.resolve();
+    try {
+      takeId.current = await beginTake(takeMeta(), rec.mimeType || mimeType || "audio/webm");
+    } catch (err) {
+      console.error("[knowledge-capture] could not keep the take on the device:", err);
+      toast.warning("This take can't be kept on the device — keep this screen open until it's saved.");
+    }
+    let seq = 0;
+    let journalWarned = false;
     rec.ondataavailable = (e) => {
       if (!e.data.size) return;
       parts.current.push(e.data);
+      const id = takeId.current;
+      if (id) {
+        const n = seq++;
+        journal.current = journal.current
+          .then(() => appendChunk(id, n, e.data))
+          .catch((err) => {
+            if (journalWarned) return;
+            journalWarned = true;
+            console.error("[knowledge-capture] journal write failed:", err);
+            toast.warning("The device is low on space — keep this screen open until the take is saved.");
+          });
+      }
       bytes.current += e.data.size;
       if (bytes.current >= STOP_AT_BYTES && rec.state === "recording") {
         toast.info("This take is nearly 25 MB — stopping it. Save it, then start another.");
@@ -162,14 +204,24 @@ export function Recorder({
     };
     rec.onstop = () => {
       stream.getTracks().forEach((t) => t.stop());
-      if (!mounted.current) return;
       const blob = new Blob(parts.current, { type: rec.mimeType || mimeType || "audio/webm" });
+      const id = takeId.current;
+      // Swap the per-second journal for one file (also after unmount, so a take
+      // cut off by leaving the page is ready to save from "On this device").
+      if (id) {
+        const duration = elapsed.current;
+        journal.current = journal.current
+          .then(() => finishTake(id, blob, duration))
+          .catch((err) => console.error("[knowledge-capture] could not finish the take on the device:", err));
+      }
+      if (!mounted.current) return;
       setTake({ blob, url: preview(blob) });
       setState("review");
     };
     starting.current = false;
     rec.start(1000);
     recorder.current = rec;
+    elapsed.current = 0;
     setSeconds(0);
     setState("recording");
     startTimer();
@@ -189,14 +241,22 @@ export function Recorder({
     stopTimer();
     if (recorder.current && recorder.current.state !== "inactive") recorder.current.stop();
   }
-  function discard() {
+  /** Back to idle; the device copy (if any) is left as it is. */
+  function reset() {
     if (take) URL.revokeObjectURL(take.url);
+    takeId.current = null;
     setTake(null);
     setSeconds(0);
     setState("idle");
   }
 
-  function attach(file: File | undefined) {
+  async function discard() {
+    const id = takeId.current;
+    reset();
+    if (id) await journal.current.then(() => discardTake(id)).catch(() => undefined);
+  }
+
+  async function attach(file: File | undefined) {
     if (!file) return;
     const audio = asAudio(file);
     if (!audio) {
@@ -207,10 +267,19 @@ export function Recorder({
       toast.error("That file is over 25 MB — split it into shorter recordings.");
       return;
     }
+    takeId.current = null;
+    try {
+      takeId.current = await addFile(takeMeta(), audio);
+    } catch (err) {
+      console.error("[knowledge-capture] could not keep the memo on the device:", err);
+    }
+    elapsed.current = 0;
     setSeconds(0);
     setTake({ blob: audio, url: preview(audio) });
     setState("review");
   }
+
+  const [queueing, setQueueing] = useState(false);
 
   async function save() {
     if (!take) return;
@@ -218,7 +287,30 @@ export function Recorder({
       toast.error("This take is over 25 MB — record shorter takes.");
       return;
     }
-    if (await onSave(take.blob)) discard();
+    const id = takeId.current;
+    if (id) {
+      setQueueing(true);
+      try {
+        await journal.current;
+        await queueTake(id, takeMeta().voices);
+        toast.info(
+          navigator.onLine
+            ? "Saved. Uploading — you'll review the transcript before it goes to the brain."
+            : "Saved on this device. It uploads by itself when you're back online."
+        );
+        reset();
+        return;
+      } catch (err) {
+        console.error("[knowledge-capture] could not queue the take:", err);
+      } finally {
+        setQueueing(false);
+      }
+    }
+    // No device copy: upload now (needs signal).
+    if (await onSaveDirect(take.blob)) {
+      if (id) void discardTake(id);
+      reset();
+    }
   }
 
   if (state === "review" && take) {
@@ -226,11 +318,11 @@ export function Recorder({
       <div className="space-y-3">
         <audio controls src={take.url} className="w-full" />
         <div className="flex flex-wrap gap-2">
-          <Button onClick={save} disabled={busy}>
+          <Button onClick={save} disabled={busy || queueing}>
             <Upload className="mr-2 h-4 w-4" />
-            {busy ? "Saving…" : "Save & add to brain"}
+            {busy || queueing ? "Saving…" : online ? "Save & add to brain" : "Save on this device"}
           </Button>
-          <Button variant="outline" onClick={discard} disabled={busy}>
+          <Button variant="outline" onClick={discard} disabled={busy || queueing}>
             <Trash2 className="mr-2 h-4 w-4" />
             Discard
           </Button>
@@ -288,6 +380,7 @@ export function Recorder({
           </Button>
           <p className="w-full text-xs text-charcoal-500">
             Keep this screen open while recording — on iPhone, locking the phone or switching apps pauses the microphone.
+            No signal needed: the take is kept on this device as you go.
           </p>
         </>
       )}

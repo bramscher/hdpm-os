@@ -467,6 +467,7 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
    - **Ingest** into the brain (`brain_chunk`, domain `company`, sensitivity `internal`): transcript windows as `kind=fact` (author `human:<email>`), notes as `kind=summary` (author `agent:knowledge-capture`), on `owner:appfolio:<id>` / `property:appfolio:<id>` brain nodes linked by `owns` edges
    - **Rebuild the living profile** from all of the subject's takes: stored in `kc_profile`, written to the node's `brain_node.summary_md`, and ingested as a high-salience chunk
 5. **Read** — each subject shows the profile and every take (audio, transcript, notes), retry for failed takes, delete, and **Rebuild profile**.
+6. **No signal (Home Screen app):** installs to the phone's Home Screen and opens and records offline. Takes are kept on the device (IndexedDB, written every second while recording) and upload by themselves when the app is open with signal; **On this device** lists what's waiting. Offline page + data: `public/kc-sw.js`; outbox: `lib/knowledge-capture/outbox.ts`. Details in the spec, flow step 10.
 
 **Transcript editor (#140):** **Edit** on a take opens its transcript under the audio player. Saving keeps the first machine transcript in `transcript_original`, records who edited it and when, and rebuilds that take's notes, brain chunks and the profile from the corrected text. Audio isn't re-transcribed, and Retry never overwrites an edit.
 

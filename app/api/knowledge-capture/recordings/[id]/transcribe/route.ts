@@ -17,9 +17,16 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   const { id } = await params;
 
   const db = getSupabaseAdmin();
-  const { data: rec } = await db.from('kc_recording').select('id, mime_type').eq('org_id', ORG).eq('id', id).maybeSingle();
+  const { data: rec } = await db
+    .from('kc_recording')
+    .select('id, mime_type, transcript')
+    .eq('org_id', ORG)
+    .eq('id', id)
+    .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
   if (isTextEntry(rec)) return NextResponse.json({ error: 'Typed notes have nothing to transcribe' }, { status: 400 });
+  // A device that lost signal mid-request asks again; don't pay Whisper twice.
+  if (rec.transcript) return NextResponse.json({ transcript: rec.transcript });
   if (!(await claimRecording(db, id))) return NextResponse.json({ error: 'Already working on this take' }, { status: 409 });
 
   try {

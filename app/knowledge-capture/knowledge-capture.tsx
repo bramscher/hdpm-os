@@ -14,8 +14,10 @@ import { INTERVIEW_PROMPTS } from "@/lib/knowledge-capture/prompts";
 import { coverageKey, type Coverage, type RosterProperty, type SubjectType } from "@/lib/knowledge-capture/roster";
 import type { LinkSuggestion, LinkedRosterOwner } from "@/lib/knowledge-capture/links";
 import type { Voice } from "@/lib/knowledge-capture/voices";
+import { onOutboxEvent } from "@/lib/knowledge-capture/outbox";
 import { Recorder, formatClock } from "./recorder";
 import { OwnerLinks } from "./owner-links";
+import { InstallHint, OfflineBanner, OutboxPanel, useOfflineApp } from "./outbox-panel";
 
 const BUCKET = "knowledge-capture";
 
@@ -57,8 +59,16 @@ interface Detail {
 type Filter = "all" | "todo" | "done" | "review" | "dupes" | `needs:${string}`;
 type Selected = { type: SubjectType; id: string } | null;
 
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(`/api/knowledge-capture${path}`, init);
+  } catch {
+    throw new Error("No signal — try again when you're back online.");
+  }
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/knowledge-capture${path}`, init);
+  const res = await send(path, init);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data as T;
@@ -91,15 +101,34 @@ export function KnowledgeCapture() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Selected>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Set when the owner/property list is the copy saved on this device (no signal).
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  useOfflineApp();
 
   const load = useCallback(async (refresh = false) => {
     try {
-      setData(await call<Overview>(refresh ? "?refresh=1" : ""));
+      const res = await send(refresh ? "?refresh=1" : "");
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+      setData(body as Overview);
+      setSavedAt(res.headers.get("X-KC-Offline") ? res.headers.get("X-KC-Saved-At") || "" : null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load owners and properties");
     }
   }, []);
+
+  // Takes uploading from this device: say how they went and refresh the counts.
+  useEffect(
+    () =>
+      onOutboxEvent((e) => {
+        if (e.type === "uploaded") return;
+        if (e.type === "transcribed") toast.success(`Transcript ready for ${e.take.subjectName} — check it, then Add to brain.`);
+        else toast.error(`${e.take.subjectName}: ${e.error}`);
+        load();
+      }),
+    [load]
+  );
 
   useEffect(() => {
     const initial = readSelection();
@@ -117,7 +146,11 @@ export function KnowledgeCapture() {
     takeInProgress.current = v;
   }, []);
   const select = useCallback((s: Selected) => {
-    if (takeInProgress.current && !window.confirm("You have a recording that isn't saved. Leave it and discard it?")) return;
+    if (
+      takeInProgress.current &&
+      !window.confirm("You're in the middle of a take. Leave it? It stays under \"On this device\" to save or discard later.")
+    )
+      return;
     takeInProgress.current = false;
     setSelected(s);
     if (s) setTab(s.type);
@@ -191,7 +224,10 @@ export function KnowledgeCapture() {
         }
       />
 
+      <InstallHint />
+      <OfflineBanner savedAt={savedAt} />
       {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
+      <OutboxPanel />
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
         {(["owner", "property"] as const).map((t) => {
@@ -394,16 +430,27 @@ function SubjectPanel({
   const name = owner?.name ?? property?.name ?? "Unknown";
   const path = `/subjects/${selected.type}/${encodeURIComponent(selected.id)}`;
 
+  const [detailError, setDetailError] = useState<string | null>(null);
   const loadDetail = useCallback(async () => {
     try {
       setDetail(await call<Detail>(path));
+      setDetailError(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not load this profile");
+      // No signal: say so in place (recording still works) instead of a toast.
+      setDetailError(err instanceof Error ? err.message : "Could not load this profile");
     }
   }, [path]);
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
+  // A take about this subject finished uploading from the device.
+  useEffect(
+    () =>
+      onOutboxEvent((e) => {
+        if (e.take.subjectType === selected.type && e.take.subjectId === selected.id) loadDetail();
+      }),
+    [loadDetail, selected.type, selected.id]
+  );
 
   const markWorking = (id: string) =>
     setDetail((d) => d && { ...d, recordings: d.recordings.map((r) => (r.id === id ? { ...r, status: "processing" } : r)) });
@@ -614,7 +661,8 @@ function SubjectPanel({
           {talking.length > 1 && <span className="text-xs text-charcoal-500">Recording together — say names when you hand off.</span>}
         </div>
         <Recorder
-          onSave={save}
+          takeMeta={() => ({ subjectType: selected.type, subjectId: selected.id, subjectName: name, voices: talking })}
+          onSaveDirect={save}
           busy={saving}
           onTakeChange={onTakeChange}
           extraActions={
@@ -684,7 +732,9 @@ function SubjectPanel({
           )}
         </div>
         {!detail ? (
-          <p className="text-sm text-charcoal-500">Loading…</p>
+          <p className="text-sm text-charcoal-500">
+            {detailError ? `Profile not available right now — you can still record. (${detailError})` : "Loading…"}
+          </p>
         ) : detail.profile ? (
           <MarkdownLite md={detail.profile.markdown} className="text-sm text-charcoal-700" />
         ) : (
