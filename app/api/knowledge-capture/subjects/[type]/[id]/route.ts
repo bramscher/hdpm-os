@@ -38,11 +38,13 @@ export async function GET(_request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Could not load this profile' }, { status: 500 });
   }
 
-  // A take still 'pending_upload' after 10 minutes most likely uploaded but its
-  // process call never arrived: show it as 'uploaded' so Retry is offered.
+  // A take still 'pending_upload' 10 minutes after its upload started most likely
+  // uploaded but its process call never arrived: show it as 'uploaded' so Retry
+  // is offered. (updated_at, not created_at: a take recorded offline days ago
+  // carries its recording time in created_at.)
   const staleBefore = Date.now() - 10 * 60 * 1000;
   const rows = (recs.data ?? [])
-    .filter((r) => r.status !== 'pending_upload' || new Date(r.created_at).getTime() < staleBefore)
+    .filter((r) => r.status !== 'pending_upload' || new Date(r.updated_at).getTime() < staleBefore)
     .map((r) => (r.status === 'pending_upload' ? { ...r, status: 'uploaded' } : r))
     // Transcribed audio not yet added to the brain: waiting for a person to review it.
     .map((r) => (r.status === 'uploaded' && r.transcript && !isTextEntry(r) ? { ...r, status: 'review' } : r))

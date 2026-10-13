@@ -3,7 +3,7 @@ ontology: true
 type: spec
 domain: hdpm-os
 status: active
-tags: [knowledge-capture, brain, appfolio, owners, properties, audio, transcription]
+tags: [knowledge-capture, brain, appfolio, owners, properties, audio, transcription, offline, pwa]
 summary: Matt and Penny record what they know about each AppFolio owner and property; transcripts flow into the brain and roll up into living profiles.
 related: [04-gbrain-company-brain, fee-management]
 discovered: 2026-10-07
@@ -47,6 +47,14 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
    - Inputs are 16px on phones, so iOS doesn't zoom in on focus.
    - On phones the list and the profile are separate screens, with an "All owners" back link.
 
+10. **Works with no signal (Home Screen app).** Capture installs as a Home Screen app ("Capture") that opens and records with no signal, then uploads when the phone is back online.
+    - **Install:** in Safari, open `/knowledge-capture` while you have signal → Share → **Add to Home Screen** → open it from the Home Screen once and sign in. (Android Chrome: **Install**.) The page shows this hint on phones until dismissed. The Home Screen app keeps its own sign-in, separate from Safari.
+    - **Opens offline:** `public/kc-sw.js` (a service worker registered by the page in production) saves the page, the code it needs, the owner/property list, and each profile you've opened. With no signal, or weak signal (4s), or an expired session, the app opens the saved copy; a banner says it's offline and when the list was saved.
+    - **Every take stays on the device until the server has it** (`lib/knowledge-capture/outbox.ts`, IndexedDB). While recording, each second of audio is written to the device, so closing the app, a crash or a dead battery keeps everything up to the last second. Save queues the take; **On this device** at the top of the page lists what's waiting.
+    - **Uploads by themselves** when the app is open with signal: on open, back online, brought forward, and every 30s. iPhone can't upload in the background, so open the app once you're back in signal. A take cut off mid-recording shows as **Not saved**, with Play / Save / Discard. An expired session (8 hours) shows **Sign in to upload**; takes wait.
+    - **Retry-safe:** the device picks the take's id, so a retried upload reuses the same `kc_recording` row (`POST /recordings` with `id`), and transcription of a take that already has a transcript returns it rather than paying Whisper again. `recordedAt` from the device becomes `created_at`, so a take is dated when it was recorded, not when it uploaded.
+    - Typed notes, transcript review and Add to brain still need signal.
+
 Dez and agents find this knowledge through ordinary brain retrieval (`searchBrain` / `think`).
 
 ## Brain identity
@@ -73,3 +81,5 @@ Re-processing a recording replaces its chunks. Deleting a recording removes its 
 
 - Editing the profile directly. Correct the transcript instead, or record a correction take; the profile prefers newer notes and flags disagreements.
 - Unit-level subjects and vendor profiles.
+- Recording with no subject picked (quick capture, tag later) and attaching several voice memos at once.
+- Background upload on iPhone (Safari has no Background Sync); the app must be open.

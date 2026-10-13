@@ -48,6 +48,10 @@ export const PUBLIC_PREFIXES = [
   // URL. The trailing slash matters: "/r" alone would also open /reports,
   // /routes etc. without a session.
   "/r/",
+  // Knowledge Capture offline app: the service worker and install manifest are
+  // static public files with no data (browsers fetch manifests without cookies).
+  "/kc-sw.js",
+  "/kc.webmanifest",
 ];
 
 // Admin-only: the entire KPI/financial dashboard and its data APIs.
