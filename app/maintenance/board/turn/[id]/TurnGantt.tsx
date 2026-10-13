@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { TurnSchedule, TaskStatus, MilestoneKind, TurnTaskLite } from '@/lib/maintenance/turn-schedule';
+import type { TurnScheduleSummary } from '@/lib/maintenance/load-turn-schedule';
 
 const LEFT_W = 320; // px — task-list pane width
 const AXIS_H = 56;
@@ -12,19 +13,7 @@ const CAP = 11; // hollow end-cap diameter, px
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 8;
 
-interface TurnSummary {
-  id: string;
-  propertyName: string;
-  unitName: string | null;
-  vacatedAt: string;
-  targetReady: string | null;
-  moveinDate: string | null;
-  availableDate: string | null;
-  budget: number | null;
-  actual: number | null;
-  currentBlocker: string | null;
-  afUnitLink: string | null;
-}
+type TurnSummary = TurnScheduleSummary;
 
 const BAR_FILL: Record<TaskStatus, string> = {
   done: 'bg-green-500',
@@ -71,10 +60,13 @@ export default function TurnGantt({
   turn,
   schedule,
   today,
+  popup = false,
 }: {
   turn: TurnSummary;
   schedule: TurnSchedule;
   today: string;
+  /** In its own window (Brody Turnover): full window width, Close instead of the board link. */
+  popup?: boolean;
 }) {
   const { phases, milestones, domain } = schedule;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -108,12 +100,23 @@ export default function TurnGantt({
   const rowW = LEFT_W + timelineW;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div className={popup ? 'px-4 py-4' : 'mx-auto max-w-6xl px-4 py-8'}>
       {/* Header */}
       <div className="mb-4">
-        <Link href="/maintenance/board?view=turnover" className="text-xs text-charcoal-400 hover:text-charcoal-700">
-          ← Turnover board
-        </Link>
+        {popup ? (
+          <button
+            type="button"
+            // A window opened from the board closes; opened as a tab (pop-ups blocked), go to the unit page.
+            onClick={() => (window.opener ? window.close() : (window.location.href = `/turnover-tracker/${turn.id}`))}
+            className="text-xs text-charcoal-400 hover:text-charcoal-700"
+          >
+            ✕ Close window
+          </button>
+        ) : (
+          <Link href="/maintenance/board?view=turnover" className="text-xs text-charcoal-400 hover:text-charcoal-700">
+            ← Turnover board
+          </Link>
+        )}
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-display text-charcoal-900">{where}</h1>
           {turn.afUnitLink && (

@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
+import { CalendarRange } from 'lucide-react';
 import { SECTIONS, SECTION_STATUS_LABEL, VIEW_LABEL, type SectionStatus, type TurnView } from '@/lib/turnover/model';
 import type { Dashboard } from '@/lib/turnover/server';
 import { SECTION_KEY_ORDER, SectionPill, shortDate } from './pills';
+import { openTurnSchedule } from './open-schedule';
 
 const select = 'h-10 rounded-lg border border-sand-200 bg-white px-3 text-sm text-charcoal-800';
 
@@ -107,6 +109,18 @@ export function TurnoverDashboard({ data, view }: { data: Dashboard; view: TurnV
                   <Link href={`/turnover-tracker/${r.id}`} className="font-semibold text-charcoal-900 hover:underline" onClick={(e) => e.stopPropagation()}>{r.unit}</Link>
                   <div className="text-xs text-charcoal-500">{r.unit !== r.property ? r.property : ''}</div>
                   {r.coordinator && <div className="text-xs text-charcoal-400">{r.coordinator}</div>}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openTurnSchedule(r.id);
+                    }}
+                    className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-sand-200 px-2 py-0.5 text-xs font-medium text-charcoal-700 hover:bg-sand-100"
+                    title="Open the Gantt schedule in its own window"
+                  >
+                    <CalendarRange className="h-3.5 w-3.5" />
+                    Schedule
+                  </button>
                 </td>
                 <td className="whitespace-nowrap px-3 py-3">{shortDate(r.vacated_at)}</td>
                 <td className="whitespace-nowrap px-3 py-3">{shortDate(r.movein_date)}</td>

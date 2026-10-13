@@ -17,7 +17,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isReferrerRoute =
     pathname.startsWith("/partners") && !pathname.startsWith("/partners/admin");
 
-  if (isLoginPage || isReferrerRoute) {
+  // A turn's Gantt schedule opened as its own window from Brody Turnover.
+  const isPopupWindow = /^\/turnover-tracker\/[^/]+\/schedule$/.test(pathname);
+
+  if (isLoginPage || isReferrerRoute || isPopupWindow) {
     return <>{children}</>;
   }
 

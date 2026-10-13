@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { CalendarRange } from 'lucide-react';
 import { SECTIONS, WO_STATUSES, WO_STATUS_LABEL, type CheckDef, type CheckState, type WoStatus } from '@/lib/turnover/model';
 import type { Detail, DetailWo } from '@/lib/turnover/server';
 import { SectionPill, WO_TONE, shortDate } from '../pills';
+import { openTurnSchedule } from '../open-schedule';
 
 const money = (n: number | null) => (n == null ? '—' : `$${n.toFixed(2)}`);
 const card = 'rounded-xl border border-sand-200 bg-white';
@@ -47,6 +49,15 @@ export function TurnDetail({ detail }: { detail: Detail }) {
             <Link href="/turnover-tracker" className="text-xs text-white/70 hover:text-white">← Back to all turnovers</Link>
             <h1 className="mt-1 text-2xl font-semibold">{turn.unit_name ? `${turn.unit_name}, ${turn.property_name}` : turn.property_name}</h1>
             <p className="text-xs text-white/60">Shows from the AppFolio move-out date until the turn is marked complete{closed ? ' · Marked complete' : ''}</p>
+            <button
+              type="button"
+              onClick={() => openTurnSchedule(turn.id)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs font-medium text-white hover:bg-white/20"
+              title="Open the Gantt schedule in its own window"
+            >
+              <CalendarRange className="h-3.5 w-3.5" />
+              Schedule
+            </button>
           </div>
           <dl className="flex flex-wrap gap-6 text-sm">
             {[
