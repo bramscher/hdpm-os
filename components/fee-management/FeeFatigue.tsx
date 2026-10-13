@@ -1,6 +1,9 @@
 "use client";
 
+import { Fragment, useState } from "react";
 import { DEFAULT_SIZE_MULTIPLIERS, type FatigueAssumptions, type FatigueResult } from "@/lib/fee-management/fatigue";
+import type { RiskNote } from "@/lib/fee-management/risk-notes";
+import { RiskNotes } from "./RiskNotes";
 
 const usd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -18,6 +21,7 @@ export function FeeFatigue({
   assumptions,
   onChange,
   baseline,
+  notes,
 }: {
   result: FatigueResult;
   newFeeTypes: number;
@@ -25,7 +29,32 @@ export function FeeFatigue({
   assumptions: FatigueAssumptions;
   onChange: (a: FatigueAssumptions) => void;
   baseline: { ended: number; active: number } | null;
+  /** Matt's and Penny's notes on the at-risk owners. */
+  notes?: { list: RiskNote[]; me: string | null; onSaved: (ownerSetKey: string, authorEmail: string, note: RiskNote | null) => void };
 }) {
+  // Which owner's notes are open, per table ("large:<key>" / "risk:<key>").
+  const [openNotes, setOpenNotes] = useState<string | null>(null);
+  const noteCount = (key: string) => notes?.list.filter((n) => n.ownerSetKey === key).length ?? 0;
+  const notesCell = (id: string, key: string) =>
+    notes && (
+      <td className="py-1.5 pl-3 text-right">
+        <button
+          onClick={() => setOpenNotes(openNotes === id ? null : id)}
+          className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${noteCount(key) ? "bg-terra-50 text-terra-700" : "text-charcoal-400 hover:text-charcoal-700"}`}
+        >
+          {noteCount(key) ? `${noteCount(key)} ${noteCount(key) === 1 ? "note" : "notes"}` : "Add note"}
+        </button>
+      </td>
+    );
+  const notesRow = (id: string, key: string, name: string, cols: number) =>
+    notes &&
+    openNotes === id && (
+      <tr>
+        <td colSpan={cols} className="pb-3 pt-1">
+          <RiskNotes ownerSetKey={key} ownerName={name} notes={notes.list} me={notes.me} saveUrl="/api/admin/fee-management/risk-notes" onSaved={notes.onSaved} />
+        </td>
+      </tr>
+    );
   const baselinePct = baseline && baseline.active + baseline.ended > 0 ? (baseline.ended / (baseline.active + baseline.ended)) * 100 : null;
   const lossShare = result.grossGain > 0 ? Math.min(100, (result.expectedLoss / result.grossGain) * 100) : 0;
   const setA = (k: keyof FatigueAssumptions, v: string) => onChange({ ...assumptions, [k]: v === "" ? 0 : Math.max(0, Number(v)) });
@@ -169,30 +198,35 @@ export function FeeFatigue({
                     <th className="py-1.5 pr-3 font-semibold text-right">Chance of leaving</th>
                     <th className="py-1.5 pr-3 font-semibold text-right">Expected loss</th>
                     <th className="py-1.5 font-semibold text-right">If they leave</th>
+                    {notes && <th className="py-1.5 pl-3 font-semibold text-right">Notes</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {large.owners.map((o) => (
-                    <tr key={o.key} className="border-b border-red-100 last:border-0">
-                      <td className="py-1.5 pr-3 max-w-[260px] truncate font-medium text-charcoal-900" title={o.name}>{o.name}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums font-semibold">{o.doors}</td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums">+{o.increasePct.toFixed(0)}%</td>
-                      <td className="py-1.5 pr-3 text-right">
-                        <span
-                          className="inline-block min-w-[34px] rounded px-1.5 text-center text-[11px] font-semibold tabular-nums text-white"
-                          style={{ background: BAND_COLORS[Math.min(3, Math.floor(o.fatigue / 25))] }}
-                        >
-                          {o.fatigue}
-                        </span>
-                      </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums" title={`Includes the ${o.sizeMultiplier}× size multiplier`}>
-                        {(o.addedChurn * 100).toFixed(1)}%
-                      </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-red-600">−{usd(o.expectedLoss)}</td>
-                      <td className="py-1.5 text-right tabular-nums font-semibold text-red-700">
-                        −{usd(o.proposedYearly)} · {o.doors} doors
-                      </td>
-                    </tr>
+                    <Fragment key={o.key}>
+                      <tr className="border-b border-red-100 last:border-0">
+                        <td className="py-1.5 pr-3 max-w-[260px] truncate font-medium text-charcoal-900" title={o.name}>{o.name}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums font-semibold">{o.doors}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums">+{o.increasePct.toFixed(0)}%</td>
+                        <td className="py-1.5 pr-3 text-right">
+                          <span
+                            className="inline-block min-w-[34px] rounded px-1.5 text-center text-[11px] font-semibold tabular-nums text-white"
+                            style={{ background: BAND_COLORS[Math.min(3, Math.floor(o.fatigue / 25))] }}
+                          >
+                            {o.fatigue}
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums" title={`Includes the ${o.sizeMultiplier}× size multiplier`}>
+                          {(o.addedChurn * 100).toFixed(1)}%
+                        </td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums text-red-600">−{usd(o.expectedLoss)}</td>
+                        <td className="py-1.5 text-right tabular-nums font-semibold text-red-700">
+                          −{usd(o.proposedYearly)} · {o.doors} doors
+                        </td>
+                        {notesCell(`large:${o.key}`, o.key)}
+                      </tr>
+                      {notesRow(`large:${o.key}`, o.key, o.name, 8)}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -211,25 +245,30 @@ export function FeeFatigue({
                   <th className="py-1.5 pr-3 font-semibold text-right">Increase</th>
                   <th className="py-1.5 pr-3 font-semibold text-right">Fatigue</th>
                   <th className="py-1.5 font-semibold text-right">Expected loss</th>
+                  {notes && <th className="py-1.5 pl-3 font-semibold text-right">Notes</th>}
                 </tr>
               </thead>
               <tbody>
                 {result.owners.slice(0, 10).map((o) => (
-                  <tr key={o.key} className="border-b border-sand-100 last:border-0">
-                    <td className="py-1.5 pr-3 max-w-[260px] truncate font-medium text-charcoal-900" title={o.name}>{o.name}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums">{o.doors}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums text-charcoal-600">{usd(o.currentYearly)} → {usd(o.proposedYearly)}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums">+{o.increasePct.toFixed(0)}%</td>
-                    <td className="py-1.5 pr-3 text-right">
-                      <span
-                        className="inline-block min-w-[34px] rounded px-1.5 text-center text-[11px] font-semibold tabular-nums text-white"
-                        style={{ background: BAND_COLORS[Math.min(3, Math.floor(o.fatigue / 25))] }}
-                      >
-                        {o.fatigue}
-                      </span>
-                    </td>
-                    <td className="py-1.5 text-right tabular-nums text-red-600">−{usd(o.expectedLoss)}</td>
-                  </tr>
+                  <Fragment key={o.key}>
+                    <tr className="border-b border-sand-100 last:border-0">
+                      <td className="py-1.5 pr-3 max-w-[260px] truncate font-medium text-charcoal-900" title={o.name}>{o.name}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{o.doors}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-charcoal-600">{usd(o.currentYearly)} → {usd(o.proposedYearly)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">+{o.increasePct.toFixed(0)}%</td>
+                      <td className="py-1.5 pr-3 text-right">
+                        <span
+                          className="inline-block min-w-[34px] rounded px-1.5 text-center text-[11px] font-semibold tabular-nums text-white"
+                          style={{ background: BAND_COLORS[Math.min(3, Math.floor(o.fatigue / 25))] }}
+                        >
+                          {o.fatigue}
+                        </span>
+                      </td>
+                      <td className="py-1.5 text-right tabular-nums text-red-600">−{usd(o.expectedLoss)}</td>
+                      {notesCell(`risk:${o.key}`, o.key)}
+                    </tr>
+                    {notesRow(`risk:${o.key}`, o.key, o.name, 7)}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

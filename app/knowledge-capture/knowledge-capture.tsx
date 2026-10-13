@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Building2, ChevronDown, ChevronRight, ExternalLink, Keyboard, Pencil, RefreshCw, RotateCcw, Search, Trash2, User } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Building2, ChevronDown, ChevronRight, ExternalLink, Keyboard, Pencil, RefreshCw, RotateCcw, Search, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,8 @@ import { onOutboxEvent } from "@/lib/knowledge-capture/outbox";
 import { Recorder, formatClock } from "./recorder";
 import { OwnerLinks } from "./owner-links";
 import { InstallHint, OfflineBanner, OutboxPanel, useOfflineApp } from "./outbox-panel";
+import { FeeRiskPanel, OwnerFeeRisk, riskFor, useFeeRisk, type FeeRisk } from "./fee-risk";
+import type { RiskNote } from "@/lib/fee-management/risk-notes";
 
 const BUCKET = "knowledge-capture";
 
@@ -104,6 +106,10 @@ export function KnowledgeCapture() {
   // Set when the owner/property list is the copy saved on this device (no signal).
   const [savedAt, setSavedAt] = useState<string | null>(null);
   useOfflineApp();
+  // "Fee change risk": at-risk owners from Fee Management, with Matt's and Penny's notes.
+  const [view, setView] = useState<"capture" | "feeRisk">("capture");
+  const { risk, error: riskError, onSaved: onRiskNoteSaved } = useFeeRisk();
+  const riskCount = risk ? new Set([...risk.large.owners, ...risk.mostAtRisk].map((o) => o.key)).size : null;
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -208,19 +214,29 @@ export function KnowledgeCapture() {
         title="Knowledge Capture"
         description="Talk through what you know about each owner and property. Recordings are transcribed, added to the brain, and rolled up into a profile the team keeps."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={refreshing}
-            onClick={async () => {
-              setRefreshing(true);
-              await load(true);
-              setRefreshing(false);
-            }}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh from AppFolio
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={view === "feeRisk" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setView((v) => (v === "feeRisk" ? "capture" : "feeRisk"))}
+            >
+              <AlertTriangle className="mr-2 h-4 w-4" />
+              {view === "feeRisk" ? "Back to capture" : `Fee change risk${riskCount ? ` (${riskCount})` : ""}`}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={refreshing}
+              onClick={async () => {
+                setRefreshing(true);
+                await load(true);
+                setRefreshing(false);
+              }}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh from AppFolio
+            </Button>
+          </div>
         }
       />
 
@@ -229,7 +245,20 @@ export function KnowledgeCapture() {
       {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
       <OutboxPanel />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2">
+      {view === "feeRisk" ? (
+        <FeeRiskPanel
+          risk={risk}
+          error={riskError}
+          owners={data?.owners ?? []}
+          onSaved={onRiskNoteSaved}
+          onOpen={(id) => {
+            setView("capture");
+            select({ type: "owner", id });
+          }}
+        />
+      ) : null}
+
+      <div className={`mb-6 grid gap-3 sm:grid-cols-2 ${view === "feeRisk" ? "hidden" : ""}`}>
         {(["owner", "property"] as const).map((t) => {
           const p = progress(t);
           const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
@@ -249,7 +278,7 @@ export function KnowledgeCapture() {
         })}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+      <div className={`grid gap-6 lg:grid-cols-[360px_1fr] ${view === "feeRisk" ? "hidden" : ""}`}>
         <aside className={`rounded-lg border border-sand-200 bg-white ${selected ? "hidden lg:block" : ""}`}>
           <div className="flex border-b border-sand-200">
             {(["owner", "property"] as const).map((t) => (
@@ -357,6 +386,8 @@ export function KnowledgeCapture() {
               onSelect={select}
               onChanged={() => load()}
               onTakeChange={onTakeChange}
+              risk={risk}
+              onRiskNoteSaved={onRiskNoteSaved}
             />
           ) : (
             <EmptyState
@@ -401,12 +432,16 @@ function SubjectPanel({
   onSelect,
   onChanged,
   onTakeChange,
+  risk,
+  onRiskNoteSaved,
 }: {
   selected: { type: SubjectType; id: string };
   data: Overview;
   onSelect: (s: Selected) => void;
   onChanged: () => Promise<void> | void;
   onTakeChange: (inProgress: boolean) => void;
+  risk: FeeRisk | null;
+  onRiskNoteSaved: (ownerSetKey: string, authorEmail: string, note: RiskNote | null) => void;
 }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [saving, setSaving] = useState(false);
@@ -624,6 +659,10 @@ function SubjectPanel({
           ))}
         </div>
       </section>
+
+      {risk && owner && riskFor(risk, owner).length > 0 && (
+        <OwnerFeeRisk entries={riskFor(risk, owner)} risk={risk} onSaved={onRiskNoteSaved} />
+      )}
 
       {owner && (
         <OwnerLinks

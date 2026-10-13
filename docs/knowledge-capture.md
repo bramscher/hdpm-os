@@ -55,6 +55,12 @@ Matt and Penny carry years of knowledge about owners and properties that isn't w
     - **Retry-safe:** the device picks the take's id, so a retried upload reuses the same `kc_recording` row (`POST /recordings` with `id`), and transcription of a take that already has a transcript returns it rather than paying Whisper again. `recordedAt` from the device becomes `created_at`, so a take is dated when it was recorded, not when it uploaded.
     - Typed notes, transcript review and Add to brain still need signal.
 
+11. **Fee change risk.** **Fee change risk** in the header lists the owners the proposed fee change is most likely to cost us, from Fee Management → Fee Schedule → Fee fatigue & churn (same math, the saved fee schedule): **Large-owner exposure** (16+ doors by default) and the top 10 **Most at risk**.
+    - Each owner has a notes field for Matt and one for Penny (`fee_risk_note`, one note per owner set per person; Craig's shows once he writes one). Everyone sees all notes; each person edits only their own. The same notes appear in Fee Management's tables.
+    - Fee campaign only: these notes don't go to the brain. For knowledge the brain should keep, record a take.
+    - At-risk owners also get a **Fee change risk** card on their capture page; **Record about them** jumps there from the list.
+    - Matt and Penny don't need Fee Management access: `GET /api/knowledge-capture/fee-risk` computes the list server-side under the Knowledge Capture section.
+
 Dez and agents find this knowledge through ordinary brain retrieval (`searchBrain` / `think`).
 
 ## Brain identity
@@ -74,6 +80,7 @@ Re-processing a recording replaces its chunks. Deleting a recording removes its 
 
 1. Apply `supabase/migrations/20261014_knowledge_capture.sql` in the Supabase SQL Editor. It creates `kc_recording`, `kc_profile` and the private bucket. Then apply `20261015_kc_owner_links.sql` (owner record links) and `20261016_kc_voices.sql` (whose voice is in each take; apply **before** deploying the code that uses it). Until that's applied, linking errors but everything else works.
 2. Access is fixed in code: only matt@, penny@ and craig@highdesertpm.com (`allowedEmails` on the `knowledge_capture` section). User settings shows it locked; to add someone, edit that list. What they capture is readable by anyone using the brain (Dez, agents), at `internal` sensitivity.
+5. Apply `20261024_fee_risk_notes.sql` for fee change risk notes. Until then the list shows but notes can't be saved.
 4. Also apply `20261018_harden_table_grants.sql` (sets the audio bucket's 25 MB / audio-only limit, among other hardening).
 3. Production already has the env vars this needs: `OPENAI_API_KEY` (brain embeddings) and `ANTHROPIC_API_KEY` (brain think).
 

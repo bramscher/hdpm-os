@@ -1,29 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { loadFeeFacts } from '@/lib/fee-management/facts-cache';
-import {
-  DEFAULT_DOOR_SCHEDULE,
-  DEFAULT_RAISE_FLOOR,
-  DEFAULT_WEIGHTS,
-  parseDoorSchedule,
-  parseRaiseFloor,
-  parseWeights,
-  type Agreement,
-  type CampaignEntry,
-  type CampaignStatus,
-  type FeeFacts,
-} from '@/lib/fee-management/model';
-import { DEFAULT_FEE_SCHEDULE, parseFeeSchedule } from '@/lib/fee-management/fee-schedule';
+import { loadFeeInputs } from '@/lib/fee-management/inputs';
+import { loadRiskNotes } from '@/lib/fee-management/risk-notes';
 
 export const maxDuration = 120;
-
-const ORG = 'hdpm';
 
 /**
  * GET /api/admin/fee-management[?refresh=1]
  * AppFolio facts (cached daily in kpi_snapshots; ?refresh=1 re-pulls) plus
- * the app-owned config, agreement overrides and campaign rows.
+ * the app-owned config, agreement overrides, campaign rows and fee change
+ * risk notes.
  */
 export async function GET(request: NextRequest) {
   const guard = await requireSection('fee_management');
@@ -31,56 +18,13 @@ export async function GET(request: NextRequest) {
   const db = getSupabaseAdmin();
   const refresh = request.nextUrl.searchParams.get('refresh') === '1';
 
-  let facts: FeeFacts;
-  let capturedAt: string;
   try {
-    ({ facts, capturedAt } = await loadFeeFacts(db, { refresh }));
+    const [inputs, riskNotes] = await Promise.all([loadFeeInputs(db, { refresh }), loadRiskNotes(db)]);
+    return NextResponse.json({ ...inputs, riskNotes, me: guard.email });
   } catch (err) {
-    console.error('[fee-management] AppFolio pull failed:', err);
-    return NextResponse.json({ error: 'Could not load AppFolio data. Try again in a minute.' }, { status: 502 });
-  }
-
-  const [config, agreements, campaign] = await Promise.all([
-    db.from('fee_campaign_config').select('key, value').eq('org_id', ORG),
-    db.from('property_agreement').select('*').eq('org_id', ORG),
-    db.from('fee_campaign').select('*').eq('org_id', ORG),
-  ]);
-  const err = config.error || agreements.error || campaign.error;
-  if (err) {
-    console.error('[fee-management] Supabase read failed:', err);
+    if (err instanceof Error && err.message === 'appfolio') {
+      return NextResponse.json({ error: 'Could not load AppFolio data. Try again in a minute.' }, { status: 502 });
+    }
     return NextResponse.json({ error: 'Could not load fee management tables' }, { status: 503 });
   }
-  const cfg = new Map((config.data ?? []).map((r) => [r.key as string, r.value]));
-
-  return NextResponse.json({
-    facts,
-    capturedAt,
-    schedule: parseDoorSchedule(cfg.get('door_schedule')) ?? DEFAULT_DOOR_SCHEDULE,
-    raiseFloor: parseRaiseFloor(cfg.get('raise_floor')) ?? DEFAULT_RAISE_FLOOR,
-    feeSchedule: parseFeeSchedule(cfg.get('fee_schedule')) ?? DEFAULT_FEE_SCHEDULE,
-    weights: parseWeights(cfg.get('priority_weights')) ?? DEFAULT_WEIGHTS,
-    agreements: (agreements.data ?? []).map(
-      (a): Agreement => ({
-        propertyId: a.appfolio_property_id,
-        startDate: a.start_date,
-        endDate: a.end_date,
-        autoRenew: a.auto_renew,
-        noticeDays: a.notice_days,
-        notes: a.notes,
-        agreementUrl: a.agreement_url ?? null,
-        lastRenewedOn: a.last_renewed_on ?? null,
-      })
-    ),
-    campaign: (campaign.data ?? []).map(
-      (c): CampaignEntry => ({
-        ownerSetKey: c.owner_set_key,
-        status: c.status as CampaignStatus,
-        newFeePct: c.new_fee_pct != null ? Number(c.new_fee_pct) : null,
-        effectiveDate: c.effective_date,
-        assignedTo: c.assigned_to,
-        notes: c.notes,
-        updatedAt: c.updated_at,
-      })
-    ),
-  });
 }

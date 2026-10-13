@@ -27,6 +27,7 @@ import type { FeeVolumes } from "@/lib/fee-management/volumes";
 import { MarketBenchmarks } from "./MarketBenchmarks";
 import { FeeFatigue } from "./FeeFatigue";
 import { DEFAULT_FATIGUE } from "@/lib/fee-management/fatigue";
+import type { RiskNote } from "@/lib/fee-management/risk-notes";
 import { portfolioFatigue, volumeContext } from "@/lib/fee-management/portfolio";
 
 interface MainPayload {
@@ -37,6 +38,8 @@ interface MainPayload {
   agreements: Agreement[];
   campaign: CampaignEntry[];
   feeSchedule: FeeScheduleConfig;
+  riskNotes: RiskNote[];
+  me: string;
 }
 
 const usd = (n: number) =>
@@ -410,6 +413,20 @@ export function FeeSchedule() {
             ? { ended: volumes.volumes.endedProperties, active: volumes.volumes.activeProperties }
             : null
         }
+        notes={{
+          list: main!.riskNotes ?? [],
+          me: main!.me ?? null,
+          onSaved: (ownerSetKey, authorEmail, note) =>
+            setMain((m) =>
+              m && {
+                ...m,
+                riskNotes: [
+                  ...(m.riskNotes ?? []).filter((n) => !(n.ownerSetKey === ownerSetKey && n.authorEmail === authorEmail)),
+                  ...(note ? [note] : []),
+                ],
+              }
+            ),
+        }}
       />
 
       <MarketBenchmarks />
