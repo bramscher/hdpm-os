@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react';
 import Link from 'next/link';
 import type {FollowupCandidate,FollowupReview} from '@/lib/agents/estimate-followups';
-import {isDue,isLocked,daysStuck,nextStep,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
+import {isDue,isLocked,daysStuck,nextStep,afInvoiced,invoiceLabel,type ChaseEvent,type LegacyChase} from '@/lib/agents/chase-board';
 import {HeatBar,ChaseDots,STEP} from './ChaseCard';
 import PartsOrders from '../board/components/parts-orders';
 
@@ -23,7 +23,7 @@ export default function ChaseDrawer({c,r,legacy,events,chases,staff,team,senders
  const locked=isLocked(r),canSend=c.eligible!==false&&c.kind!=='decision'&&isDue(r)&&!locked;
  const sender=channel==='email'?senders.email:senders.sms,ready=available[channel==='email'?'email':'sms'];
  const act=(op:string)=>onAct(op,{version:r?.version||0,contextVersion:c.contextVersion||'',sender,note,owner_person:owner,next_review_date:nextDate||null,channel,recipient,subject,body,confirmed});
- const days=daysStuck(c),step=nextStep(c,r),st=STEP[step.kind],cleanup=step.kind==='fix'||step.kind==='decide';
+ const days=daysStuck(c),step=nextStep(c,r),st=STEP[step.kind],invoiced=afInvoiced(c.appfolio),cleanup=step.kind==='fix'||step.kind==='decide'||invoiced;
  return <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="chase-drawer-title">
   <button aria-label="Close review" className="absolute inset-0 bg-charcoal-900/30" onClick={()=>!busy&&onClose()}/>
   <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-2xl">
@@ -36,13 +36,14 @@ export default function ChaseDrawer({c,r,legacy,events,chases,staff,team,senders
     <section className="rounded-xl border border-sand-200 bg-sand-50 p-4" aria-label="Next step">
      <p className={`text-xs font-semibold uppercase tracking-wide ${st.text}`}>Next step · {st.label}</p>
      <p className="mt-1 text-base font-semibold">{step.text}</p>
-     {cleanup&&<p className="mt-1 text-sm text-charcoal-600">{step.kind==='fix'?'A follow-up can’t go anywhere useful until this is fixed. Fix it in AppFolio or the work order, then add a note here.':'If it’s no longer needed, close it in AppFolio and it will drop off this board. If it is, set a date and record a note.'}</p>}
+     {cleanup&&<p className="mt-1 text-sm text-charcoal-600">{invoiced?'A bill or invoice in AppFolio usually means the work is done. If it is, close the work order in AppFolio and it drops off this board; if not, record a note.':step.kind==='fix'?'A follow-up can’t go anywhere useful until this is fixed. Fix it in AppFolio or the work order, then add a note here.':'If it’s no longer needed, close it in AppFolio and it will drop off this board. If it is, set a date and record a note.'}</p>}
     </section>
     {c.kind==='parts'?<section aria-labelledby="parts-heading" className="space-y-2"><h3 id="parts-heading" className="text-sm font-semibold">Parts orders · {c.parts?.minutes||0} min spent chasing</h3><PartsOrders workOrderId={c.id} onChanged={onPartsChanged} addOpen={false}/></section>
      :<details className="rounded-xl border border-sand-200 p-4"><summary className="cursor-pointer text-sm font-medium">Waiting on parts? Log the supplier order</summary><div className="mt-3"><PartsOrders workOrderId={c.id} onChanged={onPartsChanged}/></div></details>}
     <p className="text-sm text-charcoal-600">{c.reason}</p>
     <p className="whitespace-pre-wrap text-sm">{c.description}</p>
     <p className="text-sm text-charcoal-500">HDPM owner: {c.owner||'Unassigned'} · Assigned to: {c.assignedTo||'Unassigned'} · Total age: {c.totalAge??'Unknown'} calendar days · Synced {date(c.sourceUpdatedAt)} PT</p>
+    <p className="text-sm">Invoice: {invoiceLabel(c.appfolio)??'Not checked in AppFolio yet'}{c.appfolio?.lastBillDate&&` · last bill ${new Date(`${c.appfolio.lastBillDate}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})}`}{c.appfolio&&<span className="text-charcoal-500"> · checked {date(c.appfolio.checkedAt)} PT</span>}</p>
     {c.decisionMaker&&<p className="text-sm">Decision requested of: {c.decisionMaker} · {date(c.approvalRequestedAt)} PT</p>}
     {c.estimate&&<p className="text-sm">Estimate: {c.estimate.total===null?'Amount unavailable':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c.estimate.total)} · {c.estimate.status} · version {c.estimate.version??'draft'}</p>}
     {legacy&&<p className="rounded bg-amber-50 p-3 text-sm">Earlier chaser activity: {date(legacy.created_at)} PT ({legacy.action_type}). A prepared draft is not proof of sending. Check the current conversation.</p>}

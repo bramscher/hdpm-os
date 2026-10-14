@@ -9,6 +9,7 @@ import type { OutboxMessage } from './types';
 import { businessDaysBetween } from '@/lib/maintenance/business-days';
 import { logAudit } from '@/lib/audit';
 import { logPartsContact } from '@/lib/maintenance/parts-db';
+import { loadAfBilling } from '@/lib/maintenance/af-wo-billing';
 
 export function followupSenders() {
   return { email: process.env.AGENT_EMAIL_FROM || process.env.MAINT_DIGEST_FROM || 'HDPM Agents <maintenance@highdesertpm.com>',
@@ -50,6 +51,9 @@ export async function loadFollowupQueue() {
     if(error)throw new Error(error.message);
     for(const w of data||[]) candidates.push({id:w.id,property:w.property_name,unit:w.unit_name||'',woNumber:w.wo_number||'',vendor:w.vendor_name||'',description:w.description||'',age:0,kind:'decision',reason:'No longer overdue in the estimate or unscheduled-work queue. History is retained.',email:'',phone:'',subject:'',emailBody:'',smsBody:'',eligible:false,owner:w.owner_name,sourceStatus:w.appfolio_status,sourceUpdatedAt:w.synced_at});
   }
+  // Invoice or bill already in AppFolio: usually the work is done and the chase is stale.
+  const billing=await loadAfBilling(db,candidates.map(c=>c.woNumber));
+  for(const c of candidates){const b=billing.get(c.woNumber);if(b)c.appfolio={invoices:b.invoice_count,billed:b.billed_amount,unpaid:b.unpaid_amount,lastBillDate:b.last_bill_date,checkedAt:b.synced_at};}
   const preview=followupPreview();
   const enabled=!!config?.enabled && !killed && !preview;
   return {candidates,staff:(staff.data||[]).map(s=>s.person as string),team:(await followupTeam()).map(s=>s.person),reviews:reviews as FollowupReview[],events:events.sort((a,b)=>b.id-a.id),legacy:legacy.data||[],senders:followupSenders(),

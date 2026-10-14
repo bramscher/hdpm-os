@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,morningSeven,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,ageBucket,agingSnapshot,matchesSnapshot,chasesFor,FOCUS_CAP} from '../chase-board';
+import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,morningSeven,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,ageBucket,agingSnapshot,matchesSnapshot,chasesFor,afInvoiced,invoiceLabel,FOCUS_CAP} from '../chase-board';
 import type {FollowupCandidate,FollowupReview} from '../estimate-followups';
 const now=new Date('2026-10-01T18:00:00Z');
 const ago=(d:number)=>new Date(now.getTime()-d*86400_000).toISOString();
@@ -90,6 +90,23 @@ describe('next step',()=>{
  it('puts delivery checks and help ahead of everything',()=>{
   expect(nextStep(c(),r({status:'uncertain'}),now).kind).toBe('check');
   expect(nextStep(c(),r({status:'help',note:'Matt calling vendor'}),now).text).toBe('Waiting on team help: Matt calling vendor');
+ });
+});
+describe('AppFolio invoice status',()=>{
+ const af=(o:Partial<NonNullable<FollowupCandidate['appfolio']>>={})=>({invoices:0,billed:0,unpaid:0,lastBillDate:null,checkedAt:ago(0),...o});
+ it('labels what AppFolio has, or says it has not been checked',()=>{
+  expect(invoiceLabel(undefined)).toBeNull();
+  expect(invoiceLabel(af())).toBe('No invoice or bill in AppFolio yet');
+  expect(invoiceLabel(af({invoices:1,billed:90,unpaid:0}))).toBe('Invoice uploaded · billed $90.00, paid');
+  expect(invoiceLabel(af({invoices:2}))).toBe('2 invoices uploaded');
+  expect(invoiceLabel(af({billed:1350.5,unpaid:1100.5}))).toBe('Billed $1,350.50, $1,100.50 unpaid');
+ });
+ it('turns an invoiced chase into a check instead of another follow-up',()=>{
+  expect(afInvoiced(af())).toBe(false);expect(afInvoiced(af({billed:10}))).toBe(true);
+  expect(nextStep(c({kind:'schedule',appfolio:af({billed:200})}),undefined,now)).toEqual({kind:'check',text:'AppFolio already has a bill for this — check the work is done, then update or close it in AppFolio'});
+  expect(nextStep(c({kind:'vendor',appfolio:af({invoices:1})}),undefined,now).text).toMatch(/^AppFolio already has an invoice/);
+  expect(nextStep(c({kind:'vendor',appfolio:af()}),undefined,now).kind).toBe('chase');
+  expect(nextStep(c({appfolio:af({billed:5})}),r({status:'uncertain'}),now).text).toMatch(/^Check whether the last message/);
  });
 });
 describe('aging snapshot',()=>{

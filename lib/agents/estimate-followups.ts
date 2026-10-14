@@ -19,8 +19,11 @@ export interface FollowupCandidate {
   appfolioLink?: string | null; assignedTo?: string | null; priority?: string | null; contextVersion?: string;
   estimate?: {id: string; total: number | null; status: string; version: number | null};
   parts?: PartsSummary;
+  /** What AppFolio has for this work order's invoice (wo_af_billing); absent until checked. */
+  appfolio?: AfInvoice;
   reason: string; email: string; phone: string; subject: string; emailBody: string; smsBody: string;
 }
+export interface AfInvoice { invoices: number; billed: number; unpaid: number; lastBillDate: string | null; checkedAt: string }
 export interface PartsOrderLine {
   id: string; supplier: string; item: string; orderNumber: string | null; poNumber: string | null; status: PartsStatus;
   orderedAt: string; expectedAt: string | null; deliveredAt: string | null; trackingUrl: string | null;

@@ -1,6 +1,6 @@
 'use client';
 import type {FollowupCandidate,FollowupReview} from '@/lib/agents/estimate-followups';
-import {daysStuck,heatFor,isLocked,nextStep,type Heat,type StepKind} from '@/lib/agents/chase-board';
+import {afInvoiced,daysStuck,heatFor,invoiceLabel,isLocked,nextStep,type Heat,type StepKind} from '@/lib/agents/chase-board';
 
 const HEAT:Record<Heat,{bar:string;text:string;label:string}>={
  fresh:{bar:'bg-emerald-500',text:'text-emerald-700',label:'under a week'},
@@ -28,10 +28,10 @@ export function ChaseDots({count}:{count:number}) {
 export default function ChaseCard({c,r,chases,onOpen,showLane}:{c:FollowupCandidate;r?:FollowupReview;chases:number;onOpen:()=>void;showLane?:string}) {
  const days=daysStuck(c),h=HEAT[heatFor(days)];
  const step=nextStep(c,r),st=STEP[step.kind];
- const flag=isLocked(r)?'Check delivery':c.newEpisode?'Changed':c.priority==='P1'?'P1':'';
+ const flag=isLocked(r)?'Check delivery':afInvoiced(c.appfolio)?'Invoiced':c.newEpisode?'Changed':c.priority==='P1'?'P1':'';
  return <button onClick={onOpen} className="group w-full rounded-lg border border-sand-200 bg-white p-3 text-left transition hover:border-charcoal-400 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-green-700">
   <div className="flex items-baseline justify-between gap-2"><span className="truncate text-sm font-semibold">{c.property}{c.unit&&` · ${c.unit}`}</span><span className={`shrink-0 text-xs font-semibold tabular-nums ${h.text}`}>{days}d</span></div>
-  <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-charcoal-500"><span className="truncate">WO {c.woNumber||'—'} · {c.vendor||'No vendor'}</span>{flag&&<span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${flag==='Check delivery'||flag==='P1'?'bg-red-50 text-red-700':'bg-amber-50 text-amber-800'}`}>{flag}</span>}</div>
+  <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-charcoal-500"><span className="truncate">WO {c.woNumber||'—'} · {c.vendor||'No vendor'}</span>{flag&&<span title={flag==='Invoiced'?invoiceLabel(c.appfolio)||undefined:undefined} className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${flag==='Check delivery'||flag==='P1'?'bg-red-50 text-red-700':flag==='Invoiced'?'bg-blue-50 text-blue-800':'bg-amber-50 text-amber-800'}`}>{flag}</span>}</div>
   <p className={`mt-2 flex items-start gap-1.5 text-xs font-medium leading-snug ${st.text}`}><span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} aria-hidden/><span><span className="sr-only">{st.label}: </span>{step.text}</span></p>
   <div className="mt-2 flex items-center justify-between gap-2"><HeatBar days={days}/>{showLane&&<span className="truncate text-[11px] text-charcoal-500">{showLane}</span>}<ChaseDots count={chases}/></div>
  </button>;
