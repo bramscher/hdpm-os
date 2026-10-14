@@ -22,6 +22,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     .select('id, mime_type, transcript')
     .eq('org_id', ORG)
     .eq('id', id)
+    .is('archived_at', null)
     .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
   if (isTextEntry(rec)) return NextResponse.json({ error: 'Typed notes have nothing to transcribe' }, { status: 400 });

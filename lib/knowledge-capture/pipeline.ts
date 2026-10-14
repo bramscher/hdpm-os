@@ -227,6 +227,7 @@ export async function claimRecording(db: SupabaseClient, id: string): Promise<bo
     .update({ status: 'processing', error: null, updated_at: new Date().toISOString() })
     .eq('org_id', ORG)
     .eq('id', id)
+    .is('archived_at', null)
     .or(`status.neq.processing,updated_at.lt.${staleBefore}`)
     .select('id');
   if (error) throw new Error(error.message);
@@ -275,6 +276,7 @@ export async function transcribeRecording(recordingId: string): Promise<string> 
     .select('id, subject_name, storage_path, mime_type')
     .eq('org_id', ORG)
     .eq('id', recordingId)
+    .is('archived_at', null)
     .maybeSingle();
   if (error || !rec) throw new Error('Recording not found');
   const setRow = async (patch: Record<string, unknown>) => {
@@ -326,6 +328,7 @@ export async function processRecording(
     .select('id, subject_type, subject_id, subject_name, speaker_email, speaker_name, voices, storage_path, mime_type, transcript, transcript_original, created_at')
     .eq('org_id', ORG)
     .eq('id', recordingId)
+    .is('archived_at', null)
     .maybeSingle<RecordingRow>();
   if (error || !rec) throw new Error('Recording not found');
 
@@ -441,7 +444,7 @@ export async function processRecording(
 
 /**
  * Rebuild a subject's profile from every finished recording. With no
- * recordings left (all deleted), the profile and its brain chunk are removed.
+ * recordings left (all archived), the profile and its brain chunk are removed.
  */
 export async function regenerateProfile(
   type: SubjectType,
@@ -458,6 +461,7 @@ export async function regenerateProfile(
       .eq('subject_type', type)
       .in('subject_id', ids)
       .eq('status', 'done')
+      .is('archived_at', null)
       .order('created_at', { ascending: true });
     if (error) throw new Error(error.message);
     return data ?? [];

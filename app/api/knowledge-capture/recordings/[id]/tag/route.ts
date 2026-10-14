@@ -28,6 +28,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .select('id, speaker_email, voices, subject_type')
     .eq('org_id', ORG)
     .eq('id', id)
+    .is('archived_at', null)
     .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
   if (!canChangeTake(rec, guard)) {

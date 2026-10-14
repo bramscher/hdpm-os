@@ -25,6 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .select('id, transcript, subject_type')
     .eq('org_id', ORG)
     .eq('id', id)
+    .is('archived_at', null)
     .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
   if (!isTagged(rec)) return NextResponse.json({ error: UNTAGGED_ERROR }, { status: 400 });
