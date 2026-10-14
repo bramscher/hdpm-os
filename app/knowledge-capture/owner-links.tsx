@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Link2, Unlink, Users } from "lucide-react";
 import { toast } from "sonner";
+import { requestError, showError } from "./sign-in";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { LinkSuggestion, LinkedRosterOwner } from "@/lib/knowledge-capture/links";
@@ -16,7 +17,7 @@ async function send(method: "POST" | "DELETE", body: Record<string, unknown>) {
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) throw requestError(res, data);
 }
 
 /**
@@ -60,7 +61,7 @@ export function OwnerLinks({
       setNote("");
       await onChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong");
+      showError(err, "Something went wrong");
     }
     setBusy(false);
   }
