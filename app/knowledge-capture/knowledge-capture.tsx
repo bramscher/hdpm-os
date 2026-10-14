@@ -20,6 +20,7 @@ import { OwnerLinks } from "./owner-links";
 import { InstallHint, OfflineBanner, OutboxPanel, useOfflineApp } from "./outbox-panel";
 import { VoicePicker, useTalking } from "./voice-picker";
 import { Inbox, QuickCapture } from "./quick-capture";
+import { SignInBanner, requestError, showError, useSignedOut } from "./sign-in";
 import { FeeRiskPanel, OwnerFeeRisk, riskFor, useFeeRisk, type FeeRisk } from "./fee-risk";
 import type { RiskNote } from "@/lib/fee-management/risk-notes";
 
@@ -74,7 +75,7 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await send(path, init);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) throw requestError(res, data);
   return data as T;
 }
 
@@ -108,6 +109,8 @@ export function KnowledgeCapture() {
   // Set when the owner/property list is the copy saved on this device (no signal).
   const [savedAt, setSavedAt] = useState<string | null>(null);
   useOfflineApp();
+  // Signed out, the worker serves the saved owner list — that's not "can't reach the server".
+  const signedOut = useSignedOut();
   // "Fee change risk": at-risk owners from Fee Management, with Matt's and Penny's notes.
   const [view, setView] = useState<"capture" | "feeRisk">("capture");
   // Bumped when a quick capture finishes uploading, so the Inbox reloads.
@@ -119,7 +122,7 @@ export function KnowledgeCapture() {
     try {
       const res = await send(refresh ? "?refresh=1" : "");
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+      if (!res.ok) throw requestError(res, body);
       setData(body as Overview);
       setSavedAt(res.headers.get("X-KC-Offline") ? res.headers.get("X-KC-Saved-At") || "" : null);
       setError(null);
@@ -251,7 +254,8 @@ export function KnowledgeCapture() {
       />
 
       <InstallHint />
-      <OfflineBanner savedAt={savedAt} />
+      <SignInBanner />
+      {!signedOut && <OfflineBanner savedAt={savedAt} />}
       {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
       <OutboxPanel />
 
@@ -470,6 +474,14 @@ function SubjectPanel({
   const [showPrompts, setShowPrompts] = useState(true);
   const { talking, toggle: toggleTalking } = useTalking(data.voices, data.me.email);
   const [typing, setTyping] = useState(false);
+  // A note left unsaved (e.g. the sign-in expired) reopens when its owner or property does.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(`kc-note-draft:${selected.type}:${selected.id}`)) setTyping(true);
+    } catch {
+      // Storage blocked: nothing kept to reopen.
+    }
+  }, [selected.type, selected.id]);
 
   const owner = selected.type === "owner" ? data.owners.find((o) => o.id === selected.id) : undefined;
   // A link to a record that has since merged lands on the profile it merged into.
@@ -520,7 +532,7 @@ function SubjectPanel({
       toast.success(`Added to ${name}'s profile.`);
     } catch (err) {
       ok = false;
-      toast.error(err instanceof Error ? err.message : "Processing failed");
+      showError(err, "Processing failed");
     }
     await loadDetail();
     onChanged();
@@ -534,7 +546,7 @@ function SubjectPanel({
       await call(`/recordings/${id}/transcribe`, { method: "POST" });
       toast.success("Transcript ready — check it below, then Add to brain.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Transcription failed");
+      showError(err, "Transcription failed");
     }
     await loadDetail();
     onChanged();
@@ -567,7 +579,7 @@ function SubjectPanel({
       await loadDetail();
       return true;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save the recording");
+      showError(err, "Could not save the recording");
       setSaving(false);
       return false;
     }
@@ -585,7 +597,7 @@ function SubjectPanel({
       await loadDetail();
       return true;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save the note");
+      showError(err, "Could not save the note");
       return false;
     }
   }
@@ -597,7 +609,7 @@ function SubjectPanel({
       if (res.warning) toast.warning(res.warning);
       else toast.success("Recording deleted.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Delete failed");
+      showError(err, "Delete failed");
     }
     await loadDetail();
     onChanged();
@@ -615,7 +627,7 @@ function SubjectPanel({
       toast.success(res.unchanged ? "No changes to save." : "Transcript saved — notes, brain and profile rebuilt.");
     } catch (err) {
       ok = false;
-      toast.error(err instanceof Error ? err.message : "Could not save the transcript");
+      showError(err, "Could not save the transcript");
     }
     await loadDetail();
     onChanged();
@@ -629,7 +641,7 @@ function SubjectPanel({
       toast.success("Profile rebuilt.");
       await loadDetail();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Rebuild failed");
+      showError(err, "Rebuild failed");
     }
     setRebuilding(false);
   }
@@ -715,6 +727,7 @@ function SubjectPanel({
         {typing && (
           <TypedNote
             subjectName={name}
+            draftKey={`kc-note-draft:${selected.type}:${selected.id}`}
             who={data.voices.filter((v) => talking.includes(v.email)).map((v) => v.name)}
             onSave={saveTyped}
             onClose={() => setTyping(false)}
@@ -809,27 +822,55 @@ function SubjectPanel({
 /** Popup for a typed or pasted note. Save closes it; processing continues in the background. */
 function TypedNote({
   subjectName,
+  draftKey,
   who,
   onSave,
   onClose,
 }: {
   subjectName: string;
+  /** The unsaved text is kept on the phone under this key, so signing in again doesn't lose it. */
+  draftKey: string;
   who: string[];
   onSave: (text: string) => Promise<boolean>;
   onClose: () => void;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => {
+    try {
+      return localStorage.getItem(draftKey) ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    try {
+      if (text.trim()) localStorage.setItem(draftKey, text);
+      else localStorage.removeItem(draftKey);
+    } catch {
+      // Storage blocked (private browsing): the note just isn't kept.
+    }
+  }, [draftKey, text]);
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      // ignore
+    }
+  };
   const save = async () => {
     setSaving(true);
     const ok = await onSave(text);
     setSaving(false);
-    if (ok) onClose();
+    if (ok) {
+      clearDraft();
+      onClose();
+    }
   };
   // With text in the box, tapping outside or Escape does nothing (the Modal
   // treats it as busy); only Cancel closes, and it asks first.
   const cancel = () => {
     if (text.trim() && !window.confirm("Discard this note?")) return;
+    clearDraft();
     onClose();
   };
   return (

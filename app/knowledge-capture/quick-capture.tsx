@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Building2, Inbox as InboxIcon, RotateCcw, Search, Tag, Trash2, User, Zap } from "lucide-react";
 import { toast } from "sonner";
+import { requestError, showError } from "./sign-in";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -26,7 +27,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error("No signal — try again when you're back online.");
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+  if (!res.ok) throw requestError(res, body);
   return body as T;
 }
 
@@ -61,7 +62,7 @@ export function QuickCapture({ voices, me, onUploaded }: { voices: Voice[]; me: 
       onUploaded();
       return true;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save the recording");
+      showError(err, "Could not save the recording");
       return false;
     } finally {
       setSaving(false);
@@ -198,7 +199,7 @@ function InboxRow({
       onTagged({ type, id });
       onChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not tag this take");
+      showError(err, "Could not tag this take");
     } finally {
       setBusy(false);
     }
@@ -210,7 +211,7 @@ function InboxRow({
       await api(`/recordings/${t.id}/transcribe`, { method: "POST" });
       toast.success("Transcribed.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Transcription failed");
+      showError(err, "Transcription failed");
     } finally {
       setBusy(false);
       onChanged();
@@ -223,7 +224,7 @@ function InboxRow({
       await api(`/recordings/${t.id}`, { method: "DELETE" });
       toast.success("Deleted.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Delete failed");
+      showError(err, "Delete failed");
     }
     onChanged();
   }
