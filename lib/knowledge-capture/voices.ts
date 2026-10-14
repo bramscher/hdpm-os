@@ -10,11 +10,13 @@ export interface Voice {
   email: string;
   name: string;
   source: boolean;
+  /** Their audio takes go straight to the brain once transcribed (no review step). */
+  skipReview?: boolean;
 }
 
 export const VOICES: Voice[] = [
   { email: 'matt@highdesertpm.com', name: 'Matt', source: true },
-  { email: 'penny@highdesertpm.com', name: 'Penny', source: true },
+  { email: 'penny@highdesertpm.com', name: 'Penny', source: true, skipReview: true },
   { email: 'craig@highdesertpm.com', name: 'Craig', source: false },
 ];
 
@@ -23,6 +25,11 @@ const BY_EMAIL = new Map(VOICES.map((v) => [v.email, v]));
 export function voiceName(email: string): string {
   const e = email.trim().toLowerCase();
   return BY_EMAIL.get(e)?.name ?? e.split('@')[0].replace(/^./, (c) => c.toUpperCase());
+}
+
+/** Does whoever recorded this take skip transcript review? */
+export function skipsReview(recorderEmail: string): boolean {
+  return !!BY_EMAIL.get(recorderEmail.trim().toLowerCase())?.skipReview;
 }
 
 /** "Matt", "Matt & Penny", "Matt, Penny & Craig". */

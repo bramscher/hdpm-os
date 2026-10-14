@@ -234,6 +234,16 @@ export async function claimRecording(db: SupabaseClient, id: string): Promise<bo
   return (data?.length ?? 0) > 0;
 }
 
+/**
+ * Add a transcribed take to the brain without review (recorders with
+ * skipReview). Runs after the response; a failure shows on the take with Retry.
+ */
+export async function autoAddToBrain(id: string): Promise<void> {
+  const db = getSupabaseAdmin();
+  if (!(await claimRecording(db, id))) return;
+  await processRecording(id).catch((err) => console.error(`[knowledge-capture] auto-add ${id} failed:`, err));
+}
+
 /** Run `fn` over `items` with at most `limit` in flight. */
 async function pool<T, R>(items: T[], limit: number, fn: (item: T, i: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);

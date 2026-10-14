@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { VOICES, canChangeTake, normalizeVoices, rowVoices, voiceName, voicesLabel } from '../voices';
+import { VOICES, canChangeTake, normalizeVoices, rowVoices, skipsReview, voiceName, voicesLabel } from '../voices';
 
 const MATT = 'matt@highdesertpm.com';
 const PENNY = 'penny@highdesertpm.com';
@@ -41,5 +41,13 @@ describe('who may change, tag or delete a take', () => {
   });
   it('nobody else', () => {
     expect(canChangeTake(take, { role: 'pm', email: 'lisa@highdesertpm.com' })).toBe(false);
+  });
+});
+
+describe('skipsReview', () => {
+  it('lets Penny skip transcript review, not Matt or unknown recorders', () => {
+    expect(skipsReview('Penny@HighDesertPM.com ')).toBe(true);
+    expect(skipsReview('matt@highdesertpm.com')).toBe(false);
+    expect(skipsReview('someone@else.com')).toBe(false);
   });
 });

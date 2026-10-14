@@ -51,7 +51,7 @@ export interface Take extends TakeMeta {
 
 export type OutboxEvent =
   | { type: "uploaded"; take: Take }
-  | { type: "transcribed"; take: Take }
+  | { type: "transcribed"; take: Take; addingToBrain: boolean }
   | { type: "transcribe-failed"; take: Take; error: string };
 
 type StoreName = "takes" | "audio" | "chunks";
@@ -445,8 +445,9 @@ async function transcribe(take: Take): Promise<void> {
       return;
     }
     const error = res.ok || res.status === 409 ? null : await readError(res);
+    const addingToBrain = res.ok && !!(await res.json().catch(() => ({}))).addingToBrain;
     await discardTake(take.id);
-    emit(error ? { type: "transcribe-failed", take, error } : { type: "transcribed", take });
+    emit(error ? { type: "transcribe-failed", take, error } : { type: "transcribed", take, addingToBrain });
   } finally {
     working.delete(take.id);
     changed();
