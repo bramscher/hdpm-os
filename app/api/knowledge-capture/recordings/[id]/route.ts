@@ -5,22 +5,17 @@ import {
   BUCKET,
   ORG,
   STALE_PROCESSING_MS,
+  UNTAGGED_ERROR,
   claimRecording,
   deleteRecordingChunks,
+  isTagged,
   isTextEntry,
   loadOwnerLinks,
   processRecording,
   regenerateProfile,
 } from '@/lib/knowledge-capture/pipeline';
 import { aliasMap, canonicalOwner } from '@/lib/knowledge-capture/links';
-import { rowVoices } from '@/lib/knowledge-capture/voices';
-
-/** The person who recorded it, anyone whose voice is in it, or an admin. */
-function canChange(rec: { speaker_email: string; voices: string[] | null }, guard: { role: string; email: string }): boolean {
-  if (guard.role === 'admin') return true;
-  const me = guard.email.toLowerCase();
-  return rec.speaker_email.toLowerCase() === me || rowVoices(rec).includes(me);
-}
+import { canChangeTake as canChange } from '@/lib/knowledge-capture/voices';
 
 // An edit re-runs notes, brain ingest and the profile (two synthesis passes).
 export const maxDuration = 300;
@@ -48,7 +43,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const db = getSupabaseAdmin();
   const { data: rec } = await db
     .from('kc_recording')
-    .select('id, status, updated_at, transcript, speaker_email, voices')
+    .select('id, status, updated_at, transcript, speaker_email, voices, subject_type')
     .eq('org_id', ORG)
     .eq('id', id)
     .maybeSingle();
@@ -56,6 +51,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!canChange(rec, guard)) {
     return NextResponse.json({ error: 'Only the person who recorded this can edit it' }, { status: 403 });
   }
+  if (!isTagged(rec)) return NextResponse.json({ error: UNTAGGED_ERROR }, { status: 400 });
   if (transcript === (rec.transcript ?? '').trim()) return NextResponse.json({ ok: true, unchanged: true });
   if (!(await claimRecording(db, id))) {
     return NextResponse.json({ error: 'Still processing — try again in a minute' }, { status: 409 });
@@ -104,6 +100,8 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { error } = await db.from('kc_recording').delete().eq('id', rec.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // A quick-capture take never reached a profile.
+  if (!rec.subject_type || !rec.subject_id) return NextResponse.json({ ok: true });
   try {
     const subjectId =
       rec.subject_type === 'owner' ? canonicalOwner(aliasMap(await loadOwnerLinks(db)), rec.subject_id) : rec.subject_id;

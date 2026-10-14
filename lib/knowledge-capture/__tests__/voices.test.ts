@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { VOICES, normalizeVoices, rowVoices, voiceName, voicesLabel } from '../voices';
+import { VOICES, canChangeTake, normalizeVoices, rowVoices, voiceName, voicesLabel } from '../voices';
 
 const MATT = 'matt@highdesertpm.com';
 const PENNY = 'penny@highdesertpm.com';
@@ -27,5 +27,19 @@ describe('voices', () => {
   it('reads older rows without voices as the recorder', () => {
     expect(rowVoices({ voices: null, speaker_email: 'Penny@HighDesertPM.com' })).toEqual([PENNY]);
     expect(rowVoices({ voices: [MATT, PENNY], speaker_email: CRAIG })).toEqual([MATT, PENNY]);
+  });
+});
+
+describe('who may change, tag or delete a take', () => {
+  const take = { speaker_email: 'Matt@highdesertpm.com', voices: ['matt@highdesertpm.com', 'penny@highdesertpm.com'] };
+  it('the recorder and anyone whose voice is in it', () => {
+    expect(canChangeTake(take, { role: 'pm', email: 'matt@highdesertpm.com' })).toBe(true);
+    expect(canChangeTake(take, { role: 'pm', email: 'Penny@highdesertpm.com' })).toBe(true);
+  });
+  it('an admin', () => {
+    expect(canChangeTake(take, { role: 'admin', email: 'someone@highdesertpm.com' })).toBe(true);
+  });
+  it('nobody else', () => {
+    expect(canChangeTake(take, { role: 'pm', email: 'lisa@highdesertpm.com' })).toBe(false);
   });
 });

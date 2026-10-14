@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { ORG, claimRecording, processRecording } from '@/lib/knowledge-capture/pipeline';
+import { ORG, UNTAGGED_ERROR, claimRecording, isTagged, processRecording } from '@/lib/knowledge-capture/pipeline';
 
 // Transcribing a long take plus two synthesis passes can take a few minutes.
 export const maxDuration = 300;
@@ -22,11 +22,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const db = getSupabaseAdmin();
   const { data: rec } = await db
     .from('kc_recording')
-    .select('id, transcript')
+    .select('id, transcript, subject_type')
     .eq('org_id', ORG)
     .eq('id', id)
     .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
+  if (!isTagged(rec)) return NextResponse.json({ error: UNTAGGED_ERROR }, { status: 400 });
 
   const body = (await request.json().catch(() => ({}))) as { transcript?: unknown };
   const reviewed = typeof body.transcript === 'string' ? body.transcript.trim() : null;

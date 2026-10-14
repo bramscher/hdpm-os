@@ -13,11 +13,13 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { INTERVIEW_PROMPTS } from "@/lib/knowledge-capture/prompts";
 import { coverageKey, type Coverage, type RosterProperty, type SubjectType } from "@/lib/knowledge-capture/roster";
 import type { LinkSuggestion, LinkedRosterOwner } from "@/lib/knowledge-capture/links";
-import type { Voice } from "@/lib/knowledge-capture/voices";
+import { VOICES, type Voice } from "@/lib/knowledge-capture/voices";
 import { onOutboxEvent } from "@/lib/knowledge-capture/outbox";
 import { Recorder, formatClock } from "./recorder";
 import { OwnerLinks } from "./owner-links";
 import { InstallHint, OfflineBanner, OutboxPanel, useOfflineApp } from "./outbox-panel";
+import { VoicePicker, useTalking } from "./voice-picker";
+import { Inbox, QuickCapture } from "./quick-capture";
 import { FeeRiskPanel, OwnerFeeRisk, riskFor, useFeeRisk, type FeeRisk } from "./fee-risk";
 import type { RiskNote } from "@/lib/fee-management/risk-notes";
 
@@ -108,6 +110,8 @@ export function KnowledgeCapture() {
   useOfflineApp();
   // "Fee change risk": at-risk owners from Fee Management, with Matt's and Penny's notes.
   const [view, setView] = useState<"capture" | "feeRisk">("capture");
+  // Bumped when a quick capture finishes uploading, so the Inbox reloads.
+  const [inboxVersion, setInboxVersion] = useState(0);
   const { risk, error: riskError, onSaved: onRiskNoteSaved } = useFeeRisk();
   const riskCount = risk ? new Set([...risk.large.owners, ...risk.mostAtRisk].map((o) => o.key)).size : null;
 
@@ -128,9 +132,15 @@ export function KnowledgeCapture() {
   useEffect(
     () =>
       onOutboxEvent((e) => {
+        if (!e.take.subjectType) setInboxVersion((v) => v + 1);
         if (e.type === "uploaded") return;
-        if (e.type === "transcribed") toast.success(`Transcript ready for ${e.take.subjectName} — check it, then Add to brain.`);
-        else toast.error(`${e.take.subjectName}: ${e.error}`);
+        if (e.type === "transcribed")
+          toast.success(
+            e.take.subjectName
+              ? `Transcript ready for ${e.take.subjectName} — check it, then Add to brain.`
+              : "Quick capture transcribed — tag it in the Inbox."
+          );
+        else toast.error(`${e.take.subjectName ?? "Quick capture"}: ${e.error}`);
         load();
       }),
     [load]
@@ -244,6 +254,17 @@ export function KnowledgeCapture() {
       <OfflineBanner savedAt={savedAt} />
       {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
       <OutboxPanel />
+
+      {view === "capture" && (
+        <div className={selected ? "hidden lg:block" : ""}>
+          <QuickCapture
+            voices={data?.voices ?? VOICES}
+            me={data?.me.email ?? ""}
+            onUploaded={() => setInboxVersion((v) => v + 1)}
+          />
+          <Inbox owners={data?.owners ?? []} properties={data?.properties ?? []} version={inboxVersion} onTagged={select} />
+        </div>
+      )}
 
       {view === "feeRisk" ? (
         <FeeRiskPanel
@@ -447,12 +468,8 @@ function SubjectPanel({
   const [saving, setSaving] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
   const [showPrompts, setShowPrompts] = useState(true);
-  // Who is talking in the next take — defaults to whoever is signed in.
-  const myVoice = data.voices.find((v) => v.email === data.me.email);
-  const [talking, setTalking] = useState<string[]>(myVoice ? [myVoice.email] : []);
+  const { talking, toggle: toggleTalking } = useTalking(data.voices, data.me.email);
   const [typing, setTyping] = useState(false);
-  const toggleTalking = (email: string) =>
-    setTalking((t) => (t.includes(email) ? (t.length > 1 ? t.filter((e) => e !== email) : t) : [...t, email]));
 
   const owner = selected.type === "owner" ? data.owners.find((o) => o.id === selected.id) : undefined;
   // A link to a record that has since merged lands on the profile it merged into.
@@ -682,23 +699,7 @@ function SubjectPanel({
         <p className="mb-4 text-sm text-charcoal-500">
           Record, attach a voice memo, or type and paste (emails, old notes). Stories, quirks, names, numbers — several short entries are fine. Use the prompts below if you get stuck.
         </p>
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-charcoal-600">Whose knowledge?</span>
-          {data.voices.map((v) => {
-            const on = talking.includes(v.email);
-            return (
-              <button
-                key={v.email}
-                onClick={() => toggleTalking(v.email)}
-                aria-pressed={on}
-                className={`rounded-full px-3 py-1 ${on ? "bg-charcoal-800 text-white" : "bg-sand-100 text-charcoal-600 hover:bg-sand-200"}`}
-              >
-                {v.name}
-              </button>
-            );
-          })}
-          {talking.length > 1 && <span className="text-xs text-charcoal-500">Recording together — say names when you hand off.</span>}
-        </div>
+        <VoicePicker voices={data.voices} talking={talking} onToggle={toggleTalking} />
         <Recorder
           takeMeta={() => ({ subjectType: selected.type, subjectId: selected.id, subjectName: name, voices: talking })}
           onSaveDirect={save}

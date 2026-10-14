@@ -22,10 +22,11 @@ const BUCKET = "knowledge-capture";
 const DB_NAME = "kc-outbox";
 const DB_VERSION = 1;
 
+/** What a take is about. All null for a quick capture (tagged later from the Inbox). */
 export interface TakeMeta {
-  subjectType: SubjectType;
-  subjectId: string;
-  subjectName: string;
+  subjectType: SubjectType | null;
+  subjectId: string | null;
+  subjectName: string | null;
   voices: string[];
 }
 

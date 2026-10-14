@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   }
 
   const [recs, profiles] = await Promise.all([
-    db.from('kc_recording').select('subject_type, subject_id, speaker_name, speaker_email, voices, created_at, status, mime_type, transcript_model').eq('org_id', ORG).neq('status', 'pending_upload'),
+    db.from('kc_recording').select('subject_type, subject_id, speaker_name, speaker_email, voices, created_at, status, mime_type, transcript_model').eq('org_id', ORG).neq('status', 'pending_upload').not('subject_type', 'is', null),
     db.from('kc_profile').select('subject_type, subject_id').eq('org_id', ORG),
   ]);
   if (recs.error || profiles.error) {
