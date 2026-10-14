@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { getSupabaseClient } from "@/lib/supabase";
 import type { LinkedRosterOwner } from "@/lib/knowledge-capture/links";
 import type { RosterProperty, SubjectType } from "@/lib/knowledge-capture/roster";
+import { suggestSubjects } from "@/lib/knowledge-capture/suggest";
 import type { Voice } from "@/lib/knowledge-capture/voices";
 import { Recorder, formatClock } from "./recorder";
 import { VoicePicker, useTalking } from "./voice-picker";
@@ -179,6 +180,10 @@ function InboxRow({
   const [busy, setBusy] = useState(false);
   const [fullText, setFullText] = useState(false);
   const status = STATUS[t.status];
+  const suggestions = useMemo(
+    () => (t.mine && t.status === "ready" ? suggestSubjects(t.transcript, owners, properties) : []),
+    [t.mine, t.status, t.transcript, owners, properties]
+  );
   const excerpt = t.transcript && !fullText && t.transcript.length > 280 ? `${t.transcript.slice(0, 280)}…` : t.transcript;
 
   async function tag(type: SubjectType, id: string, name: string) {
@@ -268,6 +273,28 @@ function InboxRow({
             </button>
           )}
         </p>
+      )}
+      {suggestions.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-charcoal-500">Sounds like:</span>
+          {suggestions.map((m) => (
+            <button
+              key={`${m.type}:${m.id}`}
+              disabled={busy}
+              onClick={() => tag(m.type, m.id, m.name)}
+              title={`Heard "${m.heard.join(" ")}". Tap to file it here.`}
+              className="inline-flex min-h-8 items-center gap-1 rounded-full border border-terra-200 bg-terra-50 px-2.5 py-1 text-xs font-medium text-terra-800 hover:bg-terra-100 disabled:opacity-50"
+            >
+              {m.type === "owner" ? <User className="h-3.5 w-3.5" /> : <Building2 className="h-3.5 w-3.5" />}
+              {m.name}
+            </button>
+          ))}
+          {!picking && (
+            <button onClick={() => setPicking(true)} className="text-xs font-medium text-charcoal-500 underline">
+              Someone else
+            </button>
+          )}
+        </div>
       )}
       {picking && <SubjectSearch owners={owners} properties={properties} disabled={busy} onPick={tag} />}
     </li>
