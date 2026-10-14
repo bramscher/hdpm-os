@@ -3,7 +3,7 @@
  * Turns the follow-up queue into lanes, a capped "today" focus list, heat by
  * days stuck, chase counts, and weekly send totals for the Loop 1 gate.
  */
-import type { FollowupCandidate, FollowupReview } from './estimate-followups';
+import type { AfInvoice, FollowupCandidate, FollowupReview } from './estimate-followups';
 
 export type Lane = 'vendor' | 'owner' | 'schedule' | 'parts' | 'help';
 export type Heat = 'fresh' | 'warm' | 'hot' | 'escalate';
@@ -134,6 +134,20 @@ export function buildVendorBatchDraft(vendor: string, items: FollowupCandidate[]
   };
 }
 
+const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+/** An invoice uploaded or a bill entered in AppFolio. */
+export const afInvoiced = (a?: AfInvoice) => !!a && (a.invoices > 0 || a.billed > 0);
+/** What AppFolio has for the invoice, in plain words; null when not checked yet. */
+export function invoiceLabel(a?: AfInvoice): string | null {
+  if (!a) return null;
+  const parts: string[] = [];
+  if (a.invoices > 0) parts.push(a.invoices === 1 ? 'Invoice uploaded' : `${a.invoices} invoices uploaded`);
+  if (a.billed > 0) parts.push(`billed ${usd(a.billed)}${a.unpaid > 0 ? `, ${usd(a.unpaid)} unpaid` : ', paid'}`);
+  if (!parts.length) return 'No invoice or bill in AppFolio yet';
+  const text = parts.join(' · ');
+  return text[0].toUpperCase() + text.slice(1);
+}
+
 export type StepKind = 'check' | 'fix' | 'decide' | 'chase' | 'wait';
 export type NextStep = { kind: StepKind; text: string };
 export const STALE_DAYS = 90;
@@ -147,6 +161,8 @@ export function nextStep(c: FollowupCandidate, r?: FollowupReview, now = new Dat
   if (isLocked(r)) return { kind: 'check', text: 'Check whether the last message went out, then record it' };
   if (r?.status === 'help') return { kind: 'wait', text: r.note ? `Waiting on team help: ${r.note}` : 'Waiting on team help' };
   if (c.kind === 'parts' && c.parts) return partsStep(c, c.parts, now);
+  // A bill or uploaded invoice usually means the work is done and AppFolio's status is behind.
+  if (afInvoiced(c.appfolio)) return { kind: 'check', text: `AppFolio already has ${c.appfolio!.invoices > 0 ? 'an invoice' : 'a bill'} for this — check the work is done, then update or close it in AppFolio` };
   if (c.kind === 'decision') return { kind: 'fix', text: 'Record who approves this estimate (owner or PM) in the work order' };
   if (c.kind === 'owner') return { kind: 'chase', text: `Ask ${c.decisionMaker || 'the owner'} to approve or decline the estimate (${days} days waiting)` };
   if (c.kind === 'vendor') {
