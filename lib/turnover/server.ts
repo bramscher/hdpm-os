@@ -25,6 +25,7 @@ import {
   type TurnView,
   type WoStatus,
 } from './model';
+import { afInvoiceReceived, loadAfBilling, type WoAfBilling } from '@/lib/maintenance/af-wo-billing';
 
 const WO_COLS =
   'id, wo_number, description, unit_turn_category, appfolio_status, status, canceled_date, completed_date, scheduled_start, ' +
@@ -61,6 +62,8 @@ interface WoRow extends TrackerWo {
   turn_status_by: string | null;
   turn_status_at: string | null;
   turn_snoozed_until: string | null;
+  /** What AppFolio shows for this work order's invoice and bills (null: not synced yet). */
+  af_billing?: (WoAfBilling & { synced_at: string }) | null;
 }
 
 async function loadWos(db: SupabaseClient, turnIds: string[]): Promise<WoRow[]> {
@@ -69,9 +72,16 @@ async function loadWos(db: SupabaseClient, turnIds: string[]): Promise<WoRow[]> 
   if (error) throw new Error(error.message);
   const wos = (data ?? []) as unknown as WoRow[];
   if (wos.length) {
-    const { data: inv } = await db.from('hdms_invoices').select('work_order_id').in('work_order_id', wos.map((w) => w.id));
+    const [{ data: inv }, af] = await Promise.all([
+      db.from('hdms_invoices').select('work_order_id').in('work_order_id', wos.map((w) => w.id)),
+      loadAfBilling(db, wos.map((w) => w.wo_number ?? '')),
+    ]);
     const linked = new Set((inv ?? []).map((r) => r.work_order_id as string));
-    for (const w of wos) w.has_linked_invoice = linked.has(w.id);
+    for (const w of wos) {
+      w.has_linked_invoice = linked.has(w.id);
+      w.af_billing = w.wo_number ? af.get(w.wo_number) ?? null : null;
+      w.af_invoice_received = afInvoiceReceived(w.af_billing);
+    }
   }
   return wos;
 }
@@ -229,6 +239,15 @@ export interface DetailWo {
   scheduled: string | null;
   done: string | null;
   invoice: string;
+  /** AppFolio's view: invoices uploaded and bills entered, with when it was last checked. */
+  appfolio: {
+    invoices: number;
+    billed: number;
+    paid: number;
+    unpaid: number;
+    lastBillDate: string | null;
+    checkedAt: string;
+  } | null;
   reminder: string;
   appfolio_link: string | null;
 }
@@ -333,6 +352,16 @@ export async function loadDetail(db: SupabaseClient, id: string, today: string):
       scheduled: w.scheduled_start ? w.scheduled_start.slice(0, 10) : null,
       done: w.completed_date ? w.completed_date.slice(0, 10) : null,
       invoice: invoiceLabel(eff.status),
+      appfolio: w.af_billing
+        ? {
+            invoices: w.af_billing.invoice_count,
+            billed: w.af_billing.billed_amount,
+            paid: w.af_billing.paid_amount,
+            unpaid: w.af_billing.unpaid_amount,
+            lastBillDate: w.af_billing.last_bill_date,
+            checkedAt: w.af_billing.synced_at,
+          }
+        : null,
       reminder: reminderLabel(w, eff.status, days, today),
       appfolio_link: w.appfolio_link,
     };

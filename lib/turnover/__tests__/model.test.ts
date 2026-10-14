@@ -54,6 +54,15 @@ describe('statusFromAppFolio', () => {
     expect(statusFromAppFolio(wo({ appfolio_status: 'Completed', status: 'done', has_linked_invoice: true }))).toBe('complete_invoice_received');
   });
 
+  it('treats an invoice uploaded or a bill entered in AppFolio as received', () => {
+    expect(statusFromAppFolio(wo({ appfolio_status: 'Completed', status: 'done', af_invoice_received: true }))).toBe('complete_invoice_received');
+    expect(statusFromAppFolio(wo({ appfolio_status: 'Completed', status: 'done', af_invoice_received: false }))).toBe('completed_awaiting_invoice');
+  });
+
+  it('does not mark an open work order received just because a bill exists', () => {
+    expect(statusFromAppFolio(wo({ appfolio_status: 'Scheduled', status: 'open', af_invoice_received: true }))).toBe('scheduled');
+  });
+
   it('a completed follow-up inspection defaults to no bill needed', () => {
     expect(
       statusFromAppFolio(wo({ unit_turn_category: 'Other', description: 'Maintenance Follow Up', appfolio_status: 'Completed', status: 'done' }))
