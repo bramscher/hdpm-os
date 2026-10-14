@@ -25,6 +25,7 @@ export async function GET() {
     .select('id, speaker_email, speaker_name, voices, storage_path, duration_sec, status, error, transcript, created_at, updated_at')
     .eq('org_id', ORG)
     .is('subject_type', null)
+    .is('archived_at', null)
     .order('created_at', { ascending: false })
     .limit(200);
   if (error) {

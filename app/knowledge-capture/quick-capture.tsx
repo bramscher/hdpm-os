@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, Inbox as InboxIcon, RotateCcw, Search, Tag, Trash2, User, Zap } from "lucide-react";
+import { Archive, Building2, Inbox as InboxIcon, RotateCcw, Search, Tag, User, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { requestError, showError } from "./sign-in";
 import { Badge } from "@/components/ui/badge";
@@ -219,12 +219,12 @@ function InboxRow({
   }
 
   async function remove() {
-    if (!window.confirm(`Delete this quick capture from ${formatWhen(t.createdAt)}? The audio and transcript are gone for good.`)) return;
+    if (!window.confirm(`Archive this quick capture from ${formatWhen(t.createdAt)}? It leaves the Inbox, but the audio and transcript are kept.`)) return;
     try {
       await api(`/recordings/${t.id}`, { method: "DELETE" });
-      toast.success("Deleted.");
+      toast.success("Archived.");
     } catch (err) {
-      showError(err, "Delete failed");
+      showError(err, "Archive failed");
     }
     onChanged();
   }
@@ -257,8 +257,8 @@ function InboxRow({
             </Button>
           )}
           {t.mine && t.status !== "transcribing" && (
-            <Button variant="ghost" size="sm" onClick={remove} disabled={busy} aria-label="Delete quick capture">
-              <Trash2 className="h-4 w-4" />
+            <Button variant="ghost" size="sm" onClick={remove} disabled={busy} aria-label="Archive quick capture" title="Archive">
+              <Archive className="h-4 w-4" />
             </Button>
           )}
         </div>

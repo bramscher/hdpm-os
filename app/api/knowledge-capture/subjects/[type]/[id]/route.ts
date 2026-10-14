@@ -32,6 +32,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
       .eq('org_id', ORG)
       .eq('subject_type', type)
       .in('subject_id', ids)
+      .is('archived_at', null)
       .order('created_at', { ascending: false }),
   ]);
   if (profile.error || recs.error) {

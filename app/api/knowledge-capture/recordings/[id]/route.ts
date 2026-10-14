@@ -70,8 +70,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 /**
  * DELETE /api/knowledge-capture/recordings/:id
- * Removes the audio, its brain chunks and the row, then rebuilds the profile
- * without it. Only the person who recorded it (or an admin) may delete.
+ * Archives the take: its brain chunks go and the profile is rebuilt without
+ * it, but the audio and raw transcript are kept (archived_at) so it can be
+ * revisited later. A row whose upload never finished has nothing to keep and
+ * is removed outright. Only the person who recorded it (or an admin).
  */
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireSection('knowledge_capture');
@@ -84,6 +86,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     .select('id, subject_type, subject_id, storage_path, mime_type, speaker_email, voices, status, updated_at')
     .eq('org_id', ORG)
     .eq('id', id)
+    .is('archived_at', null)
     .maybeSingle();
   if (!rec) return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
   if (!canChange(rec, guard)) {
@@ -95,10 +98,20 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     return NextResponse.json({ error: 'Still processing — delete it once it finishes' }, { status: 409 });
   }
 
-  if (!isTextEntry(rec)) await db.storage.from(BUCKET).remove([rec.storage_path]);
-  await deleteRecordingChunks(db, rec.id);
-  const { error } = await db.from('kc_recording').delete().eq('id', rec.id);
+  // A failed upload: no audio, no transcript — nothing worth archiving.
+  if (rec.status === 'pending_upload') {
+    if (!isTextEntry(rec)) await db.storage.from(BUCKET).remove([rec.storage_path]);
+    const { error } = await db.from('kc_recording').delete().eq('id', rec.id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  const { error } = await db
+    .from('kc_recording')
+    .update({ archived_at: new Date().toISOString(), archived_by: guard.email, updated_at: new Date().toISOString() })
+    .eq('id', rec.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await deleteRecordingChunks(db, rec.id);
 
   // A quick-capture take never reached a profile.
   if (!rec.subject_type || !rec.subject_id) return NextResponse.json({ ok: true });
@@ -108,7 +121,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     await regenerateProfile(rec.subject_type, subjectId);
   } catch (err) {
     console.error('[knowledge-capture] profile rebuild after delete failed:', err);
-    return NextResponse.json({ ok: true, warning: 'Deleted, but the profile could not be rebuilt — use Rebuild profile.' });
+    return NextResponse.json({ ok: true, warning: 'Archived, but the profile could not be rebuilt — use Rebuild profile.' });
   }
   return NextResponse.json({ ok: true });
 }

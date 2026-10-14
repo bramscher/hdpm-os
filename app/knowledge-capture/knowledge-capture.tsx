@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, Building2, ChevronDown, ChevronRight, ExternalLink, Keyboard, Pencil, RefreshCw, RotateCcw, Search, Trash2, User } from "lucide-react";
+import { AlertTriangle, Archive, ArrowLeft, Building2, ChevronDown, ChevronRight, ExternalLink, Keyboard, Pencil, RefreshCw, RotateCcw, Search, User } from "lucide-react";
 import { toast } from "sonner";
 import { PageContainer, PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -603,13 +603,13 @@ function SubjectPanel({
   }
 
   async function remove(r: Recording) {
-    if (!window.confirm(`Delete this recording from ${formatDate(r.createdAt)}? Its transcript also leaves the brain.`)) return;
+    if (!window.confirm(`Archive this take from ${formatDate(r.createdAt)}? It leaves the brain and this list, but the audio and transcript are kept.`)) return;
     try {
       const res = await call<{ warning?: string }>(`/recordings/${r.id}`, { method: "DELETE" });
       if (res.warning) toast.warning(res.warning);
-      else toast.success("Recording deleted.");
+      else toast.success("Take archived.");
     } catch (err) {
-      showError(err, "Delete failed");
+      showError(err, "Archive failed");
     }
     await loadDetail();
     onChanged();
@@ -972,8 +972,8 @@ function RecordingRow({
             </Button>
           )}
           {canDelete && (
-            <Button variant="ghost" size="sm" onClick={onDelete} aria-label="Delete recording">
-              <Trash2 className="h-4 w-4" />
+            <Button variant="ghost" size="sm" onClick={onDelete} aria-label="Archive take" title="Archive take">
+              <Archive className="h-4 w-4" />
             </Button>
           )}
         </div>
