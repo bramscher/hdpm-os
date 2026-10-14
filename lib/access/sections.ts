@@ -230,6 +230,7 @@ export const APP_SECTIONS: AppSection[] = [
     defaultRoles: [...PM, 'front_desk'],
     pages: ['/haven'],
     apis: ['/api/haven'],
+    nav: { href: '/haven', icon: 'messages', order: 21.5 },
   },
   {
     key: 'property_map',
