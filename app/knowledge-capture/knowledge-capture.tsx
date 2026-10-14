@@ -139,9 +139,11 @@ export function KnowledgeCapture() {
         if (e.type === "uploaded") return;
         if (e.type === "transcribed")
           toast.success(
-            e.take.subjectName
-              ? `Transcript ready for ${e.take.subjectName} — check it, then Add to brain.`
-              : "Quick capture transcribed — tag it in the Inbox."
+            !e.take.subjectName
+              ? "Quick capture transcribed — tag it in the Inbox."
+              : e.addingToBrain
+                ? `${e.take.subjectName} transcribed — adding it to the brain.`
+                : `Transcript ready for ${e.take.subjectName} — check it, then Add to brain.`
           );
         else toast.error(`${e.take.subjectName ?? "Quick capture"}: ${e.error}`);
         load();
@@ -539,12 +541,12 @@ function SubjectPanel({
     return ok;
   }
 
-  /** Step 1 for audio: transcribe only; the take then waits for review. */
+  /** Step 1 for audio: transcribe only; the take then waits for review (unless the recorder skips it). */
   async function transcribe(id: string) {
     markWorking(id);
     try {
-      await call(`/recordings/${id}/transcribe`, { method: "POST" });
-      toast.success("Transcript ready — check it below, then Add to brain.");
+      const res = await call<{ addingToBrain?: boolean }>(`/recordings/${id}/transcribe`, { method: "POST" });
+      toast.success(res.addingToBrain ? "Transcribed. Adding it to the brain — about a minute." : "Transcript ready — check it below, then Add to brain.");
     } catch (err) {
       showError(err, "Transcription failed");
     }

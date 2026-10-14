@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { requireSection } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { ORG, loadRoster, resolveSubject } from '@/lib/knowledge-capture/pipeline';
-import { canChangeTake, normalizeVoices, voicesLabel } from '@/lib/knowledge-capture/voices';
+import { ORG, autoAddToBrain, loadRoster, resolveSubject } from '@/lib/knowledge-capture/pipeline';
+import { canChangeTake, normalizeVoices, skipsReview, voicesLabel } from '@/lib/knowledge-capture/voices';
 
 /**
  * POST /api/knowledge-capture/recordings/:id/tag
@@ -10,7 +10,11 @@ import { canChangeTake, normalizeVoices, voicesLabel } from '@/lib/knowledge-cap
  * Files a quick-capture take under an owner or property. It then shows on
  * that subject's page for transcript review and Add to brain. Only untagged
  * takes can be tagged (moving a filed take would leave its brain entries behind).
+ * A transcribed take from someone who skips review goes on to the brain.
  */
+
+// Room for notes + brain after the response.
+export const maxDuration = 300;
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireSection('knowledge_capture');
   if (!guard.ok) return guard.response;
@@ -25,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const db = getSupabaseAdmin();
   const { data: rec } = await db
     .from('kc_recording')
-    .select('id, speaker_email, voices, subject_type')
+    .select('id, speaker_email, voices, subject_type, status, transcript')
     .eq('org_id', ORG)
     .eq('id', id)
     .maybeSingle();
@@ -56,5 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .select('id');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: 'This take is already filed' }, { status: 409 });
-  return NextResponse.json({ ok: true, subjectName: subject.name });
+  const addingToBrain = rec.status === 'uploaded' && !!rec.transcript && skipsReview(rec.speaker_email);
+  if (addingToBrain) after(() => autoAddToBrain(id));
+  return NextResponse.json({ ok: true, subjectName: subject.name, addingToBrain });
 }

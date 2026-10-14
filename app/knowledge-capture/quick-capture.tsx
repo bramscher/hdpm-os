@@ -190,12 +190,12 @@ function InboxRow({
   async function tag(type: SubjectType, id: string, name: string) {
     setBusy(true);
     try {
-      await api(`/recordings/${t.id}/tag`, {
+      const res = await api<{ addingToBrain?: boolean }>(`/recordings/${t.id}/tag`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subjectType: type, subjectId: id }),
       });
-      toast.success(`Filed under ${name}. Check the transcript there, then Add to brain.`);
+      toast.success(res.addingToBrain ? `Filed under ${name} and adding it to the brain.` : `Filed under ${name}. Check the transcript there, then Add to brain.`);
       onTagged({ type, id });
       onChanged();
     } catch (err) {
