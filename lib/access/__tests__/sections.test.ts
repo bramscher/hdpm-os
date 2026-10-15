@@ -5,6 +5,7 @@ import {
   APP_SECTIONS,
   DELEGABLE_SECTION_KEYS,
   forbiddenAdminGrants,
+  ownerGrantChanges,
   checkPath,
   deniedSections,
   parseRoleDefaults,
@@ -159,8 +160,8 @@ describe('parseSectionOverrides', () => {
 });
 
 describe('delegated admin sections', () => {
-  it('only KPIs, Fee Management, Hiring and Partners can be delegated', () => {
-    expect([...DELEGABLE_SECTION_KEYS].sort()).toEqual(['fee_management', 'hiring', 'kpis', 'referrals_admin']);
+  it('only KPIs, Fee Management, Hiring, Partners and Dez money answers can be delegated', () => {
+    expect([...DELEGABLE_SECTION_KEYS].sort()).toEqual(['dez_money', 'fee_management', 'hiring', 'kpis', 'referrals_admin']);
   });
   it('a PM granted them gets exactly those admin areas', () => {
     const granted = { kpis: true, fee_management: true, hiring: true, referrals_admin: true };
@@ -202,5 +203,19 @@ describe('fixed people list (allowedEmails)', () => {
     expect(checkPath('/api/knowledge-capture/recordings', denied).allowed).toBe(false);
     const craig = deniedSections('admin', {}, undefined, 'craig@highdesertpm.com');
     expect(checkPath('/knowledge-capture', craig).allowed).toBe(true);
+  });
+});
+
+describe('Dez money answers (dez_money)', () => {
+  it('is on for admins, off for a PM until switched on', () => {
+    expect(sectionAllowed(S('dez_money'), 'admin', {})).toBe(true);
+    expect(sectionAllowed(S('dez_money'), 'pm', {})).toBe(false);
+    expect(sectionAllowed(S('dez_money'), 'pm', { dez_money: true })).toBe(true);
+    expect(sectionAllowed(S('dez_money'), 'admin', { dez_money: false })).toBe(false);
+  });
+  it('flags only Craig-approved switches that changed', () => {
+    expect(ownerGrantChanges({}, { dez_money: true, kpis: true })).toEqual(['dez_money']);
+    expect(ownerGrantChanges({ dez_money: true }, {})).toEqual(['dez_money']);
+    expect(ownerGrantChanges({ dez_money: true }, { dez_money: true, kpis: false })).toEqual([]);
   });
 });

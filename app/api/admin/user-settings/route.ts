@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { hiddenFromRoster } from '@/lib/access/roster';
 import { clearSectionAccessCache, loadRoleDefaults } from '@/lib/access/section-access';
-import { deniedSections, forbiddenAdminGrants, parseSectionOverrides, type SectionOverrides } from '@/lib/access/sections';
+import { APP_SECTIONS, OWNER_EMAIL, deniedSections, forbiddenAdminGrants, ownerGrantChanges, parseSectionOverrides, type SectionOverrides } from '@/lib/access/sections';
 
 async function activeAdmin(email: string) {
   // Verify current admin status in the DB — an old JWT is not permission to administer access.
@@ -86,6 +86,12 @@ export async function PATCH(request: NextRequest) {
 
   const { data: current, error: readErr } = await db.from('staff_section_access').select('overrides,version').eq('person', person).maybeSingle();
   if (readErr) return NextResponse.json({ error: 'User settings table is not set up yet' }, { status: 503 });
+  // Some switches (Dez money answers) are Craig's call alone, even among admins.
+  const ownerOnly = ownerGrantChanges((current?.overrides as SectionOverrides | undefined) ?? {}, overrides);
+  if (ownerOnly.length > 0 && guard.email.toLowerCase() !== OWNER_EMAIL) {
+    const labels = APP_SECTIONS.filter((s) => ownerOnly.includes(s.key)).map((s) => s.label);
+    return NextResponse.json({ error: `Only Craig can change: ${labels.join(', ')}` }, { status: 403 });
+  }
   const currentVersion = (current?.version as number | undefined) ?? 0;
   if (currentVersion !== version) {
     return NextResponse.json({ error: 'Someone else changed these settings. Reload and try again.' }, { status: 409 });
