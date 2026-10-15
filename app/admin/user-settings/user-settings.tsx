@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import StaffPermissions from "../staff-permissions/staff-permissions";
 import {
   APP_SECTIONS,
+  OWNER_EMAIL,
   ROLE_LABELS,
   codeRoleDefault,
   roleDefault,
@@ -124,6 +125,7 @@ export default function UserSettings() {
 
 function SectionsTab() {
   const { data: session } = useSession();
+  const isOwner = session?.user?.email?.toLowerCase() === OWNER_EMAIL;
   const { data, loading, error, setError, load } = useUserSettings();
   const staff = data?.staff ?? [];
   const audit = data?.audit ?? [];
@@ -275,7 +277,7 @@ function SectionsTab() {
                     <p className="mb-1 border-b border-sand-200 pb-1 text-[11px] font-medium text-charcoal-400">{GROUP_LABEL[g]}</p>
                     <div className="divide-y divide-sand-100">
                       {sections.map((s) => (
-                        <SectionRow key={s.key} section={s} role={person.access_role} draft={draft} setDraft={setDraft} roleOv={roleOv} />
+                        <SectionRow key={s.key} section={s} role={person.access_role} draft={draft} setDraft={setDraft} roleOv={roleOv} isOwner={isOwner} />
                       ))}
                     </div>
                   </div>
@@ -501,20 +503,25 @@ function SectionRow({
   draft,
   setDraft,
   roleOv,
+  isOwner,
 }: {
   section: AppSection;
   role: string;
   draft: SectionOverrides;
   setDraft: (d: SectionOverrides) => void;
   roleOv: RoleDefaultOverrides;
+  isOwner: boolean;
 }) {
   const def = roleDefault(section, role, roleOv);
   const effective = sectionAllowed(section, role, draft, roleOv);
   const delegated = section.group === "Admin" && role !== "admin" && section.delegable === true;
   const adminOnlyForNonAdmin = section.group === "Admin" && role !== "admin" && !delegated;
   const fixedList = !!section.allowedEmails;
-  const locked = fixedList || section.alwaysOn || (section.adminLocked && role === "admin") || adminOnlyForNonAdmin;
-  const lockNote = fixedList
+  const ownerGrant = !!section.ownerGrants && !isOwner;
+  const locked = fixedList || ownerGrant || section.alwaysOn || (section.adminLocked && role === "admin") || adminOnlyForNonAdmin;
+  const lockNote = ownerGrant
+    ? "Only Craig can change this"
+    : fixedList
     ? `Only ${section.allowedEmails!.map((e) => e.split("@")[0]).join(", ")} (set in code)`
     : section.alwaysOn
     ? "Always on"
@@ -533,6 +540,7 @@ function SectionRow({
         <p className="text-[13px] font-medium text-charcoal-900">
           {section.label}
           {section.ownerOnly && <span className="ml-1.5 text-[11px] font-normal text-charcoal-400">(Craig only)</span>}
+          {section.ownerGrants && <span className="ml-1.5 text-[11px] font-normal text-charcoal-400">(Craig approves)</span>}
         </p>
         <p className="text-[11.5px] text-charcoal-500">{section.description}</p>
       </div>

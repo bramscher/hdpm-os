@@ -94,6 +94,8 @@ export interface StaffRow {
   phone: string | null;
   slack_user_id: string | null;
   role: string | null;
+  /** HDPM-OS access role (admin, pm, …) — drives section access. */
+  access_role?: string | null;
   active: boolean;
   updated_at: string;
 }

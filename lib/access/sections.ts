@@ -45,6 +45,8 @@ export interface AppSection {
    * role defaults). Its pages/APIs check the section, not the admin role.
    */
   delegable?: boolean;
+  /** Only Craig (OWNER_EMAIL) may switch this on or off for anyone in User settings. */
+  ownerGrants?: boolean;
   /**
    * Fixed list of people (company emails) who may use this section, and nobody
    * else — not other admins, not role defaults, not User settings switches.
@@ -65,6 +67,9 @@ export const ROLE_LABELS: Record<AccessRole, string> = {
   staff: 'Staff (general)',
   read_only: 'Read only',
 };
+
+/** Craig: the only person who can change `ownerGrants` switches. */
+export const OWNER_EMAIL = 'craig@highdesertpm.com';
 
 // Property managers (and the generic staff fallback) get every non-admin section.
 const PM: AccessRole[] = ['manager', 'pm', 'staff'];
@@ -359,6 +364,17 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/admin/hiring', icon: 'briefcase', order: 42.6 },
   },
   {
+    key: 'dez_money',
+    delegable: true,
+    ownerGrants: true,
+    label: 'Dez money answers',
+    description: 'Dez answers delinquency, owner retention, maintenance cost and management fee questions in Slack. On for admins; only Craig can switch it on or off for anyone.',
+    group: 'Admin',
+    defaultRoles: ['admin'],
+    // Not a page: checked by Dez's KPI lane (app/api/agents/slack/events).
+    pages: [],
+  },
+  {
     key: 'leads_admin',
     label: 'Leads',
     description: 'Website CRM leads: pipeline status, follow-ups, owner and notes.',
@@ -517,6 +533,11 @@ export function forbiddenAdminGrants(role: string | undefined, overrides: Sectio
   return Object.entries(overrides)
     .filter(([key, on]) => on && BY_KEY.get(key)?.group === 'Admin' && !BY_KEY.get(key)?.delegable)
     .map(([key]) => key);
+}
+
+/** `ownerGrants` switches that differ between two override sets (only Craig may change these). */
+export function ownerGrantChanges(before: SectionOverrides, after: SectionOverrides): string[] {
+  return APP_SECTIONS.filter((s) => s.ownerGrants && before[s.key] !== after[s.key]).map((s) => s.key);
 }
 
 /** Is this email on the section's fixed people list (see `allowedEmails`)? */

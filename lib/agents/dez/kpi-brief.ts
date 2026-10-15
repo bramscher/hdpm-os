@@ -7,9 +7,9 @@
  * hijacks an SOP question; the answer is one claude-sonnet-5 call over the
  * matched snapshot JSON (handles the heterogeneous per-KPI shapes).
  *
- * Access: operational KPIs answer for everyone; financial KPIs only for the
- * admin allowlist (DEZ_KPI_ADMINS, default Craig/Matt/Penny) — mirroring the
- * admin-only web dashboard.
+ * Access: operational KPIs answer for everyone; financial KPIs only for people
+ * with the `dez_money` section (admins, plus anyone Craig switches on in
+ * Admin → User settings) — mirroring the admin-only web dashboard.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -50,15 +50,6 @@ const METRIC_SIGNALS = [
   'this week', 'right now', 'trend', 'trending', 'percent', '%', "what's our", 'what is our',
   'average', 'avg', 'total', 'this month', 'last week', 'ytd',
 ];
-
-const DEFAULT_ADMINS = ['Craig', 'Matt', 'Penny'];
-
-/** Admin allowlist for financial KPIs (env DEZ_KPI_ADMINS, comma-separated). */
-export function kpiAdmins(): string[] {
-  const raw = process.env.DEZ_KPI_ADMINS;
-  if (!raw) return DEFAULT_ADMINS;
-  return raw.split(',').map((s) => s.trim()).filter(Boolean);
-}
 
 /**
  * Detect which KPI(s) a question is asking about. Precision-biased: ambiguous
