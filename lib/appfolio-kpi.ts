@@ -23,6 +23,7 @@
 
 import { getSupabaseAdmin } from './supabase';
 import { computeDoorMovement, type DoorRoster } from './door-movement';
+import { tallyDoorsByCity } from './doors-by-city';
 import { OPEN_LEAD_STAGES } from './referrals/types';
 import { getDashboardConfig } from './dashboard-config';
 import { havenResponseMetrics } from './haven';
@@ -874,6 +875,8 @@ async function buildDoorRoster(config: NonNullable<ReturnType<typeof getKpiConfi
   roster: DoorRoster;
   currentDoors: number;
   currentProperties: number;
+  /** The same doors grouped by unit City — sums to currentDoors. */
+  byCity: { city: string; doors: number }[];
 }> {
   const [units, properties] = await Promise.all([
     v0FetchAll<V0Unit>('/units', { 'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z' }, config),
@@ -882,6 +885,7 @@ async function buildDoorRoster(config: NonNullable<ReturnType<typeof getKpiConfi
   const activeProps = new Set(properties.filter((p) => !p.HiddenAt).map((p) => p.Id));
   const roster: DoorRoster = {};
   let currentDoors = 0;
+  const cities: string[] = [];
   for (const u of units) {
     if (u.HiddenAt) continue;
     const pid = u.PropertyId;
@@ -890,8 +894,10 @@ async function buildDoorRoster(config: NonNullable<ReturnType<typeof getKpiConfi
     const key = pid ?? 'unknown';
     roster[key] = (roster[key] ?? 0) + 1;
     currentDoors += 1;
+    cities.push(u.City ?? '');
   }
-  return { roster, currentDoors, currentProperties: activeProps.size };
+  const byCity = tallyDoorsByCity(cities.map((city) => ({ city }))).map(({ city, doors }) => ({ city, doors }));
+  return { roster, currentDoors, currentProperties: activeProps.size, byCity };
 }
 
 export interface DoorRosterKpi {
@@ -929,6 +935,8 @@ export interface DoorMovementKpi {
   pipelineLeads: number;
   /** Earliest door_roster snapshot we have, for the "collecting baseline since" state. */
   firstRosterAt: string | null;
+  /** Current doors per city (same units as currentDoors), biggest first. */
+  byCity: { city: string; doors: number }[];
 }
 
 /** Read the earliest door_roster snapshot at/after `sinceIso` (baseline for a window). */
@@ -965,9 +973,9 @@ function toWindow(current: DoorRoster, baseline: { roster: DoorRoster; capturedA
 export async function fetchDoorMovementKpi(): Promise<DoorMovementKpi> {
   const config = getKpiConfig();
   if (!config) {
-    return { currentDoors: 0, currentProperties: 0, month: null, ttm: null, pipelineDoors: 0, pipelineLeads: 0, firstRosterAt: null };
+    return { currentDoors: 0, currentProperties: 0, month: null, ttm: null, pipelineDoors: 0, pipelineLeads: 0, firstRosterAt: null, byCity: [] };
   }
-  const { roster, currentDoors, currentProperties } = await buildDoorRoster(config);
+  const { roster, currentDoors, currentProperties, byCity } = await buildDoorRoster(config);
   const supabase = getSupabaseAdmin();
 
   const now = new Date();
@@ -1006,7 +1014,7 @@ export async function fetchDoorMovementKpi(): Promise<DoorMovementKpi> {
     console.warn('[KPI] door_movement pipeline lookup failed:', e);
   }
 
-  return { currentDoors, currentProperties, month, ttm, pipelineDoors, pipelineLeads, firstRosterAt };
+  return { currentDoors, currentProperties, month, ttm, pipelineDoors, pipelineLeads, firstRosterAt, byCity };
 }
 
 // ============================================

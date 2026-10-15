@@ -10,7 +10,7 @@ export async function GET() {
 
     try {
       const supabase = getSupabaseAdmin();
-      // Lean scalars only (no roster) — trend-safe.
+      // Lean scalars + a short per-city list (no roster) — trend-safe.
       await supabase.from('kpi_snapshots').insert({ kpi_name: 'door_movement', value: data });
     } catch (e) {
       console.warn('[KPI] Failed to save door movement snapshot:', e);

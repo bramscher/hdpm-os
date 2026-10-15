@@ -98,6 +98,9 @@ export async function GET() {
         // Legacy CSV-import rows have no AppFolio id and predate the sync —
         // the live portfolio is the synced rows only.
         .not('appfolio_property_id', 'is', null)
+        // Hidden units / properties in AppFolio sync as active=false — they
+        // aren't doors we manage (same rule as the KPI door count).
+        .eq('active', true)
         .range(from, from + pageSize - 1);
       if (error) throw new Error(`Failed to fetch properties: ${error.message}`);
       rows.push(...(data || []));

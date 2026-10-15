@@ -244,6 +244,7 @@ export const APP_SECTIONS: AppSection[] = [
     group: 'Leasing',
     defaultRoles: [...PM, 'maintenance', 'field', 'inspector', 'front_desk'],
     pages: ['/properties'],
+    nav: { href: '/properties/map', icon: 'map', order: 23 },
     apis: ['/api/properties'],
   },
 

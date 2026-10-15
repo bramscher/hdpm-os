@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapProperty, PropertyMgmtStatus } from "@/app/api/properties/map/route";
+import { tallyDoorsByCity } from "@/lib/doors-by-city";
 
 // ────────────────────────────────────────────────
 // Status config
@@ -85,7 +86,6 @@ export function PropertyMap() {
     lost: true,
   });
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [showCitySummary, setShowCitySummary] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -222,26 +222,19 @@ export function PropertyMap() {
     [properties, selectedKey]
   );
 
-  // Per-city rollup for the ⓘ summary, excluding lost (not shown on the map)
-  const citySummary = useMemo(() => {
-    const byCity = new Map<
-      string,
-      { city: string; properties: number; units: number; leaving: number }
-    >();
-    for (const p of properties) {
-      if (p.status === "lost") continue;
-      const cityKey = p.city.trim().toLowerCase();
-      let entry = byCity.get(cityKey);
-      if (!entry) {
-        entry = { city: p.city.trim(), properties: 0, units: 0, leaving: 0 };
-        byCity.set(cityKey, entry);
-      }
-      entry.properties++;
-      entry.units += p.unit_count;
-      if (p.status === "offboarding") entry.leaving++;
-    }
-    return [...byCity.values()].sort((a, b) => b.units - a.units);
-  }, [properties]);
+  // Doors (units) per city, excluding lost (not shown on the map). Leaving
+  // (yellow) doors are tallied separately so the headline is active doors.
+  const doorsByCity = useMemo(
+    () =>
+      tallyDoorsByCity(
+        properties
+          .filter((p) => p.status !== "lost")
+          .map((p) => ({ city: p.city, doors: p.unit_count, leaving: p.status === "offboarding" }))
+      ),
+    [properties]
+  );
+  const activeDoors = doorsByCity.reduce((n, r) => n + r.doors, 0);
+  const leavingDoors = doorsByCity.reduce((n, r) => n + r.leaving, 0);
 
   const setStatus = useCallback(
     async (prop: MapProperty, status: PropertyMgmtStatus) => {
@@ -313,69 +306,39 @@ export function PropertyMap() {
             Status table missing — apply migration 20260727 to enable yellow/red tagging
           </span>
         )}
-        <button
-          onClick={() => setShowCitySummary((v) => !v)}
-          aria-label="Summary by city"
-          title="Summary by city"
-          className={`ml-auto w-7 h-7 rounded-full border flex items-center justify-center text-sm font-serif italic font-semibold transition-colors ${
-            showCitySummary
-              ? "bg-charcoal-800 border-charcoal-800 text-white"
-              : "bg-white border-sand-300 text-charcoal-500 hover:bg-sand-100"
-          }`}
-        >
-          i
-        </button>
       </div>
 
-      {/* City summary panel */}
-      {showCitySummary && (
-        <div className="absolute top-12 right-0 z-10 w-72 max-w-[calc(100%-1rem)] bg-white rounded-xl shadow-lg border border-sand-200 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-semibold text-charcoal-800">By city</div>
-            <button
-              onClick={() => setShowCitySummary(false)}
-              className="text-charcoal-400 hover:text-charcoal-600 text-lg leading-none"
-              aria-label="Close"
-            >
-              ×
-            </button>
+      {/* Doors by city — always visible; pills wrap on phones */}
+      {doorsByCity.length > 0 && (
+        <div className="mb-3 bg-white rounded-xl border border-sand-200 px-3 py-2.5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-charcoal-600">
+              Doors by city
+            </span>
+            <span className="text-xs text-charcoal-500 tabular-nums">
+              <span className="font-semibold text-charcoal-800">{activeDoors.toLocaleString()}</span>{" "}
+              active doors
+              {leavingDoors > 0 && (
+                <span className="text-yellow-700"> · {leavingDoors} leaving</span>
+              )}
+            </span>
           </div>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-charcoal-400">
-                <th className="text-left font-medium pb-1">City</th>
-                <th className="text-right font-medium pb-1">Props</th>
-                <th className="text-right font-medium pb-1">Units</th>
-                <th className="text-right font-medium pb-1 text-yellow-600">Leaving</th>
-              </tr>
-            </thead>
-            <tbody>
-              {citySummary.map((row) => (
-                <tr key={row.city} className="border-t border-sand-100">
-                  <td className="py-1 text-charcoal-700">{row.city}</td>
-                  <td className="py-1 text-right tabular-nums text-charcoal-700">
-                    {row.properties}
-                  </td>
-                  <td className="py-1 text-right tabular-nums text-charcoal-700">{row.units}</td>
-                  <td className="py-1 text-right tabular-nums text-yellow-700">
-                    {row.leaving || ""}
-                  </td>
-                </tr>
-              ))}
-              <tr className="border-t border-sand-200 font-semibold text-charcoal-800">
-                <td className="py-1">Total</td>
-                <td className="py-1 text-right tabular-nums">
-                  {citySummary.reduce((n, r) => n + r.properties, 0)}
-                </td>
-                <td className="py-1 text-right tabular-nums">
-                  {citySummary.reduce((n, r) => n + r.units, 0)}
-                </td>
-                <td className="py-1 text-right tabular-nums text-yellow-700">
-                  {citySummary.reduce((n, r) => n + r.leaving, 0) || ""}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div className="flex flex-wrap gap-1.5">
+            {doorsByCity.map((row) => (
+              <span
+                key={row.city}
+                className="inline-flex items-baseline gap-1.5 rounded-full border border-sand-200 bg-sand-50 px-2.5 py-0.5 text-xs"
+              >
+                <span className="text-charcoal-600">{row.city}</span>
+                <span className="font-semibold tabular-nums text-charcoal-900">{row.doors}</span>
+                {row.leaving > 0 && (
+                  <span className="tabular-nums text-yellow-700" title="Doors leaving management">
+                    +{row.leaving} leaving
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
