@@ -6,6 +6,7 @@ import type { dailyBillingActor } from '@/lib/daily-billing/server';
 import { pacificDay, shiftDay } from '@/lib/maintenance-workspace/model';
 import { validDate } from '@/lib/timekeeping/model';
 import type { HdmsInvoice } from '@/lib/invoices';
+import { isFieldReviewer } from './access';
 import { assessWorkOrder, fieldBillingIssues, fieldDayTotals, fieldTimeByWorkOrder, type BillingWorkOrder, type FieldDayTotals, type FieldTimeRow } from './billing';
 import { computeDay } from './compute';
 import { FIELD_CONFIG, RADIUS_BY_KIND } from './config';
@@ -70,17 +71,32 @@ async function loadInspectionStops(technician: string, date: string, units: Map<
   });
 }
 
+/** The tech's published maintenance route for the date (Open Board route builder): its work orders, in stop order. */
+async function loadRouteWorkOrderIds(technician: string, date: string): Promise<string[]> {
+  const plans = await all<{ id: string }>('maint_route_plan', 'id', q => q.eq('route_date', date).eq('status', 'published').ilike('assigned_tech', technician));
+  if (!plans.length) return [];
+  const stops = await all<{ work_order_id: string }>('maint_route_stop', 'work_order_id,stop_order', q => q.in('route_plan_id', plans.map(p => p.id)), 'stop_order');
+  return [...new Set(stops.map(s => s.work_order_id))];
+}
+/** Route work orders outside the in-house list (the office can route any work order) still need to be candidates. */
+async function withRouteWorkOrders(workOrders: CandidateWorkOrder[], routeIds: string[]) {
+  const known = new Set(workOrders.map(w => w.id));
+  const extra = routeIds.filter(id => !known.has(id));
+  return extra.length ? [...workOrders, ...(await all<CandidateWorkOrder>('work_orders', WO_COLUMNS, q => q.in('id', extra)))] : workOrders;
+}
+
 async function loadDayRows(technician: string, date: string) {
   const days = await all<DayRow>('field_day', 'id,technician,work_date,source,sample_spec,version,built_at', q => q.eq('technician', technician).eq('work_date', date));
   const segments = days.length ? await all<StoredSegment>('field_segment', '*', q => q.in('day_id', days.map(d => d.id)), 'started_at') : [];
   return { days, segments };
 }
 
-interface DayContext { places: Place[]; units: Unit[]; unitById: Map<string, Unit>; workOrders: CandidateWorkOrder[]; inspectionStops: InspectionStop[] }
+interface DayContext { places: Place[]; units: Unit[]; unitById: Map<string, Unit>; workOrders: CandidateWorkOrder[]; inspectionStops: InspectionStop[]; routeWorkOrderIds: string[] }
 async function loadContext(technician: string, date: string): Promise<DayContext> {
-  const [placeRows, units, workOrders] = await Promise.all([loadPlaceRows(), loadUnits(), loadWorkOrders(date)]);
+  const [placeRows, units, inHouse, routeWorkOrderIds] = await Promise.all([loadPlaceRows(), loadUnits(), loadWorkOrders(date), loadRouteWorkOrderIds(technician, date)]);
   const unitById = new Map(units.map(u => [u.id, u]));
-  return { places: placeRows.map(toPlace), units, unitById, workOrders, inspectionStops: await loadInspectionStops(technician, date, unitById) };
+  const workOrders = await withRouteWorkOrders(inHouse, routeWorkOrderIds);
+  return { places: placeRows.map(toPlace), units, unitById, workOrders, routeWorkOrderIds, inspectionStops: await loadInspectionStops(technician, date, unitById) };
 }
 const locator = (ctx: DayContext) => (p: SamplePlace) => {
   if (p.type === 'point') return p;
@@ -105,7 +121,7 @@ export async function rebuildDay(actor: FieldActor, technician: string, date: st
     const day = days.find(d => d.source === source);
     const spec = source === 'sample' ? validateSampleSpec(specInput ?? day?.sample_spec) : null;
     const confirmed = segments.filter(s => s.day_id === day?.id && s.state === 'confirmed').map(s => ({ start: Date.parse(s.started_at), end: Date.parse(s.ended_at) }));
-    const { segments: suggested } = computeDay({ technician, date, ...evidence(source, spec, date, ctx), places: ctx.places, units: ctx.units, workOrders: ctx.workOrders, inspectionStops: ctx.inspectionStops, confirmed });
+    const { segments: suggested } = computeDay({ technician, date, ...evidence(source, spec, date, ctx), places: ctx.places, units: ctx.units, workOrders: ctx.workOrders, routeWorkOrderIds: ctx.routeWorkOrderIds, inspectionStops: ctx.inspectionStops, confirmed });
     const { data, error } = await getSupabaseAdmin().rpc('field_time_apply', {
       actor: actor.email,
       request: { op: 'replace', technician, work_date: date, source, version: day?.version ?? 0, sample_spec: spec, segments: suggested },
@@ -124,7 +140,7 @@ export async function stopCentre(actor: FieldActor, technician: string, date: st
   if (!day || !segment) throw new Error('Segment not found');
   const ctx = await loadContext(technician, date);
   const ev = evidence(source, day.sample_spec, date, ctx);
-  const { stops } = computeDay({ technician, date, ...ev, places: ctx.places, units: ctx.units, workOrders: ctx.workOrders, inspectionStops: ctx.inspectionStops });
+  const { stops } = computeDay({ technician, date, ...ev, places: ctx.places, units: ctx.units, workOrders: ctx.workOrders, routeWorkOrderIds: ctx.routeWorkOrderIds, inspectionStops: ctx.inspectionStops });
   const from = Date.parse(segment.started_at), to = Date.parse(segment.ended_at);
   const hit = stops.map(s => ({ s, overlap: Math.min(to, s.stop.end) - Math.max(from, s.stop.start) })).filter(x => x.overlap > 0).sort((a, b) => b.overlap - a.overlap)[0];
   if (!hit) throw new Error('No stop was detected in that segment');
@@ -154,20 +170,22 @@ export async function loadFieldDay(actor: FieldActor, technician: string, date: 
   const day = days.find(d => d.source === source) ?? null;
   const placeRows = await loadPlaceRows();
   const placeName = new Map(placeRows.map(p => [p.id, p.name]));
-  const workOrders = await loadWorkOrders(date);
-  const ranked = candidateWorkOrders(workOrders, technician, date);
+  const routeIds = await loadRouteWorkOrderIds(technician, date);
+  const onRoute = new Set(routeIds);
+  const workOrders = await withRouteWorkOrders(await loadWorkOrders(date), routeIds);
+  const ranked = candidateWorkOrders(workOrders, technician, date, FIELD_CONFIG, onRoute);
   const woById = new Map(workOrders.map(w => [w.id, w]));
   const rows = segments.filter(s => s.day_id === day?.id);
   // Work orders already on the day may be older or outside the candidate window; describe them too.
   const missing = [...new Set(rows.flatMap(s => [...s.allocations.map(a => a.work_order_id), ...(s.candidates as Candidate[]).map(c => c.work_order_id)]))].filter(id => !woById.has(id));
   if (missing.length) for (const w of await all<CandidateWorkOrder>('work_orders', WO_COLUMNS, q => q.in('id', missing))) woById.set(w.id, w);
-  // For answer buttons: "43280-2 · Remove TV mount…" over "Weinberger 284 · open, Alberto’s".
+  // For answer buttons: "43280-2 · Remove TV mount…" over "Weinberger 284 · open, Alberto’s · on the route".
   const describe = (id: string) => {
     const w = woById.get(id);
     if (!w) return { wo_number: null, property_name: null, title: 'Work order', sub: '', name: 'Work order' };
     const who = assigneeOf(w);
     const owner = who === technician ? `${technician}’s` : who ? `${who}’s` : 'unassigned';
-    return { wo_number: w.wo_number, property_name: w.property_name, title: workOrderTitle(w.description) || w.wo_number || 'Work order', sub: `${w.property_name || 'Property'} · ${workOrderDone(w) ? 'done' : 'open'}, ${owner}`, name: label(w) };
+    return { wo_number: w.wo_number, property_name: w.property_name, title: workOrderTitle(w.description) || w.wo_number || 'Work order', sub: `${w.property_name || 'Property'} · ${workOrderDone(w) ? 'done' : 'open'}, ${owner}${onRoute.has(id) ? ' · on the route' : ''}`, name: label(w) };
   };
   const totals = fieldDayTotals(rows.map(s => ({ ...s, work_date: date })));
   let sampleOptions = null;
@@ -263,13 +281,16 @@ export interface FieldForReview {
   links: { technician: string; date: string }[];
 }
 /**
- * Field time for Daily Billing Review. An admin gets every category and the "not fully billed" items;
- * anyone else gets only their own job and parts minutes. Sample days only when an admin asks for them.
+ * Field time for Daily Billing Review. An admin gets every category and the "not fully billed" items. A
+ * field reviewer (lib/field-time/access.ts) gets every tech's job and parts minutes and those items, but
+ * not drive, inspection or unlabeled time; anyone else gets only their own job and parts minutes. Links go
+ * only to field days the person can open. Sample days only when an admin asks for them.
  */
 export async function fieldForReview(args: { actor: FieldActor; from: string; to: string; technician: string; sample: boolean; invoices: HdmsInvoice[]; decisions: Decision[]; today: string }): Promise<FieldForReview> {
   const { actor, from, to } = args;
   const source: Source = args.sample && actor.admin ? 'sample' : 'device';
-  const tech = actor.admin ? args.technician : actor.person;
+  const reviewer = actor.admin || isFieldReviewer(actor.email);
+  const tech = reviewer ? args.technician : actor.person;
   const since = shiftDay(from, -FIELD_CONFIG.lookbackDays);
   const days = await all<DayRow>('field_day', 'id,technician,work_date,source,sample_spec,version,built_at', q => q.eq('source', source).gte('work_date', since));
   const dayIds = new Set(days.map(d => d.id));
@@ -280,15 +301,16 @@ export async function fieldForReview(args: { actor: FieldActor; from: string; to
   const totals = fieldDayTotals(inPeriod);
   const shaped = new Map<string, Partial<FieldDayTotals>>();
   for (const [date, t] of totals) shaped.set(date, actor.admin ? t : { date, onSite: t.onSite, parts: t.parts });
-  const links = days.filter(d => d.work_date >= from && d.work_date <= to && (!tech || d.technician === tech)).map(d => ({ technician: d.technician, date: d.work_date }));
-  if (!actor.admin) return { source, days: shaped, issues: [], noInvoiceNotes: new Map(), links };
+  const links = days.filter(d => d.work_date >= from && d.work_date <= to && (!tech || d.technician === tech) && canSeeDay(actor, d.technician, d.source)).map(d => ({ technician: d.technician, date: d.work_date }));
+  if (!reviewer) return { source, days: shaped, issues: [], noInvoiceNotes: new Map(), links };
   const woIds = [...new Set(rows.flatMap(r => r.allocations.map(a => a.work_order_id)))];
   const workOrders: BillingWorkOrder[] = [];
   for (let i = 0; i < woIds.length; i += 100) workOrders.push(...(await all<BillingWorkOrder>('work_orders', 'id,wo_number,property_name,completed_date,status,appfolio_status,stage', q => q.in('id', woIds.slice(i, i + 100)))));
   const billingRows = tech ? rows.filter(r => r.technician === tech) : rows;
   const { issues, noInvoiceNotes } = fieldBillingIssues({
     rows: billingRows, from, to, today: args.today, invoices: args.invoices, workOrders, decisions: args.decisions, sample: source === 'sample',
-    hrefFor: (t, d) => `/maintenance/daily-billing/field?technician=${encodeURIComponent(t)}&date=${d}${source === 'sample' ? '&source=sample' : ''}`,
+    // The field day where the person can open it; otherwise the invoice.
+    hrefFor: (t, d, invoiceId) => canSeeDay(actor, t, source) ? `/maintenance/daily-billing/field?technician=${encodeURIComponent(t)}&date=${d}${source === 'sample' ? '&source=sample' : ''}` : `/maintenance/invoices?tab=invoices&invoice=${invoiceId}`,
   });
   return { source, days: shaped, issues, noInvoiceNotes, links };
 }

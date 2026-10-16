@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { candidateWorkOrders, matchStop, suggestCandidate, type MatchContext } from '../match';
+import { candidateWorkOrders, matchStop, rankCandidates, suggestCandidate, type MatchContext } from '../match';
 import { workOrderTitle, type Candidate } from '../model';
 import { DATE, LOWES, PLACES, WEINBERGER, offset, place, unit, wo } from './fixtures';
 
-const ctx = (extra: Partial<MatchContext> & { workOrders?: ReturnType<typeof wo>[]; technician?: string } = {}): MatchContext => {
-  const ranked = candidateWorkOrders(extra.workOrders ?? [wo('wo-wein', 'Weinberger 284')], extra.technician ?? 'Alberto', DATE);
+const ctx = (extra: Partial<MatchContext> & { workOrders?: ReturnType<typeof wo>[]; technician?: string; onRoute?: string[] } = {}): MatchContext => {
+  const ranked = candidateWorkOrders(extra.workOrders ?? [wo('wo-wein', 'Weinberger 284')], extra.technician ?? 'Alberto', DATE, undefined, new Set(extra.onRoute ?? []));
   const candidates = new Map<string, Candidate[]>();
   for (const r of ranked) if (r.propertyId) candidates.set(r.propertyId, [...(candidates.get(r.propertyId) || []), r.candidate]);
   return { places: PLACES, units: [unit('u-wein', 'Weinberger 284', WEINBERGER)], candidates, inspectionStops: [], ...extra };
@@ -27,6 +27,17 @@ describe('candidateWorkOrders', () => {
     // Two of the tech's own jobs at one property: no guess, even if one is dated today.
     expect(suggestCandidate([c('a', 1, true), c('b', 1)])).toBeNull();
     expect(suggestCandidate([c('a', 2, true), c('b', 3)])?.work_order_id).toBe('a');
+  });
+
+  it('takes the one job on the day’s published route, and still asks between two routed jobs', () => {
+    const list = candidateWorkOrders([wo('tv-mount', 'Weinberger 284'), wo('paint', 'Weinberger 284'), wo('gate', 'Weinberger 284', { assigned_to: null })], 'Alberto', DATE, undefined, new Set(['paint']));
+    expect(list.find(r => r.candidate.work_order_id === 'paint')?.candidate).toMatchObject({ onRoute: true, today: true, tier: 1 });
+    expect(list.find(r => r.candidate.work_order_id === 'tv-mount')?.candidate).not.toHaveProperty('onRoute');
+    const candidates = list.map(r => r.candidate);
+    expect(suggestCandidate(candidates)?.work_order_id).toBe('paint');
+    expect(rankCandidates(candidates).map(c => c.work_order_id)).toEqual(['paint', 'tv-mount', 'gate']);
+    const both = candidateWorkOrders([wo('tv-mount', 'Weinberger 284'), wo('paint', 'Weinberger 284')], 'Alberto', DATE, undefined, new Set(['paint', 'tv-mount']));
+    expect(suggestCandidate(both.map(r => r.candidate))).toBeNull();
   });
 });
 
@@ -63,6 +74,9 @@ describe('matchStop', () => {
     expect(matchStop(WEINBERGER, { ...ctx({ technician: 'Brody' }), inspectionStops })).toMatchObject({ kind: 'inspection', stop: { id: 'rs-1' } });
     const brodys = ctx({ technician: 'Brody', workOrders: [wo('rekey', 'Weinberger 284', { assigned_to: 'Brody Bramscher' })] });
     expect(matchStop(WEINBERGER, { ...brodys, inspectionStops })).toMatchObject({ kind: 'job', suggested: { work_order_id: 'rekey' } });
+    // An unassigned job the office put on Brody's route for the day wins too.
+    const routed = ctx({ technician: 'Brody', workOrders: [wo('lockout', 'Weinberger 284', { assigned_to: null })], onRoute: ['lockout'] });
+    expect(matchStop(WEINBERGER, { ...routed, inspectionStops })).toMatchObject({ kind: 'job', suggested: { work_order_id: 'lockout', onRoute: true } });
   });
 
   it('records a property visit with no work order, and unknown places', () => {

@@ -18,34 +18,40 @@ export interface RankedWorkOrder { candidate: Candidate; propertyId: string | nu
 /**
  * Work orders that could be the job on `date`: in-house (the caller filters), not canceled, created by
  * that day, and either still open or completed shortly before or after it. Tier 1 is assigned to this
- * tech, 2 unassigned, 3 the other tech; work scheduled, created or completed that day is marked `today`.
+ * tech, 2 unassigned, 3 the other tech; work scheduled, created or completed that day is marked `today`,
+ * and work on the tech's published route for the day (`onRoute` ids) is marked `onRoute`.
  */
-export function candidateWorkOrders(workOrders: CandidateWorkOrder[], technician: string, date: string, cfg: FieldConfig = FIELD_CONFIG): RankedWorkOrder[] {
+export function candidateWorkOrders(workOrders: CandidateWorkOrder[], technician: string, date: string, cfg: FieldConfig = FIELD_CONFIG, onRoute: ReadonlySet<string> = new Set()): RankedWorkOrder[] {
   const lo = shiftDay(date, -cfg.candidateDaysBefore), hi = shiftDay(date, cfg.candidateDaysAfter);
   return workOrders
     .filter(w => !canceled(w) && (!w.created_at || pacific(w.created_at)! <= date))
     .filter(w => (w.completed_date ? w.completed_date.slice(0, 10) >= lo && w.completed_date.slice(0, 10) <= hi : !workOrderDone(w)))
     .map(w => {
       const who = assigneeOf(w);
-      const today = w.completed_date?.slice(0, 10) === date || pacific(w.scheduled_start) === date || pacific(w.created_at) === date;
+      const routed = onRoute.has(w.id);
+      const today = routed || w.completed_date?.slice(0, 10) === date || pacific(w.scheduled_start) === date || pacific(w.created_at) === date;
       return {
-        candidate: { work_order_id: w.id, wo_number: w.wo_number, property_name: w.property_name, tier: who === technician ? 1 : who ? 3 : 2, today },
+        candidate: { work_order_id: w.id, wo_number: w.wo_number, property_name: w.property_name, tier: who === technician ? 1 : who ? 3 : 2, today, ...(routed ? { onRoute: true } : {}) },
         propertyId: w.property_id,
         open: !workOrderDone(w),
       };
     });
 }
 
+/** The day's route first, then by tier, then work dated that day. */
 export const rankCandidates = (list: Candidate[]) =>
-  [...list].sort((a, b) => a.tier - b.tier || Number(b.today) - Number(a.today) || (a.wo_number || '').localeCompare(b.wo_number || ''));
+  [...list].sort((a, b) => Number(!!b.onRoute) - Number(!!a.onRoute) || a.tier - b.tier || Number(b.today) - Number(a.today) || (a.wo_number || '').localeCompare(b.wo_number || ''));
 
 /**
  * The one candidate clearly ahead of the rest, or null when the tech has to pick. Two of the tech's own
  * jobs at one property is common (two invoices the same day), so `today` only orders the list: guessing
- * between them would bill the wrong owner without anyone noticing.
+ * between them would bill the wrong owner without anyone noticing. The published route is the schedule:
+ * the one routed job at a property is the answer; two routed jobs there still need the tech.
  */
 export function suggestCandidate(list: Candidate[]): Candidate | null {
   if (!list.length) return null;
+  const routed = list.filter(c => c.onRoute);
+  if (routed.length) return routed.length === 1 ? routed[0] : null;
   const best = Math.min(...list.map(c => c.tier));
   const top = list.filter(c => c.tier === best);
   return top.length === 1 ? top[0] : null;
@@ -97,8 +103,8 @@ export function matchStop(stop: { lat: number; lng: number }, ctx: MatchContext)
     const propertyIds = [...new Set(work.filter(x => x.d <= nearest.d + cfg.ambiguityM).map(x => x.u.propertyId!))];
     const candidates = rankCandidates(propertyIds.flatMap(id => ctx.candidates.get(id) || []));
     const suggested = suggestCandidate(candidates);
-    // On an inspection route, a work order wins only when it's this tech's own.
-    if (inspection && suggested?.tier !== 1) return { kind: 'inspection', stop: inspection.s, propertyId: inspection.s.propertyId, unitId: inspection.s.unitId, label: inspection.s.label, candidates };
+    // On an inspection route, a work order wins only when it's this tech's own or on their route for the day.
+    if (inspection && suggested?.tier !== 1 && !suggested?.onRoute) return { kind: 'inspection', stop: inspection.s, propertyId: inspection.s.propertyId, unitId: inspection.s.unitId, label: inspection.s.label, candidates };
     return { kind: 'job', propertyId: nearest.u.propertyId!, unitId: nearest.u.unitId, label: unitLabel(nearest.u), candidates, suggested };
   }
   if (inspection) return { kind: 'inspection', stop: inspection.s, propertyId: inspection.s.propertyId, unitId: inspection.s.unitId, label: inspection.s.label, candidates: [] };

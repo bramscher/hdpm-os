@@ -3,8 +3,8 @@ ontology: true
 type: plan
 domain: maintenance
 status: active
-summary: Phase 2 of field time and recovery — a company-iPhone location app that records where techs spend paid time, matches stops to work orders and Lowe's/Home Depot runs, and lists unbilled time in Daily Billing Review. Step 1 (server, review screens, sample days) built October 2026
-tags: [field-location-app, gps-timekeeping, iphone-app, company-phones, unbilled-time, parts-runs, dump-runs, stop-locations, daily-billing-review, billing-recovery]
+summary: Phase 2 of field time and recovery — a company-iPhone location app that records where techs spend paid time, matches stops to work orders and Lowe's/Home Depot runs, and lists unbilled time in Daily Billing Review. Step 1 (server, review screens, sample days) built October 2026; Brody now schedules Alberto's day, and field time uses that published route
+tags: [field-location-app, gps-timekeeping, iphone-app, company-phones, unbilled-time, parts-runs, dump-runs, stop-locations, daily-billing-review, billing-recovery, maintenance-scheduling, day-routes, field-reviewer]
 related: [field-time-recovery-plan, gps-timekeeping-plan, daily-billing-review]
 relatedTo: [field-time-recovery-plan, gps-timekeeping-plan]
 discovered: 2026-10-15
@@ -73,7 +73,7 @@ All 1,871 properties already have coordinates (`inspection_properties`), and eve
 | Rule | Detail |
 | --- | --- |
 | Property stop | Within ~120 m of the property, for at least 5 minutes. Tune on real phones during the pilot |
-| Which job | The open work orders at that property assigned to the tech that day. If more than one, the tech picks; GPS can't tell units apart |
+| Which job | The open work orders at that property assigned to the tech that day. The one on the tech's published route for the day wins (see *Scheduling*). If more than one, or two on the route, the tech picks; GPS can't tell units apart |
 | Supplier stop | **Lowe's and Home Depot in Redmond**, sometimes **Bend**: four stores entered once in a `work_location` list with radius. More can be added in a settings screen |
 | Parts run | Drive to the store + time in the store + drive back to the next job. The tech ticks which jobs the parts were for |
 | Inspection stop | A property on Brody's inspection route for that day (the inspection scheduler already knows the route) |
@@ -151,6 +151,9 @@ Answered by Craig, October 15:
 | 9 | Dump runs | **Flat fee per the runbook**, not measured hours. The dump trip is noted on the day and linked to the job(s) it served; one dump run may be charged to several jobs. Billing checks for a dump-run charge on each linked job |
 | 10 | Other parts stores | **Ferguson, Parr Lumber and paint stores** count as parts runs, alongside Lowe's and Home Depot |
 | 11 | Shop | **The shop is the office**, 1515 SW Reindeer Ave, Redmond |
+| 12 | Who schedules | **Brody schedules Alberto's day** in the route builder, and helps with estimates and invoicing. The Maintenance Coordinator Assistant takes it over once hired |
+| 13 | How Alberto gets the day | **Outlook invite, email, My Day and a printed day sheet**; a text too once his cell is saved in User settings (texts come from the office Zoom line) |
+| 14 | What Brody sees of field time | **Job time and the "Field time vs billing" items**, not the full timeline |
 
 ## Step 1: what was built
 
@@ -173,7 +176,7 @@ Server side and review screens, testable with hand-entered sample days. Migratio
   - Sample days only show with **Show sample days** on.
 - **Who sees what.**
   - The whole day: an admin, or the tech for their own day.
-  - The review: anyone else sees only their own job and parts minutes. Both techs count as "office" elsewhere, so this checks admin or self, never office.
+  - The review: an admin sees every category. A field reviewer (Brody, see *Scheduling*) sees every tech's job and parts minutes and the billing items. Anyone else sees only their own job and parts minutes. Both techs count as "office" elsewhere, so this checks admin, reviewer or self, never office.
   - Segments never store coordinates.
 
 Changes from the plan above, made while building:
@@ -185,3 +188,18 @@ Step 2 requirements this sets for the iPhone app:
 - A location fix at least every 5 minutes while clocked in, with automatic pausing off, so "standing still" and "phone off" can be told apart.
 - Upload the raw points.
 - Use the same confirm API for arrival prompts and the end-of-day review.
+
+## Scheduling: Brody plans Alberto's day
+
+Added October 15. Before this, Alberto planned his own days from a pile of printed work orders. Nothing in HDPM-OS knew which job was planned for which day, so field time had to guess.
+
+- **Brody schedules Alberto's work orders** in the Open Board route builder (`/maintenance/board?view=open&tab=route`). He picks the day and the tech, ticks the stops, plans the order, sets the start time and the time on site at each stop, and publishes.
+- **Alberto gets the day four ways:** an Outlook invite, an email (and a text once his mobile is saved in User settings), My Day in the Field app, and a printed day sheet. Built in PR #192.
+- **Field time uses the published route:**
+  - Work orders on the tech's route for the day are marked "on the route" and listed first.
+  - At a property with more than one of the tech's jobs, the one on the route is suggested. Two jobs there that are both on the route still need the tech to pick or split.
+  - A job on the route wins over the inspection label at that property.
+  - Parts and dump runs list the route's jobs first, in stop order. A run is still pre-filled only for job A → store → job A.
+- **Brody reviews field time against billing** (`lib/field-time/access.ts`; add the assistant's email there once hired):
+  - Daily Billing Review shows him every tech's job and parts minutes, and the "Field time vs billing" items.
+  - He doesn't get drive, inspection or unlabeled time, or another tech's full field day. An item for Alberto's work opens the invoice instead of the field day.

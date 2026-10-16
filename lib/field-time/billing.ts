@@ -83,7 +83,7 @@ export interface FieldBillingInput {
   workOrders: BillingWorkOrder[];
   decisions: Decision[];
   sample: boolean;
-  hrefFor: (technician: string, date: string) => string;
+  hrefFor: (technician: string, date: string, invoiceId: string) => string;
   cfg?: FieldConfig;
 }
 
@@ -137,7 +137,7 @@ export function fieldBillingIssues(input: FieldBillingInput): { issues: Issue[];
       woId,
       invoiceId: invoices[0].id,
       property: wo.property_name || wo.wo_number || 'Work order',
-      href: input.hrefFor(t.technicians[t.technicians.length - 1], lastDay),
+      href: input.hrefFor(t.technicians[t.technicians.length - 1], lastDay, invoices[0].id),
       decision,
       // A saved decision comes back when newer confirmed field time arrives.
       overdue: !!decision && (decision.review_on <= input.today || (!!t.lastConfirmedAt && t.lastConfirmedAt > decision.updated_at)),

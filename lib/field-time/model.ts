@@ -27,8 +27,11 @@ export type SegmentLabel = 'general' | 'personal' | 'estimate' | 'other_work' | 
 export const SEGMENT_KINDS: SegmentKind[] = ['on_site', 'inspection', 'parts_run', 'dump_run', 'shop', 'drive', 'stop', 'no_data', 'break'];
 export const SEGMENT_LABELS: SegmentLabel[] = ['general', 'personal', 'estimate', 'other_work', 'phone_off'];
 export interface Allocation { work_order_id: string; percent: number }
-/** A work order offered for a segment. tier 1 = assigned to this tech, 2 = unassigned, 3 = other tech. */
-export interface Candidate { work_order_id: string; wo_number: string | null; property_name: string | null; tier: number; today: boolean }
+/**
+ * A work order offered for a segment. tier 1 = assigned to this tech, 2 = unassigned, 3 = other tech.
+ * `onRoute`: on the tech's published route for the day (the office's schedule), present only when true.
+ */
+export interface Candidate { work_order_id: string; wo_number: string | null; property_name: string | null; tier: number; today: boolean; onRoute?: boolean }
 
 /** A timeline segment as the builder produces it (always a suggestion). Never carries coordinates. */
 export interface Segment {

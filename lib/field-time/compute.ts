@@ -14,6 +14,8 @@ export interface DayInput {
   units: Unit[];
   /** In-house work orders around the date; candidateWorkOrders narrows them. */
   workOrders: CandidateWorkOrder[];
+  /** Work orders on the tech's published route for the date, in stop order. */
+  routeWorkOrderIds?: string[];
   inspectionStops: InspectionStop[];
   breaks?: Interval[];
   /** Time already confirmed; suggestions are trimmed around it. */
@@ -26,12 +28,15 @@ export interface DayResult { segments: Segment[]; stops: { stop: Stop; match: St
 export function computeDay(input: DayInput): DayResult {
   const cfg = input.cfg ?? FIELD_CONFIG;
   const places = input.places.filter(p => p.active);
-  const ranked = candidateWorkOrders(input.workOrders, input.technician, input.date, cfg);
+  const routeIds = input.routeWorkOrderIds ?? [];
+  const ranked = candidateWorkOrders(input.workOrders, input.technician, input.date, cfg, new Set(routeIds));
   const byProperty = new Map<string, Candidate[]>();
   for (const r of ranked) if (r.propertyId) byProperty.set(r.propertyId, [...(byProperty.get(r.propertyId) || []), r.candidate]);
   const ctx = { places, units: input.units, candidates: byProperty, inspectionStops: input.inspectionStops, cfg };
-  // Runs can be for any of the tech's open jobs: an end-of-day run is usually for tomorrow.
+  // Runs can be for any of the tech's open jobs: an end-of-day run is usually for tomorrow. The day's
+  // route comes first, in stop order.
   const openMine = ranked.filter(r => r.open && r.candidate.tier === 1).map(r => r.candidate);
+  const routeJobs = routeIds.flatMap(id => ranked.filter(r => r.candidate.work_order_id === id).map(r => r.candidate));
   const stops: DayResult['stops'] = [];
   const segments: Segment[] = [];
   for (const window of [...input.windows].sort((a, b) => a.start - b.start)) {
@@ -43,7 +48,7 @@ export function computeDay(input: DayInput): DayResult {
     });
     const dayJobs = pieces.flatMap(p => (p.type === 'stop' && p.match?.kind === 'job' ? p.match.candidates.map(c => ({ ...c, today: true })) : []));
     const seen = new Set<string>();
-    const tripCandidates = [...dayJobs, ...openMine].filter(c => !seen.has(c.work_order_id) && !!seen.add(c.work_order_id)).slice(0, 25);
+    const tripCandidates = [...routeJobs, ...dayJobs, ...openMine].filter(c => !seen.has(c.work_order_id) && !!seen.add(c.work_order_id)).slice(0, 25);
     segments.push(...buildTimeline(pieces, { window, breaks: input.breaks, confirmed: input.confirmed, tripCandidates, cfg }));
   }
   return { segments, stops };

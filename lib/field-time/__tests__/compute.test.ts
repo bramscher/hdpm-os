@@ -3,7 +3,7 @@ import { computeDay, type DayInput } from '../compute';
 import { detectStops } from '../detect';
 import { needsInput, type Segment } from '../model';
 import { sampleBreaks, samplePoints, sampleWindow, validateSampleSpec, type SamplePlace, type SampleStop } from '../sample';
-import { DATE, PLACES, UNITS, WORK_ORDERS, min } from './fixtures';
+import { DATE, PLACES, UNITS, WORK_ORDERS, min, wo } from './fixtures';
 
 const locate = (p: SamplePlace) => (p.type === 'place' ? PLACES.find(x => x.id === p.id) ?? null : p.type === 'unit' ? UNITS.find(u => u.id === p.id) ?? null : p);
 const shop: SamplePlace = { type: 'place', id: 'shop' }, lowes: SamplePlace = { type: 'place', id: 'lowes' }, hd: SamplePlace = { type: 'place', id: 'hd' };
@@ -37,6 +37,15 @@ describe('computeDay', () => {
     expect(run.allocations).toEqual([]);
     expect(needsInput(run)).toBe(true);
     expect(run.candidates.map(c => c.work_order_id)).toEqual(expect.arrayContaining(['wo-wein', 'wo-cedar']));
+  });
+
+  it('the day’s route decides between two of the tech’s jobs at one property, and leads the run’s choices', () => {
+    const two = [...WORK_ORDERS, wo('wo-wein-2', 'Weinberger 284')];
+    const stops = [S('08:35', '11:10', wein), S('11:25', '11:45', lowes), S('12:05', '14:00', cedar)];
+    expect(shape(day(stops, {}, { workOrders: two }).segments)).toContain('on_site');
+    const routed = day(stops, {}, { workOrders: two, routeWorkOrderIds: ['wo-cedar', 'wo-wein-2'] }).segments;
+    expect(shape(routed).filter(k => k.startsWith('on_site'))).toEqual(['on_site[wo-wein-2:100]', 'on_site[wo-cedar:100]']);
+    expect(routed.find(s => s.kind === 'parts_run')!.candidates.slice(0, 2).map(c => c.work_order_id)).toEqual(['wo-cedar', 'wo-wein-2']);
   });
 
   it("chains Lowe's then Home Depot into one run", () => {
