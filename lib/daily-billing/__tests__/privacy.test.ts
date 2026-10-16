@@ -14,6 +14,10 @@ describe('daily review payroll privacy',()=>{
  it('forces technicians to their own activity even when another name is requested',async()=>{
  const data=await loadDailyBilling(actor('field',false),'2026-09-14','2026-09-20','Brody');expect(data.records.map(r=>r.technician)).toEqual(['Alberto']);expect(data.technician).toBe('Alberto');expect(mock.tables).not.toContain('timekeeping_sheet');expect(mock.tables).not.toContain('hdms_invoices');expect(data.days[0]).not.toHaveProperty('issuedLabor');expect(data.invoiceOptions).toEqual([]);
  });
+ it('sums both field techs\' timecards for the admin when no technician is selected',async()=>{
+ mock.data.timekeeping_employee.push({id:'brody',staff_person:'Brody'});mock.data.timekeeping_sheet.push({id:'s2',employee_id:'brody',days:[{date:'2026-09-14',shifts:[{start:'2026-09-14T16:00:00Z',end:'2026-09-14T20:00:00Z',source:'manual',breaks:[]}],leave:[],miles:0}]});
+ const data=await loadDailyBilling(actor('admin',true,'Craig'),'2026-09-14','2026-09-20','');expect(data.days[0]).toMatchObject({workedHours:12,unexplainedHours:9});
+ });
  it('returns only an admin summary, with no raw shifts or leave details',async()=>{
  const data=await loadDailyBilling(actor('admin',true,'Craig'),'2026-09-14','2026-09-20','Alberto');expect(mock.tables).toContain('timekeeping_sheet');expect(data.days[0]).toMatchObject({workedHours:8,scheduledHours:0,unexplainedHours:7});expect(JSON.stringify(data)).not.toContain('2026-09-14T15:00:00Z');expect(JSON.stringify(data)).not.toContain('payroll_id');
  });

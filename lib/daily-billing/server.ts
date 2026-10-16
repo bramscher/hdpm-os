@@ -34,7 +34,8 @@ export async function loadDailyBilling(actor:Awaited<ReturnType<typeof dailyBill
  const today=pacificDay();
  const data=buildDailyBilling({from,to,today,technician,workOrders:actor.office?workOrders:[],invoices,records,jobs,tasks,allocations,bills,decisions,billsFresh});
  // Payroll comparison is read and serialized only for the admin, never merely hidden in the UI.
- if(actor.admin && technician){
+ // With no technician selected, timecards for both field techs are summed per day.
+ if(actor.admin){
   try{
    const employees=await all('timekeeping_employee','id,staff_person',q=>technician?q.eq('staff_person',technician):q.in('staff_person',['Alberto','Brody']));
    const sheets=employees.length?await all('timekeeping_sheet','id,employee_id,days',q=>q.in('employee_id',employees.map(e=>e.id)).lte('period_start',to).gte('period_end',from)):[];
