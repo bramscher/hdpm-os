@@ -70,6 +70,9 @@ describe('fieldBillingIssues', () => {
     const missing = run({ rows, invoices: [invoice([labor(2)])] }).issues;
     expect(missing[0]).toMatchObject({ title: 'Dump run not on the invoice' });
     expect(missing[0].detail).toContain('Dump run on Oct 7 has no dump-run charge');
+    // A disposal fee is the dump charge too (HDMS-INV-000482); "disposed" in a labor description is not.
+    expect(run({ rows, invoices: [invoice([labor(2), { type: 'materials', description: 'Disposal fee', qty: 1, amount: 25 }])] }).issues).toEqual([]);
+    expect(run({ rows, invoices: [invoice([labor(2, { description: 'Removed tenant items and disposed of them' })])] }).issues[0].title).toBe('Dump run not on the invoice');
     const masked = run({ rows: [row('2026-10-07', 'on_site', '15:00', '18:00')], invoices: [invoice([labor(1), labor(1, { description: 'Dump run' })])] }).issues;
     expect(masked[0].detail).toContain('bills 1 h hourly');
   });
