@@ -18,3 +18,4 @@
 .mw-no-visits{display:block;padding:8px;color:#748177;font-size:11px}
 .mw .mw-actions button[aria-pressed=true]{background:#183e38;color:white;border-color:#183e38}
 .mw-scheduling-queue{scroll-margin-top:24px;border-top:1px solid #d9dfd7;margin-top:24px}
+.mw .mw-route-today{border-color:#b5cdbb;border-left:5px solid #2f7d32}.mw-route-today h2{margin:4px 0}.mw .mw-route-today .mw-route-stops{gap:4px;margin-top:10px}.mw .mw-route-today .mw-route-stops li{padding:12px 0}.mw .mw-route-today .mw-route-stops h3{font-size:17px;margin:8px 0 0}.mw .mw-route-address{display:inline-flex;align-items:center;min-height:44px;color:#166534;font-size:15px}.mw .mw-route-note{margin:2px 0;font-size:13px;color:#4c6259}.mw .mw-route-today .mw-warning{display:inline-block;padding:2px 8px;border-radius:6px;font-weight:650}

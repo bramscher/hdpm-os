@@ -11,6 +11,20 @@ beforeEach(()=>{state.startTime=null;state.eventId=null;state.writes=[];vi.stubG
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
 describe('route publishing destinations',()=>{
  it('only lists Brody and Operations',()=>{expect(routeCalendarAttendees().map(a=>a.emailAddress.address)).toEqual(['brody@highdesertpm.com','operations@highdesertpm.com']);});
+ it('adds a maintenance route\'s tech, company addresses only, once',()=>{
+  expect(routeCalendarAttendees([{address:'Alberto@highdesertpm.com',name:'Alberto'}]).map(a=>a.emailAddress.address)).toEqual(['brody@highdesertpm.com','operations@highdesertpm.com','alberto@highdesertpm.com']);
+  expect(routeCalendarAttendees([{address:'someone@gmail.com',name:'X'},{address:'brody@highdesertpm.com',name:'Brody'}])).toHaveLength(2);
+ });
+ it('invites the tech and uses the route start time and finish',async()=>{
+  const result=await createRouteCalendarEvent({...input,startTime:'07:30',finish:'2026-09-22T17:15:00.000Z',techEmail:'alberto@highdesertpm.com'},'token');expect(result).toMatchObject({created:true});
+  const body=JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+  expect(body.attendees.map((a:any)=>a.emailAddress.address)).toContain('alberto@highdesertpm.com');
+  expect(body.start.dateTime).toBe('2026-09-22T07:30:00');expect(body.end.dateTime).toBe('2026-09-22T10:15:00');
+ });
+ it('updates the existing event on re-publish instead of adding another',async()=>{
+  await createRouteCalendarEvent(input,'token','operations:event/1');
+  const [url,request]=vi.mocked(fetch).mock.calls[0];expect(url).toBe('https://graph.microsoft.com/v1.0/users/operations@highdesertpm.com/events/event%2F1');expect(request!.method).toBe('PATCH');expect(fetch).toHaveBeenCalledTimes(1);
+ });
  it.each(['craig@highdesertpm.com','matt@highdesertpm.com'])('publishes inspection routes to Operations when %s is signed in',async email=>{
   state.email=email;state.assignee=email;
   const response=await POST(new NextRequest('http://localhost/calendar',{method:'POST'}),{params:Promise.resolve({id:'route'})});

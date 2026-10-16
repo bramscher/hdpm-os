@@ -3,11 +3,15 @@ export const ROUTE_CALENDAR_MAILBOX = 'operations@highdesertpm.com';
 export const ROUTE_CALENDAR_EVENTS_URL = `https://graph.microsoft.com/v1.0/users/${ROUTE_CALENDAR_MAILBOX}/calendar/events`;
 const STORED_EVENT_PREFIX = 'operations:';
 
-export function routeCalendarAttendees() {
-  return [
+/** Brody and Operations on every route. A maintenance route also invites its tech (Craig, Oct 15: Alberto gets his day). */
+export function routeCalendarAttendees(extra: {address: string; name: string}[] = []) {
+  const base = [
     {emailAddress: {address: 'brody@highdesertpm.com', name: 'Brody'}, type: 'required'},
     {emailAddress: {address: ROUTE_CALENDAR_MAILBOX, name: 'Operations'}, type: 'optional'},
   ];
+  const known = new Set(base.map(a => a.emailAddress.address.toLowerCase()));
+  return [...base, ...extra.filter(e => /^[a-z0-9._+-]+@highdesertpm\.com$/i.test(e.address) && !known.has(e.address.toLowerCase()))
+    .map(e => ({emailAddress: {address: e.address.toLowerCase(), name: e.name}, type: 'required'}))];
 }
 
 // Preserve the destination with the event ID without changing existing DB columns.

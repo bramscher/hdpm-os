@@ -23,15 +23,23 @@ const COLUMNS: { stage: MaintWorkOrder['stage']; title: string }[] = [
 /** Sentinel select value for "assigned to no one". */
 const UNASSIGNED = '__unassigned__';
 
+const MODES = ['grouped', 'vendor', 'kanban', 'route'] as const;
+type Mode = (typeof MODES)[number];
+
 export default function OpenBoard({
   board,
   exceptions,
+  initialTab,
 }: {
   board: BoardData;
   exceptions: ExceptionsData | null;
+  /** Deep link to a layout, e.g. ?view=open&tab=route opens the Route Builder. */
+  initialTab?: string | null;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<'grouped' | 'vendor' | 'kanban' | 'route'>('grouped');
+  const [mode, setMode] = useState<Mode>(
+    MODES.includes(initialTab as Mode) ? (initialTab as Mode) : 'grouped',
+  );
   const [internalOnly, setInternalOnly] = useState(false);
   const [assignee, setAssignee] = useState('');
   const goTo = (params: string) => router.replace(`/maintenance/board?${params}`, { scroll: false });

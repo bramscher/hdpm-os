@@ -3,9 +3,11 @@
  *
  * Mirrors the inspection-route calendar publish
  * (app/api/inspections/routes/[id]/calendar/route.ts): one event on the
- * operations calendar via Microsoft Graph, 8 AM start, per-stop arrival /
- * departure estimates, Apple + Google full-route links. Attendees: Brody and operations@ only. Set MAINT_ROUTE_CALENDAR_DRYRUN=1 to get the event JSON back
- * instead of POSTing to Graph.
+ * operations calendar via Microsoft Graph, starting at the route's start time
+ * (8 AM by default), per-stop arrival / departure estimates, Apple + Google
+ * full-route links. Attendees: Brody, operations@ and the route's tech when
+ * their email is given. Re-publishing updates the same event in place. Set
+ * MAINT_ROUTE_CALENDAR_DRYRUN=1 to get the event JSON back instead of POSTing.
  */
 
 import { ROUTE_CALENDAR_EVENTS_URL, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError, routeCalendarEventUrl } from '@/lib/route-builder/calendar-destination';
@@ -37,6 +39,14 @@ export interface RouteCalendarInput {
   totalDriveMinutes: number;
   totalServiceMinutes: number;
   stops: RouteCalendarStop[];
+  /** HH:MM Pacific; 8:00 when absent. */
+  startTime?: string;
+  /** End of the last stop (ISO); start + totals when absent. */
+  finish?: string;
+  /** The tech's company email: they get the invite too. */
+  techEmail?: string | null;
+  /** Prebuilt event body (the same day the tech is emailed); the default table when absent. */
+  html?: string;
 }
 
 export type RouteCalendarResult =
@@ -59,27 +69,31 @@ function formatDuration(mins: number): string {
 
 export async function createRouteCalendarEvent(
   input: RouteCalendarInput,
-  accessToken: string
+  accessToken: string,
+  existingEventId?: string | null
 ): Promise<RouteCalendarResult> {
   const { routeDate, assignedTech, stops } = input;
+  const [startHour, startMinute] = /^([01]\d|2[0-3]):[0-5]\d$/.test(input.startTime || '') ? input.startTime!.split(':').map(Number) : [START_HOUR, 0];
   const totalMinutes = input.totalDriveMinutes + input.totalServiceMinutes;
-  const endHour = START_HOUR + Math.floor(totalMinutes / 60);
-  const endMinute = totalMinutes % 60;
+  const endTotal = startHour * 60 + startMinute + totalMinutes;
+  const pacific = (iso: string) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso)).replace(' ', 'T') + ':00';
+  const endDateTime = input.finish ? pacific(input.finish) : `${routeDate}T${String(Math.min(23, Math.floor(endTotal / 60))).padStart(2, '0')}:${String(endTotal >= 24 * 60 ? 59 : endTotal % 60).padStart(2, '0')}:00`;
 
   // ── Per-stop ETAs ──
   let runningMinutes = 0;
   const stopDetails = stops.map((s) => {
     runningMinutes += Math.round(s.drive_minutes_from_prev);
-    const arrival = formatTime12(START_HOUR + Math.floor(runningMinutes / 60), runningMinutes % 60);
+    const at = (m: number) => formatTime12(startHour + Math.floor((startMinute + m) / 60), (startMinute + m) % 60);
+    const arrival = at(runningMinutes);
     runningMinutes += s.service_minutes;
-    const depart = formatTime12(START_HOUR + Math.floor(runningMinutes / 60), runningMinutes % 60);
+    const depart = at(runningMinutes);
     const mapsLink =
       s.lat != null && s.lng != null
         ? `https://maps.apple.com/?address=${encodeURIComponent(s.address)}&ll=${s.lat},${s.lng}`
         : `https://maps.apple.com/?address=${encodeURIComponent(s.address)}`;
     return { ...s, arrival, depart, mapsLink };
   });
-  const finishTime = formatTime12(START_HOUR + Math.floor(runningMinutes / 60), runningMinutes % 60);
+  const finishTime = formatTime12(startHour + Math.floor((startMinute + runningMinutes) / 60), (startMinute + runningMinutes) % 60);
 
   // ── Full-route links ──
   const coords = stopDetails.filter((s) => s.lat != null && s.lng != null).map((s) => `${s.lat},${s.lng}`);
@@ -117,7 +131,7 @@ export async function createRouteCalendarEvent(
       <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:14px;">
         <tr>
           <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Date</strong><br/>${new Date(routeDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</td>
-          <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Start</strong><br/>8:00 AM</td>
+          <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Start</strong><br/>${formatTime12(startHour, startMinute)}</td>
           <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Est. Finish</strong><br/>${finishTime}</td>
           <td style="padding:8px 12px;background:#f9fafb;border:1px solid #e5e7eb;width:25%;"><strong>Total</strong><br/>${formatDuration(input.totalDriveMinutes)} drive + ${formatDuration(input.totalServiceMinutes)} on-site</td>
         </tr>
@@ -140,17 +154,17 @@ export async function createRouteCalendarEvent(
     </div>
   `;
 
-  const attendees = routeCalendarAttendees();
+  const attendees = routeCalendarAttendees(input.techEmail ? [{ address: input.techEmail, name: assignedTech }] : []);
 
   const event = {
     subject: `Maintenance Route - ${assignedTech} (${stops.length} stops)`,
-    body: { contentType: 'HTML', content: htmlBody },
+    body: { contentType: 'HTML', content: input.html ?? htmlBody },
     start: {
-      dateTime: `${routeDate}T${String(START_HOUR).padStart(2, '0')}:00:00`,
+      dateTime: `${routeDate}T${String(startHour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}:00`,
       timeZone: 'America/Los_Angeles',
     },
     end: {
-      dateTime: `${routeDate}T${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}:00`,
+      dateTime: endDateTime,
       timeZone: 'America/Los_Angeles',
     },
     location: { displayName: stopDetails[0]?.address ?? '' },
@@ -161,6 +175,22 @@ export async function createRouteCalendarEvent(
 
   if (process.env.MAINT_ROUTE_CALENDAR_DRYRUN === '1') {
     return { created: false, dryRun: true, event };
+  }
+
+  // Re-publish: update the same event so the tech's invite changes instead of doubling.
+  if (existingEventId) {
+    const patched = await fetch(routeCalendarEventUrl(existingEventId), {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(event),
+    });
+    if (patched.ok) {
+      const updated = await patched.json();
+      return { created: true, eventId: existingEventId, webLink: updated.webLink ?? null };
+    }
+    if (patched.status !== 404) {
+      return { created: false, error: routeCalendarAccessError(patched.status) ?? `Failed to update calendar event: ${patched.statusText}` };
+    }
   }
 
   const graphRes = await fetch(ROUTE_CALENDAR_EVENTS_URL, {

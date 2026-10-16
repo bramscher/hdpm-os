@@ -45,12 +45,13 @@ export interface StoredSegment extends Segment {
 /**
  * A work order's task in a few words, for answer buttons: the first real line of its AppFolio description.
  * "Owner Expense - " / "Tenant Expense - " prefixes and a bare "Unit Turn Maintenance" line are skipped.
+ * Longer than `max` characters, it is cut at a word and ends with "…".
  */
-export function workOrderTitle(description: string | null | undefined): string {
+export function workOrderTitle(description: string | null | undefined, max = 48): string {
   const lines = (description || '').split(/\r?\n/).map(l => l.replace(/^(owner|tenant)\s+expense\s*[-–:]\s*/i, '').trim()).filter(Boolean);
   const line = lines.find(l => !/^unit turn maintenance$/i.test(l)) || lines[0] || '';
-  if (line.length <= 48) return line;
-  const cut = line.slice(0, 47), space = cut.lastIndexOf(' ');
+  if (line.length <= max) return line;
+  const cut = line.slice(0, max - 1), space = cut.lastIndexOf(' ');
   return `${(space > 20 ? cut.slice(0, space) : cut).replace(/[\s,;:(-]+$/, '')}…`;
 }
 
