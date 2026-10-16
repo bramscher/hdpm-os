@@ -2,9 +2,9 @@
 ontology: true
 type: plan
 domain: maintenance
-status: draft
-summary: Phase 2 of field time and recovery — a company-iPhone location app that records where techs spend paid time, matches stops to work orders and Lowe's/Home Depot runs, and lists unbilled time in Daily Billing Review
-tags: [field-location-app, gps-timekeeping, iphone-app, company-phones, unbilled-time, parts-runs, daily-billing-review, billing-recovery]
+status: active
+summary: Phase 2 of field time and recovery — a company-iPhone location app that records where techs spend paid time, matches stops to work orders and Lowe's/Home Depot runs, and lists unbilled time in Daily Billing Review. Step 1 (server, review screens, sample days) built October 2026
+tags: [field-location-app, gps-timekeeping, iphone-app, company-phones, unbilled-time, parts-runs, dump-runs, stop-locations, daily-billing-review, billing-recovery]
 related: [field-time-recovery-plan, gps-timekeeping-plan, daily-billing-review]
 relatedTo: [field-time-recovery-plan, gps-timekeeping-plan]
 discovered: 2026-10-15
@@ -12,7 +12,7 @@ discovered: 2026-10-15
 
 # Field location app plan
 
-Date: October 15, 2026. Status: decisions answered by Craig on October 15 (see *Decisions*); ready for step 1. No code yet.
+Date: October 15, 2026. Status: decisions answered by Craig on October 15 (see *Decisions*). **Step 1 is built** (see *Step 1: what was built*); step 2 (the iPhone app) is next.
 
 This is the build plan for **phase 2** of [`field-time-recovery-plan.md`](field-time-recovery-plan.md). It keeps the architecture, privacy and test scenarios in [`gps-timekeeping-plan.md`](gps-timekeeping-plan.md) and changes three things:
 
@@ -117,7 +117,7 @@ Unchanged from `gps-timekeeping-plan.md` → *iPhone architecture* and *Data and
 | Step | What | Done when |
 | --- | --- | --- |
 | 0. Prep | Confirm iPhone models / iOS versions in Mosyle. Craig has an Apple Developer account: publish the app in App Store Connect as a **custom app** for the company's Apple Business organization ID, then assign it in Mosyle. Write the notice to Brody and Alberto | Notice sent; app can be pushed from Mosyle |
-| 1. Server + review page | Tables, supplier list, matching rules as one tested function, the Unbilled time list in Daily Billing Review. Test with hand-entered sample days | Sample day shows correct job time, parts runs and unbilled rows |
+| 1. Server + review page **(built)** | Tables, supplier list, matching rules as one tested function, the Unbilled time list in Daily Billing Review. Test with hand-entered sample days | Sample day shows correct job time, parts runs and unbilled rows |
 | 2. iPhone app pilot | Clock-in/out recording, arrival suggestions, store prompt with receipt photo, end-of-day timeline. Alberto and Brody, **suggestion-only, two weeks** | Battery lasts a full day; most arrivals matched correctly; techs spend < 5 min a day confirming |
 | 3. Billing follow-through | Unbilled rows link straight to "prepare invoice" with the confirmed time and receipts pre-filled | Same-day draft invoices for most jobs |
 | 4. Parts-run charges | Pre-fill each job's share of confirmed parts-run time as a labor line (see *Decisions*) | Parts-run time shows up on invoices, split across the jobs |
@@ -148,3 +148,40 @@ Answered by Craig, October 15:
 | 6 | Stores | **Lowe's and Home Depot in Redmond**, sometimes **Bend** |
 | 7 | How a parts run is split | **Evenly across the jobs, adjustable on review** (e.g. 70/30 when most parts were for one job) |
 | 8 | Parts run vs the 1-hour minimum | **On top of the minimum**, in 15-minute increments, as part of the job's labor |
+| 9 | Dump runs | **Flat fee per the runbook**, not measured hours. The dump trip is noted on the day and linked to the job(s) it served; one dump run may be charged to several jobs. Billing checks for a dump-run charge on each linked job |
+| 10 | Other parts stores | **Ferguson, Parr Lumber and paint stores** count as parts runs, alongside Lowe's and Home Depot |
+| 11 | Shop | **The shop is the office**, 1515 SW Reindeer Ave, Redmond |
+
+## Step 1: what was built
+
+Server side and review screens, testable with hand-entered sample days. Migration `supabase/migrations/20261029_field_time.sql`; logic in `lib/field-time/`.
+
+- **Stop locations** (`/maintenance/daily-billing/locations`). Stores, dump sites and the shop, each with a match radius (store 200 m, dump 250 m, shop 150 m). Providers reuse the parts-order `supplier` list, so both Lowe's stores belong to Lowe's.
+  - Seeded with: Lowe's and Home Depot in Redmond and Bend, Ferguson Bend, Parr Lumber Bend, Sherwin-Williams and Miller Paint in Redmond, Negus Transfer Station, Knott Landfill, and the shop.
+  - Addresses are geocoded, or coordinates can be pasted. Admin edits locations; office edits providers. Locations are deactivated, never deleted.
+- **Field day** (`/maintenance/daily-billing/field`). The day as a timeline:
+  - jobs, parts runs (drive there, store, drive back), dump runs, inspections, shop, driving, unknown stops and no-signal gaps;
+  - confirm, pick the job, split across jobs (even by default, adjustable), or say what a stop was.
+  - Admin only: a sample-day editor (type the stops; the server turns them into GPS fixes and runs the same matching) and "Save as location" for an unknown stop.
+- **Daily Billing Review.**
+  - A Field time column and tile.
+  - **"Field time vs billing"** items, per work order, from confirmed time only:
+    - expected = on-site time with the 1-hour minimum, plus parts runs on top, in 15-minute steps;
+    - this is compared with the hourly invoice lines;
+    - flat-priced labor counts as covered, and dump-run lines are kept out of hours;
+    - a dump run with no dump-run charge is flagged.
+  - Sample days only show with **Show sample days** on.
+- **Who sees what.**
+  - The whole day: an admin, or the tech for their own day.
+  - The review: anyone else sees only their own job and parts minutes. Both techs count as "office" elsewhere, so this checks admin or self, never office.
+  - Segments never store coordinates.
+
+Changes from the plan above, made while building:
+- **No raw-points table yet.** Sample days are turned into points in memory. The points table, the phone upload endpoint and the 30-day purge ship together in step 2, so raw location never exists without its purge.
+- **Confirmed time doesn't write `maintenance_work_record` yet.** Doing it now would put samples in the work log and double-count the existing work-record items. Decide in step 2.
+- **Job suggestions are conservative.** A job is suggested only when exactly one candidate is the tech's own. Two of a tech's jobs at one property on the same day is real (Weinberger 284 on Oct 7 had 43280-2 and 43280-3), so the tech picks or splits. A parts run is pre-filled only for job A → store → job A.
+
+Step 2 requirements this sets for the iPhone app:
+- A location fix at least every 5 minutes while clocked in, with automatic pausing off, so "standing still" and "phone off" can be told apart.
+- Upload the raw points.
+- Use the same confirm API for arrival prompts and the end-of-day review.
