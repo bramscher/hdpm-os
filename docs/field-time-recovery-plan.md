@@ -13,6 +13,7 @@ discovered: 2026-10-02
 # Field time and recovery plan
 
 Date: October 2, 2026. Status: draft for Craig's review. Branch: `feature/gps-timekeeping`.
+Phase 2 build plan (October 15): [`field-location-app-plan.md`](field-location-app-plan.md). GPS moved first, since the manual work log was never used.
 Demo (sample data): [Field Day Recovery](https://claude.ai/artifact/1Una2CU1q7S8n8rmn5ktSv), a private claude.ai artifact.
 
 This replaces the framing of `docs/gps-timekeeping-plan.md`. That document stays as the **phase 2 reference** for the iPhone location app (architecture, privacy, retention and test scenarios are still valid). What changed is the goal: GPS is a cheaper way to *capture* work, not the point.
@@ -198,7 +199,7 @@ Decided by Craig, October 2:
 
 Still open:
 
-**1. Parts-run and travel charge.** Craig needs to think about this. Phase 1 can build and run without it: every drive and store stop is recorded and linked to its job, so the pilot will show how much time is at stake before a price is set. Options to weigh:
+**1. Parts-run and travel charge.** *Decided October 15: charged as part of the job, split among the jobs the parts were fetched for; see [`field-location-app-plan.md`](field-location-app-plan.md) → Decisions.* Original notes: Phase 1 can build and run without it: every drive and store stop is recorded and linked to its job, so the pilot will show how much time is at stake before a price is set. Options to weigh:
 
 | Option | How it works | For | Against |
 | --- | --- | --- | --- |
