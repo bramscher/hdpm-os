@@ -1,11 +1,11 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {requireCompanySession} from '@/lib/require-role';
+import {hasSection,requireCompanySession} from '@/lib/require-role';
 import {getSupabaseAdmin} from '@/lib/supabase';
 import {dailyBillingActor,loadDailyBilling} from '@/lib/daily-billing/server';
 import {pacificDay} from '@/lib/maintenance-workspace/model';
 export async function GET(request:NextRequest){
  const guard=await requireCompanySession();if(!guard.ok)return guard.response;
- try{const actor=await dailyBillingActor(guard.email);const query=request.nextUrl.searchParams;return NextResponse.json(await loadDailyBilling(actor,query.get('from')||pacificDay(),query.get('to')||pacificDay(),query.get('technician')||'',{fieldSample:query.get('fieldSource')==='sample'}),{headers:{'Cache-Control':'private, no-store'}});}catch(e){return failure(e);}
+ try{const actor=await dailyBillingActor(guard.email);const query=request.nextUrl.searchParams;const data=await loadDailyBilling(actor,query.get('from')||pacificDay(),query.get('to')||pacificDay(),query.get('technician')||'',{fieldSample:query.get('fieldSource')==='sample'});return NextResponse.json({...data,fieldPage:(await hasSection('field_time')).ok},{headers:{'Cache-Control':'private, no-store'}});}catch(e){return failure(e);}
 }
 export async function POST(request:NextRequest){
  const guard=await requireCompanySession();if(!guard.ok)return guard.response;
