@@ -24,7 +24,7 @@ export async function GET() {
   if (!(await activeAdmin(guard.email))) return NextResponse.json({ error: 'Active administrator required' }, { status: 403 });
   const db = getSupabaseAdmin();
   const [staff, access, audit, roleRows, roleAudit, roleChanges] = await Promise.all([
-    db.from('staff').select('person,email,active,access_role,role').eq('active', true).order('person'),
+    db.from('staff').select('person,email,phone,active,access_role,role').eq('active', true).order('person'),
     db.from('staff_section_access').select('person,overrides,version'),
     db.from('staff_section_access_audit').select('*').order('id', { ascending: false }).limit(100),
     db.from('role_section_defaults').select('role,overrides,version'),
@@ -46,6 +46,7 @@ export async function GET() {
         return {
           person: s.person,
           email: s.email,
+          phone: (s.phone as string | null) ?? null,
           jobTitle: s.role,
           access_role: s.access_role,
           overrides,

@@ -273,7 +273,13 @@ export default function BoardClient({
       {board && activeBoard && (
         <>
           {view === 'dashboard' && <Dashboard dash={dash} scoreboard={scoreboard} onDrill={onDrill} />}
-          {view === 'open' && <OpenBoard board={activeBoard} exceptions={exceptions} />}
+          {view === 'open' && (
+            <OpenBoard
+              board={activeBoard}
+              exceptions={exceptions}
+              initialTab={embedded ? null : searchParams.get('tab')}
+            />
+          )}
           {view === 'triage' && <TriageReview onChanged={load} />}
           {view === 'wait' && <WaitingOn board={activeBoard} />}
           {view === 'vendor' && <VendorScoreboard scoreboard={scoreboard} onRefresh={load} />}

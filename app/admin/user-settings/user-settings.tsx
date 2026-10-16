@@ -19,6 +19,7 @@ import { ACCESS_ROLES } from "@/lib/roles";
 interface StaffRow {
   person: string;
   email: string | null;
+  phone: string | null;
   jobTitle: string | null;
   access_role: string;
   overrides: SectionOverrides;
@@ -80,6 +81,62 @@ function useUserSettings() {
     void load();
   }, [load]);
   return { data, loading, error, setError, load };
+}
+
+const prettyPhone = (p: string | null | undefined) =>
+  p && /^\+1\d{10}$/.test(p) ? `(${p.slice(2, 5)}) ${p.slice(5, 8)}-${p.slice(8)}` : (p ?? "");
+
+/** A person's mobile number: the office texts them their day route from its Zoom line. */
+function MobileField({ person, phone, onSaved }: { person: string; phone: string | null; onSaved: (message: string) => Promise<void> }) {
+  const [value, setValue] = useState(prettyPhone(phone));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setValue(prettyPhone(phone));
+    setError("");
+  }, [person, phone]);
+  const dirty = value.trim() !== prettyPhone(phone);
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await fetch("/api/admin/user-settings/contact", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ person, phone: value }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Save failed");
+      await onSaved(d.phone ? `Saved ${person}'s mobile. Day routes are texted to ${prettyPhone(d.phone)}.` : `Cleared ${person}'s mobile. Day routes go by email only.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px]">
+      <label htmlFor="staff-mobile" className="text-charcoal-500">
+        Mobile (for route texts)
+      </label>
+      <input
+        id="staff-mobile"
+        type="tel"
+        inputMode="tel"
+        autoComplete="off"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="(541) 555-0100"
+        className="w-40 rounded-lg border border-sand-200 bg-white px-2 py-1.5"
+      />
+      {dirty && (
+        <button onClick={save} disabled={busy} className="rounded-lg bg-charcoal-900 px-3 py-1.5 font-medium text-white disabled:opacity-40">
+          {busy ? "Saving…" : value.trim() ? "Save mobile" : "Clear mobile"}
+        </button>
+      )}
+      {error && <span className="text-[11px] text-red-600">{error}</span>}
+    </div>
+  );
 }
 
 const GROUPS = ["main", "Maintenance", "Leasing", "Company", "Admin"] as const;
@@ -263,6 +320,14 @@ function SectionsTab() {
                     )}
                     {isSelf && <span className="text-[11px] text-charcoal-400">You can&apos;t change your own role</span>}
                   </div>
+                  <MobileField
+                    person={person.person}
+                    phone={person.phone}
+                    onSaved={async (message) => {
+                      setNotice(message);
+                      await load();
+                    }}
+                  />
                 </div>
                 <button onClick={() => setDraft({})} className="text-[12px] font-medium text-charcoal-600 hover:text-charcoal-900">
                   Reset all to role defaults

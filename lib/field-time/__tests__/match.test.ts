@@ -84,4 +84,8 @@ describe('workOrderTitle', () => {
     expect(workOrderTitle('Owner Expense - Unit Turn Maintenance\r\nPaint touch up - wear and tear throughout (some small spots, white marks)')).toBe('Paint touch up - wear and tear throughout…');
     expect(workOrderTitle(null)).toBe('');
   });
+  it('can keep more of the line (the route the tech gets)', () => {
+    expect(workOrderTitle('Owner Expense - Unit Turn Maintenance\r\nPaint touch up - wear and tear throughout (some small spots, white marks)', 120)).toBe('Paint touch up - wear and tear throughout (some small spots, white marks)');
+    expect(workOrderTitle(`Fix ${'very '.repeat(40)}long gate`, 60)).toBe(`Fix ${'very '.repeat(10)}very…`);
+  });
 });

@@ -6,6 +6,7 @@ import {dayMetrics,pacificDay,taskReady,type Workspace,type Job,type Task,type V
 import type {PriceBookItem} from '@/lib/turn-estimator/types';
 import SchedulePanel from './schedule-panel';
 import VisitFields from './visit-fields';
+import RouteToday from './route-today';
 import './workspace.css';
 const money=(n:number)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n);
 const time=(n:number)=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
@@ -14,10 +15,13 @@ type Editor={kind:'job'|'task'|'visit'|'record'|'target';job?:Job;task?:Task;vis
 export default function MaintenanceWorkspace({field=false}:{field?:boolean}){
  const [data,setData]=useState<Workspace|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[tab,setTab]=useState('today'),[day,setDay]=useState(pacificDay()),[filter,setFilter]=useState(''),[person,setPerson]=useState(''),[jobId,setJobId]=useState(''),[editor,setEditor]=useState<Editor|null>(null),[items,setItems]=useState<PriceBookItem[]>([]),[drafts,setDrafts]=useState<{id:string;payload:{propertyName:string;unitName:string};updated_at:string}[]>([]),[orders,setOrders]=useState<{id:string;property_name:string;wo_number:string;description:string}[]>([]),[search,setSearch]=useState(''),[note,setNote]=useState<Record<string,string>>({}),[selected,setSelected]=useState<string[]>([]);
  const [notice,setNotice]=useState('');
+ const [routeTech,setRouteTech]=useState(''),[hasRoute,setHasRoute]=useState(false);
  const load=useCallback(async()=>{try{const r=await fetch('/api/maintenance/workspace');const d=await r.json();if(!r.ok)throw new Error(d.error);setData(d);setError('');if(d.office&&!field){const [p,s]=await Promise.all([fetch('/api/turn-estimator/price-book'),fetch('/api/turn-estimator/saved-drafts')]);const prices=await p.json(),saved=await s.json();setItems(prices.items||[]);setDrafts(saved.drafts||[]);}return d as Workspace;}catch(e){setError((e as Error).message);}},[field]);
  useEffect(()=>{
   let cancelled=false;
   const query=new URLSearchParams(window.location.search),view=query.get('view');if(view)setTab(view);
+  // Links in the route email and text open My Day on the route's date; the office can add &tech= to see a tech's day.
+  const date=query.get('date');if(date&&/^\d{4}-\d{2}-\d{2}$/.test(date))setDay(date);setRouteTech(query.get('tech')||'');
   async function openRequestedPlan(){
    let workspace=await load();let selectedJob=query.get('job');
    try {
@@ -39,6 +43,7 @@ export default function MaintenanceWorkspace({field=false}:{field?:boolean}){
  const job=data?.jobs.find(j=>j.id===jobId);
  const tasks=data?.tasks.filter(t=>t.job_id===jobId)||[];
  const people=data?.staff.filter(p=>!person||p.person===person)||[];
+ const routePerson=(routeTech&&data?.office?routeTech:data?.person)||'';
  function openJob(jid:string){setJobId(jid);setSelected([]);setTab('job');}
  async function searchOrders(){setBusy(true);try{const r=await fetch(`/api/work-orders?search=${encodeURIComponent(search)}`);const d=await r.json();if(!r.ok)throw new Error(d.error);setOrders(d.workOrders||[]);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function submitForm(e:React.FormEvent<HTMLFormElement>){e.preventDefault();if(!editor||!data||busy)return;const f=new FormData(e.currentTarget),val=(k:string)=>input(f,k);let b:Record<string,unknown>={};
@@ -59,9 +64,12 @@ export default function MaintenanceWorkspace({field=false}:{field?:boolean}){
  {tab!=='job'&&<div className="mw-filters"><label>Date<input type="date" value={day} onChange={e=>setDay(e.target.value||pacificDay())}/></label>{office&&<label>Technician<select value={person} onChange={e=>setPerson(e.target.value)}><option value="">All staff</option>{data.staff.map(p=><option key={p.person}>{p.person}</option>)}</select></label>}<label>Property / job<input type="search" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Filter jobs"/></label></div>}
  {tab==='today'&&<>
  {office&&<div className="mw-grid">{people.filter(p=>data.records.some(r=>r.technician===p.person&&r.work_date===day)||data.visits.some(v=>v.technicians.includes(p.person)&&v.work_date===day)||['Alberto','Brody'].includes(p.person)).map(p=>{const m=dayMetrics(data,p.person,day);return <article className="mw-card" key={p.person}><h2>{p.person}</h2><div className="mw-number">{m.actual.toFixed(1)} <small>actual hours</small></div><p>{money(m.completed)} completed service · {m.equivalent.toFixed(1)} equivalent hours</p><p>Target {money(Number(m.target.benchmark)*Number(m.target.min_hours))}–{money(Number(m.target.benchmark)*Number(m.target.max_hours))}</p><div className="mw-callout">Draft {money(m.draft)} · Issued {money(m.issued)} · Unbilled {money(m.unbilled)}{m.voided>0&&` · Voided ${money(m.voided)}`}</div></article>;})}</div>}
+ {field&&routePerson&&<RouteToday day={day} tech={routePerson} viewing={routePerson!==data.person} onRoute={setHasRoute}/>}
+ {(!field||!hasRoute||data.visits.some(v=>v.work_date===day&&v.status!=='cancelled'))&&<>
  <div className="mw-between"><h2>{day===pacificDay()?"Today's visits":'Scheduled visits'}</h2>{office&&<button onClick={()=>{setTab('jobs');setNotice('Open a job to schedule its next visit.');}}><Plus size={16}/>Schedule work</button>}</div>
  <div className="mw-grid">{data.visits.filter(v=>v.work_date===day&&v.status!=='cancelled'&&(!person||v.technicians.includes(person))&&jobs.some(j=>j.id===v.job_id)).sort((a,b)=>a.start_minute-b.start_minute).map(v=><button className="mw-card mw-job" key={v.id} onClick={()=>openJob(v.job_id)}><span className="mw-tag">{time(v.start_minute)} · {v.planned_minutes} min planned</span><h2>{data.jobs.find(j=>j.id===v.job_id)?.property_name}</h2><p>{v.technicians.join(', ')} · {v.status}</p><small>Local plan</small></button>)}</div>
  {!data.visits.some(v=>v.work_date===day&&v.status!=='cancelled')&&<p className="mw-empty">No visits planned for this date. Open a job to assign the next visit.</p>}
+ </>}
  <h2>{office?'Needs attention':'Your unfinished updates & office questions'}</h2><div className="mw-stack">{data.records.filter(r=>office?['submitted','held','returned'].includes(r.status):['draft','returned'].includes(r.status)).map(recordCard)}</div>
  {office&&<><h2>Completed service awaiting a draft</h2>{data.tasks.filter(t=>taskReady(t,data.records)&&!data.allocations.some(a=>a.task_id===t.id)).map(t=><button className="mw-card mw-job" key={t.id} onClick={()=>openJob(t.job_id)}>{data.jobs.find(j=>j.id===t.job_id)?.property_name} · {t.description} · {money(Number(t.amount))}</button>)}<h2>Missing work records</h2>{data.visits.filter(v=>v.work_date<day&&v.status!=='cancelled'&&v.technicians.some(technician=>!data.records.some(r=>r.technician===technician&&r.work_date===v.work_date&&(r.visit_id===v.id||data.tasks.some(t=>t.id===r.task_id&&t.job_id===v.job_id))))).map(v=><button key={v.id} className="mw-card mw-job" onClick={()=>openJob(v.job_id)}>{v.work_date} · {data.jobs.find(j=>j.id===v.job_id)?.property_name} · {v.technicians.join(', ')}</button>)}</>}
  <p className="mw-footnote">Actual job time is separate from payroll. Completed service value excludes materials and coordination; draft and issued values are portions of it. Credits and payment reconciliation remain in the invoice tools.</p>

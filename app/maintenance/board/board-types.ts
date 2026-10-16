@@ -77,8 +77,14 @@ export function daysSince(iso: string | null | undefined, now = new Date()): num
   return Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000));
 }
 
+/** Today in Pacific time (the office's day), YYYY-MM-DD. UTC turns over at 5 PM here. */
 export function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 export function fmtDate(d: string | null): string {
