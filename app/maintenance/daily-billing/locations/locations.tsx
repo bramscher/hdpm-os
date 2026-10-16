@@ -1,6 +1,7 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
 import Link from 'next/link';
+import BillingTabs from '../billing-tabs';
 import {useSearchParams} from 'next/navigation';
 import '../review.css';
 import '../field-time.css';
@@ -33,9 +34,9 @@ export default function Locations(){
  }
  async function rematch(){try{const d=await post({op:'rematch'});setNotice(d.rebuilt?`Re-matched ${d.rebuilt} recent day${d.rebuilt===1?'':'s'}. Confirmed time was not changed.`:'No recent days had unconfirmed time to re-match.');}catch(e){setError((e as Error).message);}}
  const supplierName=(id:string|null)=>data?.suppliers.find(s=>s.id===id)?.name||'';
- return <main className="db-review">
-  <header><div><Link href="/maintenance/daily-billing">← Daily Billing Review</Link><h1>Stop locations</h1><p>Stores, dump sites and the shop that field time recognizes. A stop inside a location&apos;s radius is matched to it; stores and dumps become parts and dump runs.</p></div>
-   <div className="db-actions"><Link href="/maintenance/daily-billing/field">Field days</Link>{data?.admin&&<button disabled={busy} onClick={()=>void rematch()}>Re-match recent days</button>}{data?.admin&&<button className="db-primary" onClick={()=>{setError('');setEditor({kind:'place',place:{kind:'store',active:true}});}}>Add location</button>}</div></header>
+ return <><BillingTabs active="locations" admin={!!data?.admin}/><main className="db-review">
+  <header><div><h1>Stop locations</h1><p>Stores, dump sites and the shop that field time recognizes. A stop inside a location&apos;s radius is matched to it; stores and dumps become parts and dump runs.</p></div>
+   <div className="db-actions">{data?.admin&&<button disabled={busy} onClick={()=>void rematch()}>Re-match recent days</button>}{data?.admin&&<button className="db-primary" onClick={()=>{setError('');setEditor({kind:'place',place:{kind:'store',active:true}});}}>Add location</button>}</div></header>
   {error&&<div role="alert" className="db-error">{error}</div>}
   {notice&&<div role="status" className="db-warning">{notice}</div>}
   {data&&<>
@@ -73,5 +74,5 @@ export default function Locations(){
     <label className="db-check"><input type="checkbox" name="active" defaultChecked={editor.supplier.active!==false}/>Active</label>
    </>}<button className="db-primary" disabled={busy}>{busy?'Saving…':'Save'}</button></form>
   </section></div>}
- </main>;
+ </main></>;
 }

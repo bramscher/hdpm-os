@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { candidateWorkOrders, matchStop, suggestCandidate, type MatchContext } from '../match';
-import type { Candidate } from '../model';
+import { workOrderTitle, type Candidate } from '../model';
 import { DATE, LOWES, PLACES, WEINBERGER, offset, place, unit, wo } from './fixtures';
 
 const ctx = (extra: Partial<MatchContext> & { workOrders?: ReturnType<typeof wo>[]; technician?: string } = {}): MatchContext => {
@@ -74,5 +74,14 @@ describe('matchStop', () => {
     const far = offset(LOWES, 180, 0);
     expect(matchStop(far, ctx())).toMatchObject({ kind: 'place', place: { id: 'lowes' } });
     expect(matchStop(far, { ...ctx(), places: [place('lowes', 'store', LOWES, { radiusM: 100 })] })).toEqual({ kind: 'unknown' });
+  });
+});
+
+describe('workOrderTitle', () => {
+  it('uses the first real task line of an AppFolio description', () => {
+    expect(workOrderTitle('Tenant Expense - Unit Turn Maintenance\nRemove TV mount and repair Mounting holes\nRemove foam')).toBe('Remove TV mount and repair Mounting holes');
+    expect(workOrderTitle('Tenant Expense - Remove all tenant items throughout and dispose\r\nshower curtains')).toBe('Remove all tenant items throughout and dispose');
+    expect(workOrderTitle('Owner Expense - Unit Turn Maintenance\r\nPaint touch up - wear and tear throughout (some small spots, white marks)')).toBe('Paint touch up - wear and tear throughout…');
+    expect(workOrderTitle(null)).toBe('');
   });
 });

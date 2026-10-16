@@ -54,6 +54,27 @@ const describe = (t: WorkOrderFieldTime) =>
   [t.onSiteMin ? `on site ${hm(t.onSiteMin)}` : '', t.partsMin ? `parts runs ${hm(t.partsMin)}` : '', t.dumpDays.length ? `${t.dumpDays.length} dump run${t.dumpDays.length > 1 ? 's' : ''}` : '']
     .filter(Boolean).join(', ') + ` (${dayList(t.days)}; ${t.technicians.join(', ')})`;
 
+export interface WorkOrderAssessment {
+  expectedMin: number; billedHours: number; shortHours: number; flat: boolean; hasDumpCharge: boolean; missingDump: boolean;
+  verdict: 'no_invoice' | 'short' | 'dump_missing' | 'flat' | 'billed';
+}
+/**
+ * One work order's confirmed field time against its live invoices: expected hourly labor (1-hour minimum,
+ * parts runs on top), hourly hours billed (dump-run lines excluded), and whether a dump run has its charge.
+ */
+export function assessWorkOrder(t: WorkOrderFieldTime, invoices: HdmsInvoice[], cfg: FieldConfig = FIELD_CONFIG): WorkOrderAssessment {
+  const lines = invoices.flatMap(i => i.line_items || []);
+  const labor = lines.filter(l => (l.type || 'labor') === 'labor' && !isDumpLine(l));
+  const flat = labor.some(l => !!l.workspace_task_id || (!!l.pricing_method && l.pricing_method !== 'hourly'));
+  const billedHours = labor.reduce((n, l) => n + recordedLaborHours(l), 0);
+  const expectedMin = expectedMinutes(t.onSiteMin, t.partsMin);
+  const shortHours = expectedMin / 60 - billedHours;
+  const hasDumpCharge = lines.some(isDumpCharge);
+  const missingDump = t.dumpDays.length > 0 && !hasDumpCharge;
+  const verdict = !invoices.length ? 'no_invoice' : !flat && shortHours >= cfg.shortfallHours ? 'short' : missingDump ? 'dump_missing' : flat ? 'flat' : 'billed';
+  return { expectedMin, billedHours, shortHours, flat, hasDumpCharge, missingDump, verdict };
+}
+
 export interface FieldBillingInput {
   /** Segments from lookbackDays before `from` through today. */
   rows: FieldTimeRow[];
@@ -96,15 +117,9 @@ export function fieldBillingIssues(input: FieldBillingInput): { issues: Issue[];
       if (workOrderDone(wo)) noInvoiceNotes.set(woId, `Location time: ${describe(t)}.`);
       continue;
     }
-    const lines = invoices.flatMap(i => i.line_items || []);
-    const labor = lines.filter(l => (l.type || 'labor') === 'labor' && !isDumpLine(l));
-    const flat = labor.some(l => !!l.workspace_task_id || (!!l.pricing_method && l.pricing_method !== 'hourly'));
-    const billedHours = labor.reduce((n, l) => n + recordedLaborHours(l), 0);
-    const expected = expectedMinutes(t.onSiteMin, t.partsMin);
-    const shortHours = expected / 60 - billedHours;
+    const { flat, billedHours, expectedMin: expected, shortHours, missingDump } = assessWorkOrder(t, invoices);
     const problems: string[] = [];
     if (!flat && shortHours >= cfg.shortfallHours) problems.push(`About ${hm(shortHours * 60)} (~${money(shortHours * STANDARD_LABOR_RATE)}) is not billed.`);
-    const missingDump = t.dumpDays.length > 0 && !lines.some(isDumpCharge);
     if (missingDump) problems.push(`Dump run on ${dayList(t.dumpDays)} has no dump-run charge on the invoice.`);
     if (!problems.length) continue;
     const codes = invoices.map(i => i.invoice_code).join(', ');

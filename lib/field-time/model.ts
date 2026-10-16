@@ -11,6 +11,7 @@ export interface CandidateWorkOrder {
   id: string; wo_number: string | null; property_id: string | null; unit_id: string | null; property_name: string | null;
   assigned_to: string | null; assigned_tech: string | null; status: string | null; stage: string | null; appfolio_status: string | null;
   created_at: string | null; completed_date: string | null; scheduled_start: string | null; canceled_date: string | null;
+  description?: string | null;
 }
 /** A stop on the tech's inspection route for the day (route_stops), resolved to its unit row. */
 export interface InspectionStop { id: string; unitRowId: string; propertyId: string | null; unitId: string | null; label: string; status: string }
@@ -39,6 +40,18 @@ export interface Segment {
 export interface StoredSegment extends Segment {
   id: string; day_id: string; technician: string; work_date: string; state: 'suggested' | 'confirmed';
   note: string; suggestion: unknown; confirmed_by: string | null; confirmed_at: string | null;
+}
+
+/**
+ * A work order's task in a few words, for answer buttons: the first real line of its AppFolio description.
+ * "Owner Expense - " / "Tenant Expense - " prefixes and a bare "Unit Turn Maintenance" line are skipped.
+ */
+export function workOrderTitle(description: string | null | undefined): string {
+  const lines = (description || '').split(/\r?\n/).map(l => l.replace(/^(owner|tenant)\s+expense\s*[-–:]\s*/i, '').trim()).filter(Boolean);
+  const line = lines.find(l => !/^unit turn maintenance$/i.test(l)) || lines[0] || '';
+  if (line.length <= 48) return line;
+  const cut = line.slice(0, 47), space = cut.lastIndexOf(' ');
+  return `${(space > 20 ? cut.slice(0, space) : cut).replace(/[\s,;:(-]+$/, '')}…`;
 }
 
 export const minutesOf = (s: { started_at: string; ended_at: string }) => Math.max(0, Math.round((Date.parse(s.ended_at) - Date.parse(s.started_at)) / 60000));
