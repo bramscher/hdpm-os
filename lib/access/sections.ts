@@ -134,6 +134,17 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/maintenance/invoices', icon: 'file', order: 11 },
   },
   {
+    key: 'field_time',
+    label: 'Field time',
+    description: "Where the techs' paid day went, from location: jobs, parts runs, drive time, and field time vs billing.",
+    group: 'Maintenance',
+    // Admin only until the iPhone app is live; then switch it on for Brody and Alberto in User settings.
+    // The API stays with Work & Billing's; lib/field-time/server.ts limits a day to an admin or that tech.
+    defaultRoles: [],
+    pages: ['/maintenance/daily-billing/field'],
+    nav: { href: '/maintenance/daily-billing/field', icon: 'pin', order: 11.5 },
+  },
+  {
     key: 'field_app',
     label: 'Field workspace',
     description: 'Technician field view of the maintenance workspace.',
