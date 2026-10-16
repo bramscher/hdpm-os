@@ -116,7 +116,7 @@ Unchanged from `gps-timekeeping-plan.md` → *iPhone architecture* and *Data and
 
 | Step | What | Done when |
 | --- | --- | --- |
-| 0. Prep | Confirm iPhone models / iOS versions in Mosyle and the Apple developer account under Apple Business; write the notice to Brody and Alberto | Notice sent; app can be pushed from Mosyle |
+| 0. Prep | Confirm iPhone models / iOS versions in Mosyle. Craig has an Apple Developer account: publish the app in App Store Connect as a **custom app** for the company's Apple Business organization ID, then assign it in Mosyle. Write the notice to Brody and Alberto | Notice sent; app can be pushed from Mosyle |
 | 1. Server + review page | Tables, supplier list, matching rules as one tested function, the Unbilled time list in Daily Billing Review. Test with hand-entered sample days | Sample day shows correct job time, parts runs and unbilled rows |
 | 2. iPhone app pilot | Clock-in/out recording, arrival suggestions, store prompt with receipt photo, end-of-day timeline. Alberto and Brody, **suggestion-only, two weeks** | Battery lasts a full day; most arrivals matched correctly; techs spend < 5 min a day confirming |
 | 3. Billing follow-through | Unbilled rows link straight to "prepare invoice" with the confirmed time and receipts pre-filled | Same-day draft invoices for most jobs |
