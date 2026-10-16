@@ -46,8 +46,9 @@ beforeEach(() => {
       segment('s6', 'd-brody', 'Brody', 'on_site', '15:30', '16:30', { allocations: [{ work_order_id: 'wo-2', percent: 100 }] }),
     ],
     field_place: [], inspection_properties: [], staff: [{ person: 'Brody', email: 'brody@highdesertpm.com' }],
+    hdms_invoices: [{ id: 'i', invoice_code: 'HDMS-INV-000480', status: 'generated', doc_type: 'invoice', work_order_id: 'wo-1', wo_reference: null, line_items: [{ type: 'labor', qty: 3, amount: 285, description: 'Repair' }] }],
     work_orders: [
-      { id: 'wo-1', wo_number: '1-1', property_name: 'Weinberger 284', completed_date: '2026-10-07', status: 'done', appfolio_status: 'Completed', stage: null },
+      { id: 'wo-1', wo_number: '1-1', property_name: 'Weinberger 284', completed_date: '2026-10-07', status: 'done', appfolio_status: 'Completed', stage: null, created_at: '2026-10-01T00:00:00Z' },
       { id: 'wo-2', wo_number: '2-1', property_name: 'Cedar Creek', completed_date: null, status: 'open', appfolio_status: 'Assigned', stage: null },
     ],
   };
@@ -68,6 +69,7 @@ describe('field day access', () => {
     expect(own.sources).toEqual(['device']);
     expect(own.sampleOptions).toBeNull();
     expect(own.segments.map(s => s.kind)).toEqual(['on_site', 'drive', 'stop']);
+    expect(own.billing).toBeNull();
     await expect(loadFieldDay(alberto, 'Alberto', '2026-10-07', 'sample')).rejects.toThrow(/FORBIDDEN/);
   });
 
@@ -77,6 +79,8 @@ describe('field day access', () => {
     expect(day.day?.sample_spec).toMatchObject({ start: '08:00' });
     expect(day.sampleOptions).not.toBeNull();
     expect(JSON.stringify(day.segments)).not.toMatch(/latitude|longitude|"lat"|"lng"/);
+    const device = await loadFieldDay(craig, 'Alberto', '2026-10-07', 'device');
+    expect(device.billing).toEqual([expect.objectContaining({ work_order_id: 'wo-1', onSite: 180, pending: 0, invoices: [{ id: 'i', code: 'HDMS-INV-000480' }] })]);
   });
 });
 

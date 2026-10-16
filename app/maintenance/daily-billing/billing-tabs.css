@@ -1,0 +1,8 @@
+.bt-bar{background:#fff;border-bottom:1px solid #c7cec7;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif}
+.bt-wrap{max-width:1280px;margin:0 auto;padding:0 24px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:4px 28px}
+.bt-crumb{padding:15px 0;font-size:13px;font-weight:600;color:#5b625b;letter-spacing:.02em}
+.bt-tabs{display:flex;flex-wrap:wrap;gap:4px}
+.bt-tab{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;font-size:14px;color:#5b625b;text-decoration:none;border-bottom:3px solid transparent}
+.bt-tab:hover{color:#1a1a1a}
+.bt-active{font-weight:700;color:#1a1a1a;border-bottom-color:#2f7d32}
+@media(max-width:640px){.bt-wrap{padding:0 12px}.bt-crumb{display:none}.bt-tabs{overflow-x:auto;flex-wrap:nowrap}.bt-tab{padding:0 10px;font-size:13px;white-space:nowrap}}

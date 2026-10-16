@@ -1,16 +1,16 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { getDashboardConfig } from '@/lib/dashboard-config';
-import { inHouseVendorFilter } from '@/lib/daily-billing/links';
+import { inHouseVendorFilter, linkInvoices } from '@/lib/daily-billing/links';
 import type { Decision, Issue } from '@/lib/daily-billing/model';
 import type { dailyBillingActor } from '@/lib/daily-billing/server';
 import { pacificDay, shiftDay } from '@/lib/maintenance-workspace/model';
 import { validDate } from '@/lib/timekeeping/model';
 import type { HdmsInvoice } from '@/lib/invoices';
-import { fieldBillingIssues, fieldDayTotals, type BillingWorkOrder, type FieldDayTotals, type FieldTimeRow } from './billing';
+import { assessWorkOrder, fieldBillingIssues, fieldDayTotals, fieldTimeByWorkOrder, type BillingWorkOrder, type FieldDayTotals, type FieldTimeRow } from './billing';
 import { computeDay } from './compute';
 import { FIELD_CONFIG, RADIUS_BY_KIND } from './config';
-import { candidateWorkOrders, rankCandidates } from './match';
-import { minutesOf, needsInput, type Candidate, type CandidateWorkOrder, type InspectionStop, type Place, type PlaceKind, type StoredSegment, type Unit } from './model';
+import { assigneeOf, candidateWorkOrders, rankCandidates, workOrderDone } from './match';
+import { minutesOf, needsInput, workOrderTitle, type Candidate, type CandidateWorkOrder, type InspectionStop, type Place, type PlaceKind, type StoredSegment, type Unit } from './model';
 import { sampleBreaks, samplePoints, sampleWindow, validateSampleSpec, type SamplePlace, type SampleSpec } from './sample';
 
 export type FieldActor = Awaited<ReturnType<typeof dailyBillingActor>>;
@@ -44,7 +44,7 @@ const toUnit = (r: UnitRow): Unit => ({
   id: r.id, propertyId: r.appfolio_property_id, unitId: r.appfolio_unit_id, name: r.name || '', address: [r.address_1, r.address_2, r.city].filter(Boolean).join(', '),
   lat: r.latitude, lng: r.longitude, active: r.active,
 });
-const WO_COLUMNS = 'id,wo_number,property_id,unit_id,property_name,assigned_to,assigned_tech,status,stage,appfolio_status,created_at,completed_date,scheduled_start,canceled_date';
+const WO_COLUMNS = 'id,wo_number,property_id,unit_id,property_name,description,assigned_to,assigned_tech,status,stage,appfolio_status,created_at,completed_date,scheduled_start,canceled_date';
 
 export const loadPlaceRows = () => all<PlaceRow>('field_place', 'id,kind,supplier_id,name,address,latitude,longitude,radius_m,active,version,updated_at', undefined, 'name');
 const loadUnits = async () => (await all<UnitRow>('inspection_properties', 'id,appfolio_property_id,appfolio_unit_id,name,address_1,address_2,city,latitude,longitude,active', q => q.not('latitude', 'is', null).not('longitude', 'is', null))).map(toUnit);
@@ -156,11 +156,19 @@ export async function loadFieldDay(actor: FieldActor, technician: string, date: 
   const placeName = new Map(placeRows.map(p => [p.id, p.name]));
   const workOrders = await loadWorkOrders(date);
   const ranked = candidateWorkOrders(workOrders, technician, date);
-  const woName = new Map(workOrders.map(w => [w.id, label(w)]));
+  const woById = new Map(workOrders.map(w => [w.id, w]));
   const rows = segments.filter(s => s.day_id === day?.id);
-  // Work orders already on the day may be older or outside the candidate window; name them too.
-  const missing = [...new Set(rows.flatMap(s => s.allocations.map(a => a.work_order_id)))].filter(id => !woName.has(id));
-  if (missing.length) for (const w of await all<CandidateWorkOrder>('work_orders', WO_COLUMNS, q => q.in('id', missing))) woName.set(w.id, label(w));
+  // Work orders already on the day may be older or outside the candidate window; describe them too.
+  const missing = [...new Set(rows.flatMap(s => [...s.allocations.map(a => a.work_order_id), ...(s.candidates as Candidate[]).map(c => c.work_order_id)]))].filter(id => !woById.has(id));
+  if (missing.length) for (const w of await all<CandidateWorkOrder>('work_orders', WO_COLUMNS, q => q.in('id', missing))) woById.set(w.id, w);
+  // For answer buttons: "43280-2 · Remove TV mount…" over "Weinberger 284 · open, Alberto’s".
+  const describe = (id: string) => {
+    const w = woById.get(id);
+    if (!w) return { wo_number: null, property_name: null, title: 'Work order', sub: '', name: 'Work order' };
+    const who = assigneeOf(w);
+    const owner = who === technician ? `${technician}’s` : who ? `${who}’s` : 'unassigned';
+    return { wo_number: w.wo_number, property_name: w.property_name, title: workOrderTitle(w.description) || w.wo_number || 'Work order', sub: `${w.property_name || 'Property'} · ${workOrderDone(w) ? 'done' : 'open'}, ${owner}`, name: label(w) };
+  };
   const totals = fieldDayTotals(rows.map(s => ({ ...s, work_date: date })));
   let sampleOptions = null;
   if (actor.admin) {
@@ -189,13 +197,53 @@ export async function loadFieldDay(actor: FieldActor, technician: string, date: 
       id: s.id, kind: s.kind, started_at: s.started_at, ended_at: s.ended_at, minutes: minutesOf(s), place: s.place_id ? placeName.get(s.place_id) ?? '' : '',
       property_label: s.property_label, inspection_stop_id: s.inspection_stop_id, label: s.label, note: s.note, state: s.state,
       confirmed_by: s.confirmed_by, confirmed_at: s.confirmed_at, needs_input: needsInput(s),
-      allocations: s.allocations.map(a => ({ ...a, name: woName.get(a.work_order_id) ?? 'Work order' })),
-      candidates: (s.candidates as Candidate[]).map(c => ({ ...c, name: label(c) })),
+      allocations: s.allocations.map(a => ({ ...a, ...describe(a.work_order_id) })),
+      candidates: (s.candidates as Candidate[]).map(c => ({ ...c, ...describe(c.work_order_id) })),
     })),
     summary: totals.get(date) ?? null,
-    jobs: rankCandidates(ranked.map(r => r.candidate)).slice(0, 150).map(c => ({ id: c.work_order_id, name: label(c), tier: c.tier })),
+    jobs: rankCandidates(ranked.map(r => r.candidate)).slice(0, 150).map(c => ({ id: c.work_order_id, tier: c.tier, ...describe(c.work_order_id) })),
     sampleOptions,
+    // Invoice comparisons are office business: only an admin gets them, never the tech's own view.
+    billing: actor.admin ? await dayBilling(date, source, rows, woById) : null,
   };
+}
+
+/**
+ * "Field time vs billing" for the work orders on one day: each one's confirmed field time (all days, same
+ * source) against its live invoices, plus this day's time still waiting for an answer.
+ */
+async function dayBilling(date: string, source: Source, rows: StoredSegment[], woById: Map<string, CandidateWorkOrder>) {
+  const ids = [...new Set(rows.flatMap(s => s.allocations.map(a => a.work_order_id)))];
+  if (!ids.length) return [];
+  const since = shiftDay(date, -FIELD_CONFIG.lookbackDays);
+  const dayIds = new Set((await all<{ id: string }>('field_day', 'id', q => q.eq('source', source).gte('work_date', since))).map(d => d.id));
+  const confirmed = (await all<StoredSegment>('field_segment', 'day_id,technician,work_date,kind,started_at,ended_at,allocations,label,state,confirmed_at', q => q.gte('work_date', since).eq('state', 'confirmed'), 'started_at'))
+    .filter(r => dayIds.has(r.day_id) && r.allocations.some(a => ids.includes(a.work_order_id)));
+  const byWo = fieldTimeByWorkOrder(confirmed);
+  const wos = ids.map(id => woById.get(id)).filter((w): w is CandidateWorkOrder => !!w);
+  const numbers = wos.map(w => w.wo_number).filter((n): n is string => !!n);
+  const [byId, byRef] = await Promise.all([
+    all<HdmsInvoice>('hdms_invoices', '*', q => q.in('work_order_id', ids)),
+    numbers.length ? all<HdmsInvoice>('hdms_invoices', '*', q => q.in('wo_reference', numbers)) : Promise.resolve([] as HdmsInvoice[]),
+  ]);
+  const { live, invoiceWo } = linkInvoices([...new Map([...byId, ...byRef].map(i => [i.id, i])).values()], wos);
+  const pending = new Map<string, number>();
+  for (const s of rows) if (s.state === 'suggested' && (s.kind === 'on_site' || s.kind === 'parts_run'))
+    for (const a of s.allocations) pending.set(a.work_order_id, (pending.get(a.work_order_id) || 0) + (minutesOf(s) * a.percent) / 100);
+  return ids.map(id => {
+    const w = woById.get(id);
+    const t = byWo.get(id) ?? { onSiteMin: 0, partsMin: 0, dumpDays: [], days: [], technicians: [], lastConfirmedAt: null };
+    const invoices = live.filter(i => invoiceWo.get(i.id) === id);
+    const a = assessWorkOrder(t, invoices);
+    const anyConfirmed = t.onSiteMin > 0 || t.partsMin > 0 || t.dumpDays.length > 0;
+    return {
+      work_order_id: id, wo_number: w?.wo_number ?? null, property: w?.property_name ?? 'Work order', title: workOrderTitle(w?.description),
+      done: w ? workOrderDone(w) : false, onSite: Math.round(t.onSiteMin), parts: Math.round(t.partsMin), dumpRuns: t.dumpDays.length,
+      pending: Math.round(pending.get(id) || 0), expected: a.expectedMin, billedHours: a.billedHours, shortHours: a.shortHours,
+      hasDumpCharge: a.hasDumpCharge, verdict: anyConfirmed ? a.verdict : 'waiting',
+      invoices: invoices.map(i => ({ id: i.id, code: i.invoice_code })),
+    };
+  });
 }
 
 /** Locations and providers for the Locations page. Business locations, not people: office staff can view them. */
