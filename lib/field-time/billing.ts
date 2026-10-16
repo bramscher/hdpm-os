@@ -19,6 +19,8 @@ export const ceil15 = (minutes: number) => Math.ceil(minutes / 15 - 1e-9) * 15;
 export const expectedMinutes = (onSite: number, parts: number) => (onSite > 0 ? Math.max(60, ceil15(onSite)) : 0) + ceil15(parts);
 /** Dump runs are a flat runbook charge, so their lines never count as measured hours. */
 export const isDumpLine = (l: Pick<LineItem, 'description' | 'account'>) => /\bdump\b/i.test(`${l.description || ''} ${l.account || ''}`);
+/** Any line that charges for a dump trip: a dump-run line, or a disposal / landfill / transfer-station fee (HDMS-INV-000482 bills "Disposal fee"). */
+export const isDumpCharge = (l: Pick<LineItem, 'description' | 'account'>) => isDumpLine(l) || /\b(disposal|landfill|transfer station)\b/i.test(`${l.description || ''} ${l.account || ''}`);
 
 export const hm = (minutes: number) => {
   const m = Math.round(minutes), h = Math.floor(m / 60), r = m % 60;
@@ -102,7 +104,7 @@ export function fieldBillingIssues(input: FieldBillingInput): { issues: Issue[];
     const shortHours = expected / 60 - billedHours;
     const problems: string[] = [];
     if (!flat && shortHours >= cfg.shortfallHours) problems.push(`About ${hm(shortHours * 60)} (~${money(shortHours * STANDARD_LABOR_RATE)}) is not billed.`);
-    const missingDump = t.dumpDays.length > 0 && !lines.some(isDumpLine);
+    const missingDump = t.dumpDays.length > 0 && !lines.some(isDumpCharge);
     if (missingDump) problems.push(`Dump run on ${dayList(t.dumpDays)} has no dump-run charge on the invoice.`);
     if (!problems.length) continue;
     const codes = invoices.map(i => i.invoice_code).join(', ');
