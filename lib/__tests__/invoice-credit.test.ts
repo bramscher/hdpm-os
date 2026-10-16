@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { creditItemsForInvoice, normalizeCreditItems, creditBalancePreview } from '../invoice-credit';
 import { createCredit, type HdmsInvoice } from '../invoices';
 import { generateInvoicePdf } from '../invoice-pdf-template';
+import { pdfText } from './pdf-text';
 
 const { insert } = vi.hoisted(() => ({ insert: vi.fn() }));
 vi.mock('../supabase', () => ({
@@ -57,7 +58,7 @@ describe('itemized credit memos', () => {
     });
     expect(saved).toMatchObject({ doc_type: 'credit', labor_amount: -100, materials_amount: -25, total_amount: -125 });
     expect(saved.line_items?.map(item => item.amount)).toEqual([-100, -25]);
-    const pdf = generateInvoicePdf(saved).toString('latin1');
+    const pdf = pdfText(generateInvoicePdf(saved));
     expect(pdf).toContain('Labor adjustment');
     expect(pdf).toContain('Returned materials');
     expect(pdf).toContain('125.00');

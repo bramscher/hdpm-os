@@ -11,6 +11,7 @@ import {
 } from '../invoice-charge';
 import { createInvoice, type HdmsInvoice } from '../invoices';
 import { generateInvoicePdf } from '../invoice-pdf-template';
+import { pdfText } from './pdf-text';
 
 const { insert } = vi.hoisted(() => ({ insert: vi.fn() }));
 vi.mock('../supabase', () => ({
@@ -95,8 +96,8 @@ describe('who pays: owner or tenant, never both', () => {
       wo_reference: '123', completed_date: '2026-10-01', description: 'Door repair', labor_amount: 95, materials_amount: 0, total_amount: 95,
       line_items: [{ description: 'Door repair', type: 'labor', qty: 1, unit_price: 95, amount: 95 }],
     } as unknown as HdmsInvoice;
-    expect(generateInvoicePdf(inv).toString('latin1')).toContain('OWNER CHARGE');
-    const tenantPdf = generateInvoicePdf({ ...inv, ...tenant, tenant_charge_reason: 'lease_fee', lease_clause: 'Section 14' }).toString('latin1');
+    expect(pdfText(generateInvoicePdf(inv))).toContain('OWNER CHARGE');
+    const tenantPdf = pdfText(generateInvoicePdf({ ...inv, ...tenant, tenant_charge_reason: 'lease_fee', lease_clause: 'Section 14' }));
     expect(tenantPdf).toContain('TENANT CHARGE');
     expect(tenantPdf).toContain('CHARGED TO TENANT');
     expect(tenantPdf).toContain('Jane Doe');
