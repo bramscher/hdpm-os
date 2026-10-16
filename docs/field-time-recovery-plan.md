@@ -199,7 +199,7 @@ Decided by Craig, October 2:
 
 Still open:
 
-**1. Parts-run and travel charge.** Craig needs to think about this. Phase 1 can build and run without it: every drive and store stop is recorded and linked to its job, so the pilot will show how much time is at stake before a price is set. Options to weigh:
+**1. Parts-run and travel charge.** *Decided October 15: charged as part of the job, split among the jobs the parts were fetched for; see [`field-location-app-plan.md`](field-location-app-plan.md) → Decisions.* Original notes: Phase 1 can build and run without it: every drive and store stop is recorded and linked to its job, so the pilot will show how much time is at stake before a price is set. Options to weigh:
 
 | Option | How it works | For | Against |
 | --- | --- | --- | --- |

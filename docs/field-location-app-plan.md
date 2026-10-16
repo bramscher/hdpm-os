@@ -12,7 +12,7 @@ discovered: 2026-10-15
 
 # Field location app plan
 
-Date: October 15, 2026. Status: draft for Craig's review. No code yet.
+Date: October 15, 2026. Status: decisions answered by Craig on October 15 (see *Decisions*); ready for step 1. No code yet.
 
 This is the build plan for **phase 2** of [`field-time-recovery-plan.md`](field-time-recovery-plan.md). It keeps the architecture, privacy and test scenarios in [`gps-timekeeping-plan.md`](gps-timekeeping-plan.md) and changes three things:
 
@@ -32,7 +32,7 @@ Timecard hours vs hours on issued and draft hourly invoice lines, from the Daily
 | Oct 1–15 | Brody | 79.6 h | 1.5 h | 78.1 h |
 
 - **Alberto** is the clean signal: **24–38 hours per pay period** are paid but don't appear as billed hours. That's roughly $2,300–3,600 at $95/h if all of it were billable. It isn't: some is drive time, shopping and shop work. The app's job is to show how much is which.
-- **Brody's** gap is overstated. His re-keys are flat-priced (13 in these two periods, now marked flat, so they carry no hours), and part of his day is property-management and turnover work that never goes on a maintenance invoice. The app needs a "PM / office work" category so his maintenance time can be separated out.
+- **Brody's** gap is overstated. His re-keys are flat-priced (13 in these two periods, now marked flat, so they carry no hours), and he does **all the inspections**, which never go on a maintenance invoice. The app tracks his whole day and labels inspection stops separately, so his maintenance time stands on its own and inspection time per property becomes visible for the first time.
 
 ## What the app answers each day
 
@@ -41,10 +41,11 @@ For each tech, each day: **where did the paid hours go, and what didn't get bill
 | Time | Comes from | Billing question it raises |
 | --- | --- | --- |
 | On site at a work order | Stop within the property's radius, while that WO is open and assigned to the tech | On-site 2.5 h, invoice bills 1 h? Is there an invoice at all? |
-| Parts run for a job | Stop at Lowe's or Home Depot between two visits to the same job | Is there a materials line? A receipt? A parts-run charge (once the policy is set)? |
+| Parts run for jobs | Stop at Lowe's or Home Depot; the tech says which jobs the parts were for | Is there a materials line and a receipt? Is the job's share of the run's time on the invoice? |
+| Inspection | Stop at a property on Brody's inspection route that day | Not billed as maintenance; shows inspection time per property |
 | General shopping / van stock | Store stop not tied to a job | Overhead; visible, not billed |
-| Driving | Moving between stops | Overhead today; feeds the parts-run/travel decision |
-| Shop / office | Stop at the shop or office | Overhead, or Brody's PM work |
+| Driving | Moving between stops | Drive to and from a store on a parts run is part of that run; other driving is overhead |
+| Shop / office | Stop at the shop or office | Overhead |
 | On-call callout | Home → property → home during an after-hours callout | Billed at the after-hours rate ($142.50)? |
 | Unknown | Stops that match nothing | The tech labels it at end of day |
 
@@ -55,14 +56,14 @@ Location is evidence, not a bill. Nothing is invoiced automatically. A person st
 1. **Clock in** (existing Timekeeping). This starts location recording. A banner on the phone shows recording is on.
 2. **Work normally.** No tapping. The phone notes arrivals and departures in the background.
 3. **Arrival at a job:** a quiet notification asks "At Cedar Creek 409, WO 43343?" One tap confirms, or they can answer later. Ignored suggestions wait for the end-of-day review; they're never silently accepted.
-4. **Lowe's or Home Depot:** "Parts for Cedar Creek 409?" with buttons for that job, another job, or "Van stock / general." If parts were bought for a job, they snap the receipt. That covers phase 1's receipt rule without a separate app.
+4. **Lowe's or Home Depot:** "Parts for which jobs?" with today's jobs to tick (one or several), or "Van stock / general." They snap the receipt. That covers phase 1's receipt rule without a separate app.
 5. **End of day:** a short timeline: jobs, store stops, drives, gaps. Fix anything wrong, add notes, then **clock out**. This stops recording. The confirmed timeline becomes the day's work log, the entries the Daily Billing Review has always expected but never received.
 
 ## Company phones and on-call
 
 - **Recording only while clocked in.** Phones stay at work overnight, so off-hours tracking mostly can't happen anyway. When a phone goes home on an on-call night, recording is **off** until the tech clocks in to a callout.
-- **Callouts:** clocking in to a callout records the drive from home, time on site and the drive back. That's the evidence for the after-hours charge. On-call nights with no callout record nothing.
-- **Distribution:** if the phones are in Apple Business Manager with a device-management service (Jamf, Kandji, Mosyle or similar), the app can be pushed straight to them, with "Always" location access pre-approved. No App Store, and techs can't switch it off. If not, TestFlight works for a pilot; MDM can come later.
+- **Callouts:** techs don't clock in for callouts today. The app adds a **Start callout** button that clocks them in to Timekeeping and starts recording: the drive from home, time on site and the drive back. That's the evidence for the after-hours charge, and it puts callout hours on the timecard where they belong. On-call nights with no callout record nothing.
+- **Distribution:** the phones are in **Apple Business Manager and Mosyle**. The app is pushed through Mosyle as a custom (unlisted) app, with "Always" location access pre-approved by a configuration profile. No App Store listing, no TestFlight, and techs can't switch it off.
 - **Missing data is a question, not a verdict.** A dead phone or a gap in recording creates an "unknown" block for the tech to explain. It is never treated as unpaid time or a deduction.
 
 ## Matching rules
@@ -73,10 +74,11 @@ All 1,871 properties already have coordinates (`inspection_properties`), and eve
 | --- | --- |
 | Property stop | Within ~120 m of the property, for at least 5 minutes. Tune on real phones during the pilot |
 | Which job | The open work orders at that property assigned to the tech that day. If more than one, the tech picks; GPS can't tell units apart |
-| Supplier stop | Bend/Redmond/Prineville Lowe's and Home Depot, plus the Lowe's Pro desk, entered once in a `work_location` list with radius |
-| Parts run for a job | Store stop between two visits to the same job: **suggested** as that job's parts run; the tech confirms |
+| Supplier stop | **Lowe's and Home Depot in Redmond**, sometimes **Bend**: four stores entered once in a `work_location` list with radius. More can be added in a settings screen |
+| Parts run | Drive to the store + time in the store + drive back to the next job. The tech ticks which jobs the parts were for |
+| Inspection stop | A property on Brody's inspection route for that day (the inspection scheduler already knows the route) |
 | Shop / office | The shop and office addresses |
-| Drive | Time between stops. Belongs to the next job only once the parts-run/travel policy says so |
+| Drive | Time between stops. Part of a parts run if it's to or from a store; otherwise overhead |
 
 ## In Daily Billing Review
 
@@ -84,9 +86,10 @@ A new **Unbilled time** list, one row per tech per day, alongside the timecard c
 
 - **On-site time without enough billing:** "Alberto, Oct 7, Weinberger 284: on site 3 h 10 m, invoice HDMS-INV-000480 bills 2 h" → open invoice / mark covered (flat price, warranty, not billable).
 - **Job with no invoice:** on-site time at a work order with no linked invoice.
-- **Parts run with no materials line or receipt.**
+- **Parts run not on the invoices:** the job's share of the run's time, its materials line or its receipt is missing.
 - **Unlabeled time:** gaps and unknown stops the tech didn't explain.
 - **Callout** time not billed at the after-hours rate.
+- **Inspection time** per property (Brody), for information; not billed.
 
 Each row can be resolved with a reason (the existing "Record follow-up / decision" control). The office sees job time and stops, **not** a map of the tech's movements. Craig sees the full timeline.
 
@@ -95,7 +98,7 @@ Each row can be resolved with a reason (the existing "Record follow-up / decisio
 - Recording runs only while clocked in (including callouts), and the phone shows when it's on.
 - The tech sees and corrects their own timeline.
 - Office billing reviewers see job-linked time, not raw location history or breaks.
-- Craig (admin) sees the full timeline and the payroll comparison.
+- Craig (admin) sees the full timeline and the payroll comparison, and works the Unbilled time list until the Maintenance Coordinator Assistant is hired.
 - Raw location points are deleted after **30 days**. Confirmed work entries are kept like any other billing record.
 - Breaks pause recording.
 - Brody and Alberto get a short written notice before the pilot: what's recorded, when, who sees it, how long it's kept.
@@ -113,13 +116,13 @@ Unchanged from `gps-timekeeping-plan.md` → *iPhone architecture* and *Data and
 
 | Step | What | Done when |
 | --- | --- | --- |
-| 0. Decide | Answer the open questions below; confirm the phones' MDM status, iOS versions, Apple developer account | Answers recorded here |
+| 0. Prep | Confirm iPhone models / iOS versions in Mosyle and the Apple developer account under Apple Business; write the notice to Brody and Alberto | Notice sent; app can be pushed from Mosyle |
 | 1. Server + review page | Tables, supplier list, matching rules as one tested function, the Unbilled time list in Daily Billing Review. Test with hand-entered sample days | Sample day shows correct job time, parts runs and unbilled rows |
 | 2. iPhone app pilot | Clock-in/out recording, arrival suggestions, store prompt with receipt photo, end-of-day timeline. Alberto and Brody, **suggestion-only, two weeks** | Battery lasts a full day; most arrivals matched correctly; techs spend < 5 min a day confirming |
 | 3. Billing follow-through | Unbilled rows link straight to "prepare invoice" with the confirmed time and receipts pre-filled | Same-day draft invoices for most jobs |
-| 4. Trip charges | Once the parts-run/travel policy is set, apply it from confirmed parts runs | Policy decided |
+| 4. Parts-run charges | Pre-fill each job's share of confirmed parts-run time as a labor line (see *Decisions*) | Parts-run time shows up on invoices, split across the jobs |
 
-Step 1 can start without the app or any decisions on charging. Step 2 needs the device answers.
+Step 1 can start now. Step 2 needs step 0.
 
 ## Measures
 
@@ -127,14 +130,24 @@ The baseline is the table above. The pilot target, to confirm after the first tw
 
 - **Alberto's "not on an hourly invoice line" hours** split into billable-missed vs overhead (drive, shopping, shop). The first win is knowing the split.
 - **Billable hours found and invoiced** that would otherwise have been missed, in hours and dollars per pay period.
-- **Drive + shopping hours** per tech per day, as the input for the parts-run decision and for cutting runs (parts check the night before, van stock).
+- **Parts-run hours billed** to jobs, and drive + shopping hours per tech per day, as the input for cutting runs (parts check the night before, van stock).
+- **Inspection hours** per property and per route (Brody).
 - **Callouts** billed at the after-hours rate.
 
-## Open questions
+## Decisions
 
-1. **Phones:** are they in Apple Business Manager / an MDM? Which iPhone models and iOS versions? Is there an Apple developer account?
-2. **Brody's time:** which of Brody's hours are maintenance and which are property management or turnover? Should the app track him only on maintenance jobs, or track the whole day with a PM category?
-3. **Callouts:** do techs already clock in for on-call callouts in Timekeeping? If not, the app adds a "Start callout" button that does.
-4. **Parts-run / travel charge:** still open from October 2 (options A–D in the field-time plan). The pilot measures the time at stake first.
-5. **Who works the Unbilled time list:** Penny and Brody today, moving to the Maintenance Coordinator Assistant once hired, as with charge approval?
-6. **Supplier list:** which stores do they actually use (Lowe's Bend/Redmond, Home Depot Bend, Pro desk, others like Parr Lumber or plumbing supply)?
+Answered by Craig, October 15:
+
+| # | Question | Decision |
+| --- | --- | --- |
+| 1 | Phone management | **Apple Business Manager + Mosyle.** Push the app as a custom app; pre-approve location |
+| 2 | Brody's time | **Track his whole day, including inspections.** Inspection time is valuable on its own; it's labeled separately and not billed as maintenance |
+| 3 | Callouts | Techs **don't clock in** for callouts today. The app adds **Start callout**, which clocks in and records |
+| 4 | Parts-run / travel charge | **Charged as part of the job**, split among the jobs the parts were fetched for. The run's time (drive there, in store, drive back) is billed at the labor rate, divided across those jobs. Never charged twice; van stock and general shopping stay overhead. This settles decision 1 (option C-like, no cap) in the field-time plan |
+| 5 | Who works the Unbilled time list | **Craig**, then the **Maintenance Coordinator Assistant** once hired |
+| 6 | Stores | **Lowe's and Home Depot in Redmond**, sometimes **Bend** |
+
+To confirm:
+
+- **How a parts run is split.** Proposed: evenly across the ticked jobs, adjustable on review (e.g. 70/30 when most parts were for one job). Splitting by receipt value is the alternative.
+- **Minimum charge.** Does a job's parts-run share count toward the 1-hour minimum, or bill on top of it? Proposed: on top, in 15-minute increments, as part of the job's labor line.
