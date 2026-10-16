@@ -71,6 +71,8 @@ export function generateInvoicePdf(
     orientation: 'portrait',
     unit: 'pt',
     format: 'letter',
+    // Without compression the logo is stored raw and every invoice is ~4 MB.
+    compress: true,
   });
 
   // A credit memo stores negative amounts; the PDF prints magnitudes (so the

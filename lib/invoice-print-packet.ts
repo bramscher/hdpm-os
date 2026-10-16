@@ -1,4 +1,6 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { createHash } from 'node:crypto';
+import { deflateSync } from 'node:zlib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, PDFRef, PDFStream, StandardFonts, rgb } from 'pdf-lib';
 import type { HdmsInvoice } from './invoices';
 import { generateInvoicePdf } from './invoice-pdf-template';
 
@@ -6,6 +8,40 @@ export function validateInvoicePeriod(from: string, to: string) {
   const valid = (s:string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(Date.parse(s+'T12:00:00Z')) && new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s;
   if(!valid(from)||!valid(to)||from>to) throw new Error('Choose a valid start and end date');
   if((Date.parse(to)-Date.parse(from))/86400000>366) throw new Error('Choose a period of one year or less');
+}
+/**
+ * Saved invoices embed the logo as an uncompressed ~4 MB image, once per invoice. Deflate every
+ * unfiltered stream and keep one copy of identical images so a period packet fits in a download.
+ * Lossless: the issued pages look exactly the same.
+ */
+export function shrinkPacket(doc: PDFDocument) {
+  const ctx = doc.context, Filter = PDFName.of('Filter'), Subtype = PDFName.of('Subtype'), Image = PDFName.of('Image');
+  for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFRawStream) || obj.dict.has(Filter)) continue;
+    const contents = deflateSync(obj.contents), dict = obj.dict.clone(ctx);
+    dict.set(Filter, PDFName.of('FlateDecode')); dict.set(PDFName.of('Length'), PDFNumber.of(contents.length));
+    ctx.assign(ref, PDFRawStream.of(dict, contents));
+  }
+  const remap = new Map<string, PDFRef>();
+  const swap = (v: unknown) => v instanceof PDFRef ? remap.get(v.toString()) : undefined;
+  // Resources nest direct dictionaries (Resources → XObject → I0), so rewrite references recursively.
+  const rewrite = (o: unknown): void => {
+    if (o instanceof PDFDict) for (const [key, value] of o.entries()) { const to = swap(value); if (to) o.set(key, to); else rewrite(value); }
+    else if (o instanceof PDFArray) for (let i = 0; i < o.size(); i++) { const value = o.get(i), to = swap(value); if (to) o.set(i, to); else rewrite(value); }
+  };
+  // Several passes: a soft mask (SMask) must collapse before the images that point to it can match.
+  for (let pass = 0; pass < 3; pass++) {
+    const seen = new Map<string, PDFRef>(); let found = false;
+    for (const [, obj] of ctx.enumerateIndirectObjects()) rewrite(obj instanceof PDFStream ? obj.dict : obj);
+    for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
+      if (!(obj instanceof PDFRawStream) || obj.dict.get(Subtype) !== Image || remap.has(ref.toString())) continue;
+      const key = createHash('sha256').update(obj.dict.toString()).update(obj.contents).digest('hex');
+      const first = seen.get(key);
+      if (first) { remap.set(ref.toString(), first); found = true; } else seen.set(key, ref);
+    }
+    if (!found) break;
+  }
+  for (const key of remap.keys()) { const [n, g] = key.split(' '); ctx.delete(PDFRef.of(Number(n), Number(g))); }
 }
 export function periodInvoices(invoices: HdmsInvoice[], from: string, to: string) {
   return invoices.filter(i=>i.status!=='void'&&i.doc_type!=='credit'&&(i.completed_date||i.created_at||'').slice(0,10)>=from&&(i.completed_date||i.created_at||'').slice(0,10)<=to)
@@ -62,6 +98,7 @@ export async function invoicePrintPacket(invoices: HdmsInvoice[], from: string, 
     page.drawText('Completed date determines the period; creation date is used when missing.',{x:40,y:55,size:8,font});
     page.drawText(`Contents ${index+1} of ${coverCount}`,{x:40,y:35,size:8,font});
   }
+  shrinkPacket(packet);
   packet.setTitle(`HDPM Invoices ${from} to ${to}`);
   return {bytes:await packet.save(),invoiceCount:selected.length,pageCount:packet.getPageCount()};
 }
