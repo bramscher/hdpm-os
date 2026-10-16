@@ -5,7 +5,7 @@ import {dailyBillingActor,loadDailyBilling} from '@/lib/daily-billing/server';
 import {pacificDay} from '@/lib/maintenance-workspace/model';
 export async function GET(request:NextRequest){
  const guard=await requireCompanySession();if(!guard.ok)return guard.response;
- try{const actor=await dailyBillingActor(guard.email);const query=request.nextUrl.searchParams;return NextResponse.json(await loadDailyBilling(actor,query.get('from')||pacificDay(),query.get('to')||pacificDay(),query.get('technician')||''),{headers:{'Cache-Control':'private, no-store'}});}catch(e){return failure(e);}
+ try{const actor=await dailyBillingActor(guard.email);const query=request.nextUrl.searchParams;return NextResponse.json(await loadDailyBilling(actor,query.get('from')||pacificDay(),query.get('to')||pacificDay(),query.get('technician')||'',{fieldSample:query.get('fieldSource')==='sample'}),{headers:{'Cache-Control':'private, no-store'}});}catch(e){return failure(e);}
 }
 export async function POST(request:NextRequest){
  const guard=await requireCompanySession();if(!guard.ok)return guard.response;

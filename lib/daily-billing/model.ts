@@ -2,23 +2,22 @@ import {normalizeTechnician,type HdmsInvoice} from '@/lib/invoices';
 import {invoiceServiceDate,recordedLaborHours} from '@/lib/invoice-labor';
 import {shiftDay} from '@/lib/maintenance-workspace/model';
 import {chargeLabel,isPlaceholderName,ownerCostSignals} from '@/lib/invoice-charge';
+import {linkInvoices} from './links';
+import type {FieldDayTotals} from '@/lib/field-time/billing';
 export interface WorkOrder {id:string;wo_number:string|null;property_name:string|null;description:string|null;assigned_tech:string|null;assigned_to:string|null;completed_date:string|null;status:string|null;appfolio_status:string|null;stage:string|null;canceled_date:string|null;appfolio_link:string|null;vendor_name?:string|null;vendor_id?:string|null}
 export interface WorkRecord {id:string;task_id:string|null;work_order_id?:string|null;technician:string;work_date:string;minutes:number;activity_kind?:string;progress:string;note:string;materials:string;status:string;billability?:string;review_note:string;review_owner:string|null;review_due?:string|null;version:number}
 export interface Bill {id:string;hdms_invoice_id:string|null;reference:string|null;total_amount:number;synced_at:string}
 export interface Decision {issue_key:string;disposition:string;owner:string;review_on:string;note:string;updated_at:string}
 export interface Issue {key:string;kind:string;title:string;detail:string;day:string|null;person:string|null;woId?:string;invoiceId?:string;recordId?:string;property:string;href:string;decision?:Decision;overdue:boolean}
-export interface DaySummary {date:string;projectHours:number;otherHours:number;recordCount:number;draftHours:number;issuedHours:number;issuedLabor:number;draftLabor:number;invoiceCount:number;incomplete:boolean;issueCount:number;workedHours?:number|null;scheduledHours?:number;unexplainedHours?:number|null}
+export interface DaySummary {date:string;projectHours:number;otherHours:number;recordCount:number;draftHours:number;issuedHours:number;issuedLabor:number;draftLabor:number;invoiceCount:number;incomplete:boolean;issueCount:number;workedHours?:number|null;scheduledHours?:number;unexplainedHours?:number|null;field?:Partial<FieldDayTotals>}
 export interface Input {from:string;to:string;today:string;technician:string;invoices:HdmsInvoice[];workOrders:WorkOrder[];records:WorkRecord[];bills:Bill[];decisions:Decision[];tasks:{id:string;job_id:string;description:string;pricing_method:string;approved:boolean}[];jobs:{id:string;work_order_id:string;property_name:string}[];allocations:{task_id:string;invoice_id:string}[];billsFresh:boolean}
 export function periodDays(from:string,to:string){const result:string[]=[];for(let day=from;day<=to&&result.length<93;day=shiftDay(day,1))result.push(day);return result;}
 const techName=(value:string|null|undefined)=>normalizeTechnician(value)||value?.trim()||'';
 export function buildDailyBilling(input:Input){
  const {from,to,today,technician}=input;
  const days:DaySummary[]=periodDays(from,to).map(date=>({date,projectHours:0,otherHours:0,recordCount:0,draftHours:0,issuedHours:0,issuedLabor:0,draftLabor:0,invoiceCount:0,incomplete:false,issueCount:0}));
- const byDay=new Map(days.map(d=>[d.date,d]));const woById=new Map(input.workOrders.map(w=>[w.id,w]));const refs=new Map<string,WorkOrder[]>();
- for(const wo of input.workOrders){if(wo.wo_number){const key=wo.wo_number.trim();refs.set(key,[...(refs.get(key)||[]),wo]);}}
- const liveInvoices=input.invoices.filter(i=>i.status!=='void'&&i.doc_type!=='credit');
- const invoiceWo=new Map<string,string>();const ambiguous=new Set<string>();
- for(const invoice of liveInvoices){if(invoice.work_order_id){invoiceWo.set(invoice.id,invoice.work_order_id);continue;}const matches=refs.get(invoice.wo_reference?.trim()||'')||[];if(matches.length===1)invoiceWo.set(invoice.id,matches[0].id);else if(matches.length>1)ambiguous.add(invoice.id);}
+ const byDay=new Map(days.map(d=>[d.date,d]));const woById=new Map(input.workOrders.map(w=>[w.id,w]));
+ const {refs,live:liveInvoices,invoiceWo,ambiguous}=linkInvoices(input.invoices,input.workOrders);
  const issues:Issue[]=[];
  function add(issue:Omit<Issue,'overdue'|'decision'>){const decision=input.decisions.find(d=>d.issue_key===issue.key);const overdue=!!decision&&decision.review_on<=today;issues.push({...issue,decision,overdue});}
  const invoiceHasTech=(i:HdmsInvoice)=>!technician||(i.line_items||[]).some(l=>(l.type||'labor')==='labor'&&(!l.technician||techName(l.technician)===technician));
