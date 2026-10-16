@@ -19,6 +19,7 @@ import {
 
 import type { PriceBookItem } from "@/lib/turn-estimator/types";
 import { needsPriceReview, priceBookName, priceBookRate } from "@/lib/turn-estimator/price-book-display";
+import { AFTER_HOURS_LABOR_RATE, STANDARD_LABOR_RATE, offStandardLaborRate } from "@/lib/invoice-labor";
 import { chargeProblems, isPlaceholderName, ownerCostSignals, TENANT_REASON_LABEL, type ChargeTo, type TenantChargeReason } from "@/lib/invoice-charge";
 
 interface InvoiceFormProps {
@@ -46,9 +47,8 @@ function effMarkup(li: FormLineItem): string {
 }
 
 // ── Labor rate constants ──────────
-const STANDARD_RATE = 95;
-const AFTER_HOURS_MULTIPLIER = 1.5;
-const AFTER_HOURS_RATE = STANDARD_RATE * AFTER_HOURS_MULTIPLIER; // $142.50
+const STANDARD_RATE = STANDARD_LABOR_RATE;
+const AFTER_HOURS_RATE = AFTER_HOURS_LABOR_RATE; // $142.50
 
 // ── Flat fee jobs lookup (user will populate) ──────────
 const FLAT_FEE_JOBS: { key: string; label: string; amount: number; description: string }[] = [
@@ -68,6 +68,9 @@ interface FormLineItem {
   rate: string;
   rateType: RateType;
   technician?: string; // "Brody" | "Alberto" — attributes labor to a tech (labor lines only)
+  // Non-hourly pricing (flat / per_qty) keeps the line out of measured labor hours.
+  pricingMethod?: string;
+  workspaceTaskId?: string;
   // Materials / appliance-specific (internal only — never printed on the PDF)
   cost?: string;       // what HDMS paid for this line
   markupPct?: string;  // markup % applied on top of cost (defaults: 25 materials / 10 appliance)
@@ -193,6 +196,7 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
 
   const [taskItems, setTaskItems] = useState<string[]>([]);
   const [hourlyItem, setHourlyItem] = useState<PriceBookItem | null>(null);
+  const [rekeyItems, setRekeyItems] = useState<{ call: PriceBookItem; cylinder: PriceBookItem } | null>(null);
   const [priceBookError, setPriceBookError] = useState('');
   useEffect(() => {
     const controller = new AbortController();
@@ -201,6 +205,10 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
       .then(data => {
         const item = (data.items as PriceBookItem[]).find(i => i.item_code === 'LABOR_STD' && i.pricing_method === 'hourly' && !needsPriceReview(i));
         setHourlyItem(item ?? null);
+        const items = data.items as PriceBookItem[];
+        const call = items.find(i => i.item_code === 'REKEY_CALL' && !needsPriceReview(i));
+        const cylinder = items.find(i => i.item_code === 'REKEY_CYL' && !needsPriceReview(i));
+        setRekeyItems(call && cylinder ? { call, cylinder } : null);
         if (!item) setPriceBookError('No approved standard hourly labor item is available. Use + Labor to enter an approved rate manually.');
       })
       .catch(err => { if (err.name !== 'AbortError') setPriceBookError('Price book unavailable. Use + Labor to enter an approved rate manually.'); });
@@ -294,6 +302,8 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
               rate: li.unit_price ? li.unit_price.toFixed(2) : (liType === "labor" ? STANDARD_RATE.toFixed(2) : ""),
               rateType: "standard" as RateType,
               technician: liType === "labor" ? normalizeTechnician(li.technician) : "",
+              pricingMethod: li.pricing_method,
+              workspaceTaskId: li.workspace_task_id,
               cost: li.cost != null ? String(isMat ? li.cost / matQty : li.cost) : "",
               markupPct: li.markup_pct != null ? String(li.markup_pct) : "",
               flatFeeKey: "",
@@ -723,6 +733,7 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
           if (q > 0 && unitCost > 0) updated.amount = chargedFromCost(q * unitCost, mk).toFixed(2);
         }
 
+        if (field === "type") updated.pricingMethod = undefined;
         // When switching type TO labor, set default rate fields
         if (field === "type" && value === "labor") {
           updated.rate = STANDARD_RATE.toFixed(2);
@@ -814,6 +825,8 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
           account: li.account.trim() || undefined,
           type: li.type,
           technician: li.type === "labor" ? li.technician || undefined : undefined,
+          pricing_method: li.pricingMethod || undefined,
+          workspace_task_id: li.workspaceTaskId || undefined,
           qty: qty || undefined,
           unit_price: isMat ? materialUnitPrice || undefined : parseFloat(li.rate) || undefined,
           amount: parseFloat(li.amount) || 0,
@@ -1300,6 +1313,14 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
               const line = {...blankLineItem('labor', technician), qty: '1', rate: hourlyItem.base_price.toFixed(2), amount: hourlyItem.base_price.toFixed(2)};
               setLineItems(prev => [...prev, line]);
             }}>+ 1 hour {priceBookName(hourlyItem)} · {priceBookRate(hourlyItem)}</button>}
+            {rekeyItems && <button type="button" disabled={isLoading} className="mt-2 ml-4 font-medium text-blue-800 underline" onClick={() => {
+              userHasEdited.current = true;
+              // Flat-priced, so re-keys never count as measured labor hours. Set Qty to the cylinders re-keyed.
+              const technician = normalizeTechnician(workOrder?.assigned_to || workOrder?.technician);
+              const { call, cylinder } = rekeyItems;
+              const line = (item: PriceBookItem, qty: number) => ({...blankLineItem('labor', technician), description: item.owner_description || priceBookName(item), pricingMethod: item.pricing_method, qty: String(qty), rate: item.base_price.toFixed(2), amount: (qty * item.base_price).toFixed(2)});
+              setLineItems(prev => [...prev, line(call, 1), line(cylinder, 2)]);
+            }}>+ Re-key · {priceBookRate(rekeyItems.call)} + {priceBookRate(rekeyItems.cylinder)}</button>}
             {priceBookError && <p className="mt-2 text-amber-800">{priceBookError}</p>}
             <p className="mt-1 text-xs">Edit Qty/Hrs after adding: 0.5 = 30 minutes, 1.5 = 1 hour 30 minutes. Describe the work before saving.</p>
           </div>
@@ -1395,6 +1416,19 @@ export function InvoiceForm({ initialLineType = "labor", workOrder, editInvoice,
                     />
                     <ImproveWithAI value={li.description} context="invoice" disabled={isLoading || !canEdit}
                       onApply={(text) => updateLineItem(li.id, "description", text)} />
+                    {isLabor && li.pricingMethod && li.pricingMethod !== "hourly" && (
+                      <p className="mt-1 text-[10px] text-charcoal-400">
+                        Flat price · not counted as labor hours{" "}
+                        <button type="button" disabled={isLoading} className="underline" onClick={() => updateLineItem(li.id, "pricingMethod", "")}>Make hourly</button>
+                      </p>
+                    )}
+                    {offStandardLaborRate({ type: li.type, pricing_method: li.pricingMethod, workspace_task_id: li.workspaceTaskId, unit_price: parseFloat(li.rate) }) && (
+                      <p role="status" className="mt-1 text-[10px] text-amber-800">
+                        ${li.rate}/hr isn&apos;t the labor rate (${STANDARD_RATE} · ${AFTER_HOURS_RATE.toFixed(2)} OT).{" "}
+                        <button type="button" disabled={isLoading} className="font-medium underline" onClick={() => updateLineItem(li.id, "rate", STANDARD_RATE.toFixed(2))}>Use ${STANDARD_RATE}</button>{" · "}
+                        <button type="button" disabled={isLoading} className="font-medium underline" onClick={() => updateLineItem(li.id, "pricingMethod", "flat")}>It&apos;s a flat price</button>
+                      </p>
+                    )}
                   </div>
 
                   {/* Qty/Hrs — hours for labor, count for materials/appliance/other */}
