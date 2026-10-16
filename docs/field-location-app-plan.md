@@ -146,8 +146,5 @@ Answered by Craig, October 15:
 | 4 | Parts-run / travel charge | **Charged as part of the job**, split among the jobs the parts were fetched for. The run's time (drive there, in store, drive back) is billed at the labor rate, divided across those jobs. Never charged twice; van stock and general shopping stay overhead. This settles decision 1 (option C-like, no cap) in the field-time plan |
 | 5 | Who works the Unbilled time list | **Craig**, then the **Maintenance Coordinator Assistant** once hired |
 | 6 | Stores | **Lowe's and Home Depot in Redmond**, sometimes **Bend** |
-
-To confirm:
-
-- **How a parts run is split.** Proposed: evenly across the ticked jobs, adjustable on review (e.g. 70/30 when most parts were for one job). Splitting by receipt value is the alternative.
-- **Minimum charge.** Does a job's parts-run share count toward the 1-hour minimum, or bill on top of it? Proposed: on top, in 15-minute increments, as part of the job's labor line.
+| 7 | How a parts run is split | **Evenly across the jobs, adjustable on review** (e.g. 70/30 when most parts were for one job) |
+| 8 | Parts run vs the 1-hour minimum | **On top of the minimum**, in 15-minute increments, as part of the job's labor |
