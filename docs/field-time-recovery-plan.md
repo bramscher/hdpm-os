@@ -13,6 +13,7 @@ discovered: 2026-10-02
 # Field time and recovery plan
 
 Date: October 2, 2026. Status: draft for Craig's review. Branch: `feature/gps-timekeeping`.
+Phase 2 build plan (October 15): [`field-location-app-plan.md`](field-location-app-plan.md). GPS moved first, since the manual work log was never used.
 Demo (sample data): [Field Day Recovery](https://claude.ai/artifact/1Una2CU1q7S8n8rmn5ktSv), a private claude.ai artifact.
 
 This replaces the framing of `docs/gps-timekeeping-plan.md`. That document stays as the **phase 2 reference** for the iPhone location app (architecture, privacy, retention and test scenarios are still valid). What changed is the goal: GPS is a cheaper way to *capture* work, not the point.
