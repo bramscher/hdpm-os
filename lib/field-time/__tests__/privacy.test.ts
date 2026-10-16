@@ -73,6 +73,14 @@ describe('field day access', () => {
     await expect(loadFieldDay(alberto, 'Alberto', '2026-10-07', 'sample')).rejects.toThrow(/FORBIDDEN/);
   });
 
+  it('marks the day’s published route on the answer buttons and lists its jobs first', async () => {
+    mock.data.maint_route_plan = [{ id: 'rp-1', route_date: '2026-10-07', assigned_tech: 'Alberto', status: 'published' }];
+    mock.data.maint_route_stop = [{ route_plan_id: 'rp-1', work_order_id: 'wo-2', stop_order: 1 }];
+    const day = await loadFieldDay(alberto, 'Alberto', '2026-10-07');
+    expect(day.jobs[0]).toMatchObject({ id: 'wo-2', sub: 'Cedar Creek · open, unassigned · on the route' });
+    expect(day.jobs.find(j => j.id === 'wo-1')?.sub).not.toContain('on the route');
+  });
+
   it('gives an admin both sources, the sample spec and the sample tools, with no coordinates in segments', async () => {
     const day = await loadFieldDay(craig, 'Alberto', '2026-10-07', 'sample');
     expect(day.sources.sort()).toEqual(['device', 'sample']);
@@ -85,16 +93,27 @@ describe('field day access', () => {
 });
 
 describe('field time in Daily Billing Review', () => {
-  it('gives a non-admin only their own job and parts minutes, and no billing items', async () => {
-    const own = await review(brody, { technician: 'Alberto', sample: true });
+  it('gives anyone else only their own job and parts minutes, and no billing items', async () => {
+    const own = await review(alberto, { technician: 'Brody', sample: true });
     expect(own.source).toBe('device');
-    expect([...own.days.values()]).toEqual([{ date: '2026-10-07', onSite: 60, parts: 0 }]);
+    expect([...own.days.values()]).toEqual([{ date: '2026-10-07', onSite: 180, parts: 0 }]);
     expect(own.issues).toEqual([]);
-    expect(own.links).toEqual([{ technician: 'Brody', date: '2026-10-07' }]);
+    expect(own.links).toEqual([{ technician: 'Alberto', date: '2026-10-07' }]);
     expect(mock.tables).not.toContain('work_orders');
     const none = await review(penny);
     expect(none.days.size).toBe(0);
     expect(none.links).toEqual([]);
+  });
+
+  it('gives a field reviewer (Brody) every tech’s job and parts minutes and the billing items, but no drive, inspection or unlabeled time', async () => {
+    const r = await review(brody, { sample: true });
+    expect(r.source).toBe('device');
+    expect([...r.days.values()]).toEqual([{ date: '2026-10-07', onSite: 240, parts: 0 }]);
+    expect(r.issues.map(i => i.key)).toEqual(['wo:wo-1:field_time']);
+    // Alberto's field day isn't Brody's to open, so the item opens the invoice instead.
+    expect(r.issues[0].href).toBe('/maintenance/invoices?tab=invoices&invoice=i');
+    expect(r.links).toEqual([{ technician: 'Brody', date: '2026-10-07' }]);
+    expect([...(await review(brody, { technician: 'Alberto' })).days.values()]).toEqual([{ date: '2026-10-07', onSite: 180, parts: 0 }]);
   });
 
   it('gives an admin every category and the not-fully-billed items', async () => {
@@ -102,6 +121,7 @@ describe('field time in Daily Billing Review', () => {
     expect(all.days.get('2026-10-07')).toMatchObject({ onSite: 240, inspection: 30, drive: 20, unlabeled: 40, unconfirmed: 40, technicians: ['Alberto', 'Brody'] });
     expect(all.issues.map(i => i.key)).toEqual(['wo:wo-1:field_time']);
     expect(all.issues[0].detail).toContain('About 2 h (~$190) is not billed.');
+    expect(all.issues[0].href).toBe('/maintenance/daily-billing/field?technician=Alberto&date=2026-10-07');
   });
 
   it('keeps sample days behind the admin toggle', async () => {
