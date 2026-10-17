@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS rental_comps (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
 
   -- Location
-  town TEXT NOT NULL CHECK (town IN ('Bend', 'Redmond', 'Sisters', 'Prineville', 'Culver', 'La Pine')),
+  town TEXT NOT NULL CHECK (town IN ('Bend', 'Redmond', 'Sisters', 'Prineville', 'Culver', 'La Pine', 'Maupin')),
   address TEXT,
   zip_code TEXT,
 
