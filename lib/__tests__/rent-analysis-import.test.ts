@@ -35,3 +35,34 @@ it('keeps saved comps usable and explains an external refresh failure', async ()
   expect(analysis.recommended_rent_mid).toBeGreaterThan(0);
   expect(analysis.methodology_notes.join(' ')).toContain('could not be refreshed');
 });
+
+it('falls back to a wider RentCast estimate when a small town has no comps', async () => {
+  const { getRentEstimate } = await import('../rentcast');
+  vi.mocked(getComps).mockResolvedValue([]);
+  vi.mocked(refreshRentCastComps).mockResolvedValue(0);
+  vi.mocked(getBaselines).mockResolvedValue([{ area_name: 'Maupin', county: 'Wasco', bedrooms: 3, fmr_rent: 2225 } as never]);
+  const wide = { rent: 2390, rentRangeLow: 1920, rentRangeHigh: 2860, comparables: [
+    { formattedAddress: '1 Main St, Tygh Valley, OR', city: 'Tygh Valley', state: 'OR', zipCode: '97063', bedrooms: 3, bathrooms: 1, squareFootage: 1200, propertyType: 'Single Family', rent: 1450, correlation: 0.9, daysOld: 170, distance: 5 },
+    { formattedAddress: '2 Oak St, The Dalles, OR', city: 'The Dalles', state: 'OR', zipCode: '97058', bedrooms: 3, bathrooms: 2, squareFootage: 1600, propertyType: 'Single Family', rent: 3150, correlation: 0.8, daysOld: 1, distance: 30 },
+  ] };
+  vi.mocked(getRentEstimate).mockResolvedValueOnce(null).mockResolvedValueOnce(wide);
+
+  const analysis = await generateRentAnalysis({ ...subject, town: 'Maupin' }, 'test@highdesertpm.com');
+
+  expect(vi.mocked(getRentEstimate).mock.calls[1][1]).toMatchObject({ maxRadius: 50, daysOld: 365 });
+  expect(analysis.recommended_rent_mid).toBe(2390);
+  expect(analysis.rentcast_rent_estimate?.rent).toBe(2390);
+  const notes = analysis.methodology_notes.join(' ');
+  expect(notes).toContain('No saved comparable rentals in Maupin');
+  expect(notes).toContain('5-30 miles away');
+  expect(notes).toContain('Tygh Valley, The Dalles');
+  expect(notes).toContain('HUD FMR for Maupin 3BR: $2225/mo');
+});
+
+it('still reports no recommendation when even the wide search finds nothing', async () => {
+  vi.mocked(getComps).mockResolvedValue([]);
+  vi.mocked(refreshRentCastComps).mockResolvedValue(0);
+  const analysis = await generateRentAnalysis(subject, 'test@highdesertpm.com');
+  expect(analysis.recommended_rent_mid).toBe(0);
+  expect(analysis.methodology_notes[0]).toContain('No comparable properties found');
+});

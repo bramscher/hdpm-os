@@ -247,6 +247,9 @@ export interface RentEstimateOptions {
   squareFootage?: number;
   propertyType?: string;
   compCount?: number;
+  /** Widen the comp search for rural towns (RentCast defaults are tighter). */
+  maxRadius?: number;
+  daysOld?: number;
 }
 
 /**
@@ -264,6 +267,8 @@ export async function getRentEstimate(
     squareFootage: opts?.squareFootage,
     propertyType: opts?.propertyType,
     compCount: opts?.compCount ?? 15,
+    maxRadius: opts?.maxRadius,
+    daysOld: opts?.daysOld,
   });
 
   if (!data || !data.rent) return null;

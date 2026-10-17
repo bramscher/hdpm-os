@@ -22,6 +22,10 @@ import type {
   RentCastRentEstimate,
 } from '@/types/comps';
 
+/** Wider RentCast search used only when a town has no saved comps. */
+const WIDE_SEARCH_RADIUS_MILES = 50;
+const WIDE_SEARCH_DAYS_OLD = 365;
+
 // ============================================
 // Helpers
 // ============================================
@@ -129,6 +133,60 @@ interface RentRecommendation {
   notes: string[];
 }
 
+function hudFloorCheck(
+  subject: SubjectProperty,
+  baselines: MarketBaseline[],
+  recommended: number,
+  notes: string[]
+) {
+  const townBaseline = baselines.find(
+    (b) =>
+      b.area_name === subject.town &&
+      b.bedrooms === subject.bedrooms &&
+      b.fmr_rent
+  );
+  if (townBaseline?.fmr_rent) {
+    const fmr = Number(townBaseline.fmr_rent);
+    if (recommended < fmr) {
+      notes.push(
+        `Note: Recommendation ($${round(recommended)}) is below HUD FMR ($${round(fmr)}). Market may support higher rent.`
+      );
+    } else {
+      notes.push(
+        `HUD FMR for ${subject.town} ${subject.bedrooms}BR: $${round(fmr)}/mo`
+      );
+    }
+  }
+}
+
+/** Small towns with no saved comps: lean on RentCast's estimate and say where its comps are. */
+function rentCastOnlyRecommendation(
+  subject: SubjectProperty,
+  baselines: MarketBaseline[],
+  rentCastRent: RentCastRentEstimate
+): RentRecommendation {
+  const recommended = rentCastRent.rent;
+  const notes = [
+    `No saved comparable rentals in ${subject.town}. This recommendation is based on the RentCast rent estimate: $${round(recommended)}/mo (range: $${round(rentCastRent.rentRangeLow)}-$${round(rentCastRent.rentRangeHigh)}).`,
+  ];
+  const distances = rentCastRent.comparables
+    .map((c) => c.distance)
+    .filter((d): d is number => typeof d === 'number');
+  if (distances.length > 0) {
+    const towns = [...new Set(rentCastRent.comparables.map((c) => c.city).filter(Boolean))];
+    notes.push(
+      `RentCast used ${rentCastRent.comparables.length} rentals ${round(Math.min(...distances))}-${round(Math.max(...distances))} miles away (median ${round(median(distances))} mi)${towns.length ? `, in ${towns.join(', ')}` : ''}. Rents in those towns may not reflect ${subject.town}; confirm against local knowledge before sending.`
+    );
+  }
+  hudFloorCheck(subject, baselines, recommended, notes);
+
+  const low = round(recommended * 0.95);
+  const mid = round(recommended);
+  const high = round(recommended * 1.05);
+  notes.push(`Recommended range: $${low.toLocaleString()} - $${high.toLocaleString()}/mo`);
+  return { low, mid, high, notes };
+}
+
 function computeRecommendedRent(
   subject: SubjectProperty,
   comparables: RentalComp[],
@@ -141,12 +199,15 @@ function computeRecommendedRent(
   const rents = comparables.map((c) => Number(c.monthly_rent));
 
   if (rents.length === 0) {
-    return {
-      low: 0,
-      mid: 0,
-      high: 0,
-      notes: ['No comparable properties found. Unable to compute recommendation.'],
-    };
+    if (!rentCastRent) {
+      return {
+        low: 0,
+        mid: 0,
+        high: 0,
+        notes: ['No comparable properties found. Unable to compute recommendation.'],
+      };
+    }
+    return rentCastOnlyRecommendation(subject, baselines, rentCastRent);
   }
 
   // Base: 60% median + 40% 60th-percentile
@@ -211,25 +272,7 @@ function computeRecommendedRent(
     );
   }
 
-  // HUD FMR floor check
-  const townBaseline = baselines.find(
-    (b) =>
-      b.area_name === subject.town &&
-      b.bedrooms === subject.bedrooms &&
-      b.fmr_rent
-  );
-  if (townBaseline?.fmr_rent) {
-    const fmr = Number(townBaseline.fmr_rent);
-    if (recommended < fmr) {
-      notes.push(
-        `Note: Recommendation ($${round(recommended)}) is below HUD FMR ($${round(fmr)}). Market may support higher rent.`
-      );
-    } else {
-      notes.push(
-        `HUD FMR for ${subject.town} ${subject.bedrooms}BR: $${round(fmr)}/mo`
-      );
-    }
-  }
+  hudFloorCheck(subject, baselines, recommended, notes);
 
   // Factor in competing listings if available
   if (competingListings.length > 0) {
@@ -329,6 +372,19 @@ export async function generateRentAnalysis(
     }),
   ]);
 
+  // 2b. No saved comps and no estimate (small towns like Maupin): widen
+  // RentCast's search so the owner still gets a number, flagged as distant.
+  let rentEstimate = rentCastRent;
+  if (allComps.length === 0 && !rentEstimate) {
+    rentEstimate = await getRentEstimate(subject.address, {
+      bedrooms: subject.bedrooms,
+      bathrooms: subject.bathrooms,
+      squareFootage: subject.sqft,
+      maxRadius: WIDE_SEARCH_RADIUS_MILES,
+      daysOld: WIDE_SEARCH_DAYS_OLD,
+    });
+  }
+
   // 3. Score and rank comparables by similarity
   const scored = allComps.map((comp) => ({
     comp,
@@ -361,7 +417,7 @@ export async function generateRentAnalysis(
 
   // 5. Build competing listings (include RentCast rental comps if available)
   const now = new Date().toISOString();
-  const rentCastListings: CompetingListing[] = (rentCastRent?.comparables ?? [])
+  const rentCastListings: CompetingListing[] = (rentEstimate?.comparables ?? [])
     .filter((rc): rc is typeof rc & { rent: number } => !!rc.rent && rc.rent > 0)
     .map((rc) => ({
       address: rc.formattedAddress,
@@ -380,7 +436,7 @@ export async function generateRentAnalysis(
     comparableComps,
     baselines,
     allCompetingListings,
-    rentCastRent,
+    rentEstimate,
     rentCastValue
   );
   if (refreshWarning) notes.push(refreshWarning);
@@ -399,7 +455,7 @@ export async function generateRentAnalysis(
     recommended_rent_high: high,
     methodology_notes: notes,
     rentcast_value_estimate: rentCastValue ?? undefined,
-    rentcast_rent_estimate: rentCastRent ?? undefined,
+    rentcast_rent_estimate: rentEstimate ?? undefined,
     generated_at: new Date().toISOString(),
     generated_by: userEmail,
   };
