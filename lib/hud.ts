@@ -8,6 +8,7 @@
  *   Deschutes County → Bend, Redmond, Sisters, La Pine
  *   Crook County → Prineville
  *   Jefferson County → Culver
+ *   Wasco County → Maupin
  *
  * Required env vars:
  *   HUD_API_TOKEN
@@ -21,22 +22,24 @@ import type { UpsertBaselineInput } from '@/types/comps';
 
 const HUD_API_BASE = 'https://www.huduser.gov/hudapi/public/fmr';
 
-// County FIPS codes (10-digit: SS + CCC + 00000) for Central Oregon
+// HUD county entity IDs (10-digit: SS + CCC + 99999) for Central Oregon
 // Also try the Bend-Redmond MSA code for Deschutes County
 const COUNTIES = [
   { fips: 'METRO13460M13460', name: 'Bend-Redmond MSA', county: 'Deschutes', type: 'msa' },
-  { fips: '4101300099999', name: 'Crook County', county: 'Crook', type: 'county' },
-  { fips: '4103100099999', name: 'Jefferson County', county: 'Jefferson', type: 'county' },
+  { fips: '4101399999', name: 'Crook County', county: 'Crook', type: 'county' },
+  { fips: '4103199999', name: 'Jefferson County', county: 'Jefferson', type: 'county' },
+  { fips: '4106599999', name: 'Wasco County', county: 'Wasco', type: 'county' },
 ];
 
 // Fallback FIPS if MSA doesn't work
-const DESCHUTES_COUNTY_FIPS = '4101700099999';
+const DESCHUTES_COUNTY_FIPS = '4101799999';
 
 // Area names to assign based on county
 const COUNTY_AREAS: Record<string, string[]> = {
   Deschutes: ['Bend', 'Redmond', 'Sisters', 'La Pine'],
   Crook: ['Prineville'],
   Jefferson: ['Culver'],
+  Wasco: ['Maupin'],
 };
 
 function getToken(): string | null {

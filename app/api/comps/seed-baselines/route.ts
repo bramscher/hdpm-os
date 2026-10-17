@@ -68,6 +68,14 @@ async function seedBaselines(request: NextRequest) {
     baselines.push(...baselines.filter((b) => b.area_name === 'Bend').map((b) => ({
       ...b, area_name: 'La Pine',
     })));
+    // Wasco County → Maupin (FY2026 HUD FMR, non-metro county)
+    baselines.push(
+      { area_name: 'Maupin', county: 'Wasco', bedrooms: 0, fmr_rent: 1281, data_year: 2026, source: 'hud_fmr' },
+      { area_name: 'Maupin', county: 'Wasco', bedrooms: 1, fmr_rent: 1289, data_year: 2026, source: 'hud_fmr' },
+      { area_name: 'Maupin', county: 'Wasco', bedrooms: 2, fmr_rent: 1600, data_year: 2026, source: 'hud_fmr' },
+      { area_name: 'Maupin', county: 'Wasco', bedrooms: 3, fmr_rent: 2225, data_year: 2026, source: 'hud_fmr' },
+      { area_name: 'Maupin', county: 'Wasco', bedrooms: 4, fmr_rent: 2589, data_year: 2026, source: 'hud_fmr' },
+    );
     const count = await bulkUpsertBaselines(baselines);
 
     return NextResponse.json({
