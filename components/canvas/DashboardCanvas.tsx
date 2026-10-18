@@ -344,8 +344,8 @@ export function DashboardCanvas() {
       {/* Every feature, one compact row each */}
       <div className="stagger-children">
         <TileSection label="Maintenance OS">
-          {/* One door in. The Dashboard tab is the default and drills into every
-              other board view, so the per-tab tiles were retired (2026-09-04). */}
+          {/* One door in: the board opens on Dispatch (since 2026-10-18), and every
+              other view is a tab away, so the per-tab tiles were retired (2026-09-04). */}
           <Tile
             href="/maintenance/board"
             icon={Wrench}
