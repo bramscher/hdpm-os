@@ -41,6 +41,8 @@ export const HELP_GUIDES: Record<string, HelpGuide> = {
       <>The chips in Unassigned split it into piles: P1/P2, Overdue, Needs date, New this week, Waiting on, and HDMS work with no tech.</>,
       <>A card moved to a vendor shows <span className="warn">Assign … in AppFolio ↗</span>. Make the same assignment in AppFolio; the badge clears on the next sync (within 15 minutes). If AppFolio shows a different vendor later, AppFolio wins.</>,
       <>Need a vendor with no open work? Type its name in <b>Add a vendor column</b>. Click a card to open the work order.</>,
+      <>Drop a card on a day in the week strip to schedule it. Alberto&apos;s and Brody&apos;s days are drafts until Brody publishes them in Route Builder.</>,
+      <>The board remembers your layout in this browser: collapsed columns, vendor columns you added, your pile and sorts. <b>Reset layout</b> puts it back.</>,
     ],
   },
   triage: {
