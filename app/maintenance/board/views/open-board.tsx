@@ -9,6 +9,7 @@ import { KpiTile, WoCard } from '../components/shared';
 import OpenBoardGrouped from './open-board-grouped';
 import OpenBoardVendor from './open-board-vendor';
 import OpenBoardRoute from './open-board-route';
+import OpenBoardDispatch from './open-board-dispatch';
 
 const COLUMNS: { stage: MaintWorkOrder['stage']; title: string }[] = [
   { stage: 'NEW', title: 'NEW' },
@@ -23,7 +24,7 @@ const COLUMNS: { stage: MaintWorkOrder['stage']; title: string }[] = [
 /** Sentinel select value for "assigned to no one". */
 const UNASSIGNED = '__unassigned__';
 
-const MODES = ['grouped', 'vendor', 'kanban', 'route'] as const;
+const MODES = ['dispatch', 'grouped', 'vendor', 'kanban', 'route'] as const;
 type Mode = (typeof MODES)[number];
 
 export default function OpenBoard({
@@ -121,6 +122,14 @@ export default function OpenBoard({
       <div className="mo-seg" role="tablist" aria-label="Board layout">
         <button
           role="tab"
+          aria-selected={mode === 'dispatch'}
+          className={mode === 'dispatch' ? 'on' : ''}
+          onClick={() => setMode('dispatch')}
+        >
+          Dispatch
+        </button>
+        <button
+          role="tab"
           aria-selected={mode === 'grouped'}
           className={mode === 'grouped' ? 'on' : ''}
           onClick={() => setMode('grouped')}
@@ -184,6 +193,7 @@ export default function OpenBoard({
         </span>
       </div>
 
+      {mode === 'dispatch' && <OpenBoardDispatch board={filteredBoard} />}
       {mode === 'grouped' && <OpenBoardGrouped board={filteredBoard} showAssignee={showAssignee} />}
       {mode === 'vendor' && <OpenBoardVendor board={filteredBoard} />}
       {mode === 'kanban' && <KanbanBody board={filteredBoard} showAssignee={showAssignee} />}

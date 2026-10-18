@@ -124,7 +124,8 @@ export function tripwire4(snapshot: TripwireSnapshot): TripwireException[] {
 
   return snapshot.assignments
     .filter((a) => {
-      if (a.accepted_at || a.declined_at) return false;
+      if (a.accepted_at || a.declined_at || a.withdrawn_at) return false;
+      if (a.source === 'board') return false; // planned on the dispatch board, not a sent dispatch
       if (!woById.has(a.work_order_id)) return false; // closed WOs don't chase
       return snapshot.now.getTime() - new Date(a.sent_at).getTime() > 24 * 3600_000;
     })
