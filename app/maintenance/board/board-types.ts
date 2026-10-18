@@ -9,7 +9,7 @@ import type {
   UnitTurn,
 } from '@/lib/maintenance/types';
 import { isInternalVendor, type DispatchVendor } from '@/lib/maintenance/dispatch';
-import { isRecurringWork } from '@/lib/maintenance/recurring';
+import type { RecurringFilter } from '@/lib/maintenance/recurring';
 
 /** The HDMS check lives with the dispatch model; re-exported for existing views. */
 export { INTERNAL_VENDOR_MATCH, isInternalVendor } from '@/lib/maintenance/dispatch';
@@ -169,20 +169,14 @@ export function filterWorkOrders(wos: MaintWorkOrder[], query: string): MaintWor
   });
 }
 
-/** The board's recurring filter: everything, hide recurring/seasonal work, or only that work. */
-export type RecurringFilter = 'all' | 'hide' | 'only';
+export type { RecurringFilter } from '@/lib/maintenance/recurring';
+export { filterRecurring } from '@/lib/maintenance/recurring';
 
 export const RECURRING_OPTIONS: { key: RecurringFilter; label: string }[] = [
   { key: 'all', label: 'All work' },
   { key: 'hide', label: 'Hide recurring' },
   { key: 'only', label: 'Only recurring' },
 ];
-
-export function filterRecurring(wos: MaintWorkOrder[], filter: RecurringFilter): MaintWorkOrder[] {
-  if (filter === 'all') return wos;
-  const only = filter === 'only';
-  return wos.filter((wo) => isRecurringWork(wo) === only);
-}
 
 const PRIORITY_RANK: Record<string, number> = { P1: 0, P2: 1, P3: 2, P4: 3 };
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { BoardData, ExceptionsData, RecurringFilter, ScoreboardRow, WoSortKey } from './board-types';
 import { filterRecurring, filterWorkOrders, RECURRING_OPTIONS, sortWorkOrders, WO_SORT_OPTIONS } from './board-types';
 import { isRecurringWork } from '@/lib/maintenance/recurring';
+import { computeBoardKpis } from '@/lib/maintenance/board-kpis';
 import type { DashboardData } from '@/lib/maintenance/dashboard';
 import type { Drill } from '@/lib/maintenance/dashboard-drill';
 import { applyTurnDrill, applyWoDrill } from '@/lib/maintenance/dashboard-drill';
@@ -127,21 +128,23 @@ export default function BoardClient({
   // id lists are too long for the URL, and `?view=` alone keeps deep links working.
   const [drill, setDrill] = useState<Drill | null>(null);
 
+  // Bumped by each successful load so the dashboard refetches with it.
+  const [loadTick, setLoadTick] = useState(0);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [boardRes, dashRes, excRes, sbRes] = await Promise.all([
+      const [boardRes, excRes, sbRes] = await Promise.all([
         fetch('/api/maintenance/board'),
-        fetch('/api/maintenance/dashboard'),
         fetch('/api/maintenance/exceptions'),
         fetch('/api/maintenance/vendors/scoreboard'),
       ]);
       if (!boardRes.ok) throw new Error(`Board load failed (${boardRes.status})`);
       setBoard(await boardRes.json());
+      setLoadTick((t) => t + 1);
       // The dashboard/exceptions/scoreboard payloads are non-fatal: the list views
       // still work without them.
-      setDash(dashRes.ok ? await dashRes.json() : null);
       if (excRes.ok) setExceptions(await excRes.json());
       if (sbRes.ok) setScoreboard((await sbRes.json()).scoreboard ?? []);
     } catch (err) {
@@ -154,6 +157,20 @@ export default function BoardClient({
   useEffect(() => {
     load();
   }, [load]);
+
+  // The dashboard is aggregated on the server, so it is fetched for the current
+  // recurring filter (and again on each refresh). Late answers are ignored.
+  const dashSeq = useRef(0);
+  useEffect(() => {
+    if (!loadTick) return;
+    const seq = ++dashSeq.current;
+    fetch(`/api/maintenance/dashboard${recurring === 'all' ? '' : `?recurring=${recurring}`}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null)
+      .then((data) => {
+        if (seq === dashSeq.current) setDash(data);
+      });
+  }, [recurring, loadTick]);
 
   // Quiet refetch after a dispatch move, so every view sees it without the loading flash.
   const refreshBoard = useCallback(async () => {
@@ -194,12 +211,36 @@ export default function BoardClient({
     const open = sortWorkOrders(filterWorkOrders(drilledOpen, query), sortKey);
     const closedThisWeek = filterWorkOrders(filterRecurring(board.closedThisWeek, recurring), query);
     const unitTurns = applyTurnDrill(board.unitTurns ?? [], drill?.turnIds);
-    return { ...board, open, closedThisWeek, unitTurns };
+    // Header numbers follow the recurring filter (not the search).
+    const kpis =
+      recurring === 'all'
+        ? board.kpis
+        : computeBoardKpis(filterRecurring(board.open, recurring), filterRecurring(board.closedThisWeek, recurring));
+    return { ...board, open, closedThisWeek, unitTurns, kpis };
   }, [board, query, sortKey, drill, recurring]);
   const recurringCount = useMemo(() => board?.open.filter(isRecurringWork).length ?? 0, [board]);
 
+  // Exceptions follow the recurring filter too. Rows for work orders not on the board are kept;
+  // rows with no work order (unit turns) are kept when hiding and dropped for "only".
+  const filteredExceptions = useMemo<ExceptionsData | null>(() => {
+    if (!exceptions || !board || recurring === 'all') return exceptions;
+    const all = [...board.open, ...board.closedThisWeek];
+    const known = new Set(all.map((wo) => wo.id));
+    const kept = new Set(filterRecurring(all, recurring).map((wo) => wo.id));
+    const keep = (ex: { workOrderId?: string | null }) =>
+      ex.workOrderId ? !known.has(ex.workOrderId) || kept.has(ex.workOrderId) : recurring === 'hide';
+    const needsDate = exceptions.needsDate?.filter(keep);
+    return {
+      ...exceptions,
+      exceptions: exceptions.exceptions.filter(keep),
+      ...(needsDate ? { needsDate, needsDateCount: needsDate.length } : {}),
+    };
+  }, [exceptions, board, recurring]);
+
   const activeBoard = filteredBoard ?? board;
   const showToolbar = WO_LIST_VIEWS.has(view);
+  // The recurring filter also reshapes the Dashboard and Exceptions.
+  const showRecurring = showToolbar || view === 'dashboard' || view === 'exceptions';
   const searching = query.trim().length > 0;
   const drilled = !!drill && view !== 'dashboard';
 
@@ -208,9 +249,26 @@ export default function BoardClient({
     open: activeBoard?.open.length,
     dispatch: activeBoard?.open.length,
     wait: activeBoard?.open.filter((wo) => wo.stage === 'WAITING_ON').length,
-    exceptions: exceptions?.exceptions.length,
+    exceptions: filteredExceptions?.exceptions.length,
     turnover: activeBoard?.unitTurns?.length,
   };
+
+  const recurringControl = board && (
+    <label className="mo-sort" title="Recurring and seasonal work: AppFolio recurring work orders plus any winterization or spring start-up">
+      Recurring:
+      <select value={recurring} onChange={(e) => chooseRecurring(e.target.value as RecurringFilter)}>
+        {RECURRING_OPTIONS.map((o) => (
+          <option key={o.key} value={o.key}>
+            {o.key === 'all'
+              ? o.label
+              : o.key === 'hide'
+                ? `${o.label} (${board.open.length - recurringCount} left)`
+                : `${o.label} (${recurringCount})`}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 
   return (
     <div className="maint-os p-6 max-w-[1400px]">
@@ -258,6 +316,8 @@ export default function BoardClient({
         </div>
       )}
 
+      {showRecurring && !showToolbar && board && <div className="mo-toolbar">{recurringControl}</div>}
+
       {showToolbar && board && (
         <div className="mo-toolbar">
           <input
@@ -278,20 +338,7 @@ export default function BoardClient({
               ))}
             </select>
           </label>
-          <label className="mo-sort" title="Recurring and seasonal work: AppFolio recurring work orders plus any winterization or spring start-up">
-            Recurring:
-            <select value={recurring} onChange={(e) => chooseRecurring(e.target.value as RecurringFilter)}>
-              {RECURRING_OPTIONS.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.key === 'all'
-                    ? o.label
-                    : o.key === 'hide'
-                      ? `${o.label} (${board.open.length - recurringCount} left)`
-                      : `${o.label} (${recurringCount})`}
-                </option>
-              ))}
-            </select>
-          </label>
+          {recurringControl}
           {searching && activeBoard && (
             <span className="note" style={{ border: 'none', padding: 0, margin: 0 }}>
               {activeBoard.open.length} of {board.open.length} open match
@@ -328,7 +375,7 @@ export default function BoardClient({
           {view === 'open' && (
             <OpenBoard
               board={activeBoard}
-              exceptions={exceptions}
+              exceptions={filteredExceptions}
               initialTab={embedded ? null : searchParams.get('tab')}
             />
           )}
@@ -337,10 +384,10 @@ export default function BoardClient({
           {view === 'wait' && <WaitingOn board={activeBoard} />}
           {view === 'vendor' && <VendorScoreboard scoreboard={scoreboard} onRefresh={load} />}
           {view === 'aging' && <Aging board={activeBoard} onChanged={load} />}
-          {view === 'exceptions' && <Exceptions data={exceptions} />}
+          {view === 'exceptions' && <Exceptions data={filteredExceptions} />}
           {view === 'turnover' && <Turnover board={activeBoard} onChanged={load} />}
           {view === 'monday' && (
-            <MondayReview board={activeBoard} exceptions={exceptions} onChanged={load} />
+            <MondayReview board={activeBoard} exceptions={filteredExceptions} onChanged={load} />
           )}
         </>
       )}

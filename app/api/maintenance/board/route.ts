@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { requireStaffSession } from '@/lib/maintenance/api-auth';
 import { fetchAllRows } from '@/lib/maintenance/tripwire-engine';
 import { isDeferredRecurring } from '@/lib/maintenance/recurring';
+import { computeBoardKpis } from '@/lib/maintenance/board-kpis';
 import type { MaintWorkOrder, Turn, VendorAssignment, UnitTurn } from '@/lib/maintenance/types';
 import type { DispatchVendor } from '@/lib/maintenance/dispatch';
 
@@ -83,27 +84,7 @@ export async function GET() {
       }
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-
-    // Age math uses AppFolio's CreatedAt (catch-up syncs insert old history
-    // with fresh row timestamps), falling back to our row insert time.
-    const createdAt = (wo: MaintWorkOrder) => wo.appfolio_created_at ?? wo.created_at;
-    const kpis = {
-      open: open.length,
-      pastDue: open.filter((wo) => wo.next_action_date && wo.next_action_date < today).length,
-      aging30Plus: open.filter((wo) => createdAt(wo) < thirtyDaysAgo).length,
-      p1ThisWeek: open
-        .concat(closedThisWeek)
-        .filter((wo) => wo.priority_class === 'P1' && createdAt(wo) >= sevenDaysAgo).length,
-      ownerAndDateCoverage:
-        open.length === 0
-          ? 100
-          : Math.round(
-              (open.filter((wo) => wo.owner_name && wo.next_action_date).length / open.length) * 100
-            ),
-    };
+    const kpis = computeBoardKpis(open, closedThisWeek);
 
     return NextResponse.json({ open, closedThisWeek, turns, unitTurns, turnWos, assignments, vendors, waitingSince, kpis });
   } catch (error) {
