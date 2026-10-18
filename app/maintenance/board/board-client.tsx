@@ -9,6 +9,7 @@ import type { Drill } from '@/lib/maintenance/dashboard-drill';
 import { applyTurnDrill, applyWoDrill } from '@/lib/maintenance/dashboard-drill';
 import Dashboard from './views/dashboard';
 import OpenBoard from './views/open-board';
+import OpenBoardDispatch from './views/open-board-dispatch';
 import WaitingOn from './views/waiting-on';
 import VendorScoreboard from './views/vendor-scoreboard';
 import Aging from './views/aging';
@@ -28,6 +29,11 @@ const VIEWS = [
     key: 'open',
     label: 'Open Board',
     hint: 'Every open work order — By Property, By Vendor, Kanban, or Route Builder layouts, with the shared staff/HDMS filter.',
+  },
+  {
+    key: 'dispatch',
+    label: 'Dispatch',
+    hint: 'Drag work orders onto Alberto, Brody or a vendor to assign them. Unassigned is split into piles: P1/P2, overdue, needs a date, new this week.',
   },
   {
     key: 'turnover',
@@ -70,7 +76,7 @@ type ViewKey = (typeof VIEWS)[number]['key'];
 const DEFAULT_VIEW: ViewKey = 'dashboard';
 
 /** Views whose content is the open-WO list — the search/sort toolbar drives these. */
-const WO_LIST_VIEWS = new Set<ViewKey>(['open', 'wait', 'aging', 'turnover', 'monday']);
+const WO_LIST_VIEWS = new Set<ViewKey>(['open', 'dispatch', 'wait', 'aging', 'turnover', 'monday']);
 
 export default function BoardClient({
   embedded = false,
@@ -125,6 +131,12 @@ export default function BoardClient({
     load();
   }, [load]);
 
+  // Quiet refetch after a dispatch move, so every view sees it without the loading flash.
+  const refreshBoard = useCallback(async () => {
+    const res = await fetch('/api/maintenance/board');
+    if (res.ok) setBoard(await res.json());
+  }, []);
+
   // Deep links can prefill the search (e.g. the "P1 this week" KPI → ?q=P1).
   const qParam = embedded ? null : searchParams.get('q');
   useEffect(() => {
@@ -169,6 +181,7 @@ export default function BoardClient({
   const counts: Partial<Record<ViewKey, number>> = {
     dashboard: dash?.attention.total,
     open: activeBoard?.open.length,
+    dispatch: activeBoard?.open.length,
     wait: activeBoard?.open.filter((wo) => wo.stage === 'WAITING_ON').length,
     exceptions: exceptions?.exceptions.length,
     turnover: activeBoard?.unitTurns?.length,
@@ -280,6 +293,7 @@ export default function BoardClient({
               initialTab={embedded ? null : searchParams.get('tab')}
             />
           )}
+          {view === 'dispatch' && <OpenBoardDispatch board={activeBoard} onMoved={refreshBoard} />}
           {view === 'triage' && <TriageReview onChanged={load} />}
           {view === 'wait' && <WaitingOn board={activeBoard} />}
           {view === 'vendor' && <VendorScoreboard scoreboard={scoreboard} onRefresh={load} />}

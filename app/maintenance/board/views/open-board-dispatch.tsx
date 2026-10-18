@@ -76,7 +76,7 @@ function sortWos(wos: MaintWorkOrder[], sort: ColSort): MaintWorkOrder[] {
   return out;
 }
 
-export default function OpenBoardDispatch({ board }: { board: BoardData }) {
+export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData; onMoved?: () => void }) {
   const vendors = useMemo(() => board.vendors ?? [], [board.vendors]);
   const vendorIndex = useMemo(() => indexVendors(vendors), [vendors]);
   const serverPlans = useMemo(() => livePlansByWo(board.assignments), [board.assignments]);
@@ -246,6 +246,7 @@ export default function OpenBoardDispatch({ board }: { board: BoardData }) {
         for (const r of results) if (r.ok && r.workOrder) next.set(r.id, { wo: r.workOrder, plan: r.plan ?? null });
         return next;
       });
+      if (failed.length < results.length) onMoved?.();
       if (failed.length) {
         revert(failed.map((r) => r.id));
         toast.error(`${failed.length} not moved: ${failed[0].error}`);
