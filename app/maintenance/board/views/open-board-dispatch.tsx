@@ -47,13 +47,20 @@ import {
   type Placement,
   type TechDay,
 } from '@/lib/maintenance/dispatch';
+import {
+  DEFAULT_LAYOUT,
+  clearLayout,
+  loadLayout,
+  saveLayout,
+  type ColSort,
+  type DispatchLayout,
+} from '@/lib/maintenance/dispatch-layout';
 import DispatchWeek, { UNSCHEDULE_ID, parseChipDrag, parseDayDrop, type VendorDay } from './dispatch-week';
 import { daysSince, fmtDate, todayStr, woCreatedAt, woWhere, type BoardData } from '../board-types';
 
 /** Cards rendered per column before "show more" (300+ open WOs). */
 const PAGE = 50;
 
-type ColSort = 'priority' | 'age' | 'date';
 const PRIORITY_RANK: Record<string, number> = { P1: 0, P2: 1, P3: 2, P4: 3 };
 
 interface Column {
@@ -100,9 +107,28 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
   const serverPlans = useMemo(() => livePlansByWo(board.assignments), [board.assignments]);
   // Optimistic and server-confirmed changes since the board loaded.
   const [local, setLocal] = useState<Map<string, Local>>(new Map());
-  const [pile, setPile] = useState<PileKey>('all');
-  const [pinned, setPinned] = useState<string[]>([]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // How this person left the board (kept in this browser). Read after mount so the
+  // server render and first client render match.
+  const [layout, setLayout] = useState<DispatchLayout>(DEFAULT_LAYOUT);
+  const [layoutLoaded, setLayoutLoaded] = useState(false);
+  useEffect(() => {
+    setLayout(loadLayout());
+    setLayoutLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (layoutLoaded) saveLayout(layout);
+  }, [layout, layoutLoaded]);
+  const { pile, pinned, weekOpen } = layout;
+  const collapsed = useMemo(() => new Set(layout.collapsed), [layout.collapsed]);
+  const setPile = (next: PileKey) => setLayout((l) => ({ ...l, pile: next }));
+  const toggleCollapsed = (key: string) =>
+    setLayout((l) => ({
+      ...l,
+      collapsed: l.collapsed.includes(key) ? l.collapsed.filter((k) => k !== key) : [...l.collapsed, key],
+    }));
+  const unpin = (vendorId: string) => setLayout((l) => ({ ...l, pinned: l.pinned.filter((id) => id !== vendorId) }));
+  const customised =
+    layout.collapsed.length > 0 || layout.pinned.length > 0 || layout.pile !== 'all' || Object.keys(layout.sorts).length > 0 || !layout.weekOpen;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dragging, setDragging] = useState<string[] | null>(null);
   const [vendorQuery, setVendorQuery] = useState('');
@@ -111,7 +137,6 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
 
   const today = todayStr();
   const [monday, setMonday] = useState(() => planningMonday(todayStr()));
-  const [weekOpen, setWeekOpen] = useState(true);
   const [techDays, setTechDays] = useState<TechDay[]>([]);
   const [weekLoading, setWeekLoading] = useState(false);
 
@@ -436,7 +461,7 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
             key={v.id}
             className="mo-btn"
             onClick={() => {
-              setPinned((p) => [...p, v.id]);
+              setLayout((l) => ({ ...l, pinned: [...l.pinned, v.id] }));
               setVendorQuery('');
             }}
           >
@@ -452,6 +477,19 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
               Clear selection
             </button>
           </>
+        )}
+        {customised && (
+          <button
+            className="mo-btn secondary"
+            style={{ padding: '4px 10px', fontSize: 12 }}
+            onClick={() => {
+              clearLayout();
+              setLayout(DEFAULT_LAYOUT);
+            }}
+            title="Expand every column, remove added vendor columns, and go back to the default piles and sorts"
+          >
+            Reset layout
+          </button>
         )}
         {needsAppFolio > 0 && (
           <span className="afcount" title="Cards with a vendor or date planned here that AppFolio doesn't show yet">
@@ -474,7 +512,7 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
           monday={monday}
           onWeek={(delta) => setMonday(delta === 'this' ? planningMonday(todayStr()) : addDays(monday, delta * 7))}
           open={weekOpen}
-          onToggle={() => setWeekOpen((o) => !o)}
+          onToggle={() => setLayout((l) => ({ ...l, weekOpen: !l.weekOpen }))}
           techDays={techDays}
           vendorDays={vendorDays}
           woById={woById}
@@ -487,14 +525,17 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
                 key={col.key}
                 col={col}
                 collapsed={collapsed.has(col.key)}
-                onToggle={() =>
-                  setCollapsed((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(col.key)) next.delete(col.key);
-                    else next.add(col.key);
-                    return next;
+                onToggle={() => toggleCollapsed(col.key)}
+                sort={layout.sorts[col.key] ?? 'priority'}
+                onSort={(next) =>
+                  setLayout((l) => {
+                    const sorts = { ...l.sorts };
+                    if (next === 'priority') delete sorts[col.key];
+                    else sorts[col.key] = next;
+                    return { ...l, sorts };
                   })
                 }
+                onUnpin={pinned.includes(col.key.slice(7)) ? () => unpin(col.key.slice(7)) : undefined}
                 pile={col.kind === 'unassigned' ? pile : undefined}
                 pileCounts={pileCounts}
                 onPile={setPile}
@@ -532,6 +573,9 @@ function DispatchColumn({
   col,
   collapsed,
   onToggle,
+  sort,
+  onSort,
+  onUnpin,
   pile,
   pileCounts,
   onPile,
@@ -545,6 +589,10 @@ function DispatchColumn({
   col: Column;
   collapsed: boolean;
   onToggle: () => void;
+  sort: ColSort;
+  onSort: (sort: ColSort) => void;
+  /** Set for a vendor column this person added; removes it from their board. */
+  onUnpin?: () => void;
   pile?: PileKey;
   pileCounts: Map<PileKey, number>;
   onPile: (p: PileKey) => void;
@@ -556,7 +604,6 @@ function DispatchColumn({
   today: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key, disabled: !col.target });
-  const [sort, setSort] = useState<ColSort>('priority');
   const [limit, setLimit] = useState(PAGE);
   const wos = useMemo(() => sortWos(col.wos, sort), [col.wos, sort]);
   const overdue = col.wos.filter((wo) => wo.next_action_date && wo.next_action_date < today).length;
@@ -568,6 +615,11 @@ function DispatchColumn({
           {collapsed ? '▸' : '▾'}
         </button>
         <span className="dcol-title">{col.title}</span>
+        {onUnpin && !collapsed && (
+          <button className="dcol-toggle" onClick={onUnpin} title="Remove this column you added" aria-label={`Remove ${col.title} column`}>
+            ×
+          </button>
+        )}
         <span className="cnt">
           {col.wos.length}
           {overdue > 0 && <span className="dover"> · {overdue} late</span>}
@@ -584,7 +636,7 @@ function DispatchColumn({
               ))}
             </div>
           )}
-          <select className="mo-input dsort" value={sort} onChange={(e) => setSort(e.target.value as ColSort)} aria-label={`Sort ${col.title}`}>
+          <select className="mo-input dsort" value={sort} onChange={(e) => onSort(e.target.value as ColSort)} aria-label={`Sort ${col.title}`}>
             <option value="priority">Priority</option>
             <option value="age">Oldest first</option>
             <option value="date">Next action</option>
