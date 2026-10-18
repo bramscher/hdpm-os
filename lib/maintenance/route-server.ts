@@ -96,14 +96,17 @@ export async function publishRoute(input: PublishInput, session: Session) {
   const totals = { total_drive_minutes: scheduled.reduce((n, s) => n + s.drive_minutes_from_prev, 0), total_service_minutes: scheduled.reduce((n, s) => n + s.service_minutes, 0), stop_count: scheduled.length };
 
   // Replace this tech's route for the day if there is one (the unique index keeps it to one).
+  // Otherwise a Dispatch draft for the day becomes the published route (same plan id).
   const { data: existing } = await db.from('maint_route_plan').select('id,calendar_event_id').eq('route_date', input.routeDate).ilike('assigned_tech', input.assignedTech).eq('status', 'published').maybeSingle();
+  const { data: draft } = existing ? { data: null } : await db.from('maint_route_plan').select('id').eq('route_date', input.routeDate).ilike('assigned_tech', input.assignedTech).eq('status', 'draft').maybeSingle();
   const row = { route_date: input.routeDate, assigned_tech: tech.person, status: 'published', start_time: input.startTime, notes: input.notes, polyline: input.polyline, ...totals, updated_at: new Date().toISOString() };
   let planId: string;
-  if (existing) {
-    const { error } = await db.from('maint_route_plan').update(row).eq('id', existing.id);
+  const reuse = existing ?? draft;
+  if (reuse) {
+    const { error } = await db.from('maint_route_plan').update(row).eq('id', reuse.id);
     if (error) throw new Error(error.message);
-    await db.from('maint_route_stop').delete().eq('route_plan_id', existing.id);
-    planId = existing.id;
+    await db.from('maint_route_stop').delete().eq('route_plan_id', reuse.id);
+    planId = reuse.id;
   } else {
     const { data: plan, error } = await db.from('maint_route_plan').insert({ ...row, created_by: session.actor }).select('id').single();
     if (error || !plan) throw new Error(error?.message?.includes('duplicate') ? 'Another route for this tech and day was just saved. Reload and try again.' : error?.message || 'Could not save the route');
@@ -114,7 +117,8 @@ export async function publishRoute(input: PublishInput, session: Session) {
     drive_minutes_from_prev: s.drive_minutes_from_prev, service_minutes: s.service_minutes, estimated_arrival: s.arrival, estimated_departure: s.departure, details: s.details ?? {},
   })));
   if (stopsError) {
-    if (!existing) await db.from('maint_route_plan').delete().eq('id', planId);
+    if (draft) await db.from('maint_route_plan').update({ status: 'draft' }).eq('id', planId);
+    else if (!existing) await db.from('maint_route_plan').delete().eq('id', planId);
     throw new Error(stopsError.message);
   }
 

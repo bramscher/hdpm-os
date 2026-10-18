@@ -310,6 +310,49 @@
   .maint-os .dcol { width: 82vw; }
 }
 
+/* ── Dispatch week strip — drop a card on a day ── */
+.maint-os .dweek { border: 1px solid var(--hair); border-radius: 8px; margin-bottom: 12px; background: #fff; }
+.maint-os .dweek-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; font-size: 12.5px; }
+.maint-os .dweek-count { color: var(--muted); }
+.maint-os .dweek-nav { display: inline-flex; gap: 4px; }
+.maint-os .dweek-nav .mo-btn { padding: 3px 9px; font-size: 12px; }
+.maint-os .dweek-off {
+  margin-left: auto; border: 1.5px dashed var(--hair); border-radius: 8px; padding: 4px 10px;
+  color: var(--muted); font-size: 11.5px;
+}
+.maint-os .dweek-off.over { border-color: var(--red); color: var(--red); background: #fdf0ef; }
+.maint-os .dweek-scroll { overflow-x: auto; border-top: 1px solid var(--hair); }
+.maint-os .dweek-grid { display: grid; grid-template-columns: 76px repeat(7, minmax(132px, 1fr)); min-width: 1000px; }
+.maint-os .dweek-day {
+  font-size: 11px; font-weight: 700; color: var(--dk); padding: 4px 6px; background: var(--lt);
+  border-left: 1px solid var(--hair);
+}
+.maint-os .dweek-day.today { background: var(--tint); color: var(--gr); }
+.maint-os .dweek-label {
+  font-size: 11.5px; font-weight: 700; padding: 6px; border-top: 1px solid var(--hair); background: var(--lt);
+}
+.maint-os .dweek-cell {
+  min-height: 52px; max-height: 150px; overflow-y: auto; padding: 4px; border-top: 1px solid var(--hair);
+  border-left: 1px solid var(--hair); transition: background 0.12s, box-shadow 0.12s;
+}
+.maint-os .dweek-cell.over { background: var(--tint); box-shadow: inset 0 0 0 2px var(--gr); }
+.maint-os .dweek-cell.refuse { background: #fdf0ef; box-shadow: inset 0 0 0 2px var(--red); }
+.maint-os .dweek-cell.published { background: var(--ok-tint); }
+.maint-os .dweek-cell.past { background: repeating-linear-gradient(135deg, var(--lt) 0 6px, #fff 6px 12px); }
+.maint-os .dweek-cap { display: block; font-size: 10.5px; color: var(--muted); margin-bottom: 3px; }
+.maint-os .dweek-cap.over { color: var(--red); font-weight: 700; }
+.maint-os .wchip {
+  font-size: 11px; background: #fff; border: 1px solid var(--hair); border-radius: 5px; padding: 2px 5px;
+  margin-bottom: 3px; cursor: grab; user-select: none; touch-action: manipulation; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.maint-os .wchip .wonum { font-weight: 700; }
+.maint-os .wchip .wsub { display: block; color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+.maint-os .wchip.appfolio { border-style: dashed; }
+.maint-os .wchip.locked { cursor: default; opacity: 0.85; }
+.maint-os .wchip.ghost { opacity: 0.35; }
+.maint-os .dcard .dsched { display: block; font-size: 10.5px; color: var(--gr); font-weight: 700; margin-top: 3px; }
+
 /* ── Chip filters ── */
 .maint-os .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .maint-os .chip {
