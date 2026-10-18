@@ -147,6 +147,11 @@ export interface VendorAssignment {
   callback: boolean;
   created_by: string | null;
   created_at: string;
+  /** 'board' = planned on the dispatch board (not chased by tripwire #4). */
+  source?: 'manual' | 'board';
+  withdrawn_at?: string | null;
+  /** AppFolio's vendor_id on the WO when the board plan was made. */
+  af_vendor_at_plan?: string | null;
 }
 
 export interface Approval {

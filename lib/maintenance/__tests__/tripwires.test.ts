@@ -247,6 +247,14 @@ describe('tripwire 4 — vendor unaccepted > 24h', () => {
     });
     expect(tripwire4(s)).toHaveLength(0);
   });
+
+  it('does not chase dispatch-board plans or withdrawn assignments', () => {
+    const theWo = wo();
+    const board = assignment({ work_order_id: theWo.id, source: 'board' });
+    const withdrawn = assignment({ work_order_id: theWo.id, withdrawn_at: '2026-06-28T00:00:00Z' });
+    const s = snapshot({ openWorkOrders: [theWo], assignments: [board, withdrawn] });
+    expect(tripwire4(s)).toHaveLength(0);
+  });
 });
 
 describe('tripwire 5 — failed access needs same-day new date', () => {

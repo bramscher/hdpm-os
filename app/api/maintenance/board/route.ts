@@ -4,6 +4,7 @@ import { requireStaffSession } from '@/lib/maintenance/api-auth';
 import { fetchAllRows } from '@/lib/maintenance/tripwire-engine';
 import { isDeferredRecurring } from '@/lib/maintenance/recurring';
 import type { MaintWorkOrder, Turn, VendorAssignment, UnitTurn } from '@/lib/maintenance/types';
+import type { DispatchVendor } from '@/lib/maintenance/dispatch';
 
 /**
  * GET /api/maintenance/board
@@ -25,7 +26,7 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-    const [openRaw, closedRes, turnsRes, unitTurnsRes, turnWosRes, assignmentsRes] = await Promise.all([
+    const [openRaw, closedRes, turnsRes, unitTurnsRes, turnWosRes, assignmentsRes, vendorsRaw] = await Promise.all([
       fetchAllRows(
         () => supabase.from('work_orders').select('*').neq('stage', 'CLOSED'),
         'work_orders'
@@ -44,6 +45,7 @@ export async function GET() {
         .select('*')
         .is('completed_at', null)
         .is('declined_at', null),
+      fetchAllRows(() => supabase.from('vendor').select('id,name,appfolio_vendor_id').eq('active', true), 'vendor'),
     ]);
 
     for (const res of [closedRes, turnsRes, unitTurnsRes, turnWosRes, assignmentsRes]) {
@@ -60,7 +62,9 @@ export async function GET() {
     const turns = (turnsRes.data ?? []) as Turn[];
     const unitTurns = (unitTurnsRes.data ?? []) as UnitTurn[];
     const turnWos = (turnWosRes.data ?? []) as MaintWorkOrder[];
-    const assignments = (assignmentsRes.data ?? []) as VendorAssignment[];
+    // Withdrawn dispatch-board plans are history, not open assignments.
+    const assignments = ((assignmentsRes.data ?? []) as VendorAssignment[]).filter((a) => !a.withdrawn_at);
+    const vendors = vendorsRaw as DispatchVendor[];
 
     // How long has each WAITING_ON WO been waiting? (latest stage_change → WAITING_ON)
     const waitingIds = open.filter((wo) => wo.stage === 'WAITING_ON').map((wo) => wo.id);
@@ -101,7 +105,7 @@ export async function GET() {
             ),
     };
 
-    return NextResponse.json({ open, closedThisWeek, turns, unitTurns, turnWos, assignments, waitingSince, kpis });
+    return NextResponse.json({ open, closedThisWeek, turns, unitTurns, turnWos, assignments, vendors, waitingSince, kpis });
   } catch (error) {
     console.error('[Maintenance] Board fetch error:', error);
     const message = error instanceof Error ? error.message : 'Failed to load board';

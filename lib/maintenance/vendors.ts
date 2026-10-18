@@ -221,7 +221,7 @@ export function computeVendorScores(
   return vendors
     .map((vendor) => {
       const recent = assignments.filter(
-        (a) => a.vendor_id === vendor.id && new Date(a.sent_at).getTime() >= cutoff
+        (a) => a.vendor_id === vendor.id && !a.withdrawn_at && new Date(a.sent_at).getTime() >= cutoff
       );
 
       const acceptLatencies = recent

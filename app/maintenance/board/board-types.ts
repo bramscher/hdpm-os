@@ -8,6 +8,10 @@ import type {
   VendorAssignment,
   UnitTurn,
 } from '@/lib/maintenance/types';
+import { isInternalVendor, type DispatchVendor } from '@/lib/maintenance/dispatch';
+
+/** The HDMS check lives with the dispatch model; re-exported for existing views. */
+export { INTERNAL_VENDOR_MATCH, isInternalVendor } from '@/lib/maintenance/dispatch';
 
 export interface BoardData {
   open: MaintWorkOrder[];
@@ -17,6 +21,8 @@ export interface BoardData {
   /** ALL work orders linked to a unit turn, any stage (incl. CLOSED) */
   turnWos: MaintWorkOrder[];
   assignments: VendorAssignment[];
+  /** Every vendor (id, name, AppFolio id) — dispatch board drop targets. */
+  vendors?: DispatchVendor[];
   waitingSince: Record<string, string>;
   kpis: {
     open: number;
@@ -341,13 +347,6 @@ export function groupOpenByProperty(open: MaintWorkOrder[]): PropertyGroup[] {
   );
 }
 
-/** Substring identifying the internal maintenance crew's vendor record (HDMS). */
-export const INTERNAL_VENDOR_MATCH = 'high desert maintenance services';
-
-/** True when a work order is assigned to the internal HDMS crew. */
-export function isInternalVendor(wo: MaintWorkOrder): boolean {
-  return (wo.vendor_name ?? '').toLowerCase().includes(INTERNAL_VENDOR_MATCH);
-}
 
 /** A vendor's open work orders for one property (sub-group under a vendor). */
 export interface VendorPropertyGroup {
