@@ -7,6 +7,7 @@ import { fmtDate, isInternalVendor, todayStr, woWhere } from '../board-types';
 import { GoogleMap } from '@/components/GoogleMap';
 import { HDPM_OFFICE_LAT, HDPM_OFFICE_LNG } from '@/types/routes';
 import { workOrderTitle } from '@/lib/field-time/model';
+import { pacificDate, type TechDay } from '@/lib/maintenance/dispatch';
 import {
   clockTime,
   doorNotes,
@@ -108,13 +109,6 @@ const fieldAppUrl = (date: string, tech: string) =>
 const sentAt = (iso: string) =>
   new Date(iso).toLocaleString('en-US', { timeZone: ZONE, weekday: 'short', hour: 'numeric', minute: '2-digit' });
 
-/** AppFolio's scheduled start as a Pacific date (date-only values are already one). */
-function pacificDate(value: string | null | undefined): string | null {
-  if (!value) return null;
-  if (value.length <= 10) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('en-CA', { timeZone: ZONE });
-}
 
 /** Which list a work order belongs in: the tech's own and unassigned in-house work, all in-house, or everything. */
 function inScope(wo: MaintWorkOrder, scope: Scope, tech: string): boolean {
@@ -176,6 +170,23 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
   useEffect(() => {
     loadPublished(date);
   }, [date, loadPublished]);
+
+  // A draft day built on the Dispatch board for this tech and date, ready to load.
+  const [draft, setDraft] = useState<TechDay | null>(null);
+  const loadDraft = useCallback(async (day: string, who: string) => {
+    if (!isDate(day)) return setDraft(null);
+    try {
+      const res = await fetch(`/api/maintenance/dispatch/week?start=${day}&days=1`);
+      const data = await res.json().catch(() => ({}));
+      const days: TechDay[] = res.ok ? data.techDays ?? [] : [];
+      setDraft(days.find((d) => d.status === 'draft' && sameName(d.tech, who)) ?? null);
+    } catch {
+      setDraft(null);
+    }
+  }, []);
+  useEffect(() => {
+    loadDraft(date, tech);
+  }, [date, tech, loadDraft]);
 
   useEffect(() => {
     if (scrollToPlan) planRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -303,6 +314,7 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
       setStartTime('08:00');
       setScrollToPlan((n) => n + 1);
       await loadPublished(date);
+      await loadDraft(date, tech);
     } catch (e) {
       setPublishError(e instanceof Error ? e.message : 'The route could not be published');
     } finally {
@@ -381,6 +393,22 @@ export default function OpenBoardRoute({ board }: { board: BoardData }) {
             <>
               <b>{tech}</b> already has a route for {routeDayLabel(date, 'short')} ({existing.stops.length} stop
               {existing.stops.length === 1 ? '' : 's'}). Publishing again replaces it and sends the update.
+            </>
+          ) : draft ? (
+            <>
+              <b>{tech}</b> has a Dispatch draft for {routeDayLabel(date, 'short')}: {draft.work_order_ids.length} work
+              order{draft.work_order_ids.length === 1 ? '' : 's'}.{' '}
+              <button
+                className="mo-btn"
+                style={{ padding: '3px 10px', fontSize: 12 }}
+                onClick={() => {
+                  setSelected(new Set(draft.work_order_ids));
+                  setPlan(null);
+                }}
+              >
+                Load the draft
+              </button>{' '}
+              then plan the route and publish.
             </>
           ) : (
             <>

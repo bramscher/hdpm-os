@@ -180,3 +180,63 @@ export function inPile(
 export function inUnassignedColumn(placement: Placement): boolean {
   return placement.column === 'unassigned' || placement.hdmsNoTech;
 }
+
+// ── Week schedule (part 2) ──
+
+const ZONE = 'America/Los_Angeles';
+
+/** A timestamp or date as a Pacific calendar date (date-only values are already one). */
+export function pacificDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.length <= 10) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('en-CA', { timeZone: ZONE });
+}
+
+/** YYYY-MM-DD plus n days (calendar math at noon UTC, so DST never shifts the date). */
+export function addDays(date: string, n: number): string {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** The Monday on or before a date. */
+export function mondayOf(date: string): string {
+  const dow = new Date(`${date}T12:00:00Z`).getUTCDay(); // 0 = Sunday
+  return addDays(date, dow === 0 ? -6 : 1 - dow);
+}
+
+/** The week to plan: this week, or next week once it's the weekend. */
+export function planningMonday(today: string): string {
+  const dow = new Date(`${today}T12:00:00Z`).getUTCDay();
+  return dow === 0 || dow === 6 ? addDays(mondayOf(today), 7) : mondayOf(today);
+}
+
+export function weekDays(monday: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+}
+
+/** A vendor date we planned is stored at noon UTC so its calendar date is the same everywhere. */
+export function vendorDateIso(date: string): string {
+  return `${date}T12:00:00Z`;
+}
+
+/** A tech day on the week strip: a draft (office only) or the published route the tech has. */
+export interface TechDay {
+  plan_id: string;
+  date: string;
+  tech: string;
+  status: 'draft' | 'published';
+  work_order_ids: string[];
+  service_minutes: number;
+}
+
+/**
+ * When the board has a vendor date AppFolio doesn't show yet, staff must set it
+ * there too. Returns the board's date, or null when AppFolio agrees (or there is none).
+ */
+export function vendorDateToSet(wo: Pick<MaintWorkOrder, 'scheduled_start'>, plan: VendorAssignment | undefined | null): string | null {
+  const planned = pacificDate(plan?.scheduled_at);
+  if (!planned) return null;
+  return pacificDate(wo.scheduled_start) === planned ? null : planned;
+}

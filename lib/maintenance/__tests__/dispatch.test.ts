@@ -120,3 +120,43 @@ describe('parseTarget', () => {
     expect(parseTarget(null)).toBeNull();
   });
 });
+
+describe('week helpers', () => {
+  it('finds the Monday of any day, Sunday included', async () => {
+    const { mondayOf, weekDays } = await import('../dispatch');
+    expect(mondayOf('2026-10-18')).toBe('2026-10-12'); // Sunday
+    expect(mondayOf('2026-10-19')).toBe('2026-10-19'); // Monday
+    expect(mondayOf('2026-10-22')).toBe('2026-10-19');
+    expect(weekDays('2026-10-26')).toEqual(['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01']);
+  });
+
+  it('plans next week once it is the weekend', async () => {
+    const { planningMonday } = await import('../dispatch');
+    expect(planningMonday('2026-10-16')).toBe('2026-10-12'); // Friday
+    expect(planningMonday('2026-10-17')).toBe('2026-10-19'); // Saturday
+    expect(planningMonday('2026-10-18')).toBe('2026-10-19'); // Sunday
+  });
+
+  it('adds days across the daylight-saving change without slipping', async () => {
+    const { addDays } = await import('../dispatch');
+    expect(addDays('2026-10-31', 1)).toBe('2026-11-01');
+    expect(addDays('2026-11-01', 1)).toBe('2026-11-02');
+    expect(addDays('2026-03-07', 2)).toBe('2026-03-09');
+  });
+
+  it('reads AppFolio timestamps as Pacific dates', async () => {
+    const { pacificDate } = await import('../dispatch');
+    expect(pacificDate('2026-10-23')).toBe('2026-10-23');
+    expect(pacificDate('2026-10-24T03:00:00Z')).toBe('2026-10-23'); // 8 PM Pacific
+    expect(pacificDate(null)).toBeNull();
+  });
+
+  it('nudges for a vendor date until AppFolio shows the same day', async () => {
+    const { vendorDateToSet, vendorDateIso } = await import('../dispatch');
+    const dated = plan({ scheduled_at: vendorDateIso('2026-10-23') });
+    expect(vendorDateToSet(wo({ scheduled_start: null }), dated)).toBe('2026-10-23');
+    expect(vendorDateToSet(wo({ scheduled_start: '2026-10-23T16:00:00Z' }), dated)).toBeNull();
+    expect(vendorDateToSet(wo({ scheduled_start: '2026-10-21' }), dated)).toBe('2026-10-23');
+    expect(vendorDateToSet(wo(), plan())).toBeNull();
+  });
+});

@@ -35,7 +35,7 @@ export function parseTarget(raw: unknown): DispatchTarget | null {
 }
 
 /** Withdraw every live board plan on a work order except `keepId`. */
-async function withdrawPlans(workOrderId: string, actor: string, keepId?: string) {
+export async function withdrawPlans(workOrderId: string, actor: string, keepId?: string) {
   const db = getSupabaseAdmin();
   let q = db
     .from('vendor_assignment')
@@ -58,7 +58,8 @@ async function withdrawPlans(workOrderId: string, actor: string, keepId?: string
   }
 }
 
-async function liveBoardPlan(workOrderId: string): Promise<VendorAssignment | null> {
+/** The newest live board-planned vendor on a work order. */
+export async function liveBoardPlan(workOrderId: string): Promise<VendorAssignment | null> {
   const { data, error } = await getSupabaseAdmin()
     .from('vendor_assignment')
     .select('*')
@@ -74,6 +75,33 @@ async function liveBoardPlan(workOrderId: string): Promise<VendorAssignment | nu
   return (data as VendorAssignment | null) ?? null;
 }
 
+/** Take work orders off every draft except `keepPlanId`; returns the plans touched. */
+export async function removeFromDrafts(workOrderIds: string[], keepPlanId?: string): Promise<string[]> {
+  const db = getSupabaseAdmin();
+  const { data: rows, error } = await db
+    .from('maint_route_stop')
+    .select('id,route_plan_id,maint_route_plan!inner(status)')
+    .in('work_order_id', workOrderIds)
+    .eq('maint_route_plan.status', 'draft');
+  if (error) throw new Error(error.message);
+  const doomed = (rows ?? []).filter((r) => r.route_plan_id !== keepPlanId);
+  if (doomed.length) {
+    const { error: delError } = await db.from('maint_route_stop').delete().in('id', doomed.map((r) => r.id));
+    if (delError) throw new Error(delError.message);
+  }
+  return [...new Set(doomed.map((r) => r.route_plan_id as string))];
+}
+
+/** Keep stop counts honest; an empty draft day goes away. */
+export async function tidyDrafts(planIds: string[]) {
+  const db = getSupabaseAdmin();
+  for (const id of new Set(planIds)) {
+    const { count } = await db.from('maint_route_stop').select('id', { count: 'exact', head: true }).eq('route_plan_id', id);
+    if (!count) await db.from('maint_route_plan').delete().eq('id', id).eq('status', 'draft');
+    else await db.from('maint_route_plan').update({ stop_count: count, updated_at: new Date().toISOString() }).eq('id', id);
+  }
+}
+
 async function clearTech(wo: MaintWorkOrder, actor: string): Promise<MaintWorkOrder> {
   if (!wo.assigned_tech) return wo;
   return (await updateWorkOrderWorkflow(wo.id, { assigned_tech: null }, actor)).workOrder;
@@ -85,6 +113,11 @@ async function dispatchOne(id: string, target: DispatchTarget, actor: string): P
   if (error) throw new Error(error.message);
   if (!row) return { id, ok: false, error: 'Work order not found' };
   let wo = row as MaintWorkOrder;
+
+  // Leaving a tech takes the work order off that tech's draft days.
+  if (wo.assigned_tech && (target.kind !== 'tech' || target.person !== wo.assigned_tech)) {
+    await tidyDrafts(await removeFromDrafts([id]));
+  }
 
   if (target.kind === 'tech') {
     await withdrawPlans(id, actor);

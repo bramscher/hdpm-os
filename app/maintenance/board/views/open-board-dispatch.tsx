@@ -7,7 +7,7 @@
  * make the same assignment in AppFolio until the sync shows it.
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
@@ -18,8 +18,11 @@ import {
   TouchSensor,
   useDraggable,
   useDroppable,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
@@ -27,6 +30,10 @@ import type { MaintWorkOrder, VendorAssignment } from '@/lib/maintenance/types';
 import {
   DISPATCH_TECHS,
   PILES,
+  addDays,
+  pacificDate,
+  planningMonday,
+  vendorDateToSet,
   dispatchPlacement,
   inPile,
   inUnassignedColumn,
@@ -38,7 +45,9 @@ import {
   type DispatchVendor,
   type PileKey,
   type Placement,
+  type TechDay,
 } from '@/lib/maintenance/dispatch';
+import DispatchWeek, { UNSCHEDULE_ID, parseChipDrag, parseDayDrop, type VendorDay } from './dispatch-week';
 import { daysSince, fmtDate, todayStr, woCreatedAt, woWhere, type BoardData } from '../board-types';
 
 /** Cards rendered per column before "show more" (300+ open WOs). */
@@ -54,6 +63,15 @@ interface Column {
   target: DispatchTarget | null;
   wos: MaintWorkOrder[];
 }
+
+/** Small drop targets (day cells): the pointer decides; keyboard falls back to overlap. */
+const collision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length ? hits : rectIntersection(args);
+};
+
+const weekdayOf = (date: string) =>
+  new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short' });
 
 interface Local {
   wo: MaintWorkOrder;
@@ -88,8 +106,33 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dragging, setDragging] = useState<string[] | null>(null);
   const [vendorQuery, setVendorQuery] = useState('');
+  // Dragging a chip off the week strip: where it came from.
+  const [chipSource, setChipSource] = useState<{ row: string; date: string } | null>(null);
 
   const today = todayStr();
+  const [monday, setMonday] = useState(() => planningMonday(todayStr()));
+  const [weekOpen, setWeekOpen] = useState(true);
+  const [techDays, setTechDays] = useState<TechDay[]>([]);
+  const [weekLoading, setWeekLoading] = useState(false);
+
+  const loadWeek = useCallback(async () => {
+    setWeekLoading(true);
+    try {
+      const res = await fetch(`/api/maintenance/dispatch/week?start=${monday}`);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Week could not load (${res.status})`);
+      setTechDays(body.techDays ?? []);
+    } catch (e) {
+      setTechDays([]);
+      toast.error(e instanceof Error ? e.message : 'Week could not load');
+    } finally {
+      setWeekLoading(false);
+    }
+  }, [monday]);
+
+  useEffect(() => {
+    void loadWeek();
+  }, [loadWeek]);
   const weekAgoIso = useMemo(() => new Date(Date.now() - 7 * 86_400_000).toISOString(), []);
 
   const rows = useMemo(
@@ -103,6 +146,32 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
     [board.open, local, serverPlans, vendorIndex],
   );
   const placementById = useMemo(() => new Map(rows.map((r) => [r.wo.id, r.placement])), [rows]);
+  const woById = useMemo(() => new Map(rows.map((r) => [r.wo.id, r.wo])), [rows]);
+  const plansById = useMemo(() => new Map(rows.map((r) => [r.wo.id, r.plan])), [rows]);
+
+  // Vendor work with a date this week: the board's date, else AppFolio's.
+  const vendorDays = useMemo(() => {
+    const end = addDays(monday, 6);
+    const out: VendorDay[] = [];
+    for (const { wo, plan, placement } of rows) {
+      if (inUnassignedColumn(placement) || placement.column.startsWith('tech:')) continue;
+      const boardDate = pacificDate(plan?.scheduled_at);
+      const date = boardDate ?? pacificDate(wo.scheduled_start);
+      if (!date || date < monday || date > end) continue;
+      out.push({ wo, date, vendorName: placement.planned?.name ?? wo.vendor_name ?? 'Vendor', fromAppFolio: !boardDate });
+    }
+    return out;
+  }, [rows, monday]);
+
+  // What each card shows about its schedule this week.
+  const schedById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of techDays) {
+      for (const id of d.work_order_ids) m.set(id, `${d.tech} ${weekdayOf(d.date)} ${d.status === 'published' ? '✓' : 'draft'}`);
+    }
+    for (const v of vendorDays) m.set(v.wo.id, `${v.fromAppFolio ? 'AppFolio' : 'sched'} ${weekdayOf(v.date)} ${fmtDate(v.date)}`);
+    return m;
+  }, [techDays, vendorDays]);
 
   const columns = useMemo(() => {
     const unassigned: Column = { key: 'unassigned', title: 'Unassigned', kind: 'unassigned', target: { kind: 'unassigned' }, wos: [] };
@@ -178,8 +247,68 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
 
   const onDragStart = (e: DragStartEvent) => {
     const id = String(e.active.id);
+    const chip = parseChipDrag(id);
+    if (chip) {
+      setChipSource({ row: chip.row, date: chip.date });
+      setDragging([chip.woId]);
+      return;
+    }
+    setChipSource(null);
     setDragging(selected.has(id) ? [...selected] : [id]);
   };
+
+  async function schedule(ids: string[], rowKey: string, date: string | null) {
+    const row = rowKey === 'vendor' ? { kind: 'vendor' as const } : { kind: 'tech' as const, person: rowKey.slice(5) };
+    const published = row.kind === 'tech' && date
+      ? techDays.find((d) => d.date === date && d.status === 'published' && d.tech.toLowerCase() === row.person.toLowerCase())
+      : null;
+    if (published) {
+      toast.error(`${row.person}'s ${weekdayOf(date!)} is already published. Change it in Route Builder.`);
+      return;
+    }
+    if (date && date < todayStr()) {
+      toast.error(`${weekdayOf(date)} ${fmtDate(date)} has passed. Pick today or later.`);
+      return;
+    }
+    setSelected(new Set());
+    try {
+      const res = await fetch('/api/maintenance/dispatch/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ work_order_ids: ids, row, date }),
+      });
+      const body = await res.json().catch(() => ({}));
+      const results: { id: string; ok: boolean; error?: string; workOrder?: MaintWorkOrder; plan?: VendorAssignment | null }[] =
+        body.results ?? [];
+      if (!results.length) throw new Error(body.error || `Scheduling failed (${res.status})`);
+      setLocal((prev) => {
+        const next = new Map(prev);
+        for (const r of results) {
+          if (!r.ok || !r.workOrder) continue;
+          // A tech day withdraws any vendor plan; a vendor date returns the dated plan.
+          const plan = row.kind === 'tech' ? null : r.plan ?? (next.get(r.id)?.plan ?? serverPlans.get(r.id) ?? null);
+          next.set(r.id, { wo: r.workOrder, plan });
+        }
+        return next;
+      });
+      const failed = results.filter((r) => !r.ok);
+      const ok = results.length - failed.length;
+      if (failed.length) toast.error(`${failed.length} not scheduled: ${failed[0].error}`);
+      if (ok) {
+        toast.success(
+          date === null
+            ? `${ok} taken off the schedule`
+            : row.kind === 'tech'
+              ? `${ok} on ${row.person}'s ${weekdayOf(date)} draft. Publish it in Route Builder.`
+              : `${ok} given ${weekdayOf(date)} ${fmtDate(date)}. Set the same date in AppFolio.`,
+        );
+        onMoved?.();
+      }
+      await loadWeek();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Scheduling failed');
+    }
+  }
 
   async function move(ids: string[], col: Column) {
     const target = col.target;
@@ -246,7 +375,10 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
         for (const r of results) if (r.ok && r.workOrder) next.set(r.id, { wo: r.workOrder, plan: r.plan ?? null });
         return next;
       });
-      if (failed.length < results.length) onMoved?.();
+      if (failed.length < results.length) {
+        onMoved?.();
+        void loadWeek();
+      }
       if (failed.length) {
         revert(failed.map((r) => r.id));
         toast.error(`${failed.length} not moved: ${failed[0].error}`);
@@ -266,12 +398,26 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
 
   const onDragEnd = (e: DragEndEvent) => {
     const ids = dragging ?? [];
+    const source = chipSource;
     setDragging(null);
-    const col = columns.find((c) => c.key === e.over?.id);
-    if (col && ids.length) void move(ids, col);
+    setChipSource(null);
+    const overId = e.over ? String(e.over.id) : '';
+    if (!ids.length || !overId) return;
+    const day = parseDayDrop(overId);
+    if (day) {
+      if (source && source.row === day.row && source.date === day.date) return;
+      void schedule(ids, day.row, day.date);
+      return;
+    }
+    if (overId === UNSCHEDULE_ID) {
+      if (source) void schedule(ids, source.row, null);
+      return;
+    }
+    const col = columns.find((c) => c.key === overId);
+    if (col) void move(ids, col);
   };
 
-  const needsAppFolio = rows.filter((r) => r.placement.needsAppFolio).length;
+  const needsAppFolio = rows.filter((r) => r.placement.needsAppFolio || vendorDateToSet(r.wo, r.plan)).length;
   const draggingWo = dragging?.length ? rows.find((r) => r.wo.id === dragging[0]) : null;
 
   return (
@@ -308,13 +454,32 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
           </>
         )}
         {needsAppFolio > 0 && (
-          <span className="afcount" title="Cards planned here that still need the same change in AppFolio">
+          <span className="afcount" title="Cards with a vendor or date planned here that AppFolio doesn't show yet">
             {needsAppFolio} to update in AppFolio
           </span>
         )}
       </div>
 
-      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collision}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => {
+          setDragging(null);
+          setChipSource(null);
+        }}
+      >
+        <DispatchWeek
+          monday={monday}
+          onWeek={(delta) => setMonday(delta === 'this' ? planningMonday(todayStr()) : addDays(monday, delta * 7))}
+          open={weekOpen}
+          onToggle={() => setWeekOpen((o) => !o)}
+          techDays={techDays}
+          vendorDays={vendorDays}
+          woById={woById}
+          loading={weekLoading}
+        />
         <div className="colwrap">
           <div className="dcols">
             {columns.map((col) => (
@@ -334,6 +499,8 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
                 pileCounts={pileCounts}
                 onPile={setPile}
                 placementById={placementById}
+                schedById={schedById}
+                plansById={plansById}
                 selected={selected}
                 onSelect={toggleSelect}
                 today={today}
@@ -352,7 +519,8 @@ export default function OpenBoardDispatch({ board, onMoved }: { board: BoardData
       </DndContext>
 
       <p className="note">
-        Drag a card onto a tech or vendor to assign it. Shift-click cards to select several. Moves to a vendor are
+        Drag a card onto a tech or vendor to assign it, or onto a day above to schedule it. A tech&apos;s day is a
+        draft until Brody publishes it in Route Builder. Shift-click cards to select several. Moves to a vendor are
         planned here: the card says <b>Assign in AppFolio</b> until AppFolio shows the same vendor (it syncs every
         15 minutes). If AppFolio later shows a different vendor, AppFolio wins. Click a card to open the work order.
       </p>
@@ -368,6 +536,8 @@ function DispatchColumn({
   pileCounts,
   onPile,
   placementById,
+  schedById,
+  plansById,
   selected,
   onSelect,
   today,
@@ -379,6 +549,8 @@ function DispatchColumn({
   pileCounts: Map<PileKey, number>;
   onPile: (p: PileKey) => void;
   placementById: Map<string, Placement>;
+  schedById: Map<string, string>;
+  plansById: Map<string, VendorAssignment | undefined>;
   selected: Set<string>;
   onSelect: (id: string) => void;
   today: string;
@@ -423,6 +595,8 @@ function DispatchColumn({
               key={wo.id}
               wo={wo}
               placement={placementById.get(wo.id)!}
+              sched={schedById.get(wo.id)}
+              dateToSet={vendorDateToSet(wo, plansById.get(wo.id))}
               selected={selected.has(wo.id)}
               onSelect={onSelect}
               today={today}
@@ -443,12 +617,16 @@ function DispatchColumn({
 function DispatchCard({
   wo,
   placement,
+  sched,
+  dateToSet,
   selected,
   onSelect,
   today,
 }: {
   wo: MaintWorkOrder;
   placement: Placement;
+  sched?: string;
+  dateToSet: string | null;
   selected: boolean;
   onSelect: (id: string) => void;
   today: string;
@@ -469,12 +647,26 @@ function DispatchCard({
         }
       }}
     >
-      <CardBody wo={wo} placement={placement} today={today} link />
+      <CardBody wo={wo} placement={placement} today={today} sched={sched} dateToSet={dateToSet} link />
     </div>
   );
 }
 
-function CardBody({ wo, placement, today, link }: { wo: MaintWorkOrder; placement: Placement; today: string; link?: boolean }) {
+function CardBody({
+  wo,
+  placement,
+  today,
+  sched,
+  dateToSet,
+  link,
+}: {
+  wo: MaintWorkOrder;
+  placement: Placement;
+  today: string;
+  sched?: string;
+  dateToSet?: string | null;
+  link?: boolean;
+}) {
   const pastDue = !!wo.next_action_date && wo.next_action_date < today;
   const age = daysSince(woCreatedAt(wo));
   const title = (
@@ -507,6 +699,7 @@ function CardBody({ wo, placement, today, link }: { wo: MaintWorkOrder; placemen
         {wo.stage === 'WAITING_ON' && <> · waiting</>}
         {placement.hdmsNoTech && <> · <span className="due past">HDMS, no tech</span></>}
       </span>
+      {sched && <span className="dsched">📅 {sched}</span>}
       {nudge && (
         <a
           className="afnudge"
@@ -518,6 +711,19 @@ function CardBody({ wo, placement, today, link }: { wo: MaintWorkOrder; placemen
           title="We can't change AppFolio from here. Make the same assignment there; this clears on the next sync."
         >
           {nudge.kind === 'vendor' ? `Assign ${nudge.vendorName} in AppFolio ↗` : 'Assign HDMS in AppFolio ↗'}
+        </a>
+      )}
+      {dateToSet && !nudge && (
+        <a
+          className="afnudge"
+          href={wo.appfolio_link ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          draggable={false}
+          onPointerDown={(e) => e.stopPropagation()}
+          title="The board has a date AppFolio doesn't show yet. Set it there; this clears on the next sync."
+        >
+          Set {fmtDate(dateToSet)} in AppFolio ↗
         </a>
       )}
     </>
