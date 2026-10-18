@@ -41,6 +41,7 @@ import { statusSpells, transitionsFrom, type MetricEventRow, type StatusTransiti
 import { medianOf, p90Of } from './vendors';
 import { daysBetween } from './business-days';
 import { DASHBOARD_THRESHOLDS, isOverThreshold, type ThresholdRule } from './dashboard-thresholds';
+import { filterRecurring, type RecurringFilter } from './recurring';
 
 const DAY_MS = 24 * 3600_000;
 export const DASHBOARD_WINDOW_DAYS = 90;
@@ -154,6 +155,9 @@ export interface ClosedWoRow {
   completed_date: string | null;
   closed_at: string | null;
   canceled_date: string | null;
+  /** For the recurring filter. */
+  description?: string | null;
+  appfolio_recurring?: boolean | null;
 }
 
 export interface ChaseRow {
@@ -498,6 +502,31 @@ function toAttentionItem(ex: TripwireException): AttentionItem {
 // The whole thing
 // ============================================
 
+/**
+ * The dashboard for the board's recurring filter: open and recently closed work
+ * orders, tripwire hits and the needs-a-date list all narrowed the same way.
+ * Unit turns are unaffected.
+ */
+export function filterDashboardInputs(inputs: DashboardInputs, filter: RecurringFilter): DashboardInputs {
+  if (filter === 'all') return inputs;
+  const open = filterRecurring(inputs.snapshot.openWorkOrders, filter);
+  const kept = new Set(open.map((wo) => wo.id));
+  // Hits with no work order (unit turns, #12) aren't recurring work: kept when hiding, dropped for "only".
+  const keep = (ex: TripwireException) => (ex.workOrderId ? kept.has(ex.workOrderId) : filter === 'hide');
+  const needsDate = inputs.tripwires.needsDate.filter(keep);
+  return {
+    ...inputs,
+    snapshot: { ...inputs.snapshot, openWorkOrders: open },
+    tripwires: {
+      ...inputs.tripwires,
+      exceptions: inputs.tripwires.exceptions.filter(keep),
+      needsDate,
+      needsDateCount: needsDate.length,
+    },
+    closed: filterRecurring(inputs.closed, filter),
+  };
+}
+
 export function computeDashboard(inputs: DashboardInputs, now = new Date()): DashboardData {
   const { snapshot, tripwires } = inputs;
   const open = snapshot.openWorkOrders;
@@ -610,7 +639,7 @@ export async function loadDashboardInputs(now = new Date()): Promise<DashboardIn
       () =>
         supabase
           .from('work_orders')
-          .select('id, appfolio_created_at, created_at, completed_date, closed_at, canceled_date')
+          .select('id, appfolio_created_at, created_at, completed_date, closed_at, canceled_date, description, appfolio_recurring')
           .eq('stage', 'CLOSED')
           .gte('closed_at', since),
       'work_orders (closed)'

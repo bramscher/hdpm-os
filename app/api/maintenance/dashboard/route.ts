@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireStaffSession } from '@/lib/maintenance/api-auth';
-import { computeDashboard, loadDashboardInputs } from '@/lib/maintenance/dashboard';
+import { computeDashboard, filterDashboardInputs, loadDashboardInputs } from '@/lib/maintenance/dashboard';
+import { parseRecurringFilter } from '@/lib/maintenance/recurring';
 
 /**
  * GET /api/maintenance/dashboard
@@ -10,8 +11,9 @@ import { computeDashboard, loadDashboardInputs } from '@/lib/maintenance/dashboa
  * chase stats), the waiting pocket, unit turns by lifecycle state, and today's
  * attention list. Every tile carries the ids behind it so the board can drill.
  * Aggregation is server-side (lib/maintenance/dashboard.ts) and pure.
+ * ?recurring=hide|only applies the board's recurring filter.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await requireStaffSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -20,7 +22,8 @@ export async function GET() {
   try {
     const now = new Date();
     const inputs = await loadDashboardInputs(now);
-    return NextResponse.json(computeDashboard(inputs, now));
+    const recurring = parseRecurringFilter(request.nextUrl.searchParams.get('recurring'));
+    return NextResponse.json(computeDashboard(filterDashboardInputs(inputs, recurring), now));
   } catch (error) {
     console.error('[Maintenance] Dashboard error:', error);
     return NextResponse.json(

@@ -44,3 +44,19 @@ const SEASONAL_WORK = /winteri[sz]|spring (start|turn)[- ]?(up|on)|start[- ]?up 
 export function isRecurringWork(wo: { appfolio_recurring?: boolean | null; description?: string | null }): boolean {
   return !!wo.appfolio_recurring || SEASONAL_WORK.test(wo.description ?? '');
 }
+
+/** The board's recurring filter: everything, hide recurring/seasonal work, or only that work. */
+export type RecurringFilter = 'all' | 'hide' | 'only';
+
+export function parseRecurringFilter(value: string | null | undefined): RecurringFilter {
+  return value === 'hide' || value === 'only' ? value : 'all';
+}
+
+export function filterRecurring<T extends { appfolio_recurring?: boolean | null; description?: string | null }>(
+  rows: T[],
+  filter: RecurringFilter,
+): T[] {
+  if (filter === 'all') return rows;
+  const only = filter === 'only';
+  return rows.filter((row) => isRecurringWork(row) === only);
+}
