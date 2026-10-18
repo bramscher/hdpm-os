@@ -73,7 +73,8 @@ const VIEWS = [
 ] as const;
 
 type ViewKey = (typeof VIEWS)[number]['key'];
-const DEFAULT_VIEW: ViewKey = 'dashboard';
+/** The board opens on Dispatch (2026-10-18); the Dashboard is one tab away. */
+const DEFAULT_VIEW: ViewKey = 'dispatch';
 
 /** Views whose content is the open-WO list — the search/sort toolbar drives these. */
 const WO_LIST_VIEWS = new Set<ViewKey>(['open', 'dispatch', 'wait', 'aging', 'turnover', 'monday']);
