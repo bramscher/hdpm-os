@@ -32,3 +32,15 @@ export function isDeferredRecurring(wo: RecurringCheckFields, today: string): bo
   if (!wo.scheduled_start) return false;
   return mondayOf(wo.scheduled_start) > mondayOf(today);
 }
+
+/** Seasonal jobs staff sometimes type in by hand instead of as an AppFolio recurring WO. */
+const SEASONAL_WORK = /winteri[sz]|spring (start|turn)[- ]?(up|on)|start[- ]?up irrigation|irrigation start[- ]?up/i;
+
+/**
+ * Recurring / seasonal work: AppFolio's recurring flag, plus one-off
+ * winterizations and spring start-ups typed in by hand. Used by the board's
+ * recurring filter (hide them, or show only them).
+ */
+export function isRecurringWork(wo: { appfolio_recurring?: boolean | null; description?: string | null }): boolean {
+  return !!wo.appfolio_recurring || SEASONAL_WORK.test(wo.description ?? '');
+}

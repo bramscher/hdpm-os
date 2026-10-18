@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import type { BoardData, ExceptionsData, ScoreboardRow, WoSortKey } from './board-types';
-import { filterWorkOrders, sortWorkOrders, WO_SORT_OPTIONS } from './board-types';
+import type { BoardData, ExceptionsData, RecurringFilter, ScoreboardRow, WoSortKey } from './board-types';
+import { filterRecurring, filterWorkOrders, RECURRING_OPTIONS, sortWorkOrders, WO_SORT_OPTIONS } from './board-types';
+import { isRecurringWork } from '@/lib/maintenance/recurring';
 import type { DashboardData } from '@/lib/maintenance/dashboard';
 import type { Drill } from '@/lib/maintenance/dashboard-drill';
 import { applyTurnDrill, applyWoDrill } from '@/lib/maintenance/dashboard-drill';
@@ -76,6 +77,9 @@ type ViewKey = (typeof VIEWS)[number]['key'];
 /** The board opens on Dispatch (2026-10-18); the Dashboard is one tab away. */
 const DEFAULT_VIEW: ViewKey = 'dispatch';
 
+/** Each person's recurring filter, kept in this browser. */
+const RECURRING_KEY = 'board-recurring:v1';
+
 /** Views whose content is the open-WO list — the search/sort toolbar drives these. */
 const WO_LIST_VIEWS = new Set<ViewKey>(['open', 'dispatch', 'wait', 'aging', 'turnover', 'monday']);
 
@@ -100,6 +104,25 @@ export default function BoardClient({
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<WoSortKey>('default');
+  const [recurring, setRecurring] = useState<RecurringFilter>('all');
+  // Read after mount so the server render and first client render match.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(RECURRING_KEY);
+      if (RECURRING_OPTIONS.some((o) => o.key === saved)) setRecurring(saved as RecurringFilter);
+    } catch {
+      // Storage blocked: start with all work.
+    }
+  }, []);
+  const chooseRecurring = (next: RecurringFilter) => {
+    setRecurring(next);
+    try {
+      if (next === 'all') localStorage.removeItem(RECURRING_KEY);
+      else localStorage.setItem(RECURRING_KEY, next);
+    } catch {
+      // Storage blocked: the choice just isn't remembered.
+    }
+  };
   // Dashboard drill-down: an id set narrowing the lists below. In-memory only —
   // id lists are too long for the URL, and `?view=` alone keeps deep links working.
   const [drill, setDrill] = useState<Drill | null>(null);
@@ -167,12 +190,13 @@ export default function BoardClient({
   // hand the derived board to every WO-list view so one toolbar drives them all.
   const filteredBoard = useMemo<BoardData | null>(() => {
     if (!board) return null;
-    const drilledOpen = applyWoDrill(board.open, drill?.ids);
+    const drilledOpen = filterRecurring(applyWoDrill(board.open, drill?.ids), recurring);
     const open = sortWorkOrders(filterWorkOrders(drilledOpen, query), sortKey);
-    const closedThisWeek = filterWorkOrders(board.closedThisWeek, query);
+    const closedThisWeek = filterWorkOrders(filterRecurring(board.closedThisWeek, recurring), query);
     const unitTurns = applyTurnDrill(board.unitTurns ?? [], drill?.turnIds);
     return { ...board, open, closedThisWeek, unitTurns };
-  }, [board, query, sortKey, drill]);
+  }, [board, query, sortKey, drill, recurring]);
+  const recurringCount = useMemo(() => board?.open.filter(isRecurringWork).length ?? 0, [board]);
 
   const activeBoard = filteredBoard ?? board;
   const showToolbar = WO_LIST_VIEWS.has(view);
@@ -250,6 +274,20 @@ export default function BoardClient({
               {WO_SORT_OPTIONS.map((o) => (
                 <option key={o.key} value={o.key}>
                   {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mo-sort" title="Recurring and seasonal work: AppFolio recurring work orders plus any winterization or spring start-up">
+            Recurring:
+            <select value={recurring} onChange={(e) => chooseRecurring(e.target.value as RecurringFilter)}>
+              {RECURRING_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.key === 'all'
+                    ? o.label
+                    : o.key === 'hide'
+                      ? `${o.label} (${board.open.length - recurringCount} left)`
+                      : `${o.label} (${recurringCount})`}
                 </option>
               ))}
             </select>
