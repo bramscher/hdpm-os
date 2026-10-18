@@ -32,6 +32,17 @@ export const HELP_GUIDES: Record<string, HelpGuide> = {
       <>Scroll sideways for more columns. Header tiles show the day&apos;s vital signs.</>,
     ],
   },
+  dispatch: {
+    title: 'Dispatch',
+    intro: 'Sort and hand out open work like a Trello board. AppFolio is still the system of record for vendors.',
+    bullets: [
+      <>Columns: <b>Unassigned</b>, then Alberto, Brody, and every vendor with open work. Drag a card onto a column to assign it.</>,
+      <>Shift-click (or ⌘-click) cards to select several, then drag one to move them all.</>,
+      <>The chips in Unassigned split it into piles: P1/P2, Overdue, Needs date, New this week, Waiting on, and HDMS work with no tech.</>,
+      <>A card moved to a vendor shows <span className="warn">Assign … in AppFolio ↗</span>. Make the same assignment in AppFolio; the badge clears on the next sync (within 15 minutes). If AppFolio shows a different vendor later, AppFolio wins.</>,
+      <>Need a vendor with no open work? Type its name in <b>Add a vendor column</b>. Click a card to open the work order.</>,
+    ],
+  },
   triage: {
     title: '✦ Triage Review',
     intro: 'Clear the backlog by reviewing AI proposals instead of typing. Nothing changes a work order until you act.',
