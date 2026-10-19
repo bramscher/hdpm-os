@@ -2035,7 +2035,11 @@ function DayEditor({
                               ...shift,
                               emergencyAfterHours: e.target.value === "yes",
                             }
-                          : shift,
+                          : // Marking one interval as emergency makes the rest of the day regular unless changed.
+                            e.target.value === "yes" &&
+                              shift.emergencyAfterHours === undefined
+                            ? { ...shift, emergencyAfterHours: false }
+                            : shift,
                       ),
                     })
                   }
