@@ -152,6 +152,18 @@ describe("Oregon weekly overtime and company emergency premium", () => {
     s.overtime!.openings[0].worked_minutes = 2400;
     expect(calculate(s).summary.weeklyOvertime).toBe(480);
   });
+  it("needs no opening hours for workweek days before a new hire's start date", () => {
+    const s = source([day("2026-10-01", 480)], "2026-10-01", "2026-10-15");
+    s.overtime!.employees[0].starts_on = "2026-10-01";
+    const r = calculate(s);
+    expect(r.issues).toEqual([]);
+    expect(r.weeks[0].priorWorked).toBe(0);
+    expect(r.weeks[0].openingNote).toContain("Started 2026-10-01");
+    s.overtime!.employees[0].starts_on = "2026-09-29";
+    expect(
+      calculate(s).issues.some((x) => x.includes("Prior payroll hours needed")),
+    ).toBe(true);
+  });
   it("does not infer salary exemption; confirmed exempt staff retain company emergency pay", () => {
     const s = source([day("2026-09-06", 1440), day("2026-09-07", 1440, true)]);
     s.sheets[0].pay_basis = "salary";

@@ -10,7 +10,11 @@ export type WeekOpening = {
 };
 export type OvertimeContext = {
   version: 1;
-  employees: { id: string; overtime_status: OvertimeStatus }[];
+  employees: {
+    id: string;
+    overtime_status: OvertimeStatus;
+    starts_on?: string;
+  }[];
   precedingSheets: Sheet[];
   openings: WeekOpening[];
 };
@@ -58,9 +62,10 @@ function add(target: PayMinutes, source: PayMinutes) {
 
 /** Minute-based allocation. Pay periods never reset the weekly 40-hour counter. */
 export function payrollHours(source: PayrollSource, sheet: Sheet) {
-  const status =
-    source.overtime?.employees.find((e) => e.id === sheet.employee_id)
-      ?.overtime_status || "unconfirmed";
+  const employee = source.overtime?.employees.find(
+    (e) => e.id === sheet.employee_id,
+  );
+  const status = employee?.overtime_status || "unconfirmed";
   const weeks: PayrollWeek[] = [];
   const days: PayrollDay[] = [];
   const summary = zero();
@@ -94,7 +99,13 @@ export function payrollHours(source: PayrollSource, sheet: Sheet) {
         week.priorWorked = opening.worked_minutes;
         week.openingNote = opening.note;
       } else {
+        let beforeStart = false;
         for (const date of dates(start, addDays(source.periodStart, -1))) {
+          // No work can exist before the employee's start date.
+          if (employee?.starts_on && date < employee.starts_on) {
+            beforeStart = true;
+            continue;
+          }
           const previous =
             source.overtime?.precedingSheets.filter(
               (s) =>
@@ -111,6 +122,8 @@ export function payrollHours(source: PayrollSource, sheet: Sheet) {
             week.issues.push(`Unconfirmed scheduled hours on ${date}.`);
           week.priorWorked += t.worked;
         }
+        if (beforeStart)
+          week.openingNote = `Started ${employee!.starts_on}; no earlier hours this workweek`;
       }
       if (week.openingMissing)
         week.issues.push(
