@@ -85,6 +85,8 @@ export const APP_SECTIONS: AppSection[] = [
     group: 'main',
     defaultRoles: 'all',
     pages: [],
+    // Today's route without door notes, for everyone on staff (front desk included).
+    apis: ['/api/home'],
     nav: { href: '/', icon: 'home', order: 1 },
     alwaysOn: true,
   },
