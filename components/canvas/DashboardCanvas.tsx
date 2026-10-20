@@ -72,6 +72,7 @@ interface TodayRouteStop {
   address: string;
   lat: number | null;
   lng: number | null;
+  arrival: string | null;
   work_orders: {
     wo_number: string | null;
     property_name: string;
@@ -83,6 +84,7 @@ interface TodayRoute {
   id: string;
   route_date: string;
   assigned_tech: string | null;
+  start_time: string;
   total_drive_minutes: number;
   total_service_minutes: number;
   stop_count: number;
@@ -95,6 +97,11 @@ function fmtMins(mins: number): string {
   const m = Math.round(mins);
   if (m < 60) return `${m}m`;
   return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+function startLabel(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 
 // ────────────────────────────────────────────────
@@ -227,8 +234,8 @@ export function DashboardCanvas() {
       })
       .catch(() => {});
 
-    // Fetch today's published maintenance day route(s)
-    fetch("/api/maintenance/routes")
+    // Fetch today's published maintenance day route(s), without door notes
+    fetch("/api/home/today-route")
       .then((r) => r.json())
       .then((data) => setTodayRoutes(data.routes ?? []))
       .catch(() => {});
@@ -310,6 +317,11 @@ export function DashboardCanvas() {
               <ol className="list-decimal pl-5 text-sm text-charcoal-600 space-y-0.5">
                 {route.stops.map((s) => (
                   <li key={s.work_order_id}>
+                    {s.arrival && (
+                      <span className="text-charcoal-400">
+                        {new Date(s.arrival).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" })}{" "}
+                      </span>
+                    )}
                     <span className="font-medium text-charcoal-900">
                       {s.work_orders?.property_name ?? s.address}
                     </span>
@@ -333,7 +345,7 @@ export function DashboardCanvas() {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <CalendarDays className="w-3 h-3" />
-                  starts 8:00 AM at the office
+                  starts {startLabel(route.start_time)} at the office
                 </span>
               </div>
             </div>
