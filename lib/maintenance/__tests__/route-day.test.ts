@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
-import { dayRouteEmail, dayRouteText, doorNotes, normalizePhone, notablePriority, scheduleStops, stopRange, type DayRoute, type RouteStopInput } from '../route-day';
+import { clipAtWord, dayRouteEmail, dayRouteText, doorNotes, normalizePhone, notablePriority, scheduleStops, stopRange, type DayRoute, type RouteStopInput } from '../route-day';
 import { generateDaySheetPdf } from '../day-sheet-pdf';
 
 const stop = (n: number, extra: Partial<RouteStopInput> = {}): RouteStopInput => ({
@@ -58,9 +58,26 @@ describe('messages', () => {
   it('keeps the text short and points to the full day', () => {
     const many = Array.from({ length: 14 }, (_, i) => stop(i + 1));
     const text = dayRouteText(route(many), links);
-    expect(text.length).toBeLessThanOrEqual(620);
-    expect(text).toMatch(/\+\d+ more/);
-    expect(text.endsWith(`Full day: ${links.myDay}`)).toBe(true);
+    expect(text.length).toBeLessThanOrEqual(600);
+    expect(text).toMatch(/\n\+\d+ more\n/);
+    expect(text.endsWith(`\nFull day: ${links.myDay}`)).toBe(true);
+    const shown = text.split('\n').filter(l => /^\d+\) /.test(l)).length;
+    expect(text).toContain(`+${14 - shown} more`);
+  });
+  it('puts each stop on its own line and cuts long tasks at a word', () => {
+    const text = dayRouteText(route([stop(1), stop(2, { details: { task: 'Paint' } })]), links);
+    expect(text.split('\n')).toEqual([
+      'HDPM: Your route for Wed, Oct 7, start 7:30 AM.',
+      '1) 7:45 AM Weinberger 284 – Remove TV mount and repair mounting…',
+      '2) 9:00 AM Weinberger 284 – Paint',
+      `Full day: ${links.myDay}`,
+    ]);
+  });
+  it('clips text at a word boundary', () => {
+    expect(clipAtWord('Short task', 40)).toBe('Short task');
+    expect(clipAtWord('Remove TV mount and repair mounting holes', 40)).toBe('Remove TV mount and repair mounting…');
+    expect(clipAtWord('Supercalifragilisticexpialidociousness everywhere', 20)).toBe('Supercalifragilisti…');
+    expect(clipAtWord('Fix the door, then', 15)).toBe('Fix the door…');
   });
   it('names the Maps parts by their stops', () => {
     expect(stopRange({ first: 1, last: 4 })).toBe('stops 1–4');
