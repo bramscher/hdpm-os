@@ -133,17 +133,29 @@ ${maps.length ? `<p style="margin:14px 0 0">Directions: ${maps.map(l => `<a href
   return { subject, html, text };
 }
 
-/** The text message: short, one line per stop, a link to the full day. Kept under ~600 characters. */
+/** Text cut at a word to at most max characters, with "…" when cut. */
+export function clipAtWord(input: string, max: number): string {
+  const t = input.replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).replace(/[\s,.;:–-]+$/, '')}…`;
+}
+
+/** The text message: one line per stop, tasks cut at a word, a link to the full day. Kept under 600 characters. */
 export function dayRouteText(route: DayRoute, links: RouteLinks): string {
   const head = `HDPM: ${route.updated ? 'Updated route' : 'Your route'} for ${routeDayLabel(route.routeDate, 'short')}, start ${startClock(route.routeDate, route.startTime)}.`;
-  const tail = ` Full day: ${links.myDay}`;
+  const tail = `Full day: ${links.myDay}`;
   const lines: string[] = [];
-  for (const s of route.stops) {
-    const line = ` ${s.stop_order}) ${clockTime(s.arrival)} ${s.property_name}${s.details?.task ? ` – ${s.details.task.slice(0, 40)}` : ''}`;
-    if (head.length + lines.join('').length + line.length + tail.length > 600) { lines.push(` +${route.stops.length - lines.length} more`); break; }
+  const total = route.stops.length;
+  for (const [i, s] of route.stops.entries()) {
+    const line = `${s.stop_order}) ${clockTime(s.arrival)} ${s.property_name}${s.details?.task ? ` – ${clipAtWord(s.details.task, 40)}` : ''}`;
+    const rest = total - i - 1;
+    // Leave room for "+N more" in case the next stop doesn't fit.
+    if ([head, ...lines, line, ...(rest ? [`+${rest} more`] : []), tail].join('\n').length > 600) { lines.push(`+${total - i} more`); break; }
     lines.push(line);
   }
-  return head + lines.join('') + tail;
+  return [head, ...lines, tail].join('\n');
 }
 
 /** US numbers to E.164 (+1XXXXXXXXXX); anything else returns null. */
