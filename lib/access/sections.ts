@@ -147,6 +147,19 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/maintenance/daily-billing/field', icon: 'pin', order: 11.5 },
   },
   {
+    // Brody closes out each tech's day against the timecard as billing coordinator (Craig, 2026-10-20).
+    // It shows timecard hours, so it is a fixed people list rather than a role default.
+    key: 'billing_closeout',
+    label: 'Billing closeout',
+    description: "Account for every timecard hour of a tech's day: work orders (invoiced or not yet) and named non-billable time.",
+    group: 'Maintenance',
+    defaultRoles: [],
+    pages: ['/maintenance/daily-billing/closeout'],
+    apis: ['/api/maintenance/daily-billing/closeout'],
+    nav: { href: '/maintenance/daily-billing/closeout', icon: 'clipboard', order: 11.6 },
+    allowedEmails: ['brody@highdesertpm.com', 'craig@highdesertpm.com'],
+  },
+  {
     key: 'field_app',
     label: 'Field workspace',
     description: 'Technician field view of the maintenance workspace.',
