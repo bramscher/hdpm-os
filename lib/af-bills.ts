@@ -240,6 +240,16 @@ export async function syncAfBills(): Promise<SyncResult> {
     upserted += rows.length;
   }
 
+  // The incremental fetch covered everything updated since the checkpoint, so
+  // every stored bill is now confirmed current. Stamp them all: otherwise a
+  // quiet stretch with no new HDMS bills leaves synced_at old and the daily
+  // billing review reports AppFolio verification as stale.
+  const { error: stampError } = await supabase
+    .from('af_bills')
+    .update({ synced_at: new Date().toISOString() })
+    .not('id', 'is', null);
+  if (stampError) throw new Error(`Failed to stamp bill sync time: ${stampError.message}`);
+
   const autoMatched = await autoMatchBills();
 
   const { count } = await supabase
