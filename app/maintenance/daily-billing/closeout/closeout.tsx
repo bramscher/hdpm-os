@@ -96,7 +96,7 @@ export default function Closeout({admin}:{admin:boolean}){
         <label className="co-grow">Work order<select value={draft.woId} onChange={e=>setDraft({...draft,woId:e.target.value})} disabled={draft.locked} required><option value="">Choose…</option>{[...pick,...matches].map(w=><option key={w.id} value={w.id}>{woText(w).slice(0,120)}</option>)}</select></label>
        </div>}
        {draft.locked&&draft.kind==='job'&&<p className="db-note">To move this time to another work order, remove it and add it again.</p>}
-       <label>What was it{draft.kind==='job'?' (optional)':''}<input value={draft.note} onChange={e=>setDraft({...draft,note:e.target.value})} placeholder={draft.kind==='job'?'e.g. replaced bath fan':'e.g. Home Depot for fan + duct'}/></label>
+       <label>What was it{draft.kind==='job'?' (optional)':''}<input value={draft.note} onChange={e=>setDraft({...draft,note:e.target.value})} placeholder={draft.kind==='job'?'e.g. replaced bath fan, incl. Lowe’s run for the fan':'e.g. van stock: caulk, filters'}/></label>
        <div className="db-actions"><button className="db-primary" disabled={busy}>{busy?'Saving…':draft.locked?'Save changes':'Add'}</button><button type="button" disabled={busy} onClick={()=>{setDraft(null);setError('');}}>Cancel</button></div>
       </form>:<div className="db-actions"><button className="db-primary" disabled={busy} onClick={()=>newDraft(d.date,{hours:d.gapMinutes>0?String(Math.round(d.gapMinutes/6)/10):''})}>+ Account for time</button></div>}
      </div>}
