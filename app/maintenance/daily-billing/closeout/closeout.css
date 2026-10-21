@@ -1,0 +1,12 @@
+.co-page .co-seg{display:flex;gap:0}.co-page .co-seg button{border-radius:0}.co-page .co-seg button:first-child{border-radius:8px 0 0 8px}.co-page .co-seg button:last-child{border-radius:0 8px 8px 0;margin-left:-1px}
+.co-page .db-tiles article.co-alert{border-color:#e7b4ab;background:#fff6f4}.co-page .db-tiles article.co-alert strong{color:#9a3025}.co-page .db-tiles article.co-warn{border-color:#ecd28e;background:#fffaeb}
+.co-days{display:flex;flex-direction:column;gap:8px;margin:18px 0}
+.co-day{border:1px solid #e1e5dd;border-radius:12px;background:white;overflow:hidden}.co-day.co-open{border-left:4px solid #d08a2c}.co-day.co-balanced{border-left:4px solid #26784b}.co-day.co-no_time{opacity:.7}
+.co-page button.co-row{all:unset;box-sizing:border-box;width:100%;cursor:pointer;display:grid;grid-template-columns:130px 1fr 120px 110px 150px;gap:12px;align-items:center;padding:12px 16px;font-size:14px}.co-page button.co-row:hover{background:#f7f9f4}.co-page button.co-row:focus-visible{outline:2px solid #26784b}
+.co-status{text-align:right;font-weight:600}.co-open .co-status{color:#9a5a12}.co-balanced .co-status{color:#196e3d}
+.co-body{padding:4px 16px 16px;border-top:1px solid #edf0e9;display:flex;flex-direction:column;gap:10px}
+.co-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.co-chips small{color:#697064;font-size:12px}.co-page .co-chips button{font-size:13px;padding:5px 10px;border-radius:999px;background:#f1f5ee}
+.co-page table.co-entries{white-space:normal}.co-page .co-entries td:nth-child(3){color:#666b64;text-align:left}.co-page .co-entries th:nth-child(3){text-align:left}.co-acts{display:flex;gap:6px;justify-content:flex-end}.co-page .co-acts button{padding:4px 9px;font-size:12px}.co-muted{opacity:.55}
+.co-badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}.co-covered{background:#e5f3e9;color:#196e3d}.co-partial{background:#fff1d6;color:#8a5a0c}.co-not_invoiced{background:#fde8e4;color:#9a3025}.co-nonbill{background:#eef0ec;color:#565c51}
+.co-form{border:1px dashed #cfd6c9;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:4px;background:#fafbf8}.co-form .db-filters{margin:4px 0}.co-grow{flex:1;min-width:240px}
+@media (max-width:720px){.co-page button.co-row{grid-template-columns:1fr 1fr}.co-status{grid-column:1/-1;text-align:left}}
