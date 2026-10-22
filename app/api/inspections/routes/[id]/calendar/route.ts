@@ -2,7 +2,9 @@ import { inspectionSchedule } from '@/lib/route-builder/inspection-schedule';
 import { routeStartTime, routeWallTime, routeTimeLabel } from '@/lib/route-builder/inspection-time';
 import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
 import { ROUTE_CALENDAR_EVENTS_URL, findLegacyRouteCalendarEvent, routeCalendarEventUrl, routeCalendarAttendees, storeRouteCalendarEventId, routeCalendarAccessError } from '@/lib/route-builder/calendar-destination';
-import { routePropertyLabel, routeUnitLabel } from '@/lib/route-builder/property-label';
+import { routeKeyNumber, routePropertyLabel, routeStopName, routeUnitLabel } from '@/lib/route-builder/property-label';
+import { accessCodes } from '@/lib/route-builder/access-codes';
+import { fetchUnitNamesAndNotes } from '@/lib/appfolio';
 import { NextRequest, NextResponse } from 'next/server';
 import { formatInspectionOccupants, formatInspectionPets, escapeInspectionHtml } from '@/lib/inspection-household';
 import { auth } from '@/lib/auth';
@@ -92,6 +94,11 @@ export async function POST(
 
     await hydrateRouteHouseholds(supabase, stops || []);
 
+    // AppFolio's unit names (multi-unit stops often have none stored) and Maintenance Notes (door / lockbox codes).
+    const appfolioIds = (key: 'appfolio_unit_id' | 'appfolio_property_id') =>
+      (stops || []).map((s) => s.inspections?.inspection_properties?.[key]).filter((v): v is string => !!v && /^[0-9a-f-]{36}$/i.test(v));
+    const appfolio = await fetchUnitNamesAndNotes({ units: appfolioIds('appfolio_unit_id'), properties: appfolioIds('appfolio_property_id') });
+
     // ── Build event metadata ──
     const routeDate = routePlan.route_date; // "YYYY-MM-DD"
     const timing = inspectionSchedule(stops || []);
@@ -116,8 +123,8 @@ export async function POST(
       const insp = stop.inspections;
       const prop = insp?.inspection_properties;
       const address = prop ? `${prop.address_1}, ${prop.city}, ${prop.state} ${prop.zip}` : 'Unknown';
-      const unitLabel = routeUnitLabel(insp?.unit_name, prop?.address_2);
-      const unit = unitLabel ? ` - ${unitLabel}` : '';
+      const afUnit = appfolio.get(prop?.appfolio_unit_id ?? '');
+      const unitLabel = routeUnitLabel(insp?.unit_name, prop?.address_2) ?? routeUnitLabel(afUnit?.name);
       const type = stop.status === 'skipped' ? 'Skipped — not included in route timing' : (insp?.inspection_type || 'Inspection');
       const resident = insp?.resident_name || null;
       const priority = insp?.priority || 'normal';
@@ -129,6 +136,13 @@ export async function POST(
       // Property name (or legacy short code) — never AppFolio's internal id.
       const propertyCode = routePropertyLabel(prop);
       const ownerName = prop?.owner_name || null;
+      // Lead with the unit name (it carries the key number), address underneath.
+      const name = routeStopName(propertyCode, unitLabel);
+      const keyNumber = routeKeyNumber(unitLabel || propertyCode);
+      const access = [
+        ...(keyNumber ? [`Key #${keyNumber}`] : []),
+        ...accessCodes(afUnit?.notes, appfolio.get(prop?.appfolio_property_id ?? '')?.notes),
+      ];
 
       // Estimated arrival = start time + cumulative drive + cumulative service so far
       const arrivalTime = routeTimeLabel(startTime, timing.visits[i].arrivalMinutes);
@@ -142,7 +156,8 @@ export async function POST(
       return {
         index: i + 1,
         address,
-        unit,
+        name,
+        access,
         type,
         resident,
         occupants: formatInspectionOccupants(prop?.financially_responsible_occupants),
@@ -156,7 +171,6 @@ export async function POST(
         lat,
         lng,
         mapsLink,
-        propertyCode,
         ownerName,
       };
     });
@@ -198,14 +212,13 @@ export async function POST(
         : '';
       const overdue = s.dueDate && new Date(s.dueDate + 'T12:00:00') < new Date();
 
-      const propertyMeta = [s.propertyCode, s.ownerName ? `Owner: ${s.ownerName}` : null]
-        .filter(Boolean)
-        .join(' &middot; ');
+      const propertyMeta = s.ownerName ? `Owner: ${s.ownerName}` : '';
 
       return `<tr>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#6b7280;vertical-align:top;width:30px;">${s.index}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;vertical-align:top;">
-          <a href="${s.mapsLink}" style="color:#2563eb;text-decoration:none;font-weight:600;">${s.address}</a>${s.unit ? `<br/><span style="color:#6b7280;font-size:12px;">${s.unit}</span>` : ''}
+          ${s.name ? `<strong style="color:#111827;">${escapeInspectionHtml(s.name)}</strong><br/>` : ''}<a href="${s.mapsLink}" style="color:#2563eb;text-decoration:none;${s.name ? 'font-size:12px;' : 'font-weight:600;'}">${s.address}</a>
+          ${s.access.length ? `<br/><span style="display:inline-block;margin-top:2px;padding:1px 6px;background:#fef3c7;border-radius:4px;font-size:12px;"><strong>Access:</strong> ${escapeInspectionHtml(s.access.join(' · '))}</span>` : ''}
           ${propertyMeta ? `<br/><span style="color:#6b7280;font-size:12px;">${propertyMeta}</span>` : ''}
           ${s.resident ? `<br/><span style="color:#6b7280;font-size:12px;">Tenant: ${s.resident}</span>` : ''}
           <br/><span style="color:#6b7280;font-size:12px;"><strong>Financially responsible occupants:</strong> ${escapeInspectionHtml(s.occupants)}</span>
@@ -258,7 +271,7 @@ export async function POST(
 
     // ── First stop for event location ──
     const firstStop = stopDetails[0];
-    const location = firstStop ? firstStop.address : '';
+    const location = firstStop ? [firstStop.name, firstStop.address].filter(Boolean).join(' - ') : '';
 
     const attendees = routeCalendarAttendees();
 
@@ -290,7 +303,7 @@ export async function POST(
     // Explicitly saved start times update the existing appointment; legacy routes keep their Outlook times
     // unless the route date moved (?reschedule=1), which must move the event too.
     const moveTimes = !!routePlan.start_time || new URL(request.url).searchParams.get('reschedule') === '1';
-    const eventPayload = existingEventId ? { body: event.body, ...(moveTimes ? {start: event.start, end: event.end} : {}) } : event;
+    const eventPayload = existingEventId ? { body: event.body, location: event.location, ...(moveTimes ? {start: event.start, end: event.end} : {}) } : event;
 
     // ── Dry-run escape hatch ──
     // Set INSPECTION_CALENDAR_DRYRUN=1 to skip the Graph POST and return the
