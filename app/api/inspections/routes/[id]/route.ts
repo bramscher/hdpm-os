@@ -3,6 +3,7 @@ import { postRouteNoticeCards } from '@/lib/agents/dez/inspection-notice';
 import { validRouteStartTime } from '@/lib/route-builder/inspection-time';
 import { hydrateRouteHouseholds } from '@/lib/inspection-route-households';
 import { routeCalendarEventUrl } from '@/lib/route-builder/calendar-destination';
+import { routeStopAccess } from '@/lib/route-builder/stop-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -59,6 +60,7 @@ export async function GET(
             id,
             name,
             appfolio_unit_id,
+            appfolio_property_id,
             address_2,
             address_1,
             city,
@@ -84,7 +86,7 @@ export async function GET(
 
     return NextResponse.json({
       ...routePlan,
-      stops: stops || [],
+      stops: await withStopAccess(stops || []),
     });
   } catch (error) {
     console.error('Route plan GET error:', error);
@@ -209,6 +211,7 @@ export async function PATCH(
             id,
             name,
             appfolio_unit_id,
+            appfolio_property_id,
             address_2,
             address_1,
             city,
@@ -233,7 +236,7 @@ export async function PATCH(
 
     return NextResponse.json({
       ...updatedPlan,
-      stops: updatedStops || [],
+      stops: await withStopAccess(updatedStops || []),
       reschedule,
     });
   } catch (error) {
@@ -346,4 +349,10 @@ export async function DELETE(
     const message = error instanceof Error ? error.message : 'Failed to delete route plan';
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+/** Each stop's name and access line, the same as the Outlook event. */
+async function withStopAccess<T extends Parameters<typeof routeStopAccess>[0][number]>(stops: T[]) {
+  const access = await routeStopAccess(stops);
+  return stops.map((s, i) => ({ ...s, stop_name: access[i].name, stop_access: access[i].access }));
 }
