@@ -64,7 +64,11 @@ export async function context(): Promise<Context> {
   const session = await auth();
   if (!isCompanyEmail(session?.user?.email))
     throw new TimeError("Please sign in with your company account.", 401);
-  const email = session!.user!.email!.toLowerCase();
+  return contextFor(session!.user!.email!);
+}
+/** The same context for an already-verified company email (the HDPM Field app's device token). */
+export async function contextFor(rawEmail: string): Promise<Context> {
+  const email = rawEmail.toLowerCase();
   const db = getSupabaseAdmin();
   const staff = checked(
     await db
@@ -662,7 +666,12 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
   });
 }
 
-async function clockCommand(ctx: Context, body: Record<string, unknown>) {
+export async function clockCommand(ctx: Context, body: Record<string, unknown>) {
+  if (!recordsEmployeeTime(ctx.employee.staff_person))
+    throw new TimeError(
+      "Your account is for approvals and payroll administration only.",
+      403,
+    );
   if (!ctx.employee.enabled)
     throw new TimeError("Ask an administrator to enroll you first.", 403);
   const clock = await getClock(ctx.employee.id);
@@ -740,6 +749,8 @@ async function clockCommand(ctx: Context, body: Record<string, unknown>) {
       end: null,
       source: "clocked",
       breaks: [],
+      // HDPM Field's Start callout: an on-call trip, paid at the after-hours rate.
+      ...(body.callout === true ? { emergencyAfterHours: true } : {}),
     };
   } else {
     if (!shift) throw new TimeError("Clock in first.");

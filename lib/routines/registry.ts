@@ -49,6 +49,7 @@ export const ROUTINES: Routine[] = [
   { id: 'af_webhook_resolve', path: '/api/maintenance/cron/appfolio-webhook-resolve', schedule: '*/30 * * * *', name: 'AppFolio webhook resolver', category: 'sync', owner: 'Craig' },
   { id: 'hud_sync', path: '/api/sync/hud', schedule: '0 10 1 1 *', name: 'HUD fair market rents (yearly)', category: 'sync', owner: 'Craig' },
   { id: 'timekeeping_periods', path: '/api/timekeeping/cron', schedule: '10 8 * * *', name: 'Timekeeping periods', category: 'sync', owner: 'Craig' },
+  { id: 'field_points_purge', path: '/api/field/cron', schedule: '40 10 * * *', name: 'HDPM Field location purge (30 days)', category: 'sync', owner: 'Craig' },
   { id: 'kpi_snapshot', path: '/api/kpi/cron', schedule: '0 14 * * *', name: 'KPI snapshot', category: 'sync', owner: 'Craig' },
   { id: 'maintenance_metrics', path: '/api/maintenance/cron/metrics', schedule: '30 13,21 * * *', name: 'Maintenance metrics snapshot', category: 'sync', owner: 'Craig' },
   { id: 'wo_af_billing', path: '/api/maintenance/cron/af-billing', schedule: '10 14,18,22 * * *', name: 'Work order invoices & bills (AppFolio)', category: 'sync', owner: 'Craig' },
