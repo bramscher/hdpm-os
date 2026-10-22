@@ -22,3 +22,14 @@ export function routeUnitLabel(unitName?: string | null, address2?: string | nul
   }
   return null;
 }
+
+/** The stop's name as AppFolio shows it: "Pine Ave - Pine 123 - B", or just "Smith 456" for a house. */
+export function routeStopName(propertyName: string | null, unitLabel: string | null): string | null {
+  if (!propertyName || !unitLabel || unitLabel === propertyName) return unitLabel || propertyName;
+  return `${propertyName} - ${unitLabel}`;
+}
+
+/** The key number in a unit name, always three digits ("Pine 123 - B" → "123", "Smith 234- 1840" → "234", "4321-D 012" → "012"; "#11" is a unit number). */
+export function routeKeyNumber(name: string | null): string | null {
+  return name?.match(/(?<![#\d])\b(\d{3})\b(?!\d)/)?.[1] ?? null;
+}

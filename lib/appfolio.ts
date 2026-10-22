@@ -1092,6 +1092,39 @@ export async function fetchPropertyById(
 }
 
 // ============================================
+// Public: Name + Maintenance Notes for a few units / properties
+// (route event unit names and access codes; filters[Id] takes a comma list)
+// ============================================
+
+export async function fetchUnitNamesAndNotes(
+  ids: { units: string[]; properties: string[] }
+): Promise<Map<string, { name: string | null; notes: string | null }>> {
+  const found = new Map<string, { name: string | null; notes: string | null }>();
+  const config = getConfig();
+  if (!config) return found;
+  const { clientId, clientSecret, developerId } = config;
+
+  for (const [path, list] of [['/units', ids.units], ['/properties', ids.properties]] as const) {
+    const unique = [...new Set(list.filter(Boolean))];
+    for (let i = 0; i < unique.length; i += 50) {
+      try {
+        const res = await v0Fetch<{ Id: string; Name?: string | null; MaintenanceNotes?: string | null }>(
+          path,
+          { 'filters[Id]': unique.slice(i, i + 50).join(','), 'filters[LastUpdatedAtFrom]': '2000-01-01T00:00:00Z', 'page[size]': '1000' },
+          clientId,
+          clientSecret,
+          developerId
+        );
+        for (const row of res.data || []) found.set(row.Id, { name: row.Name?.trim() || null, notes: row.MaintenanceNotes || null });
+      } catch (err) {
+        console.error(`[AppFolio] Names and maintenance notes ${path}:`, err);
+      }
+    }
+  }
+  return found;
+}
+
+// ============================================
 // v0 Tenant Types
 // ============================================
 

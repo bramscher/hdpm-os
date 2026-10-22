@@ -56,7 +56,7 @@ describe('route publishing destinations',()=>{
   expect(response.status).toBe(200);expect((await response.json()).updated).toBe(true);
   const [url,request]=vi.mocked(fetch).mock.calls[0];
   expect(url).toBe(routeCalendarEventUrl(eventId));expect(request!.method).toBe('PATCH');
-  const payload=JSON.parse(request!.body as string);expect(Object.keys(payload)).toEqual(['body']);
+  const payload=JSON.parse(request!.body as string);expect(Object.keys(payload)).toEqual(['body','location']);
   expect(payload.body.content).toContain('Inspection Route');expect(state.writes).toEqual([]);
  });
  it('updates an existing event time only after a start time is saved', async()=>{
