@@ -46,6 +46,7 @@ interface RouteStop {
   address: string;
   city: string | null;
   unit_name: string | null;
+  access: string[];
   resident_name: string | null;
   financially_responsible_occupants: string[] | null;
   pets: AppFolioPet[] | null;
@@ -210,11 +211,12 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
             inspection_id: s.inspection_id,
             address: prop.address_1 || "Unknown",
             city: prop.city || null,
-            unit_name: insp.unit_name || null,
+            unit_name: null,
+            access: (s.stop_access as string[] | undefined) ?? [],
             resident_name: (insp.resident_name as string) || (prop.resident_name as string) || null,
             financially_responsible_occupants: (prop.financially_responsible_occupants as string[] | null) ?? null,
             pets: (prop.pets as AppFolioPet[] | null) ?? null,
-            property_name: null,
+            property_name: (s.stop_name as string | null) ?? null,
             inspection_type: insp.inspection_type || null,
             due_date: insp.due_date || null,
             status: (s.status as string) || "pending",
@@ -763,6 +765,11 @@ export function RouteDetail({ routeId }: RouteDetailProps) {
                       {stop.property_name && (
                         <p className="text-sm text-charcoal-600 truncate">
                           {stop.address}
+                        </p>
+                      )}
+                      {stop.access.length > 0 && (
+                        <p className="mt-0.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs text-charcoal-800">
+                          <span className="font-semibold">Access:</span> {stop.access.join(" · ")}
                         </p>
                       )}
                       {stop.resident_name && (
