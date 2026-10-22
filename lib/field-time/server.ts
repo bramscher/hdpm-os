@@ -12,6 +12,7 @@ import { computeDay } from './compute';
 import { FIELD_CONFIG, RADIUS_BY_KIND } from './config';
 import { assigneeOf, candidateWorkOrders, rankCandidates, workOrderDone } from './match';
 import { minutesOf, needsInput, workOrderTitle, type Candidate, type CandidateWorkOrder, type InspectionStop, type Place, type PlaceKind, type StoredSegment, type Unit } from './model';
+import { clip, pacificDayBounds } from '@/lib/field-app/model';
 import { sampleBreaks, samplePoints, sampleWindow, validateSampleSpec, type SamplePlace, type SampleSpec } from './sample';
 
 export type FieldActor = Awaited<ReturnType<typeof dailyBillingActor>>;
@@ -104,15 +105,32 @@ const locator = (ctx: DayContext) => (p: SamplePlace) => {
   return hit ? { lat: hit.lat, lng: hit.lng } : null;
 };
 
-/** Points, window and breaks for a day. Device days arrive with the phone app (step 2). */
-function evidence(source: Source, spec: SampleSpec | null, date: string, ctx: DayContext) {
-  if (source !== 'sample' || !spec) throw new Error('Device days arrive with the iPhone app (step 2). Use a sample day for now.');
+/** Points, window and breaks for a day: typed sample stops, or the HDPM Field app's points inside Timekeeping's clocked-in time. */
+async function evidence(technician: string, source: Source, spec: SampleSpec | null, date: string, ctx: DayContext) {
+  if (source === 'device') {
+    const bounds = pacificDayBounds(date);
+    // Loaded on demand: Timekeeping's server module pulls in the session (next-auth), which sample days never need.
+    const { loadWorkTime } = await import('@/lib/field-app/shifts');
+    const time = await loadWorkTime(technician, shiftDay(date, -1), date);
+    const points = (await all<{ t: string; lat: number; lng: number; acc: number | null }>('field_location_point', 't,lat,lng,acc',
+      q => q.eq('person', technician).gte('t', new Date(bounds.start).toISOString()).lt('t', new Date(bounds.end).toISOString()), 't'))
+      .map(r => ({ t: Date.parse(r.t), lat: r.lat, lng: r.lng, acc: r.acc }));
+    return { windows: clip(time.windows, bounds), points, breaks: clip(time.breaks, bounds) };
+  }
+  if (!spec) throw new Error('A sample day needs its stops');
   return { windows: [sampleWindow(spec, date)], points: samplePoints(spec, date, locator(ctx)), breaks: sampleBreaks(spec, date) };
 }
 
 /** Recompute a day's suggestions from its evidence and save them, keeping confirmed segments. Retries once if the day changed meanwhile. */
 export async function rebuildDay(actor: FieldActor, technician: string, date: string, source: Source, specInput?: unknown) {
   if (!actor.admin) throw new Error('FORBIDDEN: only an admin can rebuild a field day');
+  return rebuild(actor.email, technician, date, source, specInput);
+}
+
+/** The HDPM Field app's rebuild after an upload, as the tech (field_time_apply allows a tech their own device day). */
+export const rebuildDeviceDay = (email: string, technician: string, date: string) => rebuild(email, technician, date, 'device');
+
+async function rebuild(actorEmail: string, technician: string, date: string, source: Source, specInput?: unknown) {
   if (!validDate(date) || date > pacificDay()) throw new Error('Choose today or an earlier date');
   if (!FIELD_TECHS.includes(technician)) throw new Error('Choose a technician');
   const ctx = await loadContext(technician, date);
@@ -121,9 +139,9 @@ export async function rebuildDay(actor: FieldActor, technician: string, date: st
     const day = days.find(d => d.source === source);
     const spec = source === 'sample' ? validateSampleSpec(specInput ?? day?.sample_spec) : null;
     const confirmed = segments.filter(s => s.day_id === day?.id && s.state === 'confirmed').map(s => ({ start: Date.parse(s.started_at), end: Date.parse(s.ended_at) }));
-    const { segments: suggested } = computeDay({ technician, date, ...evidence(source, spec, date, ctx), places: ctx.places, units: ctx.units, workOrders: ctx.workOrders, routeWorkOrderIds: ctx.routeWorkOrderIds, inspectionStops: ctx.inspectionStops, confirmed });
+    const { segments: suggested } = computeDay({ technician, date, ...(await evidence(technician, source, spec, date, ctx)), places: ctx.places, units: ctx.units, workOrders: ctx.workOrders, routeWorkOrderIds: ctx.routeWorkOrderIds, inspectionStops: ctx.inspectionStops, confirmed });
     const { data, error } = await getSupabaseAdmin().rpc('field_time_apply', {
-      actor: actor.email,
+      actor: actorEmail,
       request: { op: 'replace', technician, work_date: date, source, version: day?.version ?? 0, sample_spec: spec, segments: suggested },
     });
     if (!error) return data;
@@ -139,7 +157,7 @@ export async function stopCentre(actor: FieldActor, technician: string, date: st
   const segment = segments.find(s => s.id === segmentId && s.day_id === day?.id);
   if (!day || !segment) throw new Error('Segment not found');
   const ctx = await loadContext(technician, date);
-  const ev = evidence(source, day.sample_spec, date, ctx);
+  const ev = await evidence(technician, source, day.sample_spec, date, ctx);
   const { stops } = computeDay({ technician, date, ...ev, places: ctx.places, units: ctx.units, workOrders: ctx.workOrders, routeWorkOrderIds: ctx.routeWorkOrderIds, inspectionStops: ctx.inspectionStops });
   const from = Date.parse(segment.started_at), to = Date.parse(segment.ended_at);
   const hit = stops.map(s => ({ s, overlap: Math.min(to, s.stop.end) - Math.max(from, s.stop.start) })).filter(x => x.overlap > 0).sort((a, b) => b.overlap - a.overlap)[0];
@@ -154,7 +172,7 @@ export async function rematchRecent(actor: FieldActor) {
   const days = await all<DayRow>('field_day', 'id,technician,work_date,source,sample_spec,version,built_at', q => q.gte('work_date', since));
   const open = new Set((await all<{ day_id: string }>('field_segment', 'day_id', q => q.gte('work_date', since).eq('state', 'suggested'), 'day_id')).map(s => s.day_id));
   let rebuilt = 0;
-  for (const d of days) if (open.has(d.id) && d.source === 'sample') { await rebuildDay(actor, d.technician, d.work_date, d.source); rebuilt++; }
+  for (const d of days) if (open.has(d.id)) { await rebuildDay(actor, d.technician, d.work_date, d.source); rebuilt++; }
   return { rebuilt };
 }
 

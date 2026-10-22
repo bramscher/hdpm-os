@@ -27,6 +27,12 @@ export const PUBLIC_PREFIXES = [
   "/api/kpi/cron", // Vercel cron — protected by CRON_SECRET, not session auth
   "/api/timekeeping/cron", // Period generation; exact handler requires CRON_SECRET
   "/api/maintenance/cron", // Vercel cron — protected by CRON_SECRET, not session auth
+  // HDPM Field iPhone app — self-guarded by a per-phone bearer token (lib/field-app/server.ts
+  // deviceFromRequest); the cron by CRON_SECRET. /api/field/device/start and /api/field/devices
+  // are deliberately NOT public: sign-in needs the Microsoft session, and the device list is admin-only.
+  "/api/field/clock",
+  "/api/field/points",
+  "/api/field/cron",
   "/api/agents", // Agent layer — self-guarded via HDPM_SERVICE_TOKEN or staff session (requireStaffOrService)
   "/api/intake", // hdpm-web rental-analysis handoff — self-guarded via HDPM_SERVICE_TOKEN
   // Cron-driven syncs outside /api/sync — each self-guards (CRON_SECRET

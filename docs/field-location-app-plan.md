@@ -63,7 +63,7 @@ Location is evidence, not a bill. Nothing is invoiced automatically. A person st
 
 - **Recording only while clocked in.** Phones stay at work overnight, so off-hours tracking mostly can't happen anyway. When a phone goes home on an on-call night, recording is **off** until the tech clocks in to a callout.
 - **Callouts:** techs don't clock in for callouts today. The app adds a **Start callout** button that clocks them in to Timekeeping and starts recording: the drive from home, time on site and the drive back. That's the evidence for the after-hours charge, and it puts callout hours on the timecard where they belong. On-call nights with no callout record nothing.
-- **Distribution:** the phones are in **Apple Business Manager and Mosyle**. The app is pushed through Mosyle as a custom (unlisted) app, with "Always" location access pre-approved by a configuration profile. No App Store listing, no TestFlight, and techs can't switch it off.
+- **Distribution:** the phones are in **Apple Business Manager and Mosyle** (all iPhone 17 Pro, supervised, iOS 27; checked October 21). The app is pushed through Mosyle as a custom (unlisted) app published by High Desert Property Management, Inc. No App Store listing and no TestFlight. **Correction (October 21):** MDM can't grant location access, so each tech taps Allow, then Always, once; the app shows a Settings button until they do.
 - **Missing data is a question, not a verdict.** A dead phone or a gap in recording creates an "unknown" block for the tech to explain. It is never treated as unpaid time or a deduction.
 
 ## Matching rules
@@ -203,3 +203,14 @@ Added October 15. Before this, Alberto planned his own days from a pile of print
 - **Brody reviews field time against billing** (`lib/field-time/access.ts`; add the assistant's email there once hired):
   - Daily Billing Review shows him every tech's job and parts minutes, and the "Field time vs billing" items.
   - He doesn't get drive, inspection or unlabeled time, or another tech's full field day. An item for Alberto's work opens the invoice instead of the field day.
+
+## Step 2: server endpoints (built October 21)
+
+The iPhone app lives in its own repo, `bramscher/hdpm-field-ios` (SwiftUI; its `docs/server-contract.md` is the API contract). Server side, migration `20261038_field_app_devices.sql`, code in `lib/field-app/` and `app/api/field/`:
+
+- **Sign-in:** `/api/field/device/start` runs the normal Microsoft sign-in, then hands the app a per-phone token (only its hash is stored, in `field_device`). Field techs and admins only. Admins list and revoke phones at `/api/field/devices`.
+- **Clock:** `/api/field/clock` wraps Timekeeping's clock, so there is still one timecard. **Start callout** clocks in with the after-hours flag. Breaks are paid rest or unpaid meal.
+- **Points:** `/api/field/points` stores fixes in `field_location_point`, keeping only those inside clocked-in time (breaks excluded), then rebuilds the device day (every 5 minutes while working, straight away after clock out). Field-time builds device days from these points with Timekeeping's shifts as the window.
+- **Purge:** `/api/field/cron` deletes points older than 30 days, daily.
+- Still open: whether confirmed segments write `maintenance_work_record`.
+
