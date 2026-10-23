@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const AI_LEASING_PHONE = '(541) 406-6409';
+const OFFICE_PHONE = '(541) 548-0383';
+const OFFICE_HOURS = '9–4 weekdays';
 
 // Rentzap apply pages live at /apply/<integer listing id> — Rentzap's own id,
 // NOT our AppFolio unit UUID (those render an empty criteria page with no
@@ -282,8 +284,9 @@ ${bulletsHtml}
 <p><b><a href="${applyUrl}">Apply Online Now</a></b></p>
 <p>${applyUrl}</p>
 
-<h2>Questions? We're Available 24/7</h2>
-<p>Our AI leasing agent Leesa is ready to help any time — no office hours, no waiting.</p>
+<h2>Questions? Call Us</h2>
+<p><b>Call the office:</b> ${OFFICE_PHONE} — staff available ${OFFICE_HOURS}</p>
+<p>After hours? Our AI leasing agent Leesa answers 24/7.</p>
 <p><b>Call or text Leesa:</b> ${AI_LEASING_PHONE}</p>
 <p><b>Visit Website:</b> <a href="https://www.highdesertpm.com">www.highdesertpm.com</a></p>
 <p>https://www.highdesertpm.com</p>
