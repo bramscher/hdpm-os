@@ -43,6 +43,8 @@ export interface Segment {
 export interface StoredSegment extends Segment {
   id: string; day_id: string; technician: string; work_date: string; state: 'suggested' | 'confirmed';
   note: string; suggestion: unknown; confirmed_by: string | null; confirmed_at: string | null;
+  /** Added by hand (forgot the phone): confirmed recollection, not GPS evidence. */
+  manual?: boolean;
 }
 
 /**
