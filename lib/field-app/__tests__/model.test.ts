@@ -54,16 +54,17 @@ describe('workTime + acceptPoints', () => {
     expect(time.breaks).toEqual([{ start: t('2026-10-22T19:00:00Z'), end: t('2026-10-22T19:30:00Z') }]);
   });
 
-  it('keeps only valid points recorded while clocked in and not on a break', () => {
+  it('keeps every valid point, at any hour (company phones record whenever they are on)', () => {
     const { points, rejected } = acceptPoints([
-      { t: t('2026-10-22T16:00:00Z'), lat: 44.27, lng: -121.17, acc: 8 },   // working
-      { t: t('2026-10-22T19:10:00Z'), lat: 44.27, lng: -121.17, acc: 8 },   // on break
-      { t: t('2026-10-22T14:00:00Z'), lat: 44.27, lng: -121.17 },           // before clock in
+      { t: t('2026-10-22T16:00:00Z'), lat: 44.27, lng: -121.17, acc: 8 },   // working hours
+      { t: t('2026-10-22T19:10:00Z'), lat: 44.27, lng: -121.17, acc: 8 },   // lunch
+      { t: t('2026-10-22T06:00:00Z'), lat: 44.27, lng: -121.17 },           // 11 PM, an after-hours call
       { t: t('2026-10-22T16:05:00Z'), lat: 91, lng: -121.17 },              // bad latitude
       { t: 'soon', lat: 44.27, lng: -121.17 },                               // bad time
-    ], time, now);
-    expect(points).toEqual([{ t: t('2026-10-22T16:00:00Z'), lat: 44.27, lng: -121.17, acc: 8 }]);
-    expect(rejected).toBe(4);
+      { t: now + 3_600_000, lat: 44.27, lng: -121.17 },                      // from the future
+    ], now);
+    expect(points).toHaveLength(3);
+    expect(rejected).toBe(3);
   });
 
   it('runs an open shift to now', () => {
@@ -71,8 +72,8 @@ describe('workTime + acceptPoints', () => {
   });
 
   it('refuses a batch that is not a list or is too big', () => {
-    expect(() => acceptPoints({}, time, now)).toThrow();
-    expect(() => acceptPoints(Array(501).fill({}), time, now)).toThrow('at most 500');
+    expect(() => acceptPoints({}, now)).toThrow();
+    expect(() => acceptPoints(Array(501).fill({}), now)).toThrow('at most 500');
   });
 });
 
