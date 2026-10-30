@@ -46,6 +46,7 @@ import {
   localDate,
   localTime,
   periodFor,
+  prefilledDates,
   totals,
   validateSchedule,
   wallTime,
@@ -564,6 +565,14 @@ function TimekeepingView() {
                                 <span className={`tk-badge ${s.state}`}>
                                   {s.state}
                                 </span>
+                                {prefilledDates(s).length > 0 && (
+                                  <span
+                                    className="tk-badge prefilled"
+                                    title="Signed before these days were worked"
+                                  >
+                                    {prefilledDates(s).length} pre-filled
+                                  </span>
+                                )}
                               </td>
                               <td>
                                 <button
@@ -1423,6 +1432,7 @@ function SheetEditor({
   // While clocked in, only days before today can change (see 20261008 migration).
   const lockedFrom = clockOpen ? localDate() : null;
   const [confirmed, setConfirmed] = useState(false);
+  const prefilled = new Set(prefilledDates(initial));
   const change = (next: Sheet) => {
     draftRef.current = next;
     setDraft(next);
@@ -1681,14 +1691,23 @@ function SheetEditor({
           />
         </label>
       )}
+      {prefilled.size > 0 && (
+        <div className="tk-notice tk-prefilled-notice">
+          <strong>Signed early.</strong> {initial.employee_name} signed on{" "}
+          {displayDate(localDate(new Date(initial.employee_signed_at!)))},
+          before {prefilled.size === 1 ? "this day was" : "these days were"}{" "}
+          worked: {[...prefilled].map((d) => displayDate(d)).join(", ")}. Their hours are
+          planned, not clocked. Confirm them before approving.
+        </div>
+      )}
       <fieldset disabled={!editable || busy} className="tk-days">
         {draft.days.map((day) =>
           lockedFrom && day.date >= lockedFrom ? (
             <fieldset key={day.date} disabled className="tk-day-locked" title="Clock out to edit today and later days">
-              <DayEditor day={day} onChange={dayChange} />
+              <DayEditor day={day} onChange={dayChange} prefilled={prefilled.has(day.date)} />
             </fieldset>
           ) : (
-            <DayEditor key={day.date} day={day} onChange={dayChange} />
+            <DayEditor key={day.date} day={day} onChange={dayChange} prefilled={prefilled.has(day.date)} />
           ),
         )}
       </fieldset>
@@ -1720,7 +1739,7 @@ function SheetEditor({
             </label>
             <button
               className="tk-primary"
-              disabled={busy || clockOpen || !confirmed || initial.period_end > localDate()}
+              disabled={busy || clockOpen || !confirmed}
               onClick={() => act("submit")}
             >
               Sign & submit to manager
@@ -1729,18 +1748,14 @@ function SheetEditor({
               Signing as {actorEmail} through your Microsoft company sign-in.
               The approval date and time are recorded when you submit.
             </small>
-            {initial.period_end === localDate() && (
+            {initial.period_end >= localDate() && (
               <small>
-                Today is the final day of this pay period. You can sign now
-                using your planned end time. This finalizes your entries for
-                manager review. If your actual time changes, ask your manager to
-                return the sheet for correction and sign it again.
-              </small>
-            )}
-            {initial.period_end > localDate() && (
-              <small>
-                Submission opens on {displayDate(initial.period_end)}. You can
-                save time now.
+                You can sign before the period ends on{" "}
+                {displayDate(initial.period_end)}. Days still ahead are signed
+                with the hours on your sheet, so fill them in (or mark them off)
+                first. Once signed, the sheet is locked: if your time changes,
+                or you need to clock in again this period, ask your manager to
+                return it for correction and sign it again.
               </small>
             )}
           </>
@@ -1863,9 +1878,11 @@ function SheetEditor({
 function DayEditor({
   day,
   onChange,
+  prefilled = false,
 }: {
   day: Day;
   onChange: (day: Day) => void;
+  prefilled?: boolean;
 }) {
   const [error, setError] = useState("");
   const t = totals([day]);
@@ -1926,6 +1943,14 @@ function DayEditor({
             }).format(new Date(day.date + "T12:00:00Z"))}
           </strong>
           <small>{day.date}</small>
+          {prefilled && (
+            <span
+              className="tk-badge prefilled"
+              title="Signed before this day was worked: planned hours, not clocked"
+            >
+              Pre-filled
+            </span>
+          )}
         </span>
         <span>
           {day.off
