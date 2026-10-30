@@ -489,13 +489,7 @@ export function validateDays(
     throw new Error("The sheet must include every day of the pay period");
   const days = input as Day[],
     expected = dates(start, end),
-    ids = new Set<string>(),
-    today = localDate(now),
-    finalDay = end === today && periodFor(end).end === end;
-  if (submitting && end > today)
-    throw new Error(
-      "Sign and submit on the final day of the pay period or later",
-    );
+    ids = new Set<string>();
   let previousEnd = -Infinity;
   for (let i = 0; i < days.length; i++) {
     const d = days[i];
@@ -615,18 +609,24 @@ export function validateDays(
       );
     if (submitting && !d.off && !d.shifts.length && !d.leave.length)
       throw new Error(`${d.date}: enter time or confirm no work`);
-    // Final-day signatures may include a planned departure; clock punches
-    // still cannot claim future work (checked above).
-    if (
-      submitting &&
-      d.shifts.some((s) => s.end && Date.parse(s.end) > now.getTime()) &&
-      !(finalDay && d.date === end)
-    )
-      throw new Error(
-        `${d.date}: planned end times can only be finalized on the final day of the pay period`,
-      );
+    // Early signatures cover the rest of the period with planned hours (Craig,
+    // 2026-10-30); clock punches still cannot claim future work (checked above).
   }
   return days.map((d) => ({ ...d, shifts: [...d.shifts] }));
+}
+/**
+ * Dates on an hourly sheet whose work hadn't happened yet when the employee
+ * signed: any shift ending after the signature. Signing is allowed any day
+ * (Craig, 2026-10-30), so reviewers see which hours were pre-filled.
+ */
+export function prefilledDates(
+  sheet: Pick<Sheet, "pay_basis" | "employee_signed_at" | "days">,
+): string[] {
+  if (sheet.pay_basis !== "hourly" || !sheet.employee_signed_at) return [];
+  const signed = Date.parse(sheet.employee_signed_at);
+  return sheet.days
+    .filter((d) => d.shifts.some((s) => s.end && Date.parse(s.end) > signed))
+    .map((d) => d.date);
 }
 export function confirmDays(days: Day[]): Day[] {
   return days.map((d) => ({

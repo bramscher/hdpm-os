@@ -5,6 +5,7 @@ import {
   breakMinutes,
   LEAVE_LABELS,
   localTime,
+  prefilledDates,
   totals,
   type Sheet,
 } from "./model";
@@ -31,6 +32,7 @@ export function payrollWorkbook(
     s.days.some((d) => d.leave.some((l) => l.kind.startsWith("loa_"))),
   );
   for (const sheet of snapshot.sheets) {
+    const prefilled = new Set(prefilledDates(sheet));
     const pay = snapshot.overtime ? payrollHours(snapshot, sheet) : null;
     if (pay?.issues.length && !review)
       throw new Error(`${sheet.employee_name}: ${pay.issues.join(" ")}`);
@@ -120,6 +122,7 @@ export function payrollWorkbook(
         Miles: t.miles,
         "No work": day.off ? "Yes" : "",
         Notes: day.note,
+        "Pre-filled at signing": prefilled.has(day.date) ? "Yes" : "",
         "Emergency work": day.emergency ? "Yes" : "",
         "Phone carrying (stipend)": day.emergencyPhone ? "Yes" : "",
       };
@@ -179,6 +182,7 @@ export function payrollWorkbook(
       "Approved by": sheet.approved_by || "",
       "Approved at": sheet.approved_at || "",
       "Period notes": sheet.note,
+      "Pre-filled days (signed early)": [...prefilled].join(", "),
       "Timesheet version": sheet.version,
     });
     for (const day of sheet.days)

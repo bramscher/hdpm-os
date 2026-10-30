@@ -293,6 +293,14 @@
   background: #fff0db;
   color: #986323;
 }
+.tk-badge.prefilled {
+  background: #fde8e4;
+  color: #a2402c;
+  margin-left: 6px;
+}
+.tk-prefilled-notice {
+  border-left: 3px solid #a2402c;
+}
 .tk-badge.submitted {
   background: #e5eef8;
   color: #3e6088;

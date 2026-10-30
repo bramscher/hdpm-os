@@ -16,6 +16,7 @@ import {
   type Employee,
   type Sheet,
   type Shift,
+  prefilledDates,
 } from "../model";
 import { payrollWorkbook } from "../export";
 
@@ -177,7 +178,7 @@ describe("daily entries and submission", () => {
       miles: 12.5,
     });
   });
-  it("requires explicit no-work confirmation and does not permit future submission", () => {
+  it("requires explicit no-work confirmation and accepts planned future hours", () => {
     const d = blankDay("2026-09-01");
     expect(() => validateDays([d], d.date, d.date, true, now)).toThrow(
       "confirm no work",
@@ -194,7 +195,7 @@ describe("daily entries and submission", () => {
         true,
         new Date("2026-09-01T15:00:00Z"),
       ),
-    ).toThrow("final day");
+    ).not.toThrow();
   });
   it.each([
     "2026-09-15",
@@ -227,30 +228,44 @@ describe("daily entries and submission", () => {
       validateDays(clocked, period.start, period.end, true, morning),
     ).toThrow("clocked work cannot end in the future");
   });
-  it("uses Pacific final-day boundaries and rejects early submission even with no work", () => {
+  it("accepts signing any day of the period, with planned hours ahead", () => {
     const days = buildDays(employee, "2026-09-01", "2026-09-15");
-    const beforeMidnight = new Date("2026-09-15T06:59:59Z");
+    const midPeriod = new Date("2026-09-08T17:00:00Z"); // Sep 8, 10 AM Pacific
     expect(() =>
-      validateDays(days, "2026-09-01", "2026-09-15", true, beforeMidnight),
-    ).toThrow("final day");
+      validateDays(days, "2026-09-01", "2026-09-15", true, midPeriod),
+    ).not.toThrow();
+    expect(() =>
+      validateDays(
+        confirmDays(days),
+        "2026-09-01",
+        "2026-09-15",
+        true,
+        midPeriod,
+      ),
+    ).not.toThrow();
     expect(() =>
       validateDays(
         days.map((d) => ({ ...d, off: true, shifts: [] })),
         "2026-09-01",
         "2026-09-15",
         true,
-        beforeMidnight,
-      ),
-    ).toThrow("final day");
-    expect(() =>
-      validateDays(
-        days,
-        "2026-09-01",
-        "2026-09-15",
-        true,
-        new Date("2026-09-15T07:00:00Z"),
+        midPeriod,
       ),
     ).not.toThrow();
+    // Days ahead still need time or "no work" before signing.
+    const blank = days.map((d) =>
+      d.date === "2026-09-12" ? { ...d, off: false, shifts: [], leave: [] } : d,
+    );
+    expect(() =>
+      validateDays(blank, "2026-09-01", "2026-09-15", true, midPeriod),
+    ).toThrow("2026-09-12: enter time or confirm no work");
+    // Clock punches still cannot claim future work.
+    const clocked = structuredClone(days);
+    const later = clocked.find((d) => d.date > "2026-09-08" && d.shifts.length)!;
+    later.shifts[0].source = "clocked";
+    expect(() =>
+      validateDays(clocked, "2026-09-01", "2026-09-15", true, midPeriod),
+    ).toThrow("clocked work cannot end in the future");
   });
   it("rejects overlap, missing ends and breaks outside a shift", () => {
     const d = confirmDays(buildDays(employee, "2026-09-01", "2026-09-01"))[0];
@@ -384,5 +399,34 @@ describe("access and payroll", () => {
         (c) => typeof c === "object" && c && "f" in c,
       ),
     ).toBe(false);
+  });
+});
+
+describe("prefilledDates", () => {
+  const days = buildDays(employee, "2026-09-01", "2026-09-15");
+  const base = { days, pay_basis: "hourly" as const };
+  it("flags hourly days whose shifts end after the signature", () => {
+    const signedAt = wallTime("2026-09-08", "10:00");
+    const flagged = prefilledDates({ ...base, employee_signed_at: signedAt });
+    const expected = days
+      .filter((d) => d.shifts.some((s) => Date.parse(s.end!) > Date.parse(signedAt)))
+      .map((d) => d.date);
+    expect(flagged).toEqual(expected);
+    // Sep 8 itself counts (planned end later that day); Sep 7 and earlier don't.
+    expect(flagged.every((d) => d >= "2026-09-08")).toBe(true);
+    expect(flagged.length).toBeGreaterThan(0);
+  });
+  it("flags nothing when signed after the last shift, unsigned, or salaried", () => {
+    expect(
+      prefilledDates({ ...base, employee_signed_at: wallTime("2026-09-16", "08:00") }),
+    ).toEqual([]);
+    expect(prefilledDates({ ...base, employee_signed_at: null })).toEqual([]);
+    expect(
+      prefilledDates({
+        ...base,
+        pay_basis: "salary",
+        employee_signed_at: wallTime("2026-09-08", "10:00"),
+      }),
+    ).toEqual([]);
   });
 });
