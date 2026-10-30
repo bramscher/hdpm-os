@@ -3,7 +3,7 @@ ontology: true
 type: plan
 domain: maintenance
 status: active
-summary: Phase 2 of field time and recovery — a company-iPhone location app that records where techs spend paid time, matches stops to work orders and Lowe's/Home Depot runs, and lists unbilled time in Daily Billing Review. Step 1 (server, review screens, sample days) built October 2026; Brody now schedules Alberto's day, and field time uses that published route
+summary: Phase 2 of field time and recovery — a company-iPhone location app that records where techs go whenever the phone is on (revised October 30, no clock-in or login), matches stops to work orders and Lowe's/Home Depot runs, and lists unbilled time in Daily Billing Review. Step 1 (server, review screens, sample days) built October 2026; Brody now schedules Alberto's day, and field time uses that published route
 tags: [field-location-app, gps-timekeeping, iphone-app, company-phones, unbilled-time, parts-runs, dump-runs, stop-locations, daily-billing-review, billing-recovery, maintenance-scheduling, day-routes, field-reviewer]
 related: [field-time-recovery-plan, gps-timekeeping-plan, daily-billing-review]
 relatedTo: [field-time-recovery-plan, gps-timekeeping-plan]
@@ -13,6 +13,26 @@ discovered: 2026-10-15
 # Field location app plan
 
 Date: October 15, 2026. Status: decisions answered by Craig on October 15 (see *Decisions*). **Step 1 is built** (see *Step 1: what was built*); step 2 (the iPhone app) is next.
+
+> **Revised October 30, 2026 (Craig): always-on phones, confirm the next day.** This replaces "recording only while clocked in", the clock screen and the per-tech sign-in described further down. Where the sections below disagree, this one wins.
+>
+> - **No login, no clock-in.** Each company phone is set up once and assigned to a tech. The tech never signs in or presses anything to start.
+> - **Records whenever the phone is on, in two modes:**
+>   - **Full** on weekdays 8:00–4:30, stretched while the phone is out on a job (early starts, overtime): a fix every ~30 s or 40 m.
+>   - **Light** at all other times (mostly the on-call emergency phone): only when the phone leaves or arrives somewhere (iOS visit and significant-change monitoring).
+> - **"Collected" overnight.** Each day is built from the phone's points (`lib/field-time/windows.ts` `collectionWindows`): core hours stretched to the trip that runs into them, plus every trip away from a base (the shop, or home with the on-call phone) as its own window, so after-hours and emergency calls appear without a Start callout button. The nightly cron (`/api/field/cron`, `rebuildYesterday`) builds yesterday's days.
+> - **The tech confirms the next morning on the web My Day page** (phone browser or computer): confirm or change each stop's work order or dispatch call, split time, label lunch or personal stops, and **add time by hand** if they forgot the phone. Manual entries are labelled Manual. Confirmed time writes `maintenance_work_record`.
+> - **After-hours trips to a property** with an emergency or dispatch work order are suggested as **after-hours callouts** (billed at the after-hours rate).
+> - **Privacy (Craig's choices):** everything is recorded, including home and off-duty movement on the on-call phone, and days off are kept like any other day. Raw points are still deleted after 30 days; the office still sees only job time; Craig sees the full timeline. The notice to Brody and Alberto must say so.
+> - **Timekeeping stays the payroll record**; the field day can later flag differences from the timecard, never edit it.
+>
+> Build order for the revision:
+> 1. **Server collection (PR, Oct 30):** accept points at any hour, collection windows, nightly build. *Done in this change.*
+> 2. **My Day confirmation and manual entries** on the web, writing `maintenance_work_record`.
+> 3. **After-hours callout suggestions** and dispatch-call matching.
+> 4. **Phone setup without a tech login:** an admin registers each phone and assigns it to a tech (Mosyle managed app configuration if it supports custom apps; otherwise a one-time setup link).
+> 5. **iPhone app:** remove the clock screen and sign-in; full and light recording modes; restart after iOS ends the app.
+> 6. Pilot once Apple approves the developer account.
 
 This is the build plan for **phase 2** of [`field-time-recovery-plan.md`](field-time-recovery-plan.md). It keeps the architecture, privacy and test scenarios in [`gps-timekeeping-plan.md`](gps-timekeeping-plan.md) and changes three things:
 

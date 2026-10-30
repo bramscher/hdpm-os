@@ -20,6 +20,11 @@ export const FIELD_CONFIG = {
   candidateDaysAfter: 14,  // ...or up to this many days after it
   shortfallHours: 0.5,     // flag a work order only when billing is short by at least this
   lookbackDays: 60,        // field time counted for a work order from before the review period
+  coreStart: '08:00',      // weekday core hours (Craig, 2026-10-30: 8–4:30 as a rule, overtime is common)
+  coreEnd: '16:30',
+  coreDays: [1, 2, 3, 4, 5] as number[], // Mon–Fri (0 = Sunday)
+  anchorStopMin: 60,       // a stop this long is where the phone sits off duty (shop overnight, home on call)
+  minTripMin: 10,          // a trip away from such a stop shorter than this isn't worth a window
 };
 export type FieldConfig = typeof FIELD_CONFIG;
 

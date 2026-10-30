@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { FIELD_TECHS, rebuildDeviceDay } from '@/lib/field-time/server';
-import { localDate } from '@/lib/timekeeping/model';
 import { TimeError } from '@/lib/timekeeping/server';
-import { acceptPoints, hashDeviceToken, newDeviceToken, pointDates, POINT_RETENTION_DAYS, REBUILD_EVERY_MS } from './model';
-import { loadWorkTime } from './shifts';
+import { pacificDay, shiftDay } from '@/lib/maintenance-workspace/model';
+import { acceptPoints, hashDeviceToken, newDeviceToken, pacificDayBounds, pointDates, POINT_RETENTION_DAYS, REBUILD_EVERY_MS } from './model';
 
 export interface Device { id: string; person: string; email: string; label: string }
 
@@ -45,26 +44,21 @@ export async function deviceFromRequest(request: Request): Promise<Device> {
   return { id: data.id, person: data.person, email: data.email, label: data.label };
 }
 
-/** Store the points recorded while clocked in, then rebuild the affected device days (throttled). */
+/** Store the phone's points, then rebuild the affected device days (throttled; the nightly cron finishes each day). */
 export async function uploadPoints(device: Device, input: unknown, now = Date.now()) {
-  const list = Array.isArray(input) ? input : null;
-  const times = (list || []).map(p => Number((p as { t?: unknown })?.t)).filter(Number.isFinite);
-  const from = times.length ? localDate(new Date(Math.min(...times) - 86_400_000)) : localDate(new Date(now));
-  const to = times.length ? localDate(new Date(Math.max(...times))) : from;
-  const time = await loadWorkTime(device.person, from, to, now);
-  const { points, rejected } = acceptPoints(input, time, now);
+  const { points, rejected } = acceptPoints(input, now);
   if (points.length) {
     const rows = points.map(p => ({ device_id: device.id, person: device.person, t: new Date(p.t).toISOString(), lat: p.lat, lng: p.lng, acc: p.acc }));
     const { error } = await getSupabaseAdmin().from('field_location_point').upsert(rows, { onConflict: 'device_id,t', ignoreDuplicates: true });
     if (error) throw new DeviceError(`Could not save points: ${error.message}`, 500);
   }
   // Field days exist for the pilot techs only; an admin's test phone stores points without a day.
-  // Clocked out, rebuild now so the day's last points count; while working, at most every few minutes.
+  // At most every few minutes per day; /api/field/cron rebuilds yesterday once its last points are in.
   // A failed rebuild never fails the upload (the app would re-send forever); the next one catches up.
   const rebuilt: string[] = [];
   if (FIELD_TECHS.includes(device.person)) {
     for (const date of pointDates(points)) {
-      if (time.open && !(await rebuildDue(device.person, date, now))) continue;
+      if (!(await rebuildDue(device.person, date, now))) continue;
       try {
         await rebuildDeviceDay(device.email, device.person, date);
         rebuilt.push(date);
@@ -80,6 +74,30 @@ export async function uploadPoints(device: Device, input: unknown, now = Date.no
 async function rebuildDue(person: string, date: string, now: number) {
   const { data } = await getSupabaseAdmin().from('field_day').select('built_at').eq('technician', person).eq('work_date', date).eq('source', 'device').maybeSingle();
   return !data?.built_at || now - Date.parse(data.built_at) >= REBUILD_EVERY_MS;
+}
+
+/** Nightly: rebuild yesterday's device day for each field tech whose phone sent points, so the day is
+ *  "collected" before they confirm it in the morning. */
+export async function rebuildYesterday(now = Date.now()) {
+  const date = shiftDay(pacificDay(new Date(now)), -1);
+  const bounds = pacificDayBounds(date);
+  const { data, error } = await getSupabaseAdmin().from('field_location_point').select('person')
+    .gte('t', new Date(bounds.start).toISOString()).lt('t', new Date(bounds.end).toISOString()).in('person', FIELD_TECHS);
+  if (error) throw new Error(`field_location_point: ${error.message}`);
+  const people = [...new Set((data || []).map(r => r.person as string))];
+  const { data: devices } = await getSupabaseAdmin().from('field_device').select('person,email').in('person', people).is('revoked_at', null);
+  const rebuilt: string[] = [];
+  for (const person of people) {
+    const email = devices?.find(d => d.person === person)?.email;
+    if (!email) continue;
+    try {
+      await rebuildDeviceDay(email, person, date);
+      rebuilt.push(person);
+    } catch (e) {
+      console.error('[field-app] nightly rebuild failed', person, date, e);
+    }
+  }
+  return { date, rebuilt };
 }
 
 /** Delete raw points past retention. Returns how many went. */

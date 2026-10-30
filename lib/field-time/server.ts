@@ -12,7 +12,8 @@ import { computeDay } from './compute';
 import { FIELD_CONFIG, RADIUS_BY_KIND } from './config';
 import { assigneeOf, candidateWorkOrders, rankCandidates, workOrderDone } from './match';
 import { minutesOf, needsInput, workOrderTitle, type Candidate, type CandidateWorkOrder, type InspectionStop, type Place, type PlaceKind, type StoredSegment, type Unit } from './model';
-import { clip, pacificDayBounds } from '@/lib/field-app/model';
+import { pacificDayBounds } from '@/lib/field-app/model';
+import { collectionWindows, coreHoursFor } from './windows';
 import { sampleBreaks, samplePoints, sampleWindow, validateSampleSpec, type SamplePlace, type SampleSpec } from './sample';
 
 export type FieldActor = Awaited<ReturnType<typeof dailyBillingActor>>;
@@ -105,17 +106,15 @@ const locator = (ctx: DayContext) => (p: SamplePlace) => {
   return hit ? { lat: hit.lat, lng: hit.lng } : null;
 };
 
-/** Points, window and breaks for a day: typed sample stops, or the HDPM Field app's points inside Timekeeping's clocked-in time. */
+/** Points, windows and breaks for a day: typed sample stops, or the HDPM Field app's points. A device day
+ *  covers weekday core hours stretched for overtime, plus any trip after hours (windows.ts); no clock-in. */
 async function evidence(technician: string, source: Source, spec: SampleSpec | null, date: string, ctx: DayContext) {
   if (source === 'device') {
     const bounds = pacificDayBounds(date);
-    // Loaded on demand: Timekeeping's server module pulls in the session (next-auth), which sample days never need.
-    const { loadWorkTime } = await import('@/lib/field-app/shifts');
-    const time = await loadWorkTime(technician, shiftDay(date, -1), date);
     const points = (await all<{ t: string; lat: number; lng: number; acc: number | null }>('field_location_point', 't,lat,lng,acc',
       q => q.eq('person', technician).gte('t', new Date(bounds.start).toISOString()).lt('t', new Date(bounds.end).toISOString()), 't'))
       .map(r => ({ t: Date.parse(r.t), lat: r.lat, lng: r.lng, acc: r.acc }));
-    return { windows: clip(time.windows, bounds), points, breaks: clip(time.breaks, bounds) };
+    return { windows: collectionWindows(points, bounds, coreHoursFor(date), ctx.places), points, breaks: [] };
   }
   if (!spec) throw new Error('A sample day needs its stops');
   return { windows: [sampleWindow(spec, date)], points: samplePoints(spec, date, locator(ctx)), breaks: sampleBreaks(spec, date) };

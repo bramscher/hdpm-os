@@ -57,10 +57,11 @@ export function workTime(shifts: Shift[], now: number): { windows: Interval[]; b
   return { windows, breaks };
 }
 
-const inside = (t: number, list: Interval[]) => list.some(i => t >= i.start && t <= i.end);
-
-/** Validate the app's points and keep only those recorded while clocked in and not on a break (the privacy rule, enforced here too). */
-export function acceptPoints(input: unknown, time: { windows: Interval[]; breaks: Interval[] }, now: number): { points: Point[]; rejected: number } {
+/**
+ * Validate the app's points. Company phones record whenever they're on (Craig, 2026-10-30), so every
+ * valid point is kept; the field day decides which parts of the day are work (lib/field-time/windows.ts).
+ */
+export function acceptPoints(input: unknown, now: number): { points: Point[]; rejected: number } {
   if (!Array.isArray(input)) throw new Error('Send a list of points');
   if (input.length > MAX_POINTS_PER_UPLOAD) throw new Error(`Send at most ${MAX_POINTS_PER_UPLOAD} points at a time`);
   const points: Point[] = [];
@@ -70,7 +71,7 @@ export function acceptPoints(input: unknown, time: { windows: Interval[]; breaks
     const acc = p?.acc == null ? null : Number(p.acc);
     const valid = Number.isInteger(t) && t <= now + 60_000 && Number.isFinite(lat) && Math.abs(lat) <= 90
       && Number.isFinite(lng) && Math.abs(lng) <= 180 && (acc === null || (Number.isFinite(acc) && acc >= 0));
-    if (valid && inside(t, time.windows) && !inside(t, time.breaks)) points.push({ t, lat, lng, acc });
+    if (valid) points.push({ t, lat, lng, acc });
   }
   return { points, rejected: input.length - points.length };
 }
