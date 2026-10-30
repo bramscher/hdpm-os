@@ -7,7 +7,7 @@ import BillingTabs from '../billing-tabs';
 import './field-day.css';
 
 type Job={work_order_id:string;wo_number:string|null;property_name:string|null;title:string;sub:string;name:string;tier?:number;today?:boolean};
-type Seg={id:string;kind:string;started_at:string;ended_at:string;minutes:number;place:string;property_label:string;label:string|null;note:string;state:'suggested'|'confirmed';confirmed_by:string|null;needs_input:boolean;allocations:(Job&{percent:number})[];candidates:Job[]};
+type Seg={id:string;kind:string;started_at:string;ended_at:string;minutes:number;place:string;property_label:string;label:string|null;note:string;state:'suggested'|'confirmed';confirmed_by:string|null;manual:boolean;needs_input:boolean;allocations:(Job&{percent:number})[];candidates:Job[]};
 type Bill={work_order_id:string;wo_number:string|null;property:string;title:string;done:boolean;onSite:number;parts:number;dumpRuns:number;pending:number;expected:number;billedHours:number;shortHours:number;hasDumpCharge:boolean;verdict:'waiting'|'no_invoice'|'short'|'dump_missing'|'flat'|'billed';invoices:{id:string;code:string}[]};
 type Option={id:string;label:string;unitRowId:string};
 type Data={technician:string;date:string;source:'device'|'sample';admin:boolean;self:boolean;techs:string[];sources:string[];
@@ -46,7 +46,7 @@ const placeOf=(s:Seg)=>s.property_label||s.place||KIND[s.kind]?.label||s.kind;
 
 export default function FieldDay(){
  const params=useSearchParams(),router=useRouter();
- const [technician,setTechnician]=useState(params.get('technician')||''),[date,setDate]=useState(params.get('date')||pacificDay()),[source,setSource]=useState(params.get('source')||'');
+ const [technician,setTechnician]=useState(params.get('technician')||''),[date,setDate]=useState(params.get('date')||shiftDay(pacificDay(),-1)),[source,setSource]=useState(params.get('source')||'');
  const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [selected,setSelected]=useState<string|null>(null),[editor,setEditor]=useState<{id:string;preset:Preset}|null>(null),[answered,setAnswered]=useState<string[]>([]);
  const generation=useRef(0);
@@ -103,6 +103,7 @@ export default function FieldDay(){
       <section className="fd-card fd-timeline" aria-labelledby="fd-tl-h">
        <h2 id="fd-tl-h">Timeline</h2>
        <ol>{segments.map(s=>{const k=KIND[s.kind]||KIND.stop;const status=s.needs_input?['Needs answer','need']:s.state==='confirmed'?['Confirmed','ok']:['Suggested','sugg'];
+        if(s.manual)status.splice(0,2,'Manual','manual');
         return <li key={s.id} id={`fd-seg-${s.id}`} className={`fd-row ${selected===s.id?'is-sel':''}`}>
          <span className="fd-time">{range(s.started_at,s.ended_at)} <span className="fd-muted">· {hm(s.minutes)}</span></span>
          <span className="fd-what"><span className="fd-chip" style={{background:k.chip,color:k.chipInk}}>{k.label}</span></span>
@@ -110,14 +111,17 @@ export default function FieldDay(){
           <span className="fd-where" data-empty={where==='—'||undefined}>{where}</span>
           <span className="fd-job" data-empty={job==='—'||undefined}>{job}</span></>;})()}
          <span className={`fd-status ${status[1]}`}>{status[0]}</span>
-         {canAct&&!s.needs_input&&!['drive','break'].includes(s.kind)?<button type="button" className="fd-link" aria-expanded={editor?.id===s.id} onClick={()=>setEditor(editor?.id===s.id?null:{id:s.id,preset:{}})}>{editor?.id===s.id?'Close':'Change'}</button>:<span/>}
+         {canAct&&s.manual?<button type="button" className="fd-link" disabled={busy} onClick={async()=>apply(await post({op:'manual_remove',technician:data.technician,date:data.date,segment_id:s.id,version:data.day!.version}))}>Remove</button>
+         :canAct&&!s.needs_input&&!['drive','break'].includes(s.kind)?<button type="button" className="fd-link" aria-expanded={editor?.id===s.id} onClick={()=>setEditor(editor?.id===s.id?null:{id:s.id,preset:{}})}>{editor?.id===s.id?'Close':'Change'}</button>:<span/>}
          {!s.needs_input&&editor?.id===s.id&&<div className="fd-row-edit">{editorFor(s)}</div>}
         </li>;})}</ol>
       </section>
      </div>
      {data.billing&&<BillingPanel billing={data.billing} source={data.source}/>}
     </div>
-   </>:<div className="fd-empty"><b>No field time for {tech} on {longDate(date)}.</b><span className="fd-muted">{data.admin?'Type a sample day below to test matching before the iPhone app.':'It appears once the iPhone app records your day.'}</span></div>)}
+   </>:<div className="fd-empty"><b>No field time for {tech} on {longDate(date)}.</b><span className="fd-muted">{data.source==='sample'?'Type a sample day below to test matching before the iPhone app.':'The day appears the morning after the company phone records it. Forgot the phone? Add the time below.'}</span></div>)}
+   {data&&data.source==='device'&&(data.admin||data.self)&&<AddTime key={`${data.technician}|${data.date}|${data.day?.version??0}`} data={data} busy={busy}
+    onAdd={async body=>apply(await post({op:'manual_add',technician:data.technician,date:data.date,version:data.day?.version,...body}))}/>}
    {data?.admin&&data.sampleOptions&&<SampleEditor key={`${data.technician}|${data.date}|${data.day?.version??0}`} data={data} busy={busy}
     onRebuild={async()=>apply(await post({op:'rebuild',technician:data.technician,date:data.date,source:data.source}))}
     onSave={async spec=>{const d=await post({op:'sample_save',technician:data.technician,date:data.date,spec});if(d){setSource('sample');apply(d);}}}
@@ -186,6 +190,32 @@ function NeedCard({seg,tech,canAct,busy,selected,onAnswer,onMore,editor}:{seg:Se
    :<p className="fd-muted">Waiting for {tech}.</p>}</>}
   {editor}
  </article>;
+}
+
+/** Time added by hand when the phone was left behind: confirmed at once and labelled Manual for reviewers. */
+function AddTime({data,busy,onAdd}:{data:Data;busy:boolean;onAdd:(body:Record<string,unknown>)=>Promise<void>}){
+ const [open,setOpen]=useState(false),[kind,setKind]=useState('on_site'),[job,setJob]=useState(''),[general,setGeneral]=useState(false),[label,setLabel]=useState(''),
+  [start,setStart]=useState(''),[end,setEnd]=useState(''),[note,setNote]=useState('');
+ const isTrip=TRIP_KINDS.includes(kind),takesJob=kind==='on_site'||(isTrip&&!general);
+ const valid=!!start&&!!end&&end>start&&(takesJob?!!job:kind==='stop'?!!label&&(label!=='other_work'||!!note.trim()):true);
+ if(!open)return <section className="fd-card fd-add"><div className="fd-between"><div><h2>Add time by hand</h2><span className="fd-muted">Forgot the phone, or the phone missed a job? Add it here. It’s marked Manual.</span></div>
+  <button type="button" className="fd-secondary" onClick={()=>setOpen(true)}>Add time</button></div></section>;
+ return <section className="fd-card fd-add" aria-labelledby="fd-add-h">
+  <h2 id="fd-add-h">Add time by hand · {longDate(data.date)}</h2>
+  <div className="fd-editor">
+   <label>What it was<select value={kind} onChange={e=>{setKind(e.target.value);setGeneral(false);setLabel('');}}>
+    <option value="on_site">Job</option><option value="parts_run">Parts run</option><option value="dump_run">Dump run</option><option value="stop">Other (estimate, other work, personal)</option></select></label>
+   {takesJob&&<label>Work order<select value={job} onChange={e=>setJob(e.target.value)}><option value="">Choose a work order…</option>{data.jobs.map(j=><option key={j.id} value={j.id}>{jobLabel(j)} — {j.sub}</option>)}</select></label>}
+   {isTrip&&<label className="fd-check"><input type="checkbox" checked={general} onChange={e=>{setGeneral(e.target.checked);if(e.target.checked)setJob('');}}/>Van stock / general (not for a job)</label>}
+   {kind==='stop'&&<label>Which<select value={label} onChange={e=>setLabel(e.target.value)}><option value="">Choose…</option>{['estimate','other_work','personal'].map(k=><option key={k} value={k}>{LABELS[k]}</option>)}</select></label>}
+   <div className="fd-times"><label>Start<input type="time" value={start} onChange={e=>setStart(e.target.value)}/></label><label>End<input type="time" value={end} onChange={e=>setEnd(e.target.value)}/></label></div>
+   <label>Note<textarea value={note} onChange={e=>setNote(e.target.value)} placeholder={label==='other_work'?'What was the other work?':'Optional: what was done'}/></label>
+   <div className="fd-actions">
+    <button type="button" className="fd-primary" disabled={busy||!valid} onClick={()=>void onAdd({kind,start,end,note,label:kind==='stop'?label:general?'general':null,allocations:takesJob?evenSplit([job]):[]})}>Add</button>
+    <button type="button" className="fd-secondary" onClick={()=>setOpen(false)}>Cancel</button>
+   </div>
+  </div>
+ </section>;
 }
 
 function SegmentEditor({seg,data,busy,preset,onConfirm,onCancel,onSaveLocation}:{seg:Seg;data:Data;busy:boolean;preset:Preset;onConfirm:(b:Body)=>void;onCancel:()=>void;onSaveLocation:()=>void}){
