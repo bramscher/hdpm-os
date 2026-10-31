@@ -42,7 +42,7 @@ export function selectedReviewPeriod(
   if (periods.includes(requested)) return requested;
   // Keep unfinished payroll visible after the next period opens.
   const unfinished = sheets
-    .filter((sheet) => sheet.period_end < today && sheet.state !== "approved")
+    .filter((sheet) => sheet.period_end < today && !["approved", "removed"].includes(sheet.state))
     .map((sheet) => sheet.period_start)
     .sort();
   if (unfinished.length) return unfinished[0];

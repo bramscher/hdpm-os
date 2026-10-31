@@ -37,6 +37,12 @@ describe("review pay periods", () => {
         : s,
     );
     expect(selectedReviewPeriod(complete, "", "2026-09-16")).toBe("2026-09-16");
+    // A removed sheet (employee left before the period) doesn't hold payroll open.
+    const removed = [
+      ...complete,
+      { period_start: "2026-09-01", period_end: "2026-09-15", state: "removed" as const },
+    ];
+    expect(selectedReviewPeriod(removed, "", "2026-09-16")).toBe("2026-09-16");
     // A user-selected period remains selected after its final approval.
     expect(selectedReviewPeriod(complete, "2026-09-01", "2026-09-16")).toBe(
       "2026-09-01",
