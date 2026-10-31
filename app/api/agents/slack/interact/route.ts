@@ -1,4 +1,5 @@
 import { isFollowupInteraction, handleFollowupInteraction } from '@/lib/agents/followup-slack';
+import { parseOlActionId, moveOwnerLead, redrawOwnerLeadCard, STAGE_LABELS } from '@/lib/agents/owner-lead-slack';
 import { getAgentConfig } from '@/lib/agents/config';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -123,6 +124,13 @@ export async function POST(request: NextRequest) {
     typeof rawAction?.action_id === 'string' ? parseNoticeActionId(rawAction.action_id) : null;
   if (noticeAction) {
     return handleNoticeAction(noticeAction, actor, payload.response_url);
+  }
+
+  // Owner-lead namespace (ol:*) — stage buttons on the new-owner-lead DM card.
+  const olAction =
+    typeof rawAction?.action_id === 'string' ? parseOlActionId(rawAction.action_id) : null;
+  if (olAction) {
+    return handleOlAction(olAction, staff.email, actor, payload);
   }
 
   // ORS-watch namespace (ors:digest:*) — [Digest this] ingests a newly-found
@@ -575,6 +583,43 @@ async function handleNoticeAction(
  * with a confirmation. Ingestion is a few seconds (fetch + embed); Slack shows
  * the result via response_url like the other handlers.
  */
+async function handleOlAction(
+  action: { leadId: number; status: string },
+  actorEmail: string | null,
+  actor: string,
+  payload: SlackInteractionPayload
+) {
+  if (!actorEmail) {
+    await respond(payload.response_url, {
+      response_type: 'ephemeral',
+      replace_original: false,
+      text: 'Your staff record has no email, so the website cannot record who moved this lead.',
+    });
+    return new NextResponse(null, { status: 200 });
+  }
+  const result = await moveOwnerLead(action.leadId, action.status, actorEmail);
+  if (!result.ok) {
+    await respond(payload.response_url, {
+      response_type: 'ephemeral',
+      replace_original: false,
+      text: `Could not move the lead: ${result.error}`,
+    });
+    return new NextResponse(null, { status: 200 });
+  }
+  const tapTime = new Date().toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  const note = `Moved to ${STAGE_LABELS[result.lead.status] ?? result.lead.status} by ${actor} ${tapTime}`;
+  await respond(payload.response_url, {
+    replace_original: true,
+    text: `Owner lead: ${result.lead.name} (${STAGE_LABELS[result.lead.status] ?? result.lead.status})`,
+    blocks: redrawOwnerLeadCard(payload.message?.blocks ?? [], result.lead, note),
+  });
+  return new NextResponse(null, { status: 200 });
+}
+
 async function handleOrsDigest(
   action: { section: string },
   actor: string,
@@ -766,6 +811,7 @@ interface SlackInteractionPayload {
   user?: { id?: string };
   response_url?: string;
   actions?: unknown[];
+  message?: { blocks?: Array<Record<string, unknown>> };
 }
 
 async function loadWo(id: string): Promise<{ owner_name: string | null; next_action_date: string | null } | null> {

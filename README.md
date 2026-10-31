@@ -1008,6 +1008,7 @@ Configured in `vercel.json`. All times are UTC.
 | **14:15 Mon–Fri** | `/api/eos/cron/escalation` | Escalation ladder → EOS issues; to-do roll/nudge (7:15 AM PT) |
 | **14:15 Mon–Fri** | `/api/haven/cron/digest` | Haven response-time digest |
 | **15:00 on the 1st** | `/api/reports/cron/monthly` | Monthly growth report Slack DM to Craig (owner leads + stages, doors, leasing, main line) |
+| **15:30 Mon–Fri** | `/api/reports/cron/owner-leads` | Owner leads still at New — Slack DM to Craig (new owner leads also DM instantly via `/api/intake/owner-lead`, with stage buttons) |
 | **14:20 daily** | `/api/reception/sync` | Zoom main-line reception call report sync |
 | **14:30 Monday** | `/api/eos/cron/meeting-prep` | L10 prep packet + facilitator DM (7:30 AM PT) |
 | **15:00 daily** | `/api/sync/vacancies` | AppFolio vacancy cache refresh |
