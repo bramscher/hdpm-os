@@ -57,6 +57,9 @@ const STATUS_LABELS: Record<string, string> = {
   applied: "Applied",
   approved: "Approved",
   leased: "Leased",
+  consult_booked: "Consult booked",
+  proposal_sent: "Proposal sent",
+  signed: "Signed",
   lost: "Lost",
   archived: "Archived",
 };
@@ -69,6 +72,9 @@ const STATUS_TONE: Record<string, "neutral" | "terra" | "success" | "warning" | 
   applied: "info",
   approved: "success",
   leased: "success",
+  consult_booked: "info",
+  proposal_sent: "info",
+  signed: "success",
   lost: "neutral",
   archived: "neutral",
 };
