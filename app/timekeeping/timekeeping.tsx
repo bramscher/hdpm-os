@@ -170,16 +170,18 @@ function TimekeepingView() {
   const activePeriod = selectedReviewPeriod(sheets, period, today);
   const activeIndex = periods.indexOf(activePeriod);
   const periodEnd = periodFor(activePeriod).end;
-  const periodSheets = sheets.filter((s) => s.period_start === activePeriod);
+  const allPeriodSheets = sheets.filter((s) => s.period_start === activePeriod);
+  // Removed sheets (employee left before the period) stay listed but don't count toward payroll.
+  const periodSheets = allPeriodSheets.filter((s) => s.state !== "removed");
   const payrollCheckKey =
     activePeriod + periodSheets.map((s) => `${s.id}:${s.version}`).join(",");
-  const filtered = periodSheets
+  const filtered = allPeriodSheets
     .filter((s) => !person || s.employee_id === person)
     .sort((a, b) => a.employee_name.localeCompare(b.employee_name));
   const periodExports = exports.filter((e) => e.period_start === activePeriod);
   const counts = periodSheets.reduce(
     (counts, sheet) => ({ ...counts, [sheet.state]: counts[sheet.state] + 1 }),
-    { draft: 0, returned: 0, submitted: 0, approved: 0 },
+    { draft: 0, returned: 0, submitted: 0, approved: 0, removed: 0 },
   );
   return (
     <main className="tk-app">
@@ -1819,6 +1821,26 @@ function SheetEditor({
               </button>
             </>
           )}
+        {!readOnly && isAdmin && !own && editable && !initial.employee_signed_at && (
+          <div className="tk-remove">
+            <p>
+              Employee left before this period? Set their end date in Payroll
+              setup, then remove this sheet. It stays in the history but is
+              left out of review and payroll. Uses the reason above.
+            </p>
+            <button
+              disabled={busy || !reason.trim()}
+              onClick={() => act("remove")}
+            >
+              Remove from this period
+            </button>
+          </div>
+        )}
+        {initial.state === "removed" && (
+          <p className="tk-notice">
+            <strong>Removed from this period.</strong> {initial.reason}
+          </p>
+        )}
         {isAdmin && !own && editable && (
           <p>
             After corrections are saved, the employee must sign this sheet again

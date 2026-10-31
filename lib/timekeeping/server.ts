@@ -372,7 +372,8 @@ export async function payrollSource(
   const source: PayrollSource = {
     periodStart: period,
     periodEnd: periodFor(period).end,
-    sheets: await listSheets(ctx, period),
+    // A removed sheet (employee left before the period) isn't part of payroll.
+    sheets: (await listSheets(ctx, period)).filter((s) => s.state !== "removed"),
     overtime,
   };
   return source;
@@ -562,7 +563,7 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
   }
   if (op === "clock") return clockCommand(ctx, body);
   if (
-    !["save", "submit", "approve", "return", "reopen", "refresh"].includes(
+    !["save", "submit", "approve", "return", "reopen", "refresh", "remove"].includes(
       String(op),
     )
   )

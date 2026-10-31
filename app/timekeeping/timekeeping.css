@@ -293,6 +293,16 @@
   background: #fff0db;
   color: #986323;
 }
+.tk-badge.removed {
+  background: #ececec;
+  color: #6b6b6b;
+  text-decoration: line-through;
+}
+.tk-remove {
+  border-top: 1px solid #e6e1d4;
+  margin-top: 12px;
+  padding-top: 12px;
+}
 .tk-badge.prefilled {
   background: #fde8e4;
   color: #a2402c;

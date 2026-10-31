@@ -61,7 +61,7 @@ export type Sheet = {
   employee_id: string;
   period_start: string;
   period_end: string;
-  state: "draft" | "submitted" | "returned" | "approved";
+  state: "draft" | "submitted" | "returned" | "approved" | "removed";
   days: Day[];
   note: string;
   pay_basis: "hourly" | "salary";
