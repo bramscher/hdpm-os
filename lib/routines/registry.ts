@@ -73,6 +73,7 @@ export const ROUTINES: Routine[] = [
   { id: 'operator_canary', path: '/api/agents/cron/operator-canary', schedule: '0 16 * * 1', name: 'AppFolio Form Filler health check', category: 'agent', owner: 'Craig', catalogId: 'dez_operator', recipients: ['Craig'] },
 
   // ── Reports ───────────────────────────────────────────────────────────
+  { id: 'owner_leads_nudge', path: '/api/reports/cron/owner-leads', schedule: '30 15 * * 1-5', name: 'Owner Leads at New', category: 'report', owner: 'Craig', recipients: ['Craig'] },
   { id: 'monthly_growth_report', path: '/api/reports/cron/monthly', schedule: '0 15 1 * *', name: 'Monthly Growth Report', category: 'report', owner: 'Craig', recipients: ['Craig'] },
   { id: 'haven_digest', path: '/api/haven/cron/digest', schedule: '15 14 * * 1-5', name: 'Haven Daily Digest', category: 'report', owner: 'Craig', recipients: ['Brody', 'Matt'] },
   { id: 'tripwires', path: '/api/maintenance/cron/tripwires', schedule: '0 13 * * 1-5', name: 'Maintenance Tripwire Digest', category: 'report', owner: 'Craig', recipients: ['Work owners'] },

@@ -65,6 +65,10 @@
       "schedule": "0 15 1 * *"
     },
     {
+      "path": "/api/reports/cron/owner-leads",
+      "schedule": "30 15 * * 1-5"
+    },
+    {
       "path": "/api/kpi/cron",
       "schedule": "0 14 * * *"
     },
