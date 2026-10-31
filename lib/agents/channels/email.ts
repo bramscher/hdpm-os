@@ -19,6 +19,7 @@ export async function sendEmail(input: {
   html?: string;
   text?: string;
   from?: string;
+  replyTo?: string;
 }): Promise<SendOutcome> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -31,6 +32,7 @@ export async function sendEmail(input: {
       from: input.from || process.env.AGENT_EMAIL_FROM || process.env.MAINT_DIGEST_FROM || DEFAULT_FROM,
       to: input.to,
       subject: input.subject,
+      ...(input.replyTo ? { replyTo: input.replyTo } : {}),
     };
     const { data, error } = await resend.emails.send(
       input.html !== undefined

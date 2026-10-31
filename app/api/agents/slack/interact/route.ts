@@ -1,7 +1,9 @@
 import { isFollowupInteraction, handleFollowupInteraction } from '@/lib/agents/followup-slack';
 import { parseOlActionId, moveOwnerLead, redrawOwnerLeadCard, STAGE_LABELS } from '@/lib/agents/owner-lead-slack';
+import { parseRrActionId, parseRrBatchValue, redrawReviewBatchCard } from '@/lib/review-requests';
+import { decideReviewRequests } from '@/lib/review-requests-run';
 import { getAgentConfig } from '@/lib/agents/config';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { verifySlackSignature } from '@/lib/webhook-verify';
 import { resolveStaffBySlackId } from '@/lib/agents/staff';
@@ -131,6 +133,16 @@ export async function POST(request: NextRequest) {
     typeof rawAction?.action_id === 'string' ? parseOlActionId(rawAction.action_id) : null;
   if (olAction) {
     return handleOlAction(olAction, staff.email, actor, payload);
+  }
+
+  // Review-request namespace (rr:*) — Send / Skip / Send all on the daily
+  // review batch card. Sending a card's worth of email can outrun Slack's 3s
+  // ack, so the work runs after the response and the card updates via response_url.
+  const rrAction =
+    typeof rawAction?.action_id === 'string' ? parseRrActionId(rawAction.action_id) : null;
+  if (rrAction) {
+    after(() => handleRrAction(rrAction, (rawAction as { value?: unknown }).value, actor, payload));
+    return new NextResponse(null, { status: 200 });
   }
 
   // ORS-watch namespace (ors:digest:*) — [Digest this] ingests a newly-found
@@ -618,6 +630,34 @@ async function handleOlAction(
     blocks: redrawOwnerLeadCard(payload.message?.blocks ?? [], result.lead, note),
   });
   return new NextResponse(null, { status: 200 });
+}
+
+async function handleRrAction(
+  action: NonNullable<ReturnType<typeof parseRrActionId>>,
+  value: unknown,
+  actor: string,
+  payload: SlackInteractionPayload
+): Promise<void> {
+  const decision =
+    action.kind === 'one'
+      ? { op: action.op, ids: [action.id] }
+      : { op: 'send' as const, ids: parseRrBatchValue(value) };
+  const result = await decideReviewRequests(decision, actor);
+  if (result.error) {
+    await respond(payload.response_url, {
+      response_type: 'ephemeral',
+      replace_original: false,
+      text: `Review requests not sent: ${result.error}`,
+    });
+    return;
+  }
+  const blocks = payload.message?.blocks ?? [];
+  if (!blocks.length || !result.notes.size) return;
+  await respond(payload.response_url, {
+    replace_original: true,
+    text: 'Review requests',
+    blocks: redrawReviewBatchCard(blocks, result.notes),
+  });
 }
 
 async function handleOrsDigest(
