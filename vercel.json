@@ -61,6 +61,10 @@
       "schedule": "15 14 * * 1-5"
     },
     {
+      "path": "/api/reports/cron/monthly",
+      "schedule": "0 15 1 * *"
+    },
+    {
       "path": "/api/kpi/cron",
       "schedule": "0 14 * * *"
     },
