@@ -69,6 +69,10 @@
       "schedule": "30 15 * * 1-5"
     },
     {
+      "path": "/api/reviews/cron/daily",
+      "schedule": "0 16 * * 1-5"
+    },
+    {
       "path": "/api/kpi/cron",
       "schedule": "0 14 * * *"
     },
