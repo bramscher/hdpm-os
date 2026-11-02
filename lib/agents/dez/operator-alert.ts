@@ -13,7 +13,7 @@ import { sendSlackMessage } from '@/lib/agents/channels/slack';
 import { logDezActivity } from '@/lib/agents/dez/activity';
 
 export async function alertOperatorFailure(input: {
-  context: 'request' | 'canary';
+  context: 'request' | 'canary' | 'canary_stuck';
   template: string;
   tenantQuery: string;
   error: string;
@@ -23,8 +23,8 @@ export async function alertOperatorFailure(input: {
 
   // needs_attention row → /agents panel (best-effort; table may be unapplied).
   await logDezActivity({
-    kind: context === 'canary' ? 'routine' : 'verb',
-    surface: context === 'canary' ? 'cron' : 'dm',
+    kind: context === 'request' ? 'verb' : 'routine',
+    surface: context === 'request' ? 'dm' : 'cron',
     scope: 'operator',
     actorPerson: requestedBy ?? null,
     summary: `operator failed: ${template} for ${tenantQuery}`,
@@ -38,14 +38,23 @@ export async function alertOperatorFailure(input: {
     const title =
       context === 'canary'
         ? '🚨 Dez operator *canary failed* — the AppFolio deposit-to-hold flow looks broken'
-        : '⚠️ Dez operator *failed on a live request*';
+        : context === 'canary_stuck'
+          ? '🚨 Dez operator *canary didn\'t finish* — this week\'s self-test has no result'
+          : '⚠️ Dez operator *failed on a live request*';
     const hint =
       context === 'canary'
         ? 'Weekly self-test — most likely an AppFolio UI change broke a selector. Check Railway logs or re-run the probe.'
-        : 'A staff member hit this. Check the Railway `/operator/form-merge` logs.';
+        : context === 'canary_stuck'
+          ? 'The worker may be hung or asleep. Check Railway logs and the Vercel cron log, then re-run the canary.'
+          : 'A staff member hit this. Check the Railway `/operator/form-merge` logs.';
     await sendSlackMessage({
       channel: craig.slack_user_id,
-      text: context === 'canary' ? 'Dez operator canary failed' : 'Dez operator failed',
+      text:
+        context === 'canary'
+          ? 'Dez operator canary failed'
+          : context === 'canary_stuck'
+            ? 'Dez operator canary did not finish'
+            : 'Dez operator failed',
       blocks: [
         {
           type: 'section',

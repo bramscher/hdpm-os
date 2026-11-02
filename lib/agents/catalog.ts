@@ -112,7 +112,7 @@ export const AGENT_CATALOG: CatalogAgent[] = [
     what: 'Fills the deposit-to-hold form in AppFolio for you. It only sends after a person taps Approve & Send.',
     why: 'Removes retyping the same details into AppFolio.',
     helps: 'Leasing',
-    when: 'On request through Dez; health check Mondays ~9 AM (DMs Craig if it breaks)',
+    when: 'On request through Dez; health check Mondays ~9 AM (DMs Craig if it breaks or never finishes)',
     output: 'A filled AppFolio form awaiting approval',
     status: 'live',
     config: { agent: 'dez_operator' },

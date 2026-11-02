@@ -71,6 +71,7 @@ export const ROUTINES: Routine[] = [
   { id: 'activities_nudge', path: '/api/agents/cron/activities?kind=nudge', schedule: '0 20 * * 1-5', name: 'Activity Reminders (nudge)', category: 'agent', owner: 'Craig', catalogId: 'activities', recipients: ['Each assignee'] },
   { id: 'activities_new', path: '/api/agents/cron/activities?kind=new', schedule: '30 15-23 * * 1-5', name: 'Activity Reminders (new)', category: 'agent', owner: 'Craig', catalogId: 'activities', recipients: ['Each assignee'] },
   { id: 'operator_canary', path: '/api/agents/cron/operator-canary', schedule: '0 16 * * 1', name: 'AppFolio Form Filler health check', category: 'agent', owner: 'Craig', catalogId: 'dez_operator', recipients: ['Craig'] },
+  { id: 'operator_canary_watch', path: '/api/agents/cron/operator-canary-watch', schedule: '20 16 * * 1', name: 'AppFolio Form Filler health check watchdog', category: 'agent', owner: 'Craig', catalogId: 'dez_operator', recipients: ['Craig'] },
 
   // ── Reports ───────────────────────────────────────────────────────────
   { id: 'owner_leads_nudge', path: '/api/reports/cron/owner-leads', schedule: '30 15 * * 1-5', name: 'Owner Leads at New', category: 'report', owner: 'Craig', recipients: ['Craig'] },

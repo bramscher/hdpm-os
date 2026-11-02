@@ -16,6 +16,7 @@ import { createHmac } from 'node:crypto';
 
 export const OPERATOR_AGENT = 'dez_operator';
 export const FORM_MERGE_ACTION = 'form_merge';
+export const CANARY_TENANT = process.env.DEZ_OPERATOR_CANARY_TENANT || 'Bryce Bramscher';
 
 export interface OperatorRequest {
   template: 'deposit-to-hold';
@@ -98,6 +99,25 @@ export async function callOperator(input: {
   }
 }
 
+const CANARY_STUCK_AFTER_MS = 15 * 60_000;
+const CANARY_START_WINDOW_MS = 60 * 60_000;
+
+/**
+ * Why the canary run needs an alert, or null if it reported for itself. A run
+ * killed mid-way (function timeout) stays 'running' and never reaches its own
+ * alert; a cron that never fired leaves no recent run at all. Pure.
+ */
+export function canaryProblem(
+  run: { status: string; started_at: string } | null,
+  now = Date.now()
+): string | null {
+  const age = run ? now - new Date(run.started_at).getTime() : Infinity;
+  if (age > CANARY_START_WINDOW_MS) return 'This week\'s canary never started.';
+  if (run?.status === 'running' && age > CANARY_STUCK_AFTER_MS) {
+    return 'The canary started but never finished, so it was likely killed at the time limit.';
+  }
+  return null;
+}
 // ── Slack op:* action-id helpers (approve/discard on the preview card) ──
 
 export type OperatorAction = { kind: 'approve' | 'discard'; proposalId: string };

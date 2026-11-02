@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { callOperator } from '@/lib/agents/dez/operator';
+import { callOperator, CANARY_TENANT } from '@/lib/agents/dez/operator';
 import { alertOperatorFailure } from '@/lib/agents/dez/operator-alert';
 import { logDezActivity } from '@/lib/agents/dez/activity';
 import { withCronRun } from '@/lib/cron/run';
@@ -18,7 +18,6 @@ export const maxDuration = 120;
  * (URL unset / worker disabled / unreachable) it skips quietly — those are
  * deliberate states, not drift.
  */
-const CANARY_TENANT = process.env.DEZ_OPERATOR_CANARY_TENANT || 'Bryce Bramscher';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
