@@ -16,7 +16,7 @@
  * itself (flows/deposit-to-hold.ts) was mapped and is accurate.
  */
 
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { attachVirtualAuthenticator, loadPasskey } from './passkey.js';
@@ -57,6 +57,42 @@ async function isLoggedIn(page: Page): Promise<boolean> {
   return inApp(page.url());
 }
 
+/** Fill and submit the login form. Stops if the login finishes by itself partway. */
+async function submitLoginForm(page: Page, emailField: Locator, user: string, password: string): Promise<void> {
+  await emailField.fill(user);
+
+  // Keycloak may show password on the same page or after a Continue click.
+  const passSel =
+    'input[type="password"], input[name="password"], input[name="user[password]"], #user_password, #password';
+  const passField = page.locator(passSel).first();
+  if (inApp(page.url())) return;
+  if (!(await passField.isVisible().catch(() => false))) {
+    await page
+      .getByRole('button', { name: /continue|next|sign in|log in/i })
+      .first()
+      .click()
+      .catch(() => {});
+    await passField.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+  }
+  if (inApp(page.url())) return;
+  if (await passField.isVisible().catch(() => false)) {
+    await passField.fill(password);
+  }
+  if (inApp(page.url())) return;
+  await page
+    .getByRole('button', { name: /sign in|log in|continue|submit/i })
+    .first()
+    .click()
+    .catch(() => {});
+
+  // A passkey step (if any) is auto-satisfied by the virtual authenticator.
+  if (inApp(page.url())) return;
+  const passkeyBtn = page.getByRole('button', { name: /passkey/i });
+  if (await passkeyBtn.count().catch(() => 0)) {
+    await passkeyBtn.first().click().catch(() => {});
+  }
+}
+
 async function performLogin(page: Page): Promise<void> {
   const user = process.env.APPFOLIO_DEZ_USER;
   const password = process.env.APPFOLIO_DEZ_PASSWORD;
@@ -89,39 +125,19 @@ async function performLogin(page: Page): Promise<void> {
         .catch(() => null),
     ]);
 
+    // Either way, we're done once we land in the app. That can happen while the
+    // form is being filled: the email box offers passkeys on load (autocomplete
+    // "username webauthn") and the virtual authenticator approves at once.
+    const landed = page.waitForURL((u) => inApp(u.href), { timeout: 60_000 });
+    landed.catch(() => {}); // awaited below; don't let it reject unhandled first
+
     if (outcome === 'form') {
-      await emailField.fill(user);
-
-      // Keycloak may show password on the same page or after a Continue click.
-      const passSel =
-        'input[type="password"], input[name="password"], input[name="user[password]"], #user_password, #password';
-      const passField = page.locator(passSel).first();
-      if (!(await passField.isVisible().catch(() => false))) {
-        await page
-          .getByRole('button', { name: /continue|next|sign in|log in/i })
-          .first()
-          .click()
-          .catch(() => {});
-        await passField.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
-      }
-      if (await passField.isVisible().catch(() => false)) {
-        await passField.fill(password);
-      }
-      await page
-        .getByRole('button', { name: /sign in|log in|continue|submit/i })
-        .first()
-        .click()
-        .catch(() => {});
-
-      // A passkey step (if any) is auto-satisfied by the virtual authenticator.
-      const passkeyBtn = page.getByRole('button', { name: /passkey/i });
-      if (await passkeyBtn.count().catch(() => 0)) {
-        await passkeyBtn.first().click().catch(() => {});
-      }
+      const form = submitLoginForm(page, emailField, user, password);
+      form.catch(() => {}); // loses the race once we've landed, then fails on the gone form
+      await Promise.race([form, landed]);
     }
 
-    // Either way, wait until we've actually landed in the app.
-    await page.waitForURL((u) => inApp(u.href), { timeout: 30_000 });
+    await landed;
 
     // Persist the session for reuse.
     mkdirSync(dirname(STORAGE_PATH), { recursive: true });
