@@ -1016,6 +1016,7 @@ Configured in `vercel.json`. All times are UTC.
 | **15:00 & 16:00 Mon–Fri** | `/api/maintenance/cron/followups` | Maintenance Follow-up Queue to Slack (runs only at 8 AM Pacific; skipped when the shared trial is off) |
 | **15:00 Monday** | `/api/agents/cron/ops-brief?deep=1` | Monday deep Ops Brief (8 AM PT) |
 | **16:00 Monday** | `/api/agents/cron/operator-canary` | AppFolio Form Filler weekly health check (prepare-mode run; DMs Craig on a real failure) |
+| **16:20 Monday** | `/api/agents/cron/operator-canary-watch` | Watchdog: DMs Craig if that health check never started or never finished |
 | **20:00 Mon–Fri** | `/api/agents/cron/activities?kind=nudge` | Activity Reminders: 1 PM PT reminder for anything still due today |
 | **22:00 Friday** | `/api/eos/cron/scorecard` | Scorecard auto-fill + owner nudges + Rock check cards (3 PM PT) |
 | **00:00 Tue–Sat** | `/api/agents/cron/ops-brief` | Daily Ops Brief (~5 PM PT) |
