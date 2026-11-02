@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { proposeReviewRequests } from '@/lib/review-requests-run';
-import { buildReviewBatchCard, CARD_ROWS, pacificDate, REASON_LABELS } from '@/lib/review-requests';
+import { buildReviewBatchCard, CARD_ROWS, pacificDate, REASON_LABELS, REVIEW_APPROVER } from '@/lib/review-requests';
 import { enqueueOutbox, dispatchOutbox } from '@/lib/agents/outbox';
 import { resolveStaffByPersonOrEmail } from '@/lib/agents/staff';
 import { withCronRun } from '@/lib/cron/run';
 
 export const maxDuration = 120;
 
-const RECIPIENT = 'Craig';
+const RECIPIENT = REVIEW_APPROVER;
 
 async function handleGET(request: NextRequest) {
   return POST(request);

@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   buildReviewBatchCard,
   buildReviewEmail,
+  canDecideReviewRequests,
   daysBetween,
   finalizeCandidates,
   pacificDate,
@@ -204,5 +205,13 @@ describe('batch card', () => {
     expect(one.some((b) => b.block_id === 'rr-all')).toBe(true);
     const both = redrawReviewBatchCard(one, new Map([[ids[1], 'Skipped']]));
     expect(both.some((b) => b.block_id === 'rr-all')).toBe(false);
+  });
+});
+
+describe('canDecideReviewRequests', () => {
+  it('lets only Craig send or skip', () => {
+    expect(canDecideReviewRequests({ person: 'Craig', email: null })).toBe(true);
+    expect(canDecideReviewRequests({ person: 'C', email: 'Craig@highdesertpm.com' })).toBe(true);
+    expect(canDecideReviewRequests({ person: 'Brody', email: 'brody@highdesertpm.com' })).toBe(false);
   });
 });
