@@ -29,6 +29,16 @@ export const REASON_LABELS: Record<ReviewReason, string> = {
 /** Same-email priority within one batch: the freshest, most specific moment wins. */
 const REASON_PRIORITY: ReviewReason[] = ['repair', 'renewal', 'move_in', 'owner_90d'];
 
+/**
+ * Only Craig sends. The batch card goes to his DM alone, and a Send/Skip tap
+ * from anyone else (a forwarded or shared card) is refused.
+ */
+export const REVIEW_APPROVER = 'Craig';
+
+export function canDecideReviewRequests(staff: { person: string; email: string | null }): boolean {
+  return staff.person === REVIEW_APPROVER || staff.email?.toLowerCase() === 'craig@highdesertpm.com';
+}
+
 export const ASK_COOLDOWN_DAYS = 365;
 /** A proposal nobody acted on stops being sendable after this. */
 export const PROPOSAL_TTL_DAYS = 14;

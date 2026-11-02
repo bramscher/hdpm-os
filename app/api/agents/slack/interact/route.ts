@@ -1,6 +1,6 @@
 import { isFollowupInteraction, handleFollowupInteraction } from '@/lib/agents/followup-slack';
 import { parseOlActionId, moveOwnerLead, redrawOwnerLeadCard, STAGE_LABELS } from '@/lib/agents/owner-lead-slack';
-import { parseRrActionId, parseRrBatchValue, redrawReviewBatchCard } from '@/lib/review-requests';
+import { canDecideReviewRequests, parseRrActionId, parseRrBatchValue, redrawReviewBatchCard } from '@/lib/review-requests';
 import { decideReviewRequests } from '@/lib/review-requests-run';
 import { getAgentConfig } from '@/lib/agents/config';
 import { NextRequest, NextResponse, after } from 'next/server';
@@ -141,6 +141,14 @@ export async function POST(request: NextRequest) {
   const rrAction =
     typeof rawAction?.action_id === 'string' ? parseRrActionId(rawAction.action_id) : null;
   if (rrAction) {
+    if (!canDecideReviewRequests(staff)) {
+      await respond(payload.response_url, {
+        response_type: 'ephemeral',
+        replace_original: false,
+        text: 'Only Craig can send or skip review requests.',
+      });
+      return new NextResponse(null, { status: 200 });
+    }
     after(() => handleRrAction(rrAction, (rawAction as { value?: unknown }).value, actor, payload));
     return new NextResponse(null, { status: 200 });
   }
