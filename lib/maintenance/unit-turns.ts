@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { fetchAppFolioTenants } from '@/lib/appfolio';
 import { fetchUnitIdBridge, runReport } from '@/lib/appfolio-reports';
+import { setComplete } from '@/lib/turnover/server';
 import { recordEvents } from './events';
 import type { UnitTurn } from './types';
 
@@ -338,6 +339,25 @@ export async function syncUnitTurnsFromMirror(
 // that exist in AppFolio but have no WOs yet — the board's early warning.
 // ============================================
 
+/**
+ * Close a turn AppFolio shows as ended, unless it still has open work or
+ * someone reopened it by hand (a reopen sticks). Returns whether it closed.
+ */
+export async function closeEndedTurn(turnId: string, endDate: string): Promise<boolean> {
+  const db = getSupabaseAdmin();
+  const [open, reopened] = await Promise.all([
+    db.from('work_orders').select('id').eq('unit_turn_id', turnId).eq('status', 'open').is('completed_date', null).is('canceled_date', null).limit(1),
+    db.from('turn_activity').select('id').eq('unit_turn_id', turnId).eq('kind', 'reopen').limit(1),
+  ]);
+  if (open.error || reopened.error) {
+    console.error(`[UnitTurns] Close check failed for turn ${turnId}: ${open.error?.message ?? reopened.error?.message}`);
+    return false;
+  }
+  if (open.data?.length || reopened.data?.length) return false;
+  await setComplete(db, turnId, true, 'appfolio-sync', `Closed: AppFolio turn ended ${endDate.slice(0, 10)}`);
+  return true;
+}
+
 interface UnitTurnDetailRow {
   property?: string | null;
   unit?: string | null;
@@ -373,13 +393,15 @@ function daysApart(a: string, b: string): number {
  * days of move-outs). Matching: af_unit_turn_id first, else same unit UUID
  * with vacated_at within 45 days of the report's move-out (non-closed rows
  * preferred, then closest). Craig-owned fields (blocker, budget, notes, an
- * already-set target_ready, status) are never touched.
+ * already-set target_ready) are never touched. The one status write closes a
+ * turn AppFolio has ended: see closeEndedTurn.
  */
 export async function trueUpUnitTurnsFromReport(): Promise<{
   reportRows: number;
   updated: number;
   created: number;
   unbridged: number;
+  closed: number;
 }> {
   const supabase = getSupabaseAdmin();
   const since = addDays(new Date().toISOString().slice(0, 10), -180);
@@ -410,6 +432,7 @@ export async function trueUpUnitTurnsFromReport(): Promise<{
   let updated = 0;
   let created = 0;
   let unbridged = 0;
+  let closed = 0;
 
   for (const row of report) {
     if (!row.move_out_date || row.unit_turn_id == null) continue;
@@ -445,6 +468,9 @@ export async function trueUpUnitTurnsFromReport(): Promise<{
       }
       if (actual != null && Number(target.actual) !== actual) patch.actual = actual;
       if (!target.target_ready && targetReady) patch.target_ready = targetReady;
+      if (row.turn_end_date && target.status === 'active' && target.af_unit_turn_id === afId) {
+        if (await closeEndedTurn(target.id, row.turn_end_date)) closed++;
+      }
       if (Object.keys(patch).length > 0) {
         const { error: upError } = await supabase.from('unit_turn').update(patch).eq('id', target.id);
         if (upError) console.error(`[UnitTurns] True-up update failed for AF turn ${afId}: ${upError.message}`);
@@ -473,5 +499,5 @@ export async function trueUpUnitTurnsFromReport(): Promise<{
   console.log(
     `[UnitTurns] Report true-up: ${report.length} rows, ${updated} updated, ${created} created, ${unbridged} unbridged units`
   );
-  return { reportRows: report.length, updated, created, unbridged };
+  return { reportRows: report.length, updated, created, unbridged, closed };
 }
