@@ -200,9 +200,15 @@ export type AgeBucket = typeof AGE_BUCKETS[number]['key'];
 export const ageBucket = (days: number): AgeBucket => AGE_BUCKETS.find(b => days <= b.max)!.key;
 export const STEP_ORDER: StepKind[] = ['fix', 'decide', 'chase', 'check', 'wait'];
 
-export type SnapshotFilter = { lane?: Lane; age?: AgeBucket; step?: StepKind };
-export function matchesSnapshot(c: FollowupCandidate, r: FollowupReview | undefined, f: SnapshotFilter, now = new Date()) {
-  return (!f.lane || laneFor(c, r) === f.lane) && (!f.age || ageBucket(daysStuck(c, now)) === f.age) && (!f.step || nextStep(c, r, now).kind === f.step);
+export type SnapshotFilter = { lane?: Lane; age?: AgeBucket; step?: StepKind; decision?: boolean };
+/** Stuck long enough, or chased enough, that someone has to decide what happens next. */
+export const NEEDS_DECISION = { days: 45, chases: 3 };
+/** Live on every read: estimate work on the board, past the line. Snoozing or dismissing the card clears it. */
+export function needsDecision(c: FollowupCandidate, r: FollowupReview | undefined, chases: number, now = new Date()) {
+  return ['vendor', 'owner', 'decision'].includes(c.kind) && bucketFor(c, r, now) === 'active' && (daysStuck(c, now) >= NEEDS_DECISION.days || chases >= NEEDS_DECISION.chases);
+}
+export function matchesSnapshot(c: FollowupCandidate, r: FollowupReview | undefined, f: SnapshotFilter, now = new Date(), chases?: Map<string, number>) {
+  return (!f.decision || needsDecision(c, r, chases?.get(c.id) || 0, now)) && (!f.lane || laneFor(c, r) === f.lane) && (!f.age || ageBucket(daysStuck(c, now)) === f.age) && (!f.step || nextStep(c, r, now).kind === f.step);
 }
 /** Stage × age counts (with next-step split per cell) and totals by next step, over active work. */
 export function agingSnapshot(active: FollowupCandidate[], reviews: Map<string, FollowupReview>, now = new Date()) {

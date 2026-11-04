@@ -14,9 +14,10 @@ import {
 
 function esc(overrides: Partial<EscalationBriefItem> = {}): EscalationBriefItem {
   return {
-    proposalId: 'esc-1',
+    workOrderId: 'wo-1',
     woRef: 'WO #41855-1 — 456 SW Century Dr, Unit 12',
     reason: 'chased_3x',
+    waitingOn: 'vendor bid outstanding',
     chaseCount: 3,
     ageCalendarDays: 48,
     appfolioLink: 'https://hdpm.appfolio.com/wo/41855',
@@ -110,60 +111,49 @@ describe('buildOpsBriefBlocks', () => {
         baseline: [{ label: 'Open exceptions', before: '205', now: '187' }],
       },
     });
-    for (const variant of [buildOpsBriefBlocks(briefData(), { readOnly: false }), buildOpsBriefBlocks(deep, { readOnly: false })]) {
+    for (const variant of [buildOpsBriefBlocks(briefData()), buildOpsBriefBlocks(deep)]) {
       expect(JSON.stringify(variant)).not.toMatch(/\$/);
     }
   });
 
-  it('caps needs-Craig items and notes the overflow', () => {
-    const items = Array.from({ length: 5 }, (_, i) => esc({ proposalId: `esc-${i}` }));
-    const { blocks } = buildOpsBriefBlocks(briefData({ needsCraig: items }), { readOnly: false });
-    const s = JSON.stringify(blocks);
-    const buttonCount = (s.match(/ob:ack:/g) ?? []).length;
-    expect(buttonCount).toBe(NEEDS_CRAIG_CAP);
-    expect(s).toContain('+2 more');
+  it('caps items, shows the full count, and links the rest to the live board list', () => {
+    const items = Array.from({ length: 5 }, (_, i) => esc({ workOrderId: `wo-${i}` }));
+    const s = JSON.stringify(buildOpsBriefBlocks(briefData({ needsCraig: items })).blocks);
+    expect(s).toContain('Needs decision (5)');
+    expect((s.match(/followup=wo-/g) ?? []).length).toBe(NEEDS_CRAIG_CAP);
+    expect(s).toContain('filter=needs-decision|+2 more on the Chase board');
+    expect(s).not.toContain('exceptions board');
   });
 
-  it('read-only copy renders no buttons', () => {
-    const { blocks } = buildOpsBriefBlocks(briefData(), { readOnly: true });
-    expect(JSON.stringify(blocks)).not.toContain('ob:ack:');
+  it('shows live days, what it is waiting on, and no acknowledge button', () => {
+    const s = JSON.stringify(buildOpsBriefBlocks(briefData()).blocks);
+    expect(s).toContain('48 days stuck · vendor bid outstanding · chased 3×');
+    expect(s).toContain('followup=wo-1|Open card');
+    expect(s).not.toContain('ob:ack:');
   });
 
-  it('acknowledged items render the ack line instead of a button (mixed list)', () => {
-    const { blocks } = buildOpsBriefBlocks(
-      briefData({
-        needsCraig: [
-          esc({ proposalId: 'esc-acked', acknowledgedBy: 'Craig' }),
-          esc({ proposalId: 'esc-open' }),
-        ],
-      }),
-      { readOnly: false }
+  it('links Exceptions and rounds day counts', () => {
+    const base = briefData();
+    const s = JSON.stringify(
+      buildOpsBriefBlocks({
+        ...base,
+        estimates: { ...base.estimates, medianOpenAgeDays: 8.003500046296296 },
+      }).blocks
     );
-    const s = JSON.stringify(blocks);
-    expect(s).toContain('Acknowledged by Craig');
-    expect(s).not.toContain('ob:ack:esc-acked');
-    expect(s).toContain('ob:ack:esc-open');
-  });
-
-  it('a fully acknowledged list collapses to the all-clear line', () => {
-    const { blocks } = buildOpsBriefBlocks(
-      briefData({ needsCraig: [esc({ acknowledgedBy: 'Craig' })] }),
-      { readOnly: false }
-    );
-    expect(JSON.stringify(blocks)).toContain('nothing 🎉');
+    expect(s).toContain('board?view=exceptions|Exceptions');
+    expect(s).toContain('median 8d stuck');
   });
 
   it('celebrates an empty needs-Craig list', () => {
-    const { blocks } = buildOpsBriefBlocks(briefData({ needsCraig: [] }), { readOnly: false });
+    const { blocks } = buildOpsBriefBlocks(briefData({ needsCraig: [] }));
     expect(JSON.stringify(blocks)).toContain('nothing 🎉');
   });
 
   it('flags the adoption gate state', () => {
-    const over = buildOpsBriefBlocks(briefData(), { readOnly: false });
+    const over = buildOpsBriefBlocks(briefData());
     expect(JSON.stringify(over.blocks)).toContain('over target');
     const under = buildOpsBriefBlocks(
-      briefData({ gate: { last7Days: 9, byActorTop: [] } }),
-      { readOnly: false }
+      briefData({ gate: { last7Days: 9, byActorTop: [] } })
     );
     expect(JSON.stringify(under.blocks)).toContain('below target');
   });
@@ -172,23 +162,27 @@ describe('buildOpsBriefBlocks', () => {
 // ── ack patching ──
 
 describe('applyAckToBlocks', () => {
+  // Briefs sent before the live list still carry buttons in their stored blocks.
+  const blocks = ['esc-a', 'esc-b'].map((id) => ({
+    type: 'section',
+    block_id: `ob-item:${id}`,
+    text: { type: 'mrkdwn', text: `*${id}*` },
+    accessory: { action_id: `ob:ack:${id}` },
+  }));
+
   it('patches exactly the tapped block and strips its button', () => {
-    const { blocks } = buildOpsBriefBlocks(
-      briefData({ needsCraig: [esc({ proposalId: 'esc-a' }), esc({ proposalId: 'esc-b' })] }),
-      { readOnly: false }
-    );
-    const patched = applyAckToBlocks(blocks, 'esc-a', 'Craig', '5:12 PM')!;
-    const s = JSON.stringify(patched);
+    const s = JSON.stringify(applyAckToBlocks(blocks, 'esc-a', 'Craig', '5:12 PM'));
     expect(s).toContain('Acknowledged by Craig 5:12 PM');
     expect(s).not.toContain('ob:ack:esc-a');
     expect(s).toContain('ob:ack:esc-b');
   });
 
   it('returns null when the block is absent', () => {
-    const { blocks } = buildOpsBriefBlocks(briefData(), { readOnly: false });
     expect(applyAckToBlocks(blocks, 'nope', 'Craig', '5:12 PM')).toBeNull();
   });
 });
+
+// ── memory ──
 
 describe('mdToMrkdwn (Brief 1D)', () => {
   it('converts markdown bold/headings to Slack mrkdwn and strips citations', () => {
@@ -225,8 +219,7 @@ describe('memory section (Brief 1D)', () => {
       deepWithMemory({
         answer: '**Escalations** route to Brody [1].',
         links: [{ title: 'Agent-OS Q&A <1>', url: 'https://github.com/x/y' }],
-      }),
-      { readOnly: true }
+      })
     );
     const json = JSON.stringify(blocks);
     expect(json).toContain('From company memory');
@@ -235,7 +228,7 @@ describe('memory section (Brief 1D)', () => {
   });
 
   it('omits the section when memory is null/absent', () => {
-    const { blocks } = buildOpsBriefBlocks(deepWithMemory(null), { readOnly: true });
+    const { blocks } = buildOpsBriefBlocks(deepWithMemory(null));
     expect(JSON.stringify(blocks)).not.toContain('From company memory');
   });
 });

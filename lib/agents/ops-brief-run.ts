@@ -1,7 +1,7 @@
 /**
  * Ops Brief — orchestration (DB + channels). Pure logic lives in
- * ops-brief.ts; this file gathers metric deltas, agent stats, and open
- * escalations, renders the brief, and self-sends it to Brody + Matt
+ * ops-brief.ts; this file gathers metric deltas, agent stats, and the live
+ * Needs decision list, renders the brief, and self-sends it to Brody + Matt
  * (L3 — one of the two sanctioned self-reporting exceptions).
  */
 
@@ -34,6 +34,8 @@ import {
   OWNER_APPROVAL_ACTION,
   ESCALATE_ACTION,
 } from './estimate-chaser';
+import { NEEDS_DECISION } from './chase-board';
+import { loadNeedsDecision } from './followup-service';
 
 const METRIC_NAMES = [
   'open_exceptions',
@@ -101,23 +103,23 @@ function num(map: MetricMap, metric: string, field: string): number | null {
   return typeof v === 'number' ? v : null;
 }
 
-/** payload → brief item; woRef composed the same way the chaser renders it. */
-function escalationItem(p: AgentProposal): EscalationBriefItem {
-  const pl = p.payload as Record<string, unknown>;
-  const where =
-    (typeof pl.property_address === 'string' && pl.property_address) ||
-    (typeof pl.property_name === 'string' && pl.property_name) ||
-    'property';
-  const unit = typeof pl.unit_name === 'string' && pl.unit_name ? `, Unit ${pl.unit_name}` : '';
-  const woNumber = typeof pl.wo_number === 'string' ? pl.wo_number : null;
+const WAITING_ON: Record<string, string> = {
+  vendor: 'vendor bid outstanding',
+  owner: 'owner approval pending',
+  decision: 'estimate in, next decider not recorded',
+};
+
+/** A row from the Chase board's Needs decision list → brief item. */
+function needsDecisionItem(row: Awaited<ReturnType<typeof loadNeedsDecision>>[number]): EscalationBriefItem {
+  const c = row.candidate;
   return {
-    proposalId: p.id,
-    woRef: `${woNumber ? `WO #${woNumber} — ` : ''}${where}${unit}`,
-    reason: typeof pl.reason === 'string' ? pl.reason : 'aged_45d',
-    chaseCount: typeof pl.chase_count === 'number' ? pl.chase_count : 0,
-    ageCalendarDays: typeof pl.age_calendar_days === 'number' ? pl.age_calendar_days : 0,
-    appfolioLink: typeof pl.appfolio_link === 'string' ? pl.appfolio_link : null,
-    acknowledgedBy: typeof pl.acknowledged_by === 'string' ? pl.acknowledged_by : undefined,
+    workOrderId: c.id,
+    woRef: `${c.woNumber ? `WO #${c.woNumber} — ` : ''}${c.property}${c.unit ? `, Unit ${c.unit}` : ''}`,
+    reason: row.days >= NEEDS_DECISION.days ? 'aged_45d' : 'chased_3x',
+    waitingOn: WAITING_ON[c.kind] ?? 'needs a decision',
+    chaseCount: row.chases,
+    ageCalendarDays: row.days,
+    appfolioLink: c.appfolioLink ?? null,
   };
 }
 
@@ -197,40 +199,8 @@ export async function runOpsBrief(opts: {
     ).length,
   };
 
-  // ── Open escalations: latest per WO, unacknowledged first ──
-  const { data: escRows } = await supabase
-    .from('agent_proposal')
-    .select('*')
-    .eq('agent', ESTIMATE_CHASER_AGENT)
-    .eq('action_type', ESCALATE_ACTION)
-    .order('created_at', { ascending: false });
-  const latestPerWo = new Map<string, AgentProposal>();
-  for (const row of (escRows ?? []) as AgentProposal[]) {
-    const key = row.subject_id ?? row.id;
-    if (!latestPerWo.has(key)) latestPerWo.set(key, row);
-  }
-  // An escalation is only "needs Craig" if its WO is still open AND still in an
-  // estimate state. Escalate proposals are never retracted when a WO completes,
-  // is canceled, or moves on to scheduling — without this filter the brief was
-  // showing Craig stale items for work that's already done (~30% of the list).
-  const escWoIds = [...latestPerWo.keys()];
-  const stillStuck = new Set<string>();
-  if (escWoIds.length > 0) {
-    const { data: woRows } = await supabase
-      .from('work_orders')
-      .select('id, appfolio_status, stage')
-      .in('id', escWoIds);
-    for (const w of (woRows ?? []) as { id: string; appfolio_status: string | null; stage: string | null }[]) {
-      if (w.stage !== 'CLOSED' && ['Estimated', 'Estimate Requested'].includes(w.appfolio_status ?? '')) {
-        stillStuck.add(w.id);
-      }
-    }
-  }
-  const needsCraig = [...latestPerWo.values()]
-    .filter((row) => stillStuck.has(row.subject_id ?? ''))
-    .map(escalationItem)
-    .filter((i) => !i.acknowledgedBy)
-    .sort((a, b) => b.ageCalendarDays - a.ageCalendarDays);
+  // ── Needs decision: the Chase board's live list, so the two always agree ──
+  const needsCraig = (await loadNeedsDecision(now)).map(needsDecisionItem);
   result.needsCraig = needsCraig.length;
   result.unacked = needsCraig.length;
 
@@ -363,10 +333,9 @@ export async function runOpsBrief(opts: {
     return result;
   }
 
-  // ── Send: proposal first (audit), then Brody (interactive) + Matt and
-  // Craig (read-only copies; Craig re-added 2026-08-04 by request) ──
-  const interactive = buildOpsBriefBlocks(data, { readOnly: false });
-  const readOnly = buildOpsBriefBlocks(data, { readOnly: true });
+  // ── Send: proposal first (audit), then Brody + copies to Matt and Craig
+  // (Craig re-added 2026-08-04 by request) ──
+  const brief = buildOpsBriefBlocks(data);
 
   const proposal = await createProposal({
     agent: OPS_BRIEF_AGENT,
@@ -376,8 +345,8 @@ export async function runOpsBrief(opts: {
     payload: {
       brief_date: briefDate,
       deep,
-      escalation_ids: needsCraig.map((i) => i.proposalId),
-      blocks: interactive.blocks,
+      work_order_ids: needsCraig.map((i) => i.workOrderId),
+      blocks: brief.blocks,
       summary: {
         exceptions: data.exceptions.total,
         gate: data.gate.last7Days,
@@ -388,9 +357,8 @@ export async function runOpsBrief(opts: {
   });
 
   // Recipients are configurable per-agent (agent_config.slack_recipients for
-  // ops_brief/send_brief); [0] is the interactive brief (gets the ack buttons +
-  // the auto_applied proposal stamp), the rest get read-only copies. Defaults to
-  // Brody (interactive), Matt + Craig (copies).
+  // ops_brief/send_brief); [0] gets the auto_applied proposal stamp, the rest
+  // get copies of the same message. Defaults to Brody, then Matt + Craig.
   const recipients = await getNotifyRecipients(OPS_BRIEF_AGENT, SEND_BRIEF_ACTION, [
     'Brody',
     'Matt',
@@ -406,8 +374,8 @@ export async function runOpsBrief(opts: {
       recipient_person: primary.person,
       recipient_address: primary.slack_user_id!,
       subject: 'Ops Brief',
-      body: interactive.text,
-      payload: { blocks: interactive.blocks, brief_date: briefDate },
+      body: brief.text,
+      payload: { blocks: brief.blocks, brief_date: briefDate },
     });
     primaryOutboxId = row.id;
   } else {
@@ -420,8 +388,8 @@ export async function runOpsBrief(opts: {
       recipient_person: staff.person,
       recipient_address: staff.slack_user_id!,
       subject: 'Ops Brief (copy)',
-      body: readOnly.text,
-      payload: { blocks: readOnly.blocks, brief_date: briefDate },
+      body: brief.text,
+      payload: { blocks: brief.blocks, brief_date: briefDate },
     });
   }
 

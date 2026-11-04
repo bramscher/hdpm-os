@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { chaseCounts, daysStuck, needsDecision, type ChaseEvent } from './chase-board';
 import { gatherFollowups, validateFollowupMessage, type FollowupCandidate, type FollowupReview } from './estimate-followups';
 import { BATCH_MAX } from './chase-board';
 import { getAdapter } from './channels';
@@ -32,6 +33,16 @@ async function rows(table: string, columns = '*', order = 'id') {
     const {data,error} = await db.from(table).select(columns).order(order).range(start,start+999);
     if(error) throw new Error(`${table}: ${error.message}`); all.push(...(data||[])); if((data||[]).length<1000) return all;
   }
+}
+/** The Chase board's Needs decision list, longest stuck first: what the Ops Brief reports. */
+export async function loadNeedsDecision(now = new Date()) {
+  const [candidates,reviews,events] = await Promise.all([gatherFollowups(),rows('estimate_followup_review','*','work_order_id'),rows('estimate_followup_event')]);
+  const byId=new Map((reviews as FollowupReview[]).map(r=>[r.work_order_id,r]));
+  const counts=chaseCounts(events as ChaseEvent[]);
+  return candidates
+    .filter(c=>needsDecision(c,byId.get(c.id),counts.get(c.id)||0,now))
+    .map(c=>({candidate:c,days:daysStuck(c,now),chases:counts.get(c.id)||0}))
+    .sort((a,b)=>b.days-a.days);
 }
 export async function loadFollowupQueue() {
   const db=getSupabaseAdmin();

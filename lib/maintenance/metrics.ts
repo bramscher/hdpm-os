@@ -66,11 +66,11 @@ export function exceptionsMetric(result: TripwireRunResult): MetricRow {
 
 /**
  * A human action = a wo_event written by a person. System actors are
- * 'system:*' (sync, tripwires); 'sync_update'/'exception' rows are machine
+ * 'system:*' (sync, tripwires) and 'appfolio-sync' (turn linking); 'sync_update'/'exception' rows are machine
  * observations even if an actor label ever slips.
  */
 export function isHumanAction(e: Pick<MetricEventRow, 'actor' | 'event_type'>): boolean {
-  if (e.actor.startsWith('system:')) return false;
+  if (e.actor.startsWith('system:') || e.actor === 'appfolio-sync') return false;
   return e.event_type !== 'sync_update' && e.event_type !== 'exception';
 }
 

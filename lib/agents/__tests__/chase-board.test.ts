@@ -1,11 +1,25 @@
 import {describe,expect,it} from 'vitest';
-import {bucketFor,laneFor,heatFor,daysStuck,focusQueue,morningSeven,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,ageBucket,agingSnapshot,matchesSnapshot,chasesFor,afInvoiced,invoiceLabel,FOCUS_CAP} from '../chase-board';
+import {bucketFor,laneFor,needsDecision,heatFor,daysStuck,focusQueue,morningSeven,chaseCounts,weeklySends,groupByVendor,buildVendorBatchDraft,clearedToday,daysUntil,nextStep,ageBucket,agingSnapshot,matchesSnapshot,chasesFor,afInvoiced,invoiceLabel,FOCUS_CAP} from '../chase-board';
 import type {FollowupCandidate,FollowupReview} from '../estimate-followups';
 const now=new Date('2026-10-01T18:00:00Z');
 const ago=(d:number)=>new Date(now.getTime()-d*86400_000).toISOString();
 let n=0;
 const c=(o:Partial<FollowupCandidate>={}):FollowupCandidate=>({id:`wo-${++n}`,property:'Elm St',unit:'',woNumber:String(n),vendor:'Firkus',description:'',age:5,kind:'vendor',reason:'',email:'bids@firkus.test',phone:'',subject:'',emailBody:'',smsBody:'',statusSince:ago(10),...o});
 const r=(o:Partial<FollowupReview>):FollowupReview=>({work_order_id:'x',status:'review',version:1,next_review_at:null,note:'',updated_by:'craig',channel:null,recipient:null,subject:null,body:null,updated_at:ago(1),error:null,...o});
+describe('needs decision',()=>{
+ it('takes active estimate work past 45 days or 3 chases, and the filter follows it',()=>{
+  const old=c({statusSince:ago(45)}),fresh=c({statusSince:ago(44)});
+  expect(needsDecision(old,undefined,0,now)).toBe(true);expect(needsDecision(fresh,undefined,2,now)).toBe(false);expect(needsDecision(fresh,undefined,3,now)).toBe(true);
+  expect(needsDecision(c({kind:'decision',statusSince:ago(50)}),undefined,0,now)).toBe(true);
+  expect(matchesSnapshot(fresh,undefined,{decision:true},now,new Map([[fresh.id,3]]))).toBe(true);expect(matchesSnapshot(fresh,undefined,{decision:true},now)).toBe(false);
+ });
+ it('leaves out scheduling, parts, and anything parked or dismissed',()=>{
+  const x={statusSince:ago(90)};
+  expect(needsDecision(c({...x,kind:'schedule'}),undefined,0,now)).toBe(false);
+  expect(needsDecision(c(x),r({status:'snoozed',next_review_at:ago(-2)}),0,now)).toBe(false);
+  expect(needsDecision(c(x),r({status:'dismissed'}),0,now)).toBe(false);
+ });
+});
 describe('chase board buckets and lanes',()=>{
  it('parks sent work until its review date, then returns it',()=>{
   expect(bucketFor(c(),r({status:'sent',next_review_at:ago(-2)}),now)).toBe('parked');

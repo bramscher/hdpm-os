@@ -75,6 +75,7 @@ describe('isHumanAction', () => {
   it('excludes system actors and machine event types', () => {
     expect(isHumanAction(event())).toBe(true);
     expect(isHumanAction(event({ actor: 'system:sync' }))).toBe(false);
+    expect(isHumanAction(event({ actor: 'appfolio-sync' }))).toBe(false);
     expect(isHumanAction(event({ actor: 'system:tripwire-3' }))).toBe(false);
     expect(isHumanAction(event({ event_type: 'sync_update' }))).toBe(false);
     expect(isHumanAction(event({ event_type: 'exception' }))).toBe(false);
