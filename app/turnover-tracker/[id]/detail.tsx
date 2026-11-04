@@ -39,7 +39,7 @@ export function TurnDetail({ detail }: { detail: Detail }) {
   const setWo = (woId: string, status: WoStatus) => post(`/api/turnover-tracker/work-orders/${woId}`, { status });
 
   const closed = turn.status === 'closed';
-  const slipOverdue = detail.needsAction.includes('Deposit slip overdue');
+  const slipOverdue = detail.needsAction.includes('Security deposit return overdue');
 
   return (
     <div>
@@ -74,11 +74,11 @@ export function TurnDetail({ detail }: { detail: Detail }) {
               ['Move-out', shortDate(turn.vacated_at)],
               ['New move-in', shortDate(turn.movein_date)],
               ['Target turnaround', shortDate(turn.target_ready)],
-              ['Deposit slip due', `${shortDate(turn.deposit_due)} (30 days)`],
+              ['Security deposit return due', `${shortDate(turn.deposit_due)} (30 days)`],
             ].map(([k, v]) => (
               <div key={k}>
                 <dt className="text-xs text-white/60">{k}</dt>
-                <dd className={`font-semibold ${k === 'Deposit slip due' && slipOverdue ? 'text-red-300' : ''}`}>{v}</dd>
+                <dd className={`font-semibold ${k === 'Security deposit return due' && slipOverdue ? 'text-red-300' : ''}`}>{v}</dd>
               </div>
             ))}
             <div>

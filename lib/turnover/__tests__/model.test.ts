@@ -108,7 +108,7 @@ describe('buildSections', () => {
   it('section 6 invoices are calculated across every work order', () => {
     const s = buildSections({ ...base, wos: [wo({ appfolio_status: 'Completed', status: 'done' })] });
     expect(s[5].checks.find((c) => c.def.key === 'invoices_received')!.checked).toBe(false);
-    expect(s[5].detail).toBe('Deposit slip due Nov 1');
+    expect(s[5].detail).toBe('Security deposit return due Nov 1');
   });
 
   it('the optional walkthrough video never blocks section 4', () => {
@@ -127,7 +127,7 @@ describe('buildSections', () => {
 });
 
 describe('dates and views', () => {
-  it('deposit slip is due 30 days after move-out', () => {
+  it('security deposit return is due 30 days after move-out', () => {
     expect(depositSlipDue('2026-10-02')).toBe('2026-11-01');
   });
   it('counts business days', () => {
@@ -141,6 +141,6 @@ describe('dates and views', () => {
   it('flags an overdue slip and an invoice past 5 business days', () => {
     const turn = { vacated_at: '2026-09-01', movein_date: null, status: 'active', checks: {}, wos: [wo({ appfolio_status: 'Completed', status: 'done' })] };
     const out = needsAction(turn, buildSections(turn), { w1: '2026-10-01' }, '2026-10-12');
-    expect(out).toEqual(['Deposit slip overdue', 'Invoice overdue']);
+    expect(out).toEqual(['Security deposit return overdue', 'Invoice overdue']);
   });
 });

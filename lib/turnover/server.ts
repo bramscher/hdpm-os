@@ -201,7 +201,7 @@ export async function loadDashboard(db: SupabaseClient, view: TurnView, today: s
       sections: sections.map((s) => ({
         no: s.no,
         status: s.status,
-        detail: s.no === 6 && action.includes('Deposit slip overdue') ? 'Deposit slip overdue' : s.detail,
+        detail: s.no === 6 && action.includes('Security deposit return overdue') ? 'Security deposit return overdue' : s.detail,
         overdue: s.no === 6 && action.length > 0,
       })),
       needsAction: action,

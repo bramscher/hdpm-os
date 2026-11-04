@@ -66,7 +66,7 @@ describe('ready', () => {
     expect(kinds(turn({ ...base, wos: [done] }), '2026-11-17')).toEqual([]);
     expect(kinds(turn({ ...base, wos: [done] }), '2026-11-18')).toEqual(['ready']);
   });
-  it('leaves deposit slips to accounting', () => {
+  it('leaves security deposit returns to accounting', () => {
     const t = turn({ vacated_at: '2026-10-01', wos: [wo({ created_at: '2026-10-01T00:00:00Z' })] });
     expect(kinds(t, '2026-11-09')).toEqual([]);
   });
