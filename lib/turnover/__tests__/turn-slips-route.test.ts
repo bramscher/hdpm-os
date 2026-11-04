@@ -61,15 +61,6 @@ describe('turn-slips cron', () => {
     await call();
     expect(channels()).toEqual(['U-Brody', 'U-Lisa']);
   });
-  it('also sends Craig escalated deposit slips only', async () => {
-    m.config.mockResolvedValue({ enabled: true });
-    m.load.mockResolvedValue({ slips: [slip(), slip({ key: 'deposit', kind: 'deposit', text: 'Deposit late', escalate: true })], onChaseBoard: 0 });
-    await call();
-    expect(channels()).toEqual(['U-Brody', 'U-Craig']);
-    const craig = m.send.mock.calls.find((c) => c[0].channel === 'U-Craig')![0];
-    expect(JSON.stringify(craig.blocks)).toContain('Deposit late');
-    expect(JSON.stringify(craig.blocks)).not.toContain('Keys ·');
-  });
   it('is silent on a clean day', async () => {
     m.load.mockResolvedValue({ slips: [], onChaseBoard: 3 });
     await call();

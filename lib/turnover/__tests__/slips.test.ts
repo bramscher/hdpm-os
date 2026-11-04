@@ -59,30 +59,25 @@ describe('work order slips', () => {
   });
 });
 
-describe('ready and deposit', () => {
+describe('ready', () => {
   const done = wo({ appfolio_status: 'Completed', status: 'done', completed_date: '2026-11-16' });
   const base = { checks: { keys_received: ticked, moveout_inspection: ticked } };
   it('flags ready for showing a business day after the last work finished', () => {
     expect(kinds(turn({ ...base, wos: [done] }), '2026-11-17')).toEqual([]);
     expect(kinds(turn({ ...base, wos: [done] }), '2026-11-18')).toEqual(['ready']);
   });
-  it('flags the deposit slip after 30 days, escalates at 5 business days, and stops after the window', () => {
-    const t = turn({ vacated_at: '2026-10-01', wos: [wo({ scheduled_start: '2026-12-30', created_at: '2026-10-01T00:00:00Z' })] });
-    expect(kinds(t, '2026-10-31')).toEqual([]);
-    const due = computeSlips(t, '2026-11-02')[0];
-    expect(due.kind).toBe('deposit');
-    expect(due.escalate).toBe(false);
-    expect(computeSlips(t, '2026-11-09')[0].escalate).toBe(true);
-    expect(kinds(t, '2026-12-05')).toEqual([]);
+  it('leaves deposit slips to accounting', () => {
+    const t = turn({ vacated_at: '2026-10-01', wos: [wo({ created_at: '2026-10-01T00:00:00Z' })] });
+    expect(kinds(t, '2026-11-09')).toEqual([]);
   });
   it('a snooze holds through its date', () => {
     expect(kinds(turn(), '2026-11-10', { keys: '2026-11-10' })).toEqual([]);
     expect(kinds(turn(), '2026-11-11', { keys: '2026-11-10' })).toEqual(['keys', 'inspection']);
   });
-  it('sorts deposit slips first, then longest late', () => {
+  it('sorts longest late first', () => {
     const base2 = { turnId: 't', unit: 'U', coordinator: null, text: '' };
-    const out = sortSlips([{ ...base2, key: 'a', kind: 'keys', daysLate: 9 }, { ...base2, key: 'b', kind: 'deposit', daysLate: 1 }, { ...base2, key: 'c', kind: 'keys', daysLate: 12 }]);
-    expect(out.map((s) => s.key)).toEqual(['b', 'c', 'a']);
+    const out = sortSlips([{ ...base2, key: 'a', kind: 'keys', daysLate: 9 }, { ...base2, key: 'b', kind: 'ready', daysLate: 1 }, { ...base2, key: 'c', kind: 'keys', daysLate: 12 }]);
+    expect(out.map((s) => s.key)).toEqual(['c', 'a', 'b']);
   });
 });
 

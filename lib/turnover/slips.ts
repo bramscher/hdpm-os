@@ -8,7 +8,6 @@ import {
   FINAL_STATUSES,
   addDays,
   businessDaysBetween,
-  depositSlipDue,
   effectiveStatus,
   type CheckState,
   type TrackerWo,
@@ -23,8 +22,6 @@ export const SLIP_RULES = {
   noWorkOrdersDays: 2,
   ownerAndDateDays: 3,
   readyDays: 1,
-  depositWindowDays: 60,
-  depositEscalateDays: 5,
 };
 
 /** Already chased on the Chase board, so linked there and not reminded twice. */
@@ -33,13 +30,12 @@ const WORK_DONE: ReadonlySet<WoStatus> = new Set([...FINAL_STATUSES, 'completed_
 
 /** Slip key → the checklist item its Done button ticks. */
 export const SLIP_DONE_KEYS: Record<string, string> = {
-  deposit: 'deposit_slip_sent',
   keys: 'keys_received',
   inspection: 'moveout_inspection',
   ready: 'ready_for_showing',
 };
 
-export type SlipKind = 'deposit' | 'keys' | 'inspection' | 'no_work_orders' | 'wo_owner' | 'wo_date' | 'wo_vendor_date' | 'ready';
+export type SlipKind = 'keys' | 'inspection' | 'no_work_orders' | 'wo_owner' | 'wo_date' | 'wo_vendor_date' | 'ready';
 
 export interface SlipWo extends TrackerWo {
   wo_number: string | null;
@@ -72,7 +68,6 @@ export interface Slip {
   daysLate: number;
   /** The checklist item Done ticks. Work order slips have none: that fact lives in AppFolio. */
   doneKey?: string;
-  escalate?: boolean;
 }
 
 function firstWeekday(date: string): string {
@@ -107,13 +102,6 @@ export function computeSlips(turn: SlipTurn, today: string, snoozedUntil: Record
   const vacated = turn.vacated_at.slice(0, 10);
   const inChecklist = vacated >= SLIP_RULES.checklistFrom;
 
-  if (!checked('deposit_slip_sent') && vacated >= addDays(today, -SLIP_RULES.depositWindowDays)) {
-    const due = depositSlipDue(vacated);
-    if (due < today) {
-      const daysLate = businessDaysBetween(due, today);
-      out.push({ ...base, key: 'deposit', kind: 'deposit', text: `Deposit slip was due ${due}`, daysLate, doneKey: SLIP_DONE_KEYS.deposit, escalate: daysLate >= SLIP_RULES.depositEscalateDays });
-    }
-  }
   if (inChecklist) {
     const keys = late(vacated, SLIP_RULES.keysDays, today);
     if (keys > 0 && !checked('keys_received')) out.push({ ...base, key: 'keys', kind: 'keys', text: 'Keys not marked received', daysLate: keys, doneKey: SLIP_DONE_KEYS.keys });
@@ -152,7 +140,7 @@ export function computeSlips(turn: SlipTurn, today: string, snoozedUntil: Record
   return out.filter((s) => (snoozedUntil[s.key] ?? '') < today);
 }
 
-/** Deposit slips first, then longest late. */
+/** Longest late first. */
 export function sortSlips(slips: Slip[]): Slip[] {
-  return [...slips].sort((a, b) => Number(b.kind === 'deposit') - Number(a.kind === 'deposit') || b.daysLate - a.daysLate || a.unit.localeCompare(b.unit));
+  return [...slips].sort((a, b) => b.daysLate - a.daysLate || a.unit.localeCompare(b.unit));
 }

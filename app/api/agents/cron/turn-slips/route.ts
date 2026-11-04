@@ -33,11 +33,7 @@ async function handleGET(request: NextRequest): Promise<NextResponse> {
   const byPerson = new Map<string, Slip[]>();
   const add = (person: string, list: Slip[]) => byPerson.set(person, [...(byPerson.get(person) ?? []), ...list]);
   if (preview) add('Craig', slips);
-  else {
-    for (const s of slips) add(s.coordinator || DEFAULT_COORDINATOR, [s]);
-    const overdue = slips.filter((s) => s.escalate && s.coordinator !== 'Craig');
-    if (overdue.length) add('Craig', overdue);
-  }
+  else for (const s of slips) add(s.coordinator || DEFAULT_COORDINATOR, [s]);
 
   let sent = 0;
   const failed: string[] = [];
