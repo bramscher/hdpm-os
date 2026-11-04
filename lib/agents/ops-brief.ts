@@ -4,9 +4,10 @@
  *
  * Weekday 5 PM short brief + Monday 8 AM deep brief for Brody + Matt: the
  * supervision surface for the agent team. Replaces the never-enabled digest
- * with something that ends in decisions — at most NEEDS_CRAIG_CAP
- * unacknowledged escalations, each with one [Acknowledge] button (on
- * Brody's copy; Matt's is read-only v1).
+ * with something that ends in decisions — the longest-stuck NEEDS_CRAIG_CAP
+ * items from the Chase board's live Needs decision list, each linking to its
+ * card. Decisions happen on the board. The Acknowledge handler stays only for
+ * buttons on briefs already sent.
  *
  * Hard rule inherited from the data model: NEVER a dollar figure — estimate
  * and unbilled amounts do not exist in any reachable API; everything is
@@ -18,6 +19,9 @@
 export const OPS_BRIEF_AGENT = 'ops_brief';
 export const SEND_BRIEF_ACTION = 'send_brief';
 export const NEEDS_CRAIG_CAP = 3;
+export const OS_URL = 'https://os.highdesertpm.com';
+export const CHASE_BOARD_URL = `${OS_URL}/maintenance/estimate-followups`;
+export const EXCEPTIONS_URL = `${OS_URL}/maintenance/board?view=exceptions`;
 /** The Phase 1 adoption gate: human actions/week through agent surfaces. */
 export const GATE_TARGET_PER_WEEK = 25;
 
@@ -101,13 +105,15 @@ export function parseObActionId(
 // ============================================
 
 export interface EscalationBriefItem {
-  proposalId: string;
+  workOrderId: string;
   woRef: string;
   reason: 'chased_3x' | 'aged_45d' | string;
+  /** What it's waiting on, in a few words. */
+  waitingOn: string;
   chaseCount: number;
+  /** Live days stuck in the current status. */
   ageCalendarDays: number;
   appfolioLink: string | null;
-  acknowledgedBy?: string;
 }
 
 export interface OpsBriefData {
@@ -177,39 +183,21 @@ function context(text: string): unknown {
 const DIVIDER = { type: 'divider' };
 
 function n(v: number | null | undefined): string {
-  return typeof v === 'number' ? String(v) : '—';
+  return typeof v === 'number' ? String(Number(v.toFixed(1))) : '—';
 }
 
-function reasonLine(item: EscalationBriefItem): string {
-  return item.reason === 'chased_3x'
-    ? `chased ${item.chaseCount}× with no movement`
-    : `${item.ageCalendarDays} days stuck`;
-}
-
-function escalationBlock(item: EscalationBriefItem, interactive: boolean): unknown {
-  const link = item.appfolioLink ? ` · <${item.appfolioLink}|AppFolio>` : '';
-  const text = `*${item.woRef}*\n${reasonLine(item)}${link}`;
-  if (item.acknowledgedBy) {
-    return {
-      type: 'section',
-      block_id: `ob-item:${item.proposalId}`,
-      text: { type: 'mrkdwn', text: `${text}\n✓ Acknowledged by ${item.acknowledgedBy}` },
-    };
-  }
-  const base: Record<string, unknown> = {
+function escalationBlock(item: EscalationBriefItem): unknown {
+  const chased = item.chaseCount > 0 ? ` · chased ${item.chaseCount}×` : '';
+  const af = item.appfolioLink ? ` · <${item.appfolioLink}|AppFolio>` : '';
+  const card = `<${CHASE_BOARD_URL}?followup=${encodeURIComponent(item.workOrderId)}|Open card>`;
+  return {
     type: 'section',
-    block_id: `ob-item:${item.proposalId}`,
-    text: { type: 'mrkdwn', text },
+    block_id: `ob-item:${item.workOrderId}`,
+    text: {
+      type: 'mrkdwn',
+      text: `*${item.woRef}*\n${item.ageCalendarDays} days stuck · ${item.waitingOn}${chased}\n${card}${af}`,
+    },
   };
-  if (interactive) {
-    base.accessory = {
-      type: 'button',
-      action_id: encodeObActionId('ack', item.proposalId),
-      text: { type: 'plain_text', text: '✓ Acknowledge' },
-      value: item.proposalId,
-    };
-  }
-  return base;
 }
 
 /**
@@ -239,14 +227,11 @@ export function applyAckToBlocks(
   return found ? out : null;
 }
 
-export function buildOpsBriefBlocks(
-  data: OpsBriefData,
-  opts: { readOnly: boolean }
-): { text: string; blocks: unknown[] } {
+export function buildOpsBriefBlocks(data: OpsBriefData): { text: string; blocks: unknown[] } {
   const title = data.deep
     ? `📊 Monday Ops Brief — ${data.briefDate}`
     : `📊 Ops Brief — ${data.briefDate}`;
-  const openCount = data.needsCraig.filter((i) => !i.acknowledgedBy).length;
+  const openCount = data.needsCraig.length;
   const text = `${title}: ${n(data.exceptions.total)} open exceptions · ${openCount} need${openCount === 1 ? 's' : ''} a decision`;
 
   const blocks: unknown[] = [mrkdwn(`*${title}*`)];
@@ -254,7 +239,7 @@ export function buildOpsBriefBlocks(
   // 1. Pulse
   blocks.push(
     mrkdwn(
-      `*Exceptions:* ${n(data.exceptions.total)} open${deltaSuffix(data.exceptions.vsYesterday)}${deltaSuffix(data.exceptions.vsBaseline)} · ${n(data.exceptions.needsDate)} need a date`
+      `*<${EXCEPTIONS_URL}|Exceptions>:* ${n(data.exceptions.total)} open${deltaSuffix(data.exceptions.vsYesterday)}${deltaSuffix(data.exceptions.vsBaseline)} · ${n(data.exceptions.needsDate)} need a date`
     )
   );
 
@@ -275,7 +260,7 @@ export function buildOpsBriefBlocks(
   // 3. Estimate pool
   blocks.push(
     mrkdwn(
-      `*Stuck estimates:* ${n(data.estimates.openCount)} open${deltaSuffix(data.estimates.openDelta)} · median ${n(data.estimates.medianOpenAgeDays)}d stuck · decisions take ${n(data.estimates.medianDaysToDecision)}d median`
+      `*<${CHASE_BOARD_URL}|Stuck estimates>:* ${n(data.estimates.openCount)} open${deltaSuffix(data.estimates.openDelta)} · median ${n(data.estimates.medianOpenAgeDays)}d stuck · decisions take ${n(data.estimates.medianDaysToDecision)}d median`
     )
   );
 
@@ -298,19 +283,20 @@ export function buildOpsBriefBlocks(
   );
 
   // 6. Needs Craig
-  const unacked = data.needsCraig.filter((i) => !i.acknowledgedBy);
   const shown = data.needsCraig.slice(0, NEEDS_CRAIG_CAP);
   blocks.push(DIVIDER);
-  if (unacked.length === 0) {
+  if (openCount === 0) {
     blocks.push(mrkdwn('*Needs decision:* nothing 🎉'));
   } else {
-    blocks.push(mrkdwn(`*Needs decision (${unacked.length}):*`));
+    blocks.push(mrkdwn(`*Needs decision (${openCount}):*`));
     for (const item of shown) {
-      blocks.push(escalationBlock(item, !opts.readOnly));
+      blocks.push(escalationBlock(item));
     }
-    if (data.needsCraig.length > NEEDS_CRAIG_CAP) {
-      blocks.push(context(`+${data.needsCraig.length - NEEDS_CRAIG_CAP} more on the exceptions board`));
-    }
+    const label =
+      openCount > NEEDS_CRAIG_CAP
+        ? `+${openCount - NEEDS_CRAIG_CAP} more on the Chase board`
+        : 'Open on the Chase board';
+    blocks.push(context(`<${CHASE_BOARD_URL}?filter=needs-decision|${label}>`));
   }
 
   // Deep sections
