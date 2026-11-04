@@ -7,6 +7,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   CHECK_BY_KEY,
+  addDays,
   FINAL_STATUSES,
   INVOICE_GRACE_BUSINESS_DAYS,
   WO_STATUS_LABEL,
@@ -25,6 +26,8 @@ import {
   type TurnView,
   type WoStatus,
 } from './model';
+import { CHASE_BOARD_STATUSES, SLIP_DONE_KEYS, computeSlips, looksFinished, type Slip, type SlipWo } from './slips';
+import { SLIP_SNOOZE_DAYS } from './slip-message';
 import { afInvoiceReceived, loadAfBilling, type WoAfBilling } from '@/lib/maintenance/af-wo-billing';
 
 const WO_COLS =
@@ -155,6 +158,7 @@ export interface DashboardRow {
   needsAction: string[];
   waitingApproval: number;
   waitingFunds: number;
+  looksFinished: boolean;
 }
 
 export interface Dashboard {
@@ -197,12 +201,13 @@ export async function loadDashboard(db: SupabaseClient, view: TurnView, today: s
       sections: sections.map((s) => ({
         no: s.no,
         status: s.status,
-        detail: s.no === 6 && action.includes('Deposit slip overdue') ? 'Deposit slip overdue' : s.detail,
+        detail: s.no === 6 && action.includes('Security deposit return overdue') ? 'Security deposit return overdue' : s.detail,
         overdue: s.no === 6 && action.length > 0,
       })),
       needsAction: action,
       waitingApproval: statuses.filter((s) => s === 'awaiting_owner_approval').length,
       waitingFunds: statuses.filter((s) => s === 'awaiting_owner_funds').length,
+      looksFinished: looksFinished({ status: t.status, movein_date: t.movein_date, wos: turnWos }, today),
     };
   });
 
@@ -264,7 +269,7 @@ export interface Detail {
 }
 
 /** Statuses the estimate follow-up board already chases — linked there, not reminded twice. */
-const CHASE_BOARD: ReadonlySet<WoStatus> = new Set(['estimate_requested', 'estimated', 'awaiting_owner_approval']);
+const CHASE_BOARD = CHASE_BOARD_STATUSES;
 
 function reminderLabel(w: WoRow, status: WoStatus, daysInStatus: number | null, today: string): string {
   if (w.turn_snoozed_until && w.turn_snoozed_until >= today) return `Snoozed until ${w.turn_snoozed_until}`;
@@ -446,12 +451,67 @@ export async function setCoordinator(db: SupabaseClient, turnId: string, person:
 }
 
 /** Mark complete / reopen. Keeps the legacy status and the lifecycle status in step. */
-export async function setComplete(db: SupabaseClient, turnId: string, complete: boolean, actor: string): Promise<void> {
+export async function setComplete(db: SupabaseClient, turnId: string, complete: boolean, actor: string, note?: string): Promise<void> {
   const { data: t } = await db.from('unit_turn').select('lifecycle_status').eq('id', turnId).maybeSingle();
   if (!t) throw new Error('Unit turn not found');
   const to = complete ? 'CLOSED' : 'IN_PROGRESS';
   const { error } = await db.from('unit_turn').update({ status: complete ? 'closed' : 'active', lifecycle_status: to }).eq('id', turnId);
   if (error) throw new Error(error.message);
   await db.from('turn_status_event').insert({ unit_turn_id: turnId, from_status: (t as Row).lifecycle_status ?? null, to_status: to, actor, reason: 'Turnover tracker' });
-  await logActivity(db, turnId, complete ? 'complete' : 'reopen', complete ? 'Marked complete' : 'Reopened', actor);
+  await logActivity(db, turnId, complete ? 'complete' : 'reopen', note ?? (complete ? 'Marked complete' : 'Reopened'), actor);
+}
+
+// ── Slips (the 7 AM list) ───────────────────────────────────────────────────
+
+/** Every late step on active turns, plus how many turn work orders the Chase board is already chasing. */
+export async function loadSlips(db: SupabaseClient, today: string): Promise<{ slips: Slip[]; onChaseBoard: number }> {
+  const { data, error } = await db.from('unit_turn').select(TURN_COLS).eq('status', 'active').lte('vacated_at', today).limit(500);
+  if (error) throw new Error(error.message);
+  const turns = (data ?? []) as unknown as TurnRow[];
+  const ids = turns.map((t) => t.id);
+  const [wos, checks, snoozes] = await Promise.all([
+    loadWos(db, ids),
+    loadChecks(db, ids),
+    db.from('turn_slip_snooze').select('unit_turn_id, slip_key, until').gte('until', today),
+  ]);
+  if (snoozes.error) throw new Error(snoozes.error.message);
+  const byTurn = new Map<string, WoRow[]>();
+  for (const w of wos) byTurn.set(w.unit_turn_id, [...(byTurn.get(w.unit_turn_id) ?? []), w]);
+  const slips = turns.flatMap((t) => {
+    const until: Record<string, string> = {};
+    for (const s of snoozes.data ?? []) if (s.unit_turn_id === t.id) until[s.slip_key as string] = s.until as string;
+    return computeSlips(
+      { id: t.id, unit: [t.property_name, t.unit_name].filter(Boolean).join(', '), vacated_at: t.vacated_at, coordinator: t.coordinator, status: t.status, wos: (byTurn.get(t.id) ?? []) as SlipWo[], checks: checks.get(t.id) ?? {} },
+      today,
+      until
+    );
+  });
+  const onChaseBoard = wos.filter((w) => CHASE_BOARD_STATUSES.has(effectiveStatus(w).status)).length;
+  return { slips, onChaseBoard };
+}
+
+/** Quiet a late step until a date. Work order slips use the work order's own snooze. */
+export async function snoozeSlip(db: SupabaseClient, turnId: string, key: string, until: string, actor: string): Promise<void> {
+  const woId = key.match(/^wo_[a-z_]+:(.+)$/)?.[1];
+  if (woId) {
+    const { error } = await db.from('work_orders').update({ turn_snoozed_until: until }).eq('id', woId).eq('unit_turn_id', turnId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await db.from('turn_slip_snooze').upsert({ unit_turn_id: turnId, slip_key: key, until, snoozed_by: actor, updated_at: new Date().toISOString() }, { onConflict: 'unit_turn_id,slip_key' });
+    if (error) throw new Error(error.message);
+  }
+  await logActivity(db, turnId, 'note', `Snoozed late step until ${until}: ${key.split(':')[0].replace(/_/g, ' ')}`, actor);
+}
+
+/** A Done or Snooze tap from Slack. Returns the line to show on the message. */
+export async function handleSlipAction(db: SupabaseClient, action: { kind: 'done' | 'snooze'; turnId: string; key: string }, actor: string, today: string): Promise<string> {
+  if (action.kind === 'done') {
+    const doneKey = SLIP_DONE_KEYS[action.key];
+    if (!doneKey) throw new Error('That step can only be finished in AppFolio');
+    await setCheck(db, action.turnId, doneKey, true, null, actor);
+    return `✓ Done by ${actor}`;
+  }
+  const until = addDays(today, SLIP_SNOOZE_DAYS);
+  await snoozeSlip(db, action.turnId, action.key, until, actor);
+  return `Snoozed until ${until} by ${actor}`;
 }

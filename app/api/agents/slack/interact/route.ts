@@ -1,3 +1,6 @@
+import { handleSlipAction } from '@/lib/turnover/server';
+import { markSlipHandled, parseSlipAction } from '@/lib/turnover/slip-message';
+import { todayPacific as turnTodayPacific } from '@/lib/turnover/model';
 import { isFollowupInteraction, handleFollowupInteraction } from '@/lib/agents/followup-slack';
 import { parseOlActionId, moveOwnerLead, redrawOwnerLeadCard, STAGE_LABELS } from '@/lib/agents/owner-lead-slack';
 import { canDecideReviewRequests, parseRrActionId, parseRrBatchValue, redrawReviewBatchCard } from '@/lib/review-requests';
@@ -97,6 +100,24 @@ export async function POST(request: NextRequest) {
   if (ecAction) {
     if ((await getAgentConfig(ESTIMATE_CHASER_AGENT,'team_review'))?.enabled) return NextResponse.json({response_type:'ephemeral',text:'Use the shared follow-up review in Company Issues. This old card is retired.'});
     return handleEcAction(ecAction, actor, payload.response_url);
+  }
+
+  // Unit turn slips (ts:*): Done / Snooze on the 7 AM list.
+  if (typeof rawAction?.action_id === 'string' && rawAction.action_id.startsWith('ts:')) {
+    const slipAction = parseSlipAction(rawAction.action_id);
+    if (!slipAction) return new NextResponse(null, { status: 200 });
+    try {
+      const note = await handleSlipAction(getSupabaseAdmin(), slipAction, actor, turnTodayPacific());
+      await respond(payload.response_url, {
+        replace_original: true,
+        text: 'Unit turns',
+        blocks: markSlipHandled(payload.message?.blocks ?? [], slipAction, note),
+      });
+    } catch (err) {
+      console.error('[Agents] turn slip action failed:', err);
+      await respond(payload.response_url, { response_type: 'ephemeral', replace_original: false, text: 'That did not save. Please try it in the tracker.' });
+    }
+    return new NextResponse(null, { status: 200 });
   }
 
   // Ops Brief namespace (ob:*) — [Acknowledge] on needs-Craig items (Brief E).

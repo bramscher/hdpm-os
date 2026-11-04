@@ -150,7 +150,7 @@ export const CHECKS: CheckDef[] = [
   { key: 'haven_updated', section: 5, label: 'Status updated on Haven', kind: 'manual' },
   { key: 'invoices_received', section: 6, label: 'Invoices received for all work orders', kind: 'computed', showsProgress: false, hint: 'Calculated from the work order statuses' },
   { key: 'closed_in_appfolio', section: 6, label: 'Unit turn closed out in AppFolio', kind: 'manual' },
-  { key: 'deposit_slip_sent', section: 6, label: 'Deposit return slip sent to tenant', kind: 'manual' },
+  { key: 'deposit_slip_sent', section: 6, label: 'Security deposit return sent to tenant', kind: 'manual' },
   { key: 'movein_entered', section: 7, label: 'New tenant move-in date entered', kind: 'computed', hint: 'From AppFolio' },
   // Brody 2026-10-12: may be ticked before move-in (owner close-out and similar).
   { key: 'lockbox_pulled', section: 7, label: 'Lockbox pulled', kind: 'manual' },
@@ -300,7 +300,7 @@ function sectionDetail(
 ): string {
   if (no === 6) {
     const sent = checks.find((c) => c.def.key === 'deposit_slip_sent')?.checked;
-    return sent ? 'Deposit slip sent' : `Deposit slip due ${monthDay(depositSlipDue(turn.vacated_at))}`;
+    return sent ? 'Security deposit return sent' : `Security deposit return due ${monthDay(depositSlipDue(turn.vacated_at))}`;
   }
   if (no === 1) {
     const showing = checks.find((c) => c.def.key === 'showing_set');
@@ -342,7 +342,7 @@ export function inView(turn: { status: string; vacated_at: string }, view: TurnV
 /** Grace before "Completed, awaiting invoice" counts as needing action (Brody: 5 business days). */
 export const INVOICE_GRACE_BUSINESS_DAYS = 5;
 
-/** Items overdue or needing action on one turn: an overdue deposit slip, invoices past grace. */
+/** Items overdue or needing action on one turn: an overdue security deposit return, invoices past grace. */
 export function needsAction(
   turn: TurnInput,
   sections: SectionView[],
@@ -351,7 +351,7 @@ export function needsAction(
 ): string[] {
   const out: string[] = [];
   const slip = sections.find((s) => s.no === 6)?.checks.find((c) => c.def.key === 'deposit_slip_sent');
-  if (turn.status !== 'closed' && !slip?.checked && depositSlipDue(turn.vacated_at) < today) out.push('Deposit slip overdue');
+  if (turn.status !== 'closed' && !slip?.checked && depositSlipDue(turn.vacated_at) < today) out.push('Security deposit return overdue');
   for (const wo of turn.wos) {
     if (effectiveStatus(wo).status !== 'completed_awaiting_invoice') continue;
     const since = woStatusSince[wo.id];

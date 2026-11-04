@@ -107,6 +107,16 @@ export const AGENT_CATALOG: CatalogAgent[] = [
     status: 'live',
   },
   {
+    id: 'turn_slips',
+    name: 'Unit Turn Late Steps',
+    what: 'Each weekday morning, DMs the turn coordinator the turn steps that are late, with Done and Snooze buttons. Nothing on a clean day.',
+    why: 'Catches turns slipping between keys, the move-out inspection and finished work.',
+    helps: 'Maintenance',
+    when: 'Weekdays ~7 AM',
+    output: 'Slack list',
+    status: 'live',
+  },
+  {
     id: 'dez_operator',
     name: 'AppFolio Form Filler',
     what: 'Fills the deposit-to-hold form in AppFolio for you. It only sends after a person taps Approve & Send.',

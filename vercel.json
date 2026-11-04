@@ -137,6 +137,10 @@
       "schedule": "0 16 * * 1"
     },
     {
+      "path": "/api/agents/cron/turn-slips",
+      "schedule": "0 15 * * 1-5"
+    },
+    {
       "path": "/api/agents/cron/operator-canary-watch",
       "schedule": "20 16 * * 1"
     },

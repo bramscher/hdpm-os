@@ -17,6 +17,24 @@ export function TurnoverDashboard({ data, view }: { data: Dashboard; view: TurnV
   const [property, setProperty] = useState('');
   const [coordinator, setCoordinator] = useState('');
   const [status, setStatus] = useState<SectionStatus | ''>('');
+  const [finishedOnly, setFinishedOnly] = useState(false);
+  const [closing, setClosing] = useState('');
+  const [closeError, setCloseError] = useState('');
+  const finishedCount = data.rows.filter((r) => r.looksFinished).length;
+
+  async function closeTurn(id: string) {
+    setClosing(id);
+    setCloseError('');
+    try {
+      const res = await fetch(`/api/turnover-tracker/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'complete' }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not close that turn');
+      router.refresh();
+    } catch (e) {
+      setCloseError(e instanceof Error ? e.message : 'Could not close that turn');
+    } finally {
+      setClosing('');
+    }
+  }
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -25,9 +43,10 @@ export function TurnoverDashboard({ data, view }: { data: Dashboard; view: TurnV
         (!q || `${r.unit} ${r.property}`.toLowerCase().includes(q)) &&
         (!property || r.property === property) &&
         (!coordinator || r.coordinator === coordinator) &&
-        (!status || r.sections.some((s) => s.status === status))
+        (!status || r.sections.some((s) => s.status === status)) &&
+        (!finishedOnly || r.looksFinished)
     );
-  }, [data.rows, search, property, coordinator, status]);
+  }, [data.rows, search, property, coordinator, status, finishedOnly]);
 
   const viewNote: Record<TurnView, string> = {
     active: 'Active: not marked complete, on or after the AppFolio move-out date.',
@@ -75,6 +94,17 @@ export function TurnoverDashboard({ data, view }: { data: Dashboard; view: TurnV
           <option value="">Any status</option>
           {SECTION_KEY_ORDER.map((s) => <option key={s} value={s}>{SECTION_STATUS_LABEL[s]}</option>)}
         </select>
+        {finishedCount > 0 && (
+          <button
+            type="button"
+            aria-pressed={finishedOnly}
+            title="All work done and the move-in date has passed"
+            onClick={() => setFinishedOnly(!finishedOnly)}
+            className={`rounded-lg border border-sand-200 px-3 py-2 text-sm font-medium ${finishedOnly ? 'bg-charcoal-900 text-white' : 'bg-white text-charcoal-700'}`}
+          >
+            Looks finished ({finishedCount})
+          </button>
+        )}
         <div className="flex rounded-lg bg-sand-100 p-1">
           {(Object.keys(VIEW_LABEL) as TurnView[]).map((v) => (
             <button
@@ -89,6 +119,7 @@ export function TurnoverDashboard({ data, view }: { data: Dashboard; view: TurnV
         </div>
       </div>
 
+      {closeError && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{closeError}</p>}
       <div className="overflow-x-auto rounded-xl border border-sand-200 bg-white">
         <table className="w-full min-w-[1180px] text-left text-sm">
           <thead className="bg-sand-50 text-xs text-charcoal-700">
@@ -121,6 +152,19 @@ export function TurnoverDashboard({ data, view }: { data: Dashboard; view: TurnV
                     <CalendarRange className="h-3.5 w-3.5" />
                     Schedule
                   </button>
+                  {r.looksFinished && (
+                    <button
+                      type="button"
+                      disabled={closing === r.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void closeTurn(r.id);
+                      }}
+                      className="ml-1.5 mt-1.5 inline-flex items-center rounded-md border border-sand-200 px-2 py-0.5 text-xs font-medium text-charcoal-700 hover:bg-sand-100"
+                    >
+                      {closing === r.id ? 'Closing…' : 'Close'}
+                    </button>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-3 py-3">{shortDate(r.vacated_at)}</td>
                 <td className="whitespace-nowrap px-3 py-3">{shortDate(r.movein_date)}</td>
