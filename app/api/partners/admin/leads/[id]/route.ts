@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireReferralAdmin } from '@/lib/referrals/admin';
-import { getLeadWithEvents, setLeadStage, resolveDedupe, linkAppFolio } from '@/lib/referrals/leads';
+import { getLeadWithEvents, setLeadStage, resolveDedupe, linkAppFolio, setLeadEmail } from '@/lib/referrals/leads';
+import { pushReferralToWebsite } from '@/lib/referrals/web-push';
 import { isLeadStage, type LeadStage } from '@/lib/referrals/types';
 import { BountyActionError, approveBounty, earnBountyNow, markBountyPaid, voidBounty } from '@/lib/referrals/ledger';
 
@@ -22,6 +23,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
  * PATCH /api/partners/admin/leads/:id — one of:
  *   { action: 'stage', stage }
  *   { action: 'dedupe', decision: 'confirmed'|'cleared', reason? }
+ *   { action: 'set_email', email }      (then pushes it to the website pipeline)
+ *   { action: 'push_to_website' }        (retry the website push)
  *   { action: 'link_appfolio', appfolio_owner_id?, appfolio_property_ids?, doors_under_mgmt? }
  *   { action: 'earn_bounty' } | { action: 'approve_bounty' }
  *   { action: 'mark_paid', reference } | { action: 'void_bounty', reason }   (Batch 5)
@@ -44,6 +47,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (!isLeadStage(body.stage)) return NextResponse.json({ error: 'invalid stage' }, { status: 400 });
         const lead = await setLeadStage(id, body.stage as LeadStage, guard.email);
         return NextResponse.json({ lead });
+      }
+      case 'set_email': {
+        if (typeof body.email !== 'string') return NextResponse.json({ error: 'email is required' }, { status: 400 });
+        const push = await setLeadEmail(id, body.email, guard.email);
+        return NextResponse.json({ ok: true, push });
+      }
+      case 'push_to_website': {
+        const push = await pushReferralToWebsite(id, guard.email);
+        return NextResponse.json({ ok: true, push });
       }
       case 'dedupe': {
         if (body.decision !== 'confirmed' && body.decision !== 'cleared') {

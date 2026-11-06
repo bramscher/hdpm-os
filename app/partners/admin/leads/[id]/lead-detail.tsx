@@ -32,6 +32,7 @@ export default function LeadDetail({
     props: (lead.appfolio_property_ids ?? []).join(', '),
     doors: lead.doors_under_mgmt?.toString() ?? '',
   });
+  const [email, setEmail] = useState('');
 
   async function patch(action: string, extra: Record<string, unknown>, tag: string) {
     setBusy(tag);
@@ -71,6 +72,41 @@ export default function LeadDetail({
       </div>
 
       {err && <p className="text-sm text-red-600">{err}</p>}
+
+      {/* One pipeline: is this referral on the website's owner pipeline board? */}
+      {lead.hdpm_web_lead_id ? (
+        <p className="text-sm text-charcoal-600">On the owner pipeline board (website lead #{lead.hdpm_web_lead_id}).</p>
+      ) : !lead.prospect_email ? (
+        <form
+          className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          onSubmit={(e) => {
+            e.preventDefault();
+            patch('set_email', { email }, 'email');
+          }}
+        >
+          <span className="font-medium">Not on the board: needs email.</span>
+          <span>The website needs an email to add this owner to the pipeline.</span>
+          <input
+            type="email"
+            required
+            placeholder="owner@example.com"
+            className="h-8 rounded-md border border-amber-300 bg-white px-2"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <button type="submit" disabled={busy === 'email'} className="rounded-md bg-amber-700 px-3 py-1 font-medium text-white disabled:opacity-60">
+            {busy === 'email' ? 'Saving…' : 'Save and add to board'}
+          </button>
+        </form>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span className="font-medium">Not on the board yet.</span>
+          <span>The push to the website didn&apos;t go through.</span>
+          <button onClick={() => patch('push_to_website', {}, 'push')} disabled={busy === 'push'} className="rounded-md bg-amber-700 px-3 py-1 font-medium text-white disabled:opacity-60">
+            {busy === 'push' ? 'Sending…' : 'Retry'}
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Stage */}

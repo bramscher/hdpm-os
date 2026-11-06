@@ -42,6 +42,7 @@ export default async function ReferralAdminHome() {
     { label: 'Open leads', value: stats.leadsOpen, sub: `${stats.leadsTotal} all-time`, icon: <GitBranch className="h-5 w-5" /> },
     { label: 'Referral / organic', value: `${stats.leadsReferral} / ${stats.leadsOrganic}`, sub: 'by source', icon: <Sparkles className="h-5 w-5" /> },
     { label: 'Suspected dupes', value: stats.suspectedDupes, sub: 'need review', icon: <AlertTriangle className="h-5 w-5" />, warn: stats.suspectedDupes > 0 },
+    { label: 'Not on the board', value: stats.notOnBoardNeedsEmail + stats.notOnBoardUnpushed, sub: `${stats.notOnBoardNeedsEmail} need an email · ${stats.notOnBoardUnpushed} to retry`, icon: <AlertTriangle className="h-5 w-5" />, warn: stats.notOnBoardNeedsEmail + stats.notOnBoardUnpushed > 0 },
     { label: 'W-9 missing', value: stats.w9Missing, sub: 'active referrers', icon: <FileWarning className="h-5 w-5" />, warn: stats.w9Missing > 0 },
     { label: 'Bounties to approve', value: usd(stats.bountyPendingApproval), sub: `${usd(stats.bountyApprovedUnpaid)} approved, unpaid`, icon: <DollarSign className="h-5 w-5" />, warn: stats.bountyPendingApproval > 0 },
     { label: 'Bounties paid', value: usd(stats.bountyPaid), sub: 'all-time', icon: <DollarSign className="h-5 w-5" /> },

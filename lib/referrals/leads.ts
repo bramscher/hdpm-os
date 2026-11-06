@@ -11,6 +11,7 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { PORTAL_ACTOR, pushReferralToWebsite } from './web-push';
 import { fetchAppFolioOwnerContacts } from '@/lib/appfolio';
 import { logAudit } from '@/lib/audit';
 import { findDuplicate, type DedupeCandidate, type Prospect } from './dedupe';
@@ -126,6 +127,24 @@ export async function finalizeNewLead(leadId: string, actor: string): Promise<vo
       'system:dedupe'
     );
   }
+
+  // One pipeline: put the referral on the website's owner pipeline (best-effort,
+  // never throws; failures are logged as events and retried from the admin page).
+  await pushReferralToWebsite(leadId, PORTAL_ACTOR);
+}
+
+/** Admin adds or fixes a referral's email; a referral waiting on one is then pushed to the website. */
+export async function setLeadEmail(leadId: string, email: string, actor: string) {
+  const clean = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) throw new Error('Enter a valid email address.');
+  const { error } = await getSupabaseAdmin()
+    .from('referral_lead')
+    .update({ prospect_email: clean, updated_at: new Date().toISOString() })
+    .eq('id', leadId)
+    .eq('org_id', 'hdpm');
+  if (error) throw new Error(`setLeadEmail: ${error.message}`);
+  await writeLeadEvent(leadId, 'email_set', {}, actor);
+  return pushReferralToWebsite(leadId, actor);
 }
 
 export interface IntakeLeadInput {

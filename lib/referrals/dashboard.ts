@@ -16,6 +16,10 @@ export interface ReferralAdminStats {
   suspectedDupes: number;
   leadsReferral: number;
   leadsOrganic: number;
+  /** Open referrals not on the website pipeline board because they have no email (the website needs one). */
+  notOnBoardNeedsEmail: number;
+  /** Open referrals with an email that still have no website lead (a push failed; retry from the Pipeline page). */
+  notOnBoardUnpushed: number;
   /** Batch 5 bounty totals ($). 0 before the ledger migration / any bounties. */
   bountyPendingApproval: number;
   bountyApprovedUnpaid: number;
@@ -36,6 +40,8 @@ export async function getReferralAdminStats(): Promise<ReferralAdminStats> {
     suspectedDupes,
     leadsReferral,
     leadsOrganic,
+    notOnBoardNeedsEmail,
+    notOnBoardUnpushed,
   ] = await Promise.all([
     partner(),
     partner().eq('status', 'active'),
@@ -45,6 +51,8 @@ export async function getReferralAdminStats(): Promise<ReferralAdminStats> {
     lead().eq('dup_status', 'suspected'),
     lead().eq('source', 'referral'),
     lead().eq('source', 'organic'),
+    lead().in('stage', OPEN_LEAD_STAGES).is('hdpm_web_lead_id', null).is('prospect_email', null),
+    lead().in('stage', OPEN_LEAD_STAGES).is('hdpm_web_lead_id', null).not('prospect_email', 'is', null),
   ]);
 
   const n = (r: { count: number | null; error: unknown }, label: string): number => {
@@ -67,5 +75,7 @@ export async function getReferralAdminStats(): Promise<ReferralAdminStats> {
     suspectedDupes: n(suspectedDupes, 'suspectedDupes'),
     leadsReferral: n(leadsReferral, 'leadsReferral'),
     leadsOrganic: n(leadsOrganic, 'leadsOrganic'),
+    notOnBoardNeedsEmail: n(notOnBoardNeedsEmail, 'notOnBoardNeedsEmail'),
+    notOnBoardUnpushed: n(notOnBoardUnpushed, 'notOnBoardUnpushed'),
   };
 }
