@@ -44,7 +44,20 @@ export interface WebReferralRequest {
   partner: { id: string; name: string; company?: string | null } | null;
   refCode?: string | null;
   landingPage?: string | null;
-  utm?: Record<string, unknown> | null;
+  utm?: WebUtm | null;
+}
+
+export type WebUtm = Record<'source' | 'medium' | 'campaign' | 'term' | 'content', string | null>;
+
+/** Stored utm may use utm_source or source keys; the website reads source/medium/campaign/term/content. Pure. */
+export function toWebUtm(utm: Record<string, unknown> | null): WebUtm | null {
+  if (!utm || typeof utm !== 'object') return null;
+  const pick = (k: string) => {
+    const v = utm[k] ?? utm[`utm_${k}`];
+    return typeof v === 'string' && v.trim() ? v.trim() : null;
+  };
+  const out: WebUtm = { source: pick('source'), medium: pick('medium'), campaign: pick('campaign'), term: pick('term'), content: pick('content') };
+  return Object.values(out).some(Boolean) ? out : null;
 }
 
 export interface WebReferralResponse {
@@ -107,7 +120,7 @@ export function toWebReferral(lead: ReferralRow, partner: PartnerRow | null): We
     partner: partner ? { id: partner.id, name: partner.display_name, company: partner.company } : null,
     refCode: lead.ref_code,
     landingPage: lead.landing_page,
-    utm: lead.utm,
+    utm: toWebUtm(lead.utm),
   };
 }
 

@@ -33,7 +33,7 @@ vi.mock('@/lib/hdpm-web-admin', () => ({
   webAdminFetch: async (path: string, actor: string, init: RequestInit) => (webCalls.push({ path, actor, init }), webReply()),
 }));
 
-import { PORTAL_ACTOR, pushReferralToWebsite, pushSkipReason, pushUnlinkedReferrals, toWebReferral, webReferralPath, type ReferralRow } from '../web-push';
+import { PORTAL_ACTOR, pushReferralToWebsite, pushSkipReason, pushUnlinkedReferrals, toWebReferral, toWebUtm, webReferralPath, type ReferralRow } from '../web-push';
 
 function referral(over: Partial<ReferralRow> = {}): ReferralRow {
   return {
@@ -83,6 +83,12 @@ describe('pure helpers', () => {
     expect(body.notes).toBe('Two duplexes\n\nOther properties: 200 Sample Ave');
     expect(toWebReferral(referral({ unit_count: -1 }), null)).toMatchObject({ unitCount: null, partner: null });
     expect(webReferralPath('abc')).toBe('/leads/referrals/abc');
+  });
+  it('maps stored utm keys to the website shape', () => {
+    expect(toWebUtm({ utm_source: 'google', utm_campaign: ' fall ' })).toEqual({ source: 'google', medium: null, campaign: 'fall', term: null, content: null });
+    expect(toWebUtm({ source: 'fb' })?.source).toBe('fb');
+    expect(toWebUtm({ other: 'x' })).toBeNull();
+    expect(toWebUtm(null)).toBeNull();
   });
 });
 
