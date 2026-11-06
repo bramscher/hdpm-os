@@ -7,7 +7,7 @@ import { receptionDailyReport } from '@/lib/reception';
  * GET /api/reception/report?days=14
  *
  * Daily reception breakdown from reception_call: main-line calls answered by
- * Ashley vs Haven AI (direct/overflow) vs missed, plus Haven→human transfers
+ * Front desk vs Haven AI (direct/overflow) vs missed, plus Haven→human transfers
  * split by intent (leasing / maintenance / human requested / direct staff).
  */
 export async function GET(request: NextRequest) {

@@ -3,7 +3,7 @@
  *
  * Source of truth is Zoom Phone call history (verified 2026-07-28):
  *   - Every main-line call hits the "Main Auto Receptionist" IVR.
- *   - Business hours it rings Ashley; result 'answered' = Ashley took it,
+ *   - Business hours it rings the front desk; result 'answered' = the front desk took it,
  *     'no_answer' = it forwards to Haven AI's line (HAVEN_RECEPTION_NUMBER).
  *   - After hours the IVR forwards straight to Haven ('direct' path).
  *   - When Haven needs a human it places a NEW inbound call from its own
@@ -20,7 +20,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { zoomFetch, isZoomConfigured } from './zoom-phone';
 
 const HAVEN_LINE = process.env.HAVEN_RECEPTION_NUMBER || '+15415775110';
-const RECEPTIONIST_EMAIL = process.env.RECEPTIONIST_EMAIL || 'ashley@highdesertpm.com';
+const RECEPTIONIST_EMAIL = process.env.RECEPTIONIST_EMAIL || 'info@highdesertpm.com';
 
 const ANSWERED = new Set(['answered', 'accepted', 'connected', 'call_connected', 'completed']);
 
@@ -141,8 +141,7 @@ export async function syncReceptionCalls(
   const isReceptionistLeg = (l: CallPathLeg) =>
     l.callee_ext_type === 'user' &&
     ((receptionist.extId && l.callee_ext_id === receptionist.extId) ||
-      (receptionist.name && l.callee_name === receptionist.name) ||
-      /ashley/i.test(l.callee_name || ''));
+      (receptionist.name && l.callee_name === receptionist.name));
 
   // ── Main-line inbound calls (hit the auto receptionist) ─────────
   const inbound = history.filter(
@@ -178,6 +177,7 @@ export async function syncReceptionCalls(
       haven_path = rangReceptionist ? 'overflow' : 'direct';
       haven_intent = leasingPhones.has(last10(call.caller_did_number)) ? 'leasing' : 'unknown';
     } else if (answeredLeg) {
+      // Stored as 'ashley' since July; the key stays so old and new rows count together.
       answered_by = isReceptionistLeg(answeredLeg) ? 'ashley' : 'staff';
       answered_by_name = answeredLeg.callee_name || null;
     }
