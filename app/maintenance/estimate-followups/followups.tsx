@@ -1,5 +1,5 @@
 'use client';
-import {useCallback,useEffect,useMemo,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import Link from 'next/link';
 import {useSession} from 'next-auth/react';
 import {useRouter} from 'next/navigation';
@@ -26,8 +26,9 @@ export default function Followups({embedded=false}:{embedded?:boolean}) {
  const load=useCallback(async()=>{setLoading(true);try{const response=await fetch('/api/maintenance/estimate-followups');const result=await response.json();if(!response.ok)throw new Error(result.error);setData(result);setError('');}catch(e){setError((e as Error).message);}finally{setLoading(false);}},[]);
  useEffect(()=>{void load();},[load]);
  useEffect(()=>{if(selected||busy)return;const timer=setInterval(()=>void load(),30000);return()=>clearInterval(timer);},[load,selected,busy]);
- // eslint-disable-next-line react-hooks/exhaustive-deps -- applies the deep link once, when data first arrives; depending on data would re-apply it on every refresh
- useEffect(()=>{if(!data)return;const id=new URLSearchParams(window.location.search).get('followup');if(id&&data.candidates.some(c=>c.id===id))setSelected(id);if(new URLSearchParams(window.location.search).get('filter')==='needs-decision'){setSnapFilter({decision:true});setTimeout(()=>document.getElementById('chase-lanes')?.scrollIntoView({block:'start'}),50);}},[!!data]); // Apply the deep link only on initial load.
+ // Apply the deep link once, when data first arrives; the ref stops the 30-second refreshes re-applying it.
+ const deepLinkApplied=useRef(false);
+ useEffect(()=>{if(!data||deepLinkApplied.current)return;deepLinkApplied.current=true;const id=new URLSearchParams(window.location.search).get('followup');if(id&&data.candidates.some(c=>c.id===id))setSelected(id);if(new URLSearchParams(window.location.search).get('filter')==='needs-decision'){setSnapFilter({decision:true});setTimeout(()=>document.getElementById('chase-lanes')?.scrollIntoView({block:'start'}),50);}},[data]);
 
  async function post(payload:Record<string,unknown>,success:string) {
   setBusy(true);setError('');setNotice('');

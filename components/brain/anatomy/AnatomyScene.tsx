@@ -177,6 +177,36 @@ interface World {
   resize?: () => void;
 }
 
+/** A node's world position: its layout position plus its unit's explode offset. */
+function nodeWorldIn(layout: AnatomyLayout, w: World, i: number, out: number[] | Float32Array, at = 0) {
+  const u = layout.unit[i];
+  out[at] = layout.pos[i * 3] + w.off[u * 3];
+  out[at + 1] = layout.pos[i * 3 + 1] + w.off[u * 3 + 1];
+  out[at + 2] = layout.pos[i * 3 + 2] + w.off[u * 3 + 2];
+}
+
+/** Lines from the hovered (else selected) node to its neighbours; hidden when neither. */
+function updateFocusLines(w: World, d: Data, p: AnatomySceneProps) {
+  const { hovered, selected, snapshot, layout } = p;
+  const i = hovered ?? selected;
+  if (i === null) {
+    d.focus.g.setDrawRange(0, 0);
+    return;
+  }
+  let k = 0;
+  for (const e of d.adj[i]) {
+    if (k >= 96) break;
+    const edge = snapshot.edges[e];
+    nodeWorldIn(layout, w, edge.s, d.focus.pos, k * 6);
+    nodeWorldIn(layout, w, edge.t, d.focus.pos, k * 6 + 3);
+    d.focus.col.fill(1, k * 6, k * 6 + 6);
+    k++;
+  }
+  d.focus.g.attributes.position.needsUpdate = true;
+  d.focus.g.attributes.color.needsUpdate = true;
+  d.focus.g.setDrawRange(0, k * 2);
+}
+
 export default function AnatomyScene(props: AnatomySceneProps) {
   const host = useRef<HTMLDivElement>(null);
   const tip = useRef<HTMLDivElement>(null);
@@ -503,8 +533,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
     const w = world.current;
     if (!w?.data) return;
     w.colorDirty = true;
-    updateFocusLines(w, w.data);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- updateFocusLines is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR)
+    updateFocusLines(w, w.data, live.current);
   }, [props.visible, props.focusRegion, props.focusHalf, props.hovered, props.selected]);
 
   useEffect(() => {
@@ -524,11 +553,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
   }
 
   function nodeWorld(w: World, i: number, out: number[] | Float32Array, at = 0) {
-    const { layout } = live.current;
-    const u = layout.unit[i];
-    out[at] = layout.pos[i * 3] + w.off[u * 3];
-    out[at + 1] = layout.pos[i * 3 + 1] + w.off[u * 3 + 1];
-    out[at + 2] = layout.pos[i * 3 + 2] + w.off[u * 3 + 2];
+    nodeWorldIn(live.current.layout, w, i, out, at);
   }
 
   function updatePositions(w: World, d: Data) {
@@ -560,28 +585,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
       nodeWorld(w, i, d.scanLines.pos, k * 6 + 3);
     });
     d.scanLines.g.attributes.position.needsUpdate = true;
-    updateFocusLines(w, d);
-  }
-
-  function updateFocusLines(w: World, d: Data) {
-    const { hovered, selected, snapshot } = live.current;
-    const i = hovered ?? selected;
-    if (i === null) {
-      d.focus.g.setDrawRange(0, 0);
-      return;
-    }
-    let k = 0;
-    for (const e of d.adj[i]) {
-      if (k >= 96) break;
-      const edge = snapshot.edges[e];
-      nodeWorld(w, edge.s, d.focus.pos, k * 6);
-      nodeWorld(w, edge.t, d.focus.pos, k * 6 + 3);
-      d.focus.col.fill(1, k * 6, k * 6 + 6);
-      k++;
-    }
-    d.focus.g.attributes.position.needsUpdate = true;
-    d.focus.g.attributes.color.needsUpdate = true;
-    d.focus.g.setDrawRange(0, k * 2);
+    updateFocusLines(w, d, live.current);
   }
 
   function updateColors(w: World, d: Data) {
