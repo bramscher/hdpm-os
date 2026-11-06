@@ -572,7 +572,7 @@ export function HavenDashboard() {
                 <tr className="text-charcoal-500 border-b border-sand-200">
                   <th className="text-left py-1.5 pr-3 font-medium">Date</th>
                   <th className="text-right py-1.5 px-2 font-medium">Calls</th>
-                  <th className="text-right py-1.5 px-2 font-medium">Ashley</th>
+                  <th className="text-right py-1.5 px-2 font-medium">Front Desk</th>
                   <th className="text-right py-1.5 px-2 font-medium">Haven AI</th>
                   <th className="text-right py-1.5 px-2 font-medium text-charcoal-400">
                     after-hours / overflow

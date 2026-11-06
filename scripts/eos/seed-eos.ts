@@ -73,7 +73,7 @@ const SEATS: Record<
   },
   'Front Office Support': {
     roles: ['Main line & walk-ins', 'Tenant first contact', 'Key checkout'],
-    person: 'Ashley',
+    // Open since Ashley left (2026-11-05). The front desk inbox is info@highdesertpm.com.
     reportsTo: 'Finance & Operations',
     sort: 9,
   },
