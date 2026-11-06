@@ -95,7 +95,10 @@ export function priceLine(
   cfg: EstimatorConfig = DEFAULT_ESTIMATOR_CONFIG
 ): PricedLine {
   const { item } = input;
-  const qty = input.qty ?? 1;
+  // An hourly line bills hours, so the hours are its quantity: 3 hours @ $95,
+  // not 1 hour @ $285.
+  const hours = input.estLaborHours ?? (input.minutes != null ? input.minutes / 60 : null);
+  const qty = item.pricing_method === 'hourly' && hours != null && hours > 0 ? cents(hours) : input.qty ?? 1;
   const ownerExtended = ownerChargeForLine(item, input);
   const ownerUnit = qty !== 0 ? cents(ownerExtended / qty) : ownerExtended;
   const internalCost = internalCostForLine(input, cfg);

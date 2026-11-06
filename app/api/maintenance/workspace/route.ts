@@ -57,7 +57,7 @@ export async function POST(req:NextRequest){
    for(const k of ['qty','minutes','est_material_cost'])if(body[k]!=null&&(!Number.isFinite(Number(body[k]))||Number(body[k])<0))throw new Error('Invalid quantity, time or cost');
    const qty=Number(body.qty??1);if(qty<=0)throw new Error('Quantity must be positive');
    const line=priceLine({item,qty,minutes:body.minutes==null?undefined:Number(body.minutes),estMaterialCost:Number(body.est_material_cost??0),description:body.description||undefined});
-   body.amount=line.owner_extended;body.quantity=qty;body.pricing_method=item.pricing_method;body.description=line.description;
+   body.amount=line.owner_extended;body.quantity=line.qty;body.pricing_method=item.pricing_method;body.description=line.description;
    body.invoice_type=item.category==='appliances'?'appliance':item.category==='materials'||item.pricing_method==='cost_plus'?'materials':item.category==='coordination'?'other':'labor';
    body.service_value=body.in_house===false?0:['coordination','materials','appliances'].includes(item.category)||item.pricing_method==='cost_plus'?0:line.owner_extended;
   }

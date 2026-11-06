@@ -117,6 +117,16 @@ describe('priceLine internal cost + margin', () => {
     expect(line.internal_cost).toBe(80);
     expect(line.owner_extended).toBe(190);
   });
+  it('an hourly line shows its hours as the quantity: 3 hour @ $95, not 1 @ $285', () => {
+    const it = item({ pricing_method: 'hourly', base_price: 95, uom: 'hour' });
+    const fromMinutes = priceLine({ item: it, qty: 1, minutes: 180 });
+    expect([fromMinutes.qty, fromMinutes.owner_unit_price, fromMinutes.owner_extended]).toEqual([3, 95, 285]);
+    const fromHours = priceLine({ item: it, estLaborHours: 1.5 });
+    expect([fromHours.qty, fromHours.owner_unit_price, fromHours.owner_extended]).toEqual([1.5, 95, 142.5]);
+    // Hours given as qty (older lines) still work; zero time keeps a positive qty.
+    expect(priceLine({ item: it, qty: 2 }).owner_unit_price).toBe(95);
+    expect(priceLine({ item: it, qty: 1, minutes: 0 }).qty).toBe(1);
+  });
   it('tenant allocation defaults to 0 (acceptance #10 spirit)', () => {
     const it = item({ pricing_method: 'flat', base_price: 50 });
     expect(priceLine({ item: it }).tenant_alloc_proposed).toBe(0);

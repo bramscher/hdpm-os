@@ -166,7 +166,8 @@ export function priceDraftLines(
       uom: item.uom,
       description: priced.description,
       room: priced.room,
-      qty: priced.qty,
+      // The builder row keeps its own qty; hourly time travels in minutes.
+      qty: input.qty ?? 1,
       minutes: spec.minutes ?? null,
       est_labor_hours: priced.est_labor_hours,
       est_material_cost: priced.est_material_cost,
