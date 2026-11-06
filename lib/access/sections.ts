@@ -412,6 +412,16 @@ export const APP_SECTIONS: AppSection[] = [
     nav: { href: '/admin/leads', icon: 'target', order: 42.55 },
   },
   {
+    key: 'growth',
+    label: 'Owner growth',
+    description: 'Net doors against the +150 goal, and the owner lead pipeline board.',
+    group: 'Admin',
+    defaultRoles: ['admin'],
+    pages: ['/growth'],
+    apis: ['/api/growth'],
+    nav: { href: '/growth', icon: 'chart', order: 42.52 },
+  },
+  {
     key: 'website_admin',
     label: 'Website',
     description: 'Shortcuts into the highdesertpm.com admin: blog, pages, jobs, CRM and media.',
