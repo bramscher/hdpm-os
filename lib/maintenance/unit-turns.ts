@@ -199,6 +199,33 @@ function pickVacatedAt(moveOuts: string[] | undefined, firstWoDate: string): str
   return firstWoDate;
 }
 
+const firstWoDateOf = (wos: TurnWoRow[]): string =>
+  wos.map((w) => (w.appfolio_created_at || w.created_at).slice(0, 10)).sort()[0];
+
+/** How long after a move-out new turn work still belongs to that turn. */
+export const ADOPT_WINDOW_DAYS = 45;
+
+/**
+ * The open turn on a unit that new turn work joins instead of starting its
+ * own turn. A turn not keyed to a service request yet (made by hand or by
+ * the report true-up) is taken first; otherwise the closest turn whose
+ * move-out is no more than 45 days before the work and no more than 14 after.
+ */
+export function pickAdoptableTurn<T extends Pick<UnitTurn, 'vacated_at' | 'af_service_request_id'>>(
+  activeOnUnit: T[],
+  firstWoDate: string
+): T | null {
+  const unkeyed = activeOnUnit.find((t) => !t.af_service_request_id);
+  if (unkeyed) return unkeyed;
+  const gap = (t: T) =>
+    (new Date(`${firstWoDate}T00:00:00Z`).getTime() - new Date(`${t.vacated_at.slice(0, 10)}T00:00:00Z`).getTime()) / 86_400_000;
+  return (
+    activeOnUnit
+      .filter((t) => gap(t) <= ADOPT_WINDOW_DAYS && gap(t) >= -14)
+      .sort((a, b) => Math.abs(gap(a)) - Math.abs(gap(b)))[0] ?? null
+  );
+}
+
 /**
  * Create/refresh unit turns from the AppFolio mirror columns. Never edits
  * HDPM-owned turn fields (blocker, target, budget) and never unlinks; the
@@ -249,36 +276,33 @@ export async function syncUnitTurnsFromMirror(
     const anyOpen = wos.some((w) => w.stage !== 'CLOSED');
 
     if (!turn && wos[0].unit_id) {
-      // Adopt an existing active turn on this unit that isn't SR-keyed yet
-      // (created manually or by the Reports-API true-up before any WOs
-      // existed) so all creation paths converge on one row per turn.
-      const { data: adoptable } = await supabase
+      const { data: activeOnUnit } = await supabase
         .from('unit_turn')
         .select('*')
         .eq('status', 'active')
-        .is('af_service_request_id', null)
-        .eq('unit_id', wos[0].unit_id)
-        .limit(1);
-      if (adoptable?.[0]) {
+        .eq('unit_id', wos[0].unit_id);
+      const adoptable = pickAdoptableTurn((activeOnUnit ?? []) as UnitTurn[], firstWoDateOf(wos));
+      if (adoptable && !adoptable.af_service_request_id) {
         const { data: adopted } = await supabase
           .from('unit_turn')
           .update({ af_service_request_id: sr })
-          .eq('id', (adoptable[0] as UnitTurn).id)
+          .eq('id', adoptable.id)
           .select('*')
           .single();
         turn = (adopted as UnitTurn) ?? null;
+      } else if (adoptable) {
+        // A second service request on a unit mid-turn (keys, remotes): join
+        // the open turn, keeping its own service request as the key.
+        turn = adoptable;
       }
     }
 
     if (!turn) {
       moveOutsByUnit ??= await fetchMoveOutsByUnit();
       const first = wos[0];
-      const firstWoDate = wos
-        .map((w) => (w.appfolio_created_at || w.created_at).slice(0, 10))
-        .sort()[0];
       const vacatedAt = pickVacatedAt(
         first.unit_id ? moveOutsByUnit.get(first.unit_id) : undefined,
-        firstWoDate
+        firstWoDateOf(wos)
       );
 
       const { data: createdTurn, error: createError } = await supabase
