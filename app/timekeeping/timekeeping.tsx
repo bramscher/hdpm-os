@@ -1227,7 +1227,7 @@ function ScheduleEditor({
         <p className="tk-help">
           Our starting schedule includes a one-hour unpaid lunch and two
           separate 10-minute paid rest breaks. Choose your own usual lunch
-          window for staggered coverage, then adjust each day's entries to the
+          window for staggered coverage, then adjust each day&apos;s entries to the
           breaks actually taken. Lunch minutes are calculated from its start and
           end. Suggested paid rest totals adjust to your hours. Paid breaks
           remain in worked time. Record any interrupted or working meal as paid

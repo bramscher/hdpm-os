@@ -344,7 +344,7 @@ export function CandidatesView({initialGroup = 'ready'}: {initialGroup?: string}
               {!loading && candidates.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-charcoal-500">
-                    No candidates match the current filters. Try "Sync from AppFolio" to refresh.
+                    No candidates match the current filters. Try &quot;Sync from AppFolio&quot; to refresh.
                   </td>
                 </tr>
               )}

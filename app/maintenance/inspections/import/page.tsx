@@ -386,7 +386,7 @@ export default function InspectionImportPage() {
             >
               AppFolio Candidates
             </Link>{" "}
-            for properties flagged with "Use Custom Inspection Date" — recently inspected
+            for properties flagged with &quot;Use Custom Inspection Date&quot; — recently inspected
             units are skipped automatically. This XLSX import is still available for one-off
             uploads.
           </div>

@@ -247,7 +247,7 @@ export function OfflineBanner({ savedAt }: { savedAt: string | null }) {
       <CloudOff className="mt-0.5 h-4 w-4 shrink-0" />
       <span>
         {online ? "Can't reach the server." : "No signal."} You can still record — takes stay on this device and upload
-        when you're back online.
+        when you&apos;re back online.
         {savedAt && ` Owner and property list saved ${formatWhen(savedAt)}.`}
       </span>
     </div>
@@ -307,7 +307,7 @@ export function InstallHint() {
       <div className="min-w-0 flex-1">
         <p className="font-medium text-charcoal-900">Put Capture on your Home Screen</p>
         <p>
-          It then opens and records with no signal, and uploads when you're back online.{" "}
+          It then opens and records with no signal, and uploads when you&apos;re back online.{" "}
           {ios ? (
             <>
               Tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open it from there once while you have
