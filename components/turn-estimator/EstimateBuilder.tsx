@@ -193,6 +193,7 @@ export default function EstimateBuilder({
       }
     }, 350);
     return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- specForRow is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR)
   }, [rows, authLimit, issued, validSpecs]);
 
   function setRow(key: string, patch: Partial<Row>) {
@@ -247,7 +248,7 @@ export default function EstimateBuilder({
       const saved=d.drafts?.[0]; if(!saved)throw new Error(d.error||'Draft not found');
       setRows(saved.payload.rows);setPropertyName(saved.payload.propertyName);setUnitName(saved.payload.unitName);setAuthLimit(saved.payload.authLimit);setTemplateId(saved.payload.templateId||'');draftVersion.current=saved.version;setLoaded(true);setSaveStatus('Saved draft loaded');lastSaved.current=JSON.stringify({rows:saved.payload.rows,propertyName:saved.payload.propertyName,unitName:saved.payload.unitName,authLimit:saved.payload.authLimit,templateId:saved.payload.templateId||''});
     }).catch(e=>setError(e.message));
-  }, [seed.resume_id]);
+  }, [seed.resume_id, router]);
   async function saveDraft(){
     if(!loaded)return;setBusy('save');setError(null);
     try{const id=draftIdentity.current||crypto.randomUUID();draftIdentity.current=id;

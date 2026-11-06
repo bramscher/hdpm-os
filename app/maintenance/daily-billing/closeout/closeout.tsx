@@ -31,6 +31,7 @@ export default function Closeout({admin}:{admin:boolean}){
  const load=useCallback(async()=>{const g=++gen.current;setLoading(true);setError('');
   try{const r=await fetch(`/api/maintenance/daily-billing/closeout?technician=${encodeURIComponent(tech)}&from=${from}&to=${to}`,{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error);if(g===gen.current)setData(d);}
   catch(e){if(g===gen.current)setError((e as Error).message);}finally{if(g===gen.current)setLoading(false);}},[tech,from,to]);
+ // eslint-disable-next-line react-hooks/exhaustive-deps -- generation counter, not a DOM ref: cleanup must bump the live value so in-flight loads are dropped
  useEffect(()=>{void load();router.replace(`?technician=${encodeURIComponent(tech)}&from=${from}&to=${to}`,{scroll:false});return()=>{gen.current++}},[load,router,tech,from,to]);
 
  const newDraft=(date:string,over:Partial<Draft>={})=>{setSearch('');setError('');setDraft({id:crypto.randomUUID(),date,kind:'job',woId:'',hours:'',note:'',locked:false,...over});};

@@ -504,6 +504,7 @@ export default function AnatomyScene(props: AnatomySceneProps) {
     if (!w?.data) return;
     w.colorDirty = true;
     updateFocusLines(w, w.data);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- updateFocusLines is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR)
   }, [props.visible, props.focusRegion, props.focusHalf, props.hovered, props.selected]);
 
   useEffect(() => {

@@ -49,6 +49,7 @@ export default function PayrollReview({
   }
   useEffect(() => {
     void refresh();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR)
   }, [period]);
   return (
     <section className="tk-panel" aria-label="Overtime and payroll setup">
