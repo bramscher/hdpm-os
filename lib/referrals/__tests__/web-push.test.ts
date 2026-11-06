@@ -9,18 +9,24 @@ let webReply: () => Response = () => Response.json({});
 function query(table: keyof typeof db) {
   const filters: ((r: Row) => boolean)[] = [];
   let patch: Row | null = null;
+  let orderBy: string | null = null;
+  let max = Infinity;
   const q = {
     select: () => q,
     eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), q),
     is: (k: string, v: unknown) => (filters.push((r) => (r[k] ?? null) === v), q),
-    not: () => q,
-    order: () => q,
-    limit: () => q,
+    not: (k: string, op: string, v: unknown) => (filters.push((r) => (op === 'is' ? (r[k] ?? null) !== v : true)), q),
+    in: (k: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[k])), q),
+    gt: (k: string, v: string) => (filters.push((r) => String(r[k]) > v), q),
+    order: (k: string) => ((orderBy = k), q),
+    limit: (n: number) => ((max = n), q),
     update: (p: Row) => ((patch = p), q),
     insert: async (r: Row) => (db[table].push(r), { error: null }),
     maybeSingle: async () => ({ data: db[table].find((r) => filters.every((f) => f(r))) ?? null, error: null }),
     then: (resolve: (v: unknown) => void) => {
-      const rows = db[table].filter((r) => filters.every((f) => f(r)));
+      let rows = db[table].filter((r) => filters.every((f) => f(r)));
+      if (orderBy) rows = [...rows].sort((a, b) => String(a[orderBy!]).localeCompare(String(b[orderBy!])));
+      rows = rows.slice(0, max);
       if (patch) rows.forEach((r) => Object.assign(r, patch));
       resolve({ data: rows, error: null });
     },
@@ -50,6 +56,7 @@ function referral(over: Partial<ReferralRow> = {}): ReferralRow {
     utm: null,
     hdpm_web_lead_id: null,
     dup_status: null,
+    stage: 'submitted',
     created_at: '2026-11-06T00:00:00Z',
     ...over,
   };
@@ -64,10 +71,14 @@ beforeEach(() => {
 
 describe('pure helpers', () => {
   it('skips linked referrals and ones with no email', () => {
-    expect(pushSkipReason({ hdpm_web_lead_id: '5', prospect_email: 'a@b.co' })).toBe('already_linked');
-    expect(pushSkipReason({ hdpm_web_lead_id: null, prospect_email: null })).toBe('needs_email');
-    expect(pushSkipReason({ hdpm_web_lead_id: null, prospect_email: '  ' })).toBe('needs_email');
-    expect(pushSkipReason({ hdpm_web_lead_id: null, prospect_email: 'a@b.co' })).toBeNull();
+    expect(pushSkipReason({ hdpm_web_lead_id: '5', prospect_email: 'a@b.co', stage: 'submitted' })).toBe('already_linked');
+    expect(pushSkipReason({ hdpm_web_lead_id: null, prospect_email: null, stage: 'submitted' })).toBe('needs_email');
+    expect(pushSkipReason({ hdpm_web_lead_id: null, prospect_email: '  ', stage: 'qualified' })).toBe('needs_email');
+    expect(pushSkipReason({ hdpm_web_lead_id: null, prospect_email: 'a@b.co', stage: 'contacted' })).toBeNull();
+    // Signed or finished referrals would show up on the website as "new": not pushed.
+    for (const stage of ['agreement_signed', 'onboarding', 'active', 'closed', 'lost']) {
+      expect(pushSkipReason({ hdpm_web_lead_id: null, prospect_email: 'a@b.co', stage })).toBe('stage');
+    }
   });
   it('builds the website body: first address, extra addresses in notes, partner, units', () => {
     const body = toWebReferral(referral(), { id: 'p1', display_name: 'Sample Agent', company: 'Sample Realty' });
@@ -131,18 +142,49 @@ describe('pushReferralToWebsite', () => {
 });
 
 describe('pushUnlinkedReferrals (backfill / retry)', () => {
+  const row = (id: string, over: Partial<ReferralRow> = {}) => ({ ...referral({ id, ...over }), org_id: 'hdpm' });
   beforeEach(() => {
-    db.referral_lead.push({ ...referral({ id: 'no-email', prospect_email: null }), org_id: 'hdpm' });
+    db.referral_lead = [
+      row('a1', { prospect_email: null }), // needs email: never selected, counted
+      row('a2', { prospect_email: 'fail@example.com' }), // website error
+      row('a3', { stage: 'active' }), // signed owner: never imported
+      row('a4'),
+      row('a5'),
+    ];
   });
-  it('dry run counts without calling the website', async () => {
-    const r = await pushUnlinkedReferrals('admin@highdesertpm.com', { dryRun: true });
-    expect(r).toMatchObject({ dryRun: true, candidates: 1, pushed: 0, skipped: { needs_email: 1 } });
+
+  it('dry run reports the batch, the cursor and the needs-email count without calling the website', async () => {
+    const r = await pushUnlinkedReferrals('admin@highdesertpm.com', { dryRun: true, limit: 2 });
+    expect(r).toMatchObject({ dryRun: true, processed: 2, pushed: 0, nextCursor: 'a4', needsEmail: 1 });
     expect(webCalls).toHaveLength(0);
   });
-  it('confirmed run pushes the candidates', async () => {
-    webReply = () => Response.json({ outcome: 'created', leadId: 5 });
+
+  it('pages past skipped and failed rows: limit=1 batches reach every pushable referral', async () => {
+    webReply = () => {
+      const id = webCalls[webCalls.length - 1].path.split('/').pop();
+      return id === 'a2' ? Response.json({ error: 'Website error' }, { status: 500 }) : Response.json({ outcome: 'created', leadId: 100 });
+    };
+    const seen: string[] = [];
+    let after: string | null = null;
+    for (let i = 0; i < 10; i++) {
+      const r = await pushUnlinkedReferrals('admin@highdesertpm.com', { dryRun: false, limit: 1, after });
+      seen.push(...r.failed.map((f) => `fail:${f.id}`));
+      if (r.pushed) seen.push('pushed');
+      after = r.nextCursor;
+      if (!after) break;
+    }
+    expect(seen).toEqual(['fail:a2', 'pushed', 'pushed']);
+    expect(webCalls.map((c) => c.path.split('/').pop())).toEqual(['a2', 'a4', 'a5']);
+    expect(db.referral_lead.find((r) => r.id === 'a2')?.hdpm_web_lead_id).toBeNull();
+    expect(db.referral_lead.find((r) => r.id === 'a3')?.hdpm_web_lead_id).toBeNull();
+  });
+
+  it('a rerun from the start retries only what is still unlinked', async () => {
+    webReply = () => Response.json({ outcome: 'created', leadId: 100 });
+    await pushUnlinkedReferrals('admin@highdesertpm.com', { dryRun: false });
+    webCalls.length = 0;
     const r = await pushUnlinkedReferrals('admin@highdesertpm.com', { dryRun: false });
-    expect(r).toMatchObject({ dryRun: false, candidates: 1, pushed: 1, failed: [], skipped: { needs_email: 1 } });
-    expect(webCalls[0].actor).toBe('admin@highdesertpm.com');
+    expect(r).toMatchObject({ processed: 0, pushed: 0, nextCursor: null, needsEmail: 1 });
+    expect(webCalls).toHaveLength(0);
   });
 });

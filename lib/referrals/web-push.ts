@@ -16,6 +16,7 @@
  */
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { webAdminFetch } from '@/lib/hdpm-web-admin';
+import { BACKFILL_STAGES } from './types';
 
 /** Append-only lead event (same table and shape as leads.ts writeLeadEvent; kept local to avoid an import cycle). */
 async function writeLeadEvent(leadId: string, eventType: string, payload: Record<string, unknown>, actor: string) {
@@ -81,6 +82,7 @@ export interface ReferralRow {
   utm: Record<string, unknown> | null;
   hdpm_web_lead_id: string | null;
   dup_status: string | null;
+  stage: string;
   created_at: string;
 }
 
@@ -90,7 +92,7 @@ export interface PartnerRow {
   company: string | null;
 }
 
-export type PushSkip = 'already_linked' | 'needs_email';
+export type PushSkip = 'already_linked' | 'needs_email' | 'stage';
 
 /**
  * Why a referral can't be pushed yet, or null when it can. Pure.
@@ -98,8 +100,10 @@ export type PushSkip = 'already_linked' | 'needs_email';
  * counted as "not on the board: needs email" for admins, and is pushed as soon
  * as an email is added (admin lead PATCH) or by the retry route.
  */
-export function pushSkipReason(lead: Pick<ReferralRow, 'hdpm_web_lead_id' | 'prospect_email'>): PushSkip | null {
+export function pushSkipReason(lead: Pick<ReferralRow, 'hdpm_web_lead_id' | 'prospect_email' | 'stage'>): PushSkip | null {
   if (lead.hdpm_web_lead_id) return 'already_linked';
+  // Only referrals still being worked; see BACKFILL_STAGES.
+  if (!(BACKFILL_STAGES as readonly string[]).includes(lead.stage)) return 'stage';
   if (!lead.prospect_email?.trim()) return 'needs_email';
   return null;
 }
@@ -129,7 +133,7 @@ export type PushResult =
   | { ok: false; skipped: PushSkip }
   | { ok: false; error: string };
 
-const SELECT = 'id, partner_id, prospect_name, prospect_email, prospect_phone, property_addresses, unit_count, notes, ref_code, landing_page, utm, hdpm_web_lead_id, dup_status, created_at';
+const SELECT = 'id, partner_id, prospect_name, prospect_email, prospect_phone, property_addresses, unit_count, notes, ref_code, landing_page, utm, hdpm_web_lead_id, dup_status, stage, created_at';
 
 /** Push one referral to the website. Never throws. */
 export async function pushReferralToWebsite(leadId: string, actor: string): Promise<PushResult> {
@@ -186,42 +190,70 @@ export async function pushReferralToWebsite(leadId: string, actor: string): Prom
   }
 }
 
+export { BACKFILL_STAGES };
+
 export interface BackfillReport {
   dryRun: boolean;
-  candidates: number;
+  /** Rows looked at in this batch (unlinked, has email, backfill stage). */
+  processed: number;
   pushed: number;
   failed: { id: string; error: string }[];
-  skipped: Record<PushSkip, number>;
+  /** Pass as ?after= to continue; null when this was the last batch. */
+  nextCursor: string | null;
+  /** Unlinked referrals in backfill stages with no email: not pushable until one is added (whole table, not this batch). */
+  needsEmail: number;
+  stages: readonly string[];
 }
 
 /**
- * Retry / backfill: every referral without a website lead. Dry run
- * (the default) only counts. Sequential so the website isn't flooded.
+ * Retry / backfill: referrals in BACKFILL_STAGES with an email and no website
+ * lead, in batches ordered by id. The cursor (last id seen) always moves
+ * forward, so a failing row never blocks later ones; rerun from the start to
+ * retry failures. Dry run (the default) only counts. Sequential so the website
+ * isn't flooded.
  */
-export async function pushUnlinkedReferrals(actor: string, opts: { dryRun: boolean; limit?: number }): Promise<BackfillReport> {
+export async function pushUnlinkedReferrals(
+  actor: string,
+  opts: { dryRun: boolean; limit?: number; after?: string | null }
+): Promise<BackfillReport> {
   const db = getSupabaseAdmin();
-  const { data, error } = await db
+  const limit = Math.min(Math.max(Math.floor(opts.limit ?? 200), 1), 500);
+  let q = db
     .from('referral_lead')
     .select('id, prospect_email, hdpm_web_lead_id')
     .eq('org_id', 'hdpm')
     .is('hdpm_web_lead_id', null)
-    .order('created_at', { ascending: true })
-    .limit(Math.min(Math.max(opts.limit ?? 200, 1), 500));
+    .not('prospect_email', 'is', null)
+    .in('stage', [...BACKFILL_STAGES]);
+  if (opts.after) q = q.gt('id', opts.after);
+  const { data, error } = await q.order('id', { ascending: true }).limit(limit);
   if (error) throw new Error(`referral_lead: ${error.message}`);
 
-  const report: BackfillReport = { dryRun: opts.dryRun, candidates: 0, pushed: 0, failed: [], skipped: { already_linked: 0, needs_email: 0 } };
-  for (const row of (data ?? []) as Pick<ReferralRow, 'id' | 'prospect_email' | 'hdpm_web_lead_id'>[]) {
-    const skip = pushSkipReason(row);
-    if (skip) {
-      report.skipped[skip] += 1;
-      continue;
-    }
-    report.candidates += 1;
-    if (opts.dryRun) continue;
+  const { data: noEmail, error: neErr } = await db
+    .from('referral_lead')
+    .select('id')
+    .eq('org_id', 'hdpm')
+    .is('hdpm_web_lead_id', null)
+    .is('prospect_email', null)
+    .in('stage', [...BACKFILL_STAGES]);
+  if (neErr) throw new Error(`referral_lead: ${neErr.message}`);
+
+  const rows = (data ?? []) as Pick<ReferralRow, 'id' | 'prospect_email' | 'hdpm_web_lead_id'>[];
+  const report: BackfillReport = {
+    dryRun: opts.dryRun,
+    processed: rows.length,
+    pushed: 0,
+    failed: [],
+    nextCursor: rows.length === limit ? rows[rows.length - 1].id : null,
+    needsEmail: (noEmail ?? []).length,
+    stages: BACKFILL_STAGES,
+  };
+  if (opts.dryRun) return report;
+  for (const row of rows) {
     const r = await pushReferralToWebsite(row.id, actor);
     if (r.ok) report.pushed += 1;
-    else if ('skipped' in r) report.skipped[r.skipped] += 1;
-    else report.failed.push({ id: row.id, error: r.error });
+    else if ('error' in r) report.failed.push({ id: row.id, error: r.error });
+    // 'skipped' here means it was linked or lost its email meanwhile; nothing to do.
   }
   return report;
 }

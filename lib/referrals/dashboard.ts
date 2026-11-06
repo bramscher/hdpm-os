@@ -4,7 +4,7 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { OPEN_LEAD_STAGES } from './types';
+import { BACKFILL_STAGES, OPEN_LEAD_STAGES } from './types';
 import { summarizeLedger } from './bounty';
 
 export interface ReferralAdminStats {
@@ -16,9 +16,9 @@ export interface ReferralAdminStats {
   suspectedDupes: number;
   leadsReferral: number;
   leadsOrganic: number;
-  /** Open referrals not on the website pipeline board because they have no email (the website needs one). */
+  /** Referrals still being worked (submitted/contacted/qualified) not on the website pipeline board because they have no email (the website needs one). */
   notOnBoardNeedsEmail: number;
-  /** Open referrals with an email that still have no website lead (a push failed; retry from the Pipeline page). */
+  /** Referrals still being worked with an email that still have no website lead (a push failed; retry from the Pipeline page). */
   notOnBoardUnpushed: number;
   /** Batch 5 bounty totals ($). 0 before the ledger migration / any bounties. */
   bountyPendingApproval: number;
@@ -51,8 +51,8 @@ export async function getReferralAdminStats(): Promise<ReferralAdminStats> {
     lead().eq('dup_status', 'suspected'),
     lead().eq('source', 'referral'),
     lead().eq('source', 'organic'),
-    lead().in('stage', OPEN_LEAD_STAGES).is('hdpm_web_lead_id', null).is('prospect_email', null),
-    lead().in('stage', OPEN_LEAD_STAGES).is('hdpm_web_lead_id', null).not('prospect_email', 'is', null),
+    lead().in('stage', [...BACKFILL_STAGES]).is('hdpm_web_lead_id', null).is('prospect_email', null),
+    lead().in('stage', [...BACKFILL_STAGES]).is('hdpm_web_lead_id', null).not('prospect_email', 'is', null),
   ]);
 
   const n = (r: { count: number | null; error: unknown }, label: string): number => {

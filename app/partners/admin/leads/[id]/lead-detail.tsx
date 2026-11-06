@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LEAD_STAGES, type FeeAgreementRow, type LedgerEntry, type LeadEvent, type LeadStage, type ReferralLead } from '@/lib/referrals/types';
+import { BACKFILL_STAGES, LEAD_STAGES, type FeeAgreementRow, type LedgerEntry, type LeadEvent, type LeadStage, type ReferralLead } from '@/lib/referrals/types';
 import type { BountyDecision } from '@/lib/referrals/bounty';
 import BountyCard from './bounty-card';
 
@@ -76,7 +76,7 @@ export default function LeadDetail({
       {/* One pipeline: is this referral on the website's owner pipeline board? */}
       {lead.hdpm_web_lead_id ? (
         <p className="text-sm text-charcoal-600">On the owner pipeline board (website lead #{lead.hdpm_web_lead_id}).</p>
-      ) : !lead.prospect_email ? (
+      ) : !(BACKFILL_STAGES as readonly string[]).includes(lead.stage) ? null : !lead.prospect_email ? (
         <form
           className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"
           onSubmit={(e) => {
