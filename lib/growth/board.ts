@@ -2,7 +2,13 @@
  * Pipeline board data shaping. Pure functions: no I/O, unit-tested.
  */
 import { BOARD_STAGES, type BoardStage } from './config';
-import { SOURCE_LABELS, type BoardLead } from './lead-api';
+import { SOURCE_LABELS, type BoardLead, type LeadDetail } from './lead-api';
+
+/** The detail endpoint nests the property; flatten it to one display line ('' when none). */
+export function detailProperty(lead: Pick<LeadDetail, 'subjectProperty'>): string {
+  const p = lead.subjectProperty;
+  return [p?.address, p?.town].filter((x): x is string => !!x && x.trim() !== '').join(', ');
+}
 
 const DAY_MS = 86_400_000;
 

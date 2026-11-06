@@ -50,9 +50,21 @@ export interface LeadPatchResponse {
   lead: BoardLead;
 }
 
-/** GET /api/os/leads/[id]: the side panel reads only these fields. */
+/**
+ * GET /api/os/leads/[id]: the side panel reads only these fields. Unlike the
+ * board feed and PATCH, the detail keeps the property nested in subjectProperty
+ * (no flat propertyAddress / town); use detailProperty() in board.ts.
+ */
+export interface LeadDetail extends Omit<BoardLead, 'town' | 'propertyAddress'> {
+  subjectProperty: { address?: string | null; town?: string | null } | null;
+  stageReason: string | null;
+  notesSummary: string | null;
+  message: string | null;
+  lastContactedAt: string | null;
+}
+
 export interface LeadDetailResponse {
-  lead: BoardLead & { stageReason: string | null; notesSummary: string | null; message: string | null; lastContactedAt: string | null };
+  lead: LeadDetail;
   activities: { id: number; type: string; direction: string | null; body: string; performedBy: string | null; createdAt: string }[];
 }
 

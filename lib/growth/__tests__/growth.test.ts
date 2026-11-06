@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeDoorMovement } from '../../door-movement';
 import { STAGE_WEIGHTS, GROWTH_SETTINGS } from '../config';
-import { buildColumns, canMove, daysInStage, filterLeads, filterOptions, replaceLead, sourceLabel } from '../board';
+import { buildColumns, canMove, daysInStage, detailProperty, filterLeads, filterOptions, replaceLead, sourceLabel } from '../board';
 import {
   addMonths,
   firstOnOrAfter,
@@ -17,7 +17,7 @@ import {
   partnerLeaderboard,
   pipelineByStage,
 } from '../metrics';
-import type { BoardLead } from '../lead-api';
+import type { BoardLead, LeadDetailResponse } from '../lead-api';
 
 let nextId = 1;
 function lead(over: Partial<BoardLead> = {}): BoardLead {
@@ -223,5 +223,33 @@ describe('dashboard metrics', () => {
       { partnerId: 'p2', name: 'Partner Two', leads: 1, signedLeads: 1, doors: 6 },
       { partnerId: 'p1', name: 'Partner One (Firm A)', leads: 2, signedLeads: 1, doors: 3 },
     ]);
+  });
+});
+
+describe('lead detail contract (GET /api/os/leads/[id])', () => {
+  // Shaped like hdpm-web PR 75's detail route: the property stays nested in
+  // subjectProperty; there is no flat propertyAddress / town.
+  const response = {
+    lead: {
+      id: 1, name: 'Test Owner', email: null, phone: null, status: 'engaged', leadType: 'owner', source: 'website',
+      assignedTo: null, nextFollowUpAt: null, createdAt: '2026-10-01T00:00:00Z', isDuplicateOfLeadId: null,
+      preferredLanguage: null, doNotContact: false, sourceDetail: null, expectedDoors: 3, statusEnteredAt: '2026-11-01T00:00:00Z',
+      stageReason: null, notesSummary: null, message: null, desiredMoveInDate: null, monthlyBudgetMin: null, monthlyBudgetMax: null,
+      subjectProperty: { address: '100 Example St', town: 'Bend', bedrooms: 3 },
+      rentAnalysisStatus: null, rentAnalysisShortUrl: null, lastContactedAt: null, attribution: null, allowedStatuses: ['consult_booked'],
+    },
+    activities: [],
+  };
+  // Extra website fields (bedrooms, attribution, ...) are fine; the required ones must line up.
+  const typed: LeadDetailResponse = response;
+
+  it('shows the nested property address and town', () => {
+    expect(detailProperty(typed.lead)).toBe('100 Example St, Bend');
+    expect('propertyAddress' in response.lead).toBe(false);
+  });
+  it('handles a missing or partial property', () => {
+    expect(detailProperty({ subjectProperty: null })).toBe('');
+    expect(detailProperty({ subjectProperty: { town: 'Redmond' } })).toBe('Redmond');
+    expect(detailProperty({ subjectProperty: { address: ' ', town: null } })).toBe('');
   });
 });

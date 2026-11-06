@@ -21,7 +21,7 @@ import { PageContainer, PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { STAGE_LABELS } from "@/lib/growth/config";
 import { SOURCE_LABELS, type BoardLead, type BoardResponse, type LeadDetailResponse, type LeadPatch, type LeadPatchResponse, type Person } from "@/lib/growth/lead-api";
-import { buildColumns, canMove, daysInStage, filterLeads, filterOptions, replaceLead, sourceLabel, type BoardColumn, type BoardFilters } from "@/lib/growth/board";
+import { buildColumns, canMove, daysInStage, detailProperty, filterLeads, filterOptions, replaceLead, sourceLabel, type BoardColumn, type BoardFilters } from "@/lib/growth/board";
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/growth/leads/${path}`, init);
@@ -325,7 +325,7 @@ function LeadPanel({ id, users, websiteUrl, onClose, onSaved }: { id: number; us
         <p className="text-sm text-charcoal-500">Loading…</p>
       ) : (
         <div className="space-y-5 text-sm">
-          {(lead.propertyAddress || lead.town) && <p className="text-charcoal-700">{[lead.propertyAddress, lead.town].filter(Boolean).join(", ")}</p>}
+          {detailProperty(lead) && <p className="text-charcoal-700">{detailProperty(lead)}</p>}
 
           <div className="grid gap-3">
             <label className="grid gap-1">

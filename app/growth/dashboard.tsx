@@ -21,6 +21,10 @@ import { PageContainer, PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { SOURCE_LABELS } from "@/lib/growth/lead-api";
 import type { GrowthSummary } from "@/lib/growth/data";
+import { addMonths } from "@/lib/growth/metrics";
+
+const dayMs = (d: string) => Date.parse(`${d.slice(0, 10)}T00:00:00Z`);
+const fmtTick = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 const GRID_PROPS = { strokeDasharray: "3 3", stroke: "rgba(0,0,0,0.05)", vertical: false };
 const X_TICK = { fontSize: 12, fill: "#6b7280" };
@@ -130,15 +134,25 @@ export function GrowthDashboard() {
             >
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={data.doors?.series ?? []} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                  {/* Time-scaled x axis: daily snapshots and the monthly goal points sit at their real dates. */}
+                  <LineChart data={(data.doors?.series ?? []).map((p) => ({ ...p, t: dayMs(p.date) }))} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                     <CartesianGrid {...GRID_PROPS} />
-                    <XAxis dataKey="date" tickFormatter={fmtDay} tick={X_TICK} minTickGap={24} />
+                    <XAxis
+                      dataKey="t"
+                      type="number"
+                      scale="time"
+                      domain={[dayMs(s.startDate), dayMs(s.endDate)]}
+                      ticks={Array.from({ length: s.months + 1 }, (_, i) => dayMs(addMonths(s.startDate, i)))}
+                      tickFormatter={fmtTick}
+                      tick={X_TICK}
+                      minTickGap={24}
+                    />
                     <YAxis tick={Y_TICK} domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(s.targetNetDoors, max)]} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(d) => fmtDay(String(d))} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(t) => fmtTick(Number(t))} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <ReferenceLine y={s.targetNetDoors} stroke="#d97706" strokeDasharray="6 4" />
                     <Line name="Pace" dataKey="pace" stroke="#9ca3af" strokeDasharray="5 5" dot={false} isAnimationActive={false} />
-                    <Line name="Actual" dataKey="actual" stroke="#c2410c" strokeWidth={2.5} dot={{ r: 3 }} connectNulls isAnimationActive={false} />
+                    <Line name="Actual" dataKey="actual" stroke="#c2410c" strokeWidth={2.5} dot={{ r: 1.5 }} connectNulls isAnimationActive={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
