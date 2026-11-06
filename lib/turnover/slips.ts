@@ -64,6 +64,9 @@ export interface Slip {
   unit: string;
   coordinator: string | null;
   woId?: string;
+  /** Short work order name and the date it missed, for the one-line Slack row. */
+  woLabel?: string;
+  scheduled?: string;
   text: string;
   daysLate: number;
   /** The checklist item Done ticks. Work order slips have none: that fact lives in AppFolio. */
@@ -120,15 +123,15 @@ export function computeSlips(turn: SlipTurn, today: string, snoozedUntil: Record
     if (WORK_DONE.has(status) || CHASE_BOARD_STATUSES.has(status)) continue;
     const date = w.scheduled_start?.slice(0, 10) ?? null;
     if (date && date < today) {
-      out.push({ ...base, key: `wo_vendor_date:${w.id}`, kind: 'wo_vendor_date', woId: w.id, text: `${woName(w)} was scheduled ${date} and is still open`, daysLate: businessDaysBetween(date, today) });
+      out.push({ ...base, key: `wo_vendor_date:${w.id}`, kind: 'wo_vendor_date', woId: w.id, woLabel: woName(w), scheduled: date, text: `${woName(w)} was scheduled ${date} and is still open`, daysLate: businessDaysBetween(date, today) });
       continue;
     }
     // A work order added late to an old turn still gets its full time.
     const from = w.created_at.slice(0, 10) > vacated ? w.created_at.slice(0, 10) : vacated;
     const days = late(from, SLIP_RULES.ownerAndDateDays, today);
     if (days === 0) continue;
-    if (!w.assigned_to && !w.vendor_name) out.push({ ...base, key: `wo_owner:${w.id}`, kind: 'wo_owner', woId: w.id, text: `${woName(w)} has no owner or vendor`, daysLate: days });
-    else if (!date) out.push({ ...base, key: `wo_date:${w.id}`, kind: 'wo_date', woId: w.id, text: `${woName(w)} has no scheduled date`, daysLate: days });
+    if (!w.assigned_to && !w.vendor_name) out.push({ ...base, key: `wo_owner:${w.id}`, kind: 'wo_owner', woId: w.id, woLabel: woName(w), text: `${woName(w)} has no owner or vendor`, daysLate: days });
+    else if (!date) out.push({ ...base, key: `wo_date:${w.id}`, kind: 'wo_date', woId: w.id, woLabel: woName(w), text: `${woName(w)} has no scheduled date`, daysLate: days });
   }
 
   if (inChecklist && !checked('ready_for_showing') && workDone(turn.wos)) {

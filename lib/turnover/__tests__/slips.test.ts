@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeSlips, looksFinished, sortSlips, workDone, type SlipTurn, type SlipWo } from '../slips';
-import { buildSlipBlocks, markSlipHandled, parseSlipAction, encodeSlipAction, SLIP_LIST_CAP } from '../slip-message';
+import { buildSlipBlocks, markSlipHandled, parseSlipAction, encodeSlipAction, SLIP_LIST_CAP, SLIP_SNOOZE_ALL } from '../slip-message';
 
 const wo = (o: Partial<SlipWo> = {}): SlipWo => ({
   id: 'wo-1', wo_number: '100-1', unit_turn_category: 'Paint', description: 'Paint', appfolio_status: 'Assigned', status: 'open', canceled_date: null,
@@ -103,11 +103,12 @@ describe('the Slack list', () => {
     expect(parseSlipAction(encodeSlipAction('snooze', s))).toEqual({ kind: 'snooze', ...s });
     expect(parseSlipAction('ob:ack:x')).toBeNull();
   });
-  it('caps the list, offers Done only when it can tick something, and marks preview', () => {
-    const many = Array.from({ length: SLIP_LIST_CAP + 2 }, (_, i) => slip(`k${i}`));
+  const TURN = (n: number) => `${String(n).padStart(8, 'a')}-1111-1111-1111-111111111111`;
+  it('caps the list by unit, offers Done only when it can tick something, and marks preview', () => {
+    const many = Array.from({ length: SLIP_LIST_CAP + 2 }, (_, i) => ({ ...slip(`k${i}`), turnId: TURN(i) }));
     const s = JSON.stringify(buildSlipBlocks(many, { preview: true, onChaseBoard: 4 }).blocks);
     expect((s.match(/ts:snooze:/g) ?? []).length).toBe(SLIP_LIST_CAP);
-    expect(s).toContain('+2 more');
+    expect(s).toContain('+2 more units');
     expect(s).toContain('Preview');
     expect(s).toContain('4 turn work orders');
     expect(s).not.toContain('Elm <1>');
@@ -115,11 +116,28 @@ describe('the Slack list', () => {
     expect(noDone).not.toContain('ts:done:');
     expect(noDone).not.toContain('Preview');
   });
-  it('marks one slip handled and removes only its buttons', () => {
-    const { blocks } = buildSlipBlocks([slip('a'), slip('b')], { preview: false });
-    const out = JSON.stringify(markSlipHandled(blocks as Array<Record<string, unknown>>, slip('a'), '✓ Done by Brody'));
-    expect(out).toContain('✓ Done by Brody');
-    expect(out).not.toContain('ts:snooze:11111111-1111-1111-1111-111111111111:a"');
-    expect(out).toContain('ts:snooze:11111111-1111-1111-1111-111111111111:b"');
+  it('puts every late step on a unit into one row, with one Snooze on the side', () => {
+    const wo = (kind: 'wo_date' | 'wo_vendor_date', n: string, daysLate: number, scheduled?: string) => ({ ...slip(`${kind}:${n}`), kind, doneKey: undefined, woLabel: `WO ${n}`, scheduled, daysLate });
+    const { text, blocks } = buildSlipBlocks([wo('wo_vendor_date', '1-2', 16, '2026-10-13'), wo('wo_date', '1-3', 4), wo('wo_date', '1-4', 4)], { preview: false });
+    expect(text).toBe('Unit turns: 3 late steps on 1 unit');
+    const row = (blocks as Array<Record<string, any>>).find((b) => b.block_id?.startsWith('ts:'))!;
+    expect(row.text.text).toContain('16 days late');
+    expect(row.text.text).toContain('Date passed: WO 1-2 (Oct 13) · No date: WO 1-3, WO 1-4');
+    expect(row.accessory.action_id).toBe(`ts:snooze:${slip('x').turnId}:${SLIP_SNOOZE_ALL}`);
+    expect((blocks as Array<Record<string, any>>).some((b) => b.type === 'actions')).toBe(false);
+  });
+  it('a Snooze tap clears the side button; a Done tap removes only that Done', () => {
+    const noDone = buildSlipBlocks([{ ...slip('wo_date:x'), doneKey: undefined }], { preview: false }).blocks as Array<Record<string, unknown>>;
+    const snoozed = JSON.stringify(markSlipHandled(noDone, { kind: 'snooze', turnId: slip('x').turnId, key: SLIP_SNOOZE_ALL }, 'Snoozed by Brody'));
+    expect(snoozed).toContain('Snoozed by Brody');
+    expect(snoozed).not.toContain('ts:snooze:');
+
+    const two = [{ ...slip('keys') }, { ...slip('inspection'), kind: 'inspection' as const }];
+    const { blocks } = buildSlipBlocks(two, { preview: false });
+    const done = JSON.stringify(markSlipHandled(blocks as Array<Record<string, unknown>>, { kind: 'done', turnId: slip('x').turnId, key: 'keys' }, '✓ Keys received by Brody'));
+    expect(done).toContain('✓ Keys received by Brody');
+    expect(done).not.toContain(':keys"');
+    expect(done).toContain(':inspection"');
+    expect(done).toContain('ts:snooze:');
   });
 });

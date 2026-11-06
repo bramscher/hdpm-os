@@ -110,6 +110,8 @@ export async function POST(request: NextRequest) {
       const note = await handleSlipAction(getSupabaseAdmin(), slipAction, actor, turnTodayPacific());
       await respond(payload.response_url, {
         replace_original: true,
+        unfurl_links: false,
+        unfurl_media: false,
         text: 'Unit turns',
         blocks: markSlipHandled(payload.message?.blocks ?? [], slipAction, note),
       });
