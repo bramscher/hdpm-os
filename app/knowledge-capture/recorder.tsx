@@ -107,11 +107,13 @@ export function Recorder({
   // device copy stays: it shows under "On this device" to save or discard.
   useEffect(() => {
     mounted.current = true;
+    // Same array for the component's life (only pushed to), so this is the live list.
+    const urlList = urls.current;
     return () => {
       mounted.current = false;
       stopTimer();
       recorder.current?.stream.getTracks().forEach((t) => t.stop());
-      urls.current.forEach((u) => URL.revokeObjectURL(u));
+      urlList.forEach((u) => URL.revokeObjectURL(u));
       if (takeId.current) releaseLive(takeId.current);
       onTakeChange?.(false);
     };

@@ -21,6 +21,7 @@ export default function DailyBillingReview({embedded=false}:{embedded?:boolean})
  const [view,setView]=useState<'list'|'calendar'>('list'),[day,setDay]=useState<string|null>(initial),[kind,setKind]=useState(''),[history,setHistory]=useState(false),[editor,setEditor]=useState<Editor|null>(null),[search,setSearch]=useState('');
  const generation=useRef(0);
  const load=useCallback(async()=>{const gen=++generation.current;setLoading(true);setError('');try{const r=await fetch(`/api/maintenance/daily-billing?from=${from}&to=${to}&technician=${encodeURIComponent(tech)}${fieldSample?'&fieldSource=sample':''}`,{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error);if(gen===generation.current)setData(d);}catch(e){if(gen===generation.current)setError((e as Error).message);}finally{if(gen===generation.current)setLoading(false);}},[from,to,tech,fieldSample]);
+ // eslint-disable-next-line react-hooks/exhaustive-deps -- generation counter, not a DOM ref: cleanup must bump the live value so in-flight loads are dropped
  useEffect(()=>{void load();return()=>{generation.current++}},[load]);
  async function save(event:React.FormEvent<HTMLFormElement>){event.preventDefault();if(!editor||!data)return;setBusy(true);setError('');const f=new FormData(event.currentTarget);const value=(k:string)=>String(f.get(k)||'');
   let body:Record<string,unknown>;

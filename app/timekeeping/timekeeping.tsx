@@ -136,6 +136,7 @@ function TimekeepingView() {
         }
       })
       .catch((e) => setError(errorText(e)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR); api is context
   }, []);
   async function perform(action: () => Promise<void>) {
     setBusy(true);
@@ -766,6 +767,7 @@ function PersonalHistory({
   }
   useEffect(() => {
     void refresh();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR)
   }, []);
   const selected =
     sheets?.find((s) => s.period_start === period) || sheets?.[0];
@@ -1499,6 +1501,7 @@ function SheetEditor({
       save().catch(() => {});
     }, 800);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- save is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR); tick is the trigger
   }, [tick]); // refs serialize overlapping autosaves
   useEffect(() => {
     const guard = (e: BeforeUnloadEvent) => {

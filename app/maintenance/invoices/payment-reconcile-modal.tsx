@@ -112,6 +112,7 @@ export function PaymentReconcileModal({
         setLoadingPayments(false);
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- loads payments once when the modal opens; re-running when savedPayment changes would reload them mid-edit (behavior decision, see PR)
   }, []);
 
   // Charged split of the selected invoices (void excluded by aggregate()).

@@ -198,10 +198,15 @@ export default function VendorScoreboard({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const sortKey = searchParams.get('sort');
-  const sort =
-    sortKey && SORT_KEYS.has(sortKey as SortKey)
-      ? { key: sortKey as SortKey, dir: searchParams.get('dir') === 'desc' ? 'desc' : 'asc' }
-      : null;
+  const sortDir = searchParams.get('dir');
+  // Memoized so the sorted-rows useMemo below only recomputes when the URL sort changes.
+  const sort = useMemo(
+    () =>
+      sortKey && SORT_KEYS.has(sortKey as SortKey)
+        ? { key: sortKey as SortKey, dir: sortDir === 'desc' ? 'desc' : 'asc' }
+        : null,
+    [sortKey, sortDir]
+  );
 
   // Rank is pinned to the server's score-sorted order so it stays meaningful
   // regardless of how the table is re-sorted for display below.
