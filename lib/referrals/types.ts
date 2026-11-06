@@ -96,6 +96,14 @@ export const OPEN_LEAD_STAGES: LeadStage[] = [
   'active',
 ];
 
+/**
+ * Referral stages that are pushed to the website's owner pipeline (on submit,
+ * retry and backfill): still being worked, before an agreement. The website
+ * creates unmatched referrals as "new", so signed/onboarding/active owners and
+ * closed/lost prospects stay in hdpm-os.
+ */
+export const BACKFILL_STAGES = ['submitted', 'contacted', 'qualified'] as const satisfies readonly LeadStage[];
+
 export const LEAD_SOURCES = ['referral', 'organic'] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
 
