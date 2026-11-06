@@ -27,7 +27,7 @@ import {
   type WoStatus,
 } from './model';
 import { CHASE_BOARD_STATUSES, SLIP_DONE_KEYS, computeSlips, looksFinished, type Slip, type SlipWo } from './slips';
-import { SLIP_SNOOZE_DAYS } from './slip-message';
+import { SLIP_DONE_LABELS, SLIP_SNOOZE_ALL, SLIP_SNOOZE_DAYS } from './slip-message';
 import { afInvoiceReceived, loadAfBilling, type WoAfBilling } from '@/lib/maintenance/af-wo-billing';
 
 const WO_COLS =
@@ -464,8 +464,9 @@ export async function setComplete(db: SupabaseClient, turnId: string, complete: 
 // ── Slips (the 7 AM list) ───────────────────────────────────────────────────
 
 /** Every late step on active turns, plus how many turn work orders the Chase board is already chasing. */
-export async function loadSlips(db: SupabaseClient, today: string): Promise<{ slips: Slip[]; onChaseBoard: number }> {
-  const { data, error } = await db.from('unit_turn').select(TURN_COLS).eq('status', 'active').lte('vacated_at', today).limit(500);
+export async function loadSlips(db: SupabaseClient, today: string, turnId?: string): Promise<{ slips: Slip[]; onChaseBoard: number }> {
+  const query = db.from('unit_turn').select(TURN_COLS).eq('status', 'active').lte('vacated_at', today);
+  const { data, error } = await (turnId ? query.eq('id', turnId) : query).limit(500);
   if (error) throw new Error(error.message);
   const turns = (data ?? []) as unknown as TurnRow[];
   const ids = turns.map((t) => t.id);
@@ -481,7 +482,7 @@ export async function loadSlips(db: SupabaseClient, today: string): Promise<{ sl
     const until: Record<string, string> = {};
     for (const s of snoozes.data ?? []) if (s.unit_turn_id === t.id) until[s.slip_key as string] = s.until as string;
     return computeSlips(
-      { id: t.id, unit: [t.property_name, t.unit_name].filter(Boolean).join(', '), vacated_at: t.vacated_at, coordinator: t.coordinator, status: t.status, wos: (byTurn.get(t.id) ?? []) as SlipWo[], checks: checks.get(t.id) ?? {} },
+      { id: t.id, unit: t.unit_name || t.property_name, vacated_at: t.vacated_at, coordinator: t.coordinator, status: t.status, wos: (byTurn.get(t.id) ?? []) as SlipWo[], checks: checks.get(t.id) ?? {} },
       today,
       until
     );
@@ -509,9 +510,14 @@ export async function handleSlipAction(db: SupabaseClient, action: { kind: 'done
     const doneKey = SLIP_DONE_KEYS[action.key];
     if (!doneKey) throw new Error('That step can only be finished in AppFolio');
     await setCheck(db, action.turnId, doneKey, true, null, actor);
-    return `✓ Done by ${actor}`;
+    return `✓ ${SLIP_DONE_LABELS[action.key] ?? 'Done'} by ${actor}`;
   }
   const until = addDays(today, SLIP_SNOOZE_DAYS);
-  await snoozeSlip(db, action.turnId, action.key, until, actor);
+  if (action.key === SLIP_SNOOZE_ALL) {
+    const { slips } = await loadSlips(db, today, action.turnId);
+    for (const s of slips) await snoozeSlip(db, action.turnId, s.key, until, actor);
+  } else {
+    await snoozeSlip(db, action.turnId, action.key, until, actor);
+  }
   return `Snoozed until ${until} by ${actor}`;
 }

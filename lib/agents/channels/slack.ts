@@ -59,6 +59,9 @@ export async function sendSlackMessage(input: {
   return slackApi('chat.postMessage', {
     channel: input.channel,
     text: input.text,
+    // Without these Slack adds a site preview card under the message for each link.
+    unfurl_links: false,
+    unfurl_media: false,
     ...(input.blocks ? { blocks: input.blocks } : {}),
     ...(input.thread_ts ? { thread_ts: input.thread_ts } : {}),
   });
