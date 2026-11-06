@@ -17,7 +17,10 @@ import {
   PRIORITY_TRIPWIRE_RECURRING,
   PRIORITY_TRIPWIRE_AGED,
   ESCALATION_ACTOR,
+  TODO_ROLL_EXTENSION_DAYS,
+  PRIORITY_TODO_TWICE_MISSED,
 } from '@/lib/eos/escalation';
+import type { TodoStatus } from '@/lib/eos/types';
 import type { TripwireException } from '@/lib/maintenance/types';
 
 describe('todayPacific', () => {
@@ -195,6 +198,119 @@ describe('buildTodoRoll', () => {
   });
   it('rolledDueOn does plain calendar math', () => {
     expect(rolledDueOn('2026-08-28')).toBe('2026-09-04');
+  });
+});
+
+describe('rolledDueOn — calendar edges', () => {
+  it('adds exactly TODO_ROLL_EXTENSION_DAYS', () => {
+    expect(TODO_ROLL_EXTENSION_DAYS).toBe(7);
+    expect(rolledDueOn('2026-08-04')).toBe('2026-08-11');
+  });
+  it('rolls over 30- and 31-day month ends', () => {
+    expect(rolledDueOn('2026-04-30')).toBe('2026-05-07'); // 30-day month
+    expect(rolledDueOn('2026-07-31')).toBe('2026-08-07'); // 31-day month
+    expect(rolledDueOn('2026-04-24')).toBe('2026-05-01'); // lands on the 1st
+  });
+  it('rolls over the year end', () => {
+    expect(rolledDueOn('2026-12-28')).toBe('2027-01-04');
+    expect(rolledDueOn('2026-12-31')).toBe('2027-01-07');
+  });
+  it('handles February in common and leap years', () => {
+    expect(rolledDueOn('2027-02-22')).toBe('2027-03-01'); // common year: no Feb 29
+    expect(rolledDueOn('2028-02-22')).toBe('2028-02-29'); // leap year: lands on leap day
+    expect(rolledDueOn('2028-02-29')).toBe('2028-03-07'); // from leap day
+    expect(rolledDueOn('2028-02-25')).toBe('2028-03-03'); // spans leap day
+  });
+  it('is unaffected by US DST transitions', () => {
+    // 2026: DST starts Mar 8, ends Nov 1 — noon-UTC anchor keeps the date stable
+    expect(rolledDueOn('2026-03-05')).toBe('2026-03-12');
+    expect(rolledDueOn('2026-10-29')).toBe('2026-11-05');
+  });
+});
+
+describe('decideTodoAction — boundaries and statuses', () => {
+  const today = '2026-08-04';
+  it('due today is not overdue; due yesterday is', () => {
+    expect(decideTodoAction({ status: 'open', due_on: '2026-08-04' }, false, today)).toBe('none');
+    expect(decideTodoAction({ status: 'open', due_on: '2026-08-03' }, false, today)).toBe('roll');
+    expect(decideTodoAction({ status: 'open', due_on: '2026-08-04' }, true, today)).toBe('none');
+    expect(decideTodoAction({ status: 'open', due_on: '2026-08-03' }, true, today)).toBe('file_issue');
+  });
+  it('compares across month and year boundaries', () => {
+    expect(decideTodoAction({ status: 'open', due_on: '2026-07-31' }, false, '2026-08-01')).toBe('roll');
+    expect(decideTodoAction({ status: 'open', due_on: '2026-12-31' }, false, '2027-01-01')).toBe('roll');
+    expect(decideTodoAction({ status: 'open', due_on: '2027-01-01' }, false, '2026-12-31')).toBe('none');
+    expect(decideTodoAction({ status: 'open', due_on: '2028-02-29' }, true, '2028-03-01')).toBe('file_issue');
+  });
+  it('never acts on a non-open todo, however overdue, roll or not', () => {
+    const statuses: TodoStatus[] = ['done', 'missed', 'rolled'];
+    for (const status of statuses) {
+      for (const isRoll of [false, true]) {
+        expect(decideTodoAction({ status, due_on: '2025-01-01' }, isRoll, today)).toBe('none');
+      }
+    }
+  });
+});
+
+describe('to-do roll chain', () => {
+  const original = {
+    id: 't-root',
+    title: 'Renew the boiler permit',
+    owner_person: 'Cheryl',
+    source: 'meeting' as const,
+    due_on: '2026-12-29',
+  };
+
+  it('first miss rolls across the year end; second miss files an issue on the root', () => {
+    // first miss: due Dec 29, cron runs Dec 30
+    expect(decideTodoAction({ status: 'open', due_on: original.due_on }, false, '2026-12-30')).toBe('roll');
+    const { insert, nudge } = buildTodoRoll(original, '2026-12-30');
+    expect(insert.due_on).toBe('2027-01-06');
+    expect(insert.source_id).toBe('t-root');
+    expect(nudge.body('u')).toContain('was due 2026-12-29');
+    expect(nudge.body('u')).toContain('moved it to 2027-01-06');
+
+    // the rolled copy (isRoll = it has a source_id) — due day itself is still fine
+    const copy = { status: 'open' as const, due_on: insert.due_on };
+    expect(decideTodoAction(copy, true, '2027-01-06')).toBe('none');
+    // roll of a roll ⇒ file_issue, never a second roll
+    expect(decideTodoAction(copy, true, '2027-01-07')).toBe('file_issue');
+
+    const draft = buildTodoMissedIssue(
+      { title: insert.title, owner_person: insert.owner_person, due_on: insert.due_on, source_id: insert.source_id },
+      original.due_on,
+      null
+    );
+    expect(draft.source_ref).toBe(todoSourceRef('t-root'));
+    expect(draft.priority).toBe(PRIORITY_TODO_TWICE_MISSED);
+    expect(draft.detail).toBe(
+      'Owner: Cheryl. Due 2026-12-29, rolled to 2027-01-06, missed again. Original: todo:t-root.'
+    );
+  });
+
+  it('buildTodoRoll carries a null owner and a non-meeting source through unchanged', () => {
+    const { insert } = buildTodoRoll(
+      { id: 't-2', title: 'x', owner_person: null, source: 'manual', due_on: '2028-02-21' },
+      '2028-02-22'
+    );
+    expect(insert).toEqual({
+      title: 'x',
+      owner_person: null,
+      due_on: '2028-02-29',
+      source: 'manual',
+      source_id: 't-2',
+    });
+  });
+
+  it('buildTodoMissedIssue falls back for missing owner and original due date', () => {
+    const draft = buildTodoMissedIssue(
+      { title: 'x', owner_person: null, due_on: '2026-08-10', source_id: 't-3' },
+      null,
+      null
+    );
+    expect(draft.detail).toContain('Owner: unassigned.');
+    expect(draft.detail).toContain('Due ?, rolled to 2026-08-10');
+    expect(draft.detail).not.toContain('seat:');
   });
 });
 
