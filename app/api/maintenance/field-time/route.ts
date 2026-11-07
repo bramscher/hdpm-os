@@ -3,7 +3,7 @@ import { requireCompanySession } from '@/lib/require-role';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { dailyBillingActor } from '@/lib/daily-billing/server';
 import { pacificDay } from '@/lib/maintenance-workspace/model';
-import { FIELD_TECHS, loadFieldDay, rebuildDay, type Source } from '@/lib/field-time/server';
+import { FIELD_TECHS, loadFieldDay, manualEntry, rebuildDay, type Source } from '@/lib/field-time/server';
 
 const noStore = { 'Cache-Control': 'private, no-store' };
 export async function GET(request: NextRequest) {
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       await rebuildDay(actor, String(body.technician || ''), String(body.date || ''), body.op === 'sample_save' ? 'sample' : source, body.op === 'sample_save' ? body.spec : undefined);
       return NextResponse.json(await loadFieldDay(actor, body.technician, body.date, body.op === 'sample_save' ? 'sample' : source), { headers: noStore });
     }
+    if (body.op === 'manual_add' || body.op === 'manual_remove') return NextResponse.json(await manualEntry(actor, body), { headers: noStore });
     const allowed: Record<string, string[]> = {
       confirm: ['segment_id', 'version', 'kind', 'allocations', 'label', 'note'],
       confirm_all: ['day_id', 'version'],

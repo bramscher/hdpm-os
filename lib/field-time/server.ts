@@ -4,7 +4,7 @@ import { inHouseVendorFilter, linkInvoices } from '@/lib/daily-billing/links';
 import type { Decision, Issue } from '@/lib/daily-billing/model';
 import type { dailyBillingActor } from '@/lib/daily-billing/server';
 import { pacificDay, shiftDay } from '@/lib/maintenance-workspace/model';
-import { validDate } from '@/lib/timekeeping/model';
+import { validDate, wallTime } from '@/lib/timekeeping/model';
 import type { HdmsInvoice } from '@/lib/invoices';
 import { isFieldReviewer } from './access';
 import { assessWorkOrder, fieldBillingIssues, fieldDayTotals, fieldTimeByWorkOrder, type BillingWorkOrder, type FieldDayTotals, type FieldTimeRow } from './billing';
@@ -148,6 +148,44 @@ async function rebuild(actorEmail: string, technician: string, date: string, sou
   }
 }
 
+const MANUAL_KINDS = ['on_site', 'parts_run', 'dump_run', 'stop'];
+
+/**
+ * Add time by hand to a tech's phone day (forgot the phone), or remove such an entry. Saved confirmed
+ * and labelled Manual; then the day is rebuilt so its suggestions trim around the entry.
+ * The browser sends times as Pacific "HH:MM"; the work order's property becomes the entry's place.
+ */
+export async function manualEntry(actor: FieldActor, body: Record<string, unknown>) {
+  const technician = String(body.technician || ''), date = String(body.date || '');
+  if (!FIELD_TECHS.includes(technician)) throw new Error('Choose a technician');
+  if (!actor.admin && actor.person !== technician) throw new Error('FORBIDDEN: only the tech or an admin can change this day');
+  let request: Record<string, unknown>;
+  if (body.op === 'manual_remove') {
+    request = { op: 'remove', segment_id: body.segment_id, version: body.version };
+  } else {
+    const kind = String(body.kind || '');
+    if (!MANUAL_KINDS.includes(kind)) throw new Error('Choose a job, parts run, dump run or other work');
+    const at = (hm: unknown) => {
+      const v = String(hm || '');
+      if (!/^\d{2}:\d{2}$/.test(v)) throw new Error('Enter a start and end time');
+      return wallTime(date, v);
+    };
+    const allocations = Array.isArray(body.allocations) ? body.allocations : [];
+    const first = allocations[0] as { work_order_id?: string } | undefined;
+    let property_label = '';
+    if (first?.work_order_id) {
+      const { data } = await getSupabaseAdmin().from('work_orders').select('property_name').eq('id', first.work_order_id).maybeSingle();
+      property_label = data?.property_name || '';
+    }
+    request = { op: 'add', technician, work_date: date, version: body.version, kind, started_at: at(body.start), ended_at: at(body.end),
+      allocations, label: body.label ?? null, note: String(body.note || ''), property_label };
+  }
+  const { error } = await getSupabaseAdmin().rpc('field_time_manual', { actor: actor.email, request });
+  if (error) throw new Error(error.message);
+  await rebuildDeviceDay(actor.email, technician, date);
+  return loadFieldDay(actor, technician, date, 'device');
+}
+
 /** The centre of the detected stop under a segment, for "Save as location". Admin only; never stored on segments. */
 export async function stopCentre(actor: FieldActor, technician: string, date: string, source: Source, segmentId: string) {
   if (!actor.admin) throw new Error('FORBIDDEN: only an admin can add locations');
@@ -231,7 +269,7 @@ export async function loadFieldDay(actor: FieldActor, technician: string, date: 
     segments: rows.map(s => ({
       id: s.id, kind: s.kind, started_at: s.started_at, ended_at: s.ended_at, minutes: minutesOf(s), place: s.place_id ? placeName.get(s.place_id) ?? '' : '',
       property_label: s.property_label, inspection_stop_id: s.inspection_stop_id, label: s.label, note: s.note, state: s.state,
-      confirmed_by: s.confirmed_by, confirmed_at: s.confirmed_at, needs_input: needsInput(s),
+      confirmed_by: s.confirmed_by, confirmed_at: s.confirmed_at, manual: !!s.manual, needs_input: needsInput(s),
       allocations: s.allocations.map(a => ({ ...a, ...describe(a.work_order_id) })),
       candidates: (s.candidates as Candidate[]).map(c => ({ ...c, ...describe(c.work_order_id) })),
     })),
