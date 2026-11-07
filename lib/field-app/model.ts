@@ -25,8 +25,8 @@ export function clockSnapshot(clock: Pick<Clock, 'version' | 'shift'>): ClockSna
   return { state: shift.emergencyAfterHours ? 'callout' : 'working', version: clock.version, since: shift.start };
 }
 
-export type ClockAction = 'in' | 'break' | 'resume' | 'out' | 'callout';
-const ACTIONS: ClockAction[] = ['in', 'break', 'resume', 'out', 'callout'];
+export type ClockAction = 'in' | 'break' | 'resume' | 'out' | 'callout' | 'cancel';
+const ACTIONS: ClockAction[] = ['in', 'break', 'resume', 'out', 'callout', 'cancel'];
 
 /** The app's clock request → Timekeeping's clock command body. Breaks default to unpaid unless the app says paid. */
 export function clockBody(input: unknown): Record<string, unknown> {
@@ -37,6 +37,14 @@ export function clockBody(input: unknown): Record<string, unknown> {
   if (!Number.isInteger(clockVersion) || clockVersion < 0) throw new Error('Reload the clock and try again');
   if (action === 'callout') return { op: 'clock', action: 'in', callout: true, clockVersion };
   if (action === 'break') return { op: 'clock', action, paid: body.paid === true, clockVersion };
+  // Cancel a clock-in started by mistake (Craig, 2026-11-07): needs a short reason, like the website.
+  // Nothing goes on the sheet and the day's planned hours come back. Fixing the start stays on the website.
+  if (action === 'cancel') {
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    if (!reason) throw new Error("Say why you're cancelling this clock-in");
+    if (reason.length > 2000) throw new Error('Keep the reason under 2000 characters');
+    return { op: 'clock', action, reason, clockVersion };
+  }
   return { op: 'clock', action, clockVersion };
 }
 

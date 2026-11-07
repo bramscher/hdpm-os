@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { recordsEmployeeTime } from "@/lib/timekeeping/eligibility";
 import {
   reviewPeriods,
@@ -74,6 +82,15 @@ type EventRow = {
   before_data: unknown;
   after_data: unknown;
 };
+/** Readable names for clock fixes in the change history (20261044). */
+const EVENT_LABELS: Record<string, string> = {
+  clock_correct: "Missed clock-out fixed",
+  clock_fix_start: "Start time fixed",
+  clock_cancel: "Clock-in cancelled",
+  admin_clock_fix_start: "Start time fixed by admin",
+  admin_clock_stop: "Clock stopped by admin",
+  admin_clock_cancel: "Clock-in cancelled by admin",
+};
 async function liveApi<T>(
   path = "",
   body?: Record<string, unknown>,
@@ -122,6 +139,27 @@ function TimekeepingView() {
   const [period, setPeriod] = useState(""),
     [person, setPerson] = useState("");
   const [payrollReady, setPayrollReady] = useState("");
+  // An admin reviewing someone else's sheet sees that person's running clock.
+  const [subjectClock, setSubjectClock] = useState<Clock | null>(null);
+  const subjectId =
+    data?.isAdmin && selected && selected.employee_id !== data.employee.id
+      ? selected.employee_id
+      : "";
+  useEffect(() => {
+    setSubjectClock(null);
+    if (!subjectId) return;
+    let live = true;
+    api<Clock>(`?view=clock&employeeId=${encodeURIComponent(subjectId)}`)
+      .then((clock) => {
+        if (live) setSubjectClock(clock);
+      })
+      .catch((e) => {
+        if (live) setError(errorText(e));
+      });
+    return () => {
+      live = false;
+    };
+  }, [api, subjectId]);
   const load = useCallback(async () => {
     const d = await api<Boot>();
     setData(d);
@@ -357,6 +395,35 @@ function TimekeepingView() {
                   <ArrowLeft size={16} /> Back to{" "}
                   {view === "review" ? "review" : "payroll"}
                 </button>
+                {subjectId && subjectClock && (
+                  <ClockPanel
+                    clock={subjectClock}
+                    disabled={dirty}
+                    subject={{
+                      employeeId: subjectId,
+                      name: selected.employee_name,
+                    }}
+                    onChange={async (body) => {
+                      await api("", body);
+                      const [rows, clock] = await Promise.all([
+                        api<Sheet[]>("?view=review"),
+                        api<Clock>(
+                          `?view=clock&employeeId=${encodeURIComponent(subjectId)}`,
+                        ),
+                      ]);
+                      setSheets(rows);
+                      setSelected(rows.find((s) => s.id === selected.id) || null);
+                      setSubjectClock(clock);
+                      setReceipt(
+                        body.action === "cancel"
+                          ? `${selected.employee_name}'s clock-in was cancelled. The reason is in the sheet's change history.`
+                          : body.action === "stop"
+                            ? `${selected.employee_name}'s clock was stopped and the shift is on the sheet.`
+                            : `${selected.employee_name}'s start time was corrected.`,
+                      );
+                    }}
+                  />
+                )}
                 <SheetEditor
                   key={`${selected.id}:${selected.version}`}
                   initial={selected}
@@ -369,7 +436,12 @@ function TimekeepingView() {
                     )
                   }
                   isAdmin={data.isAdmin}
-                  clockOpen={false}
+                  clockOpen={
+                    subjectId
+                      ? !!subjectClock?.shift
+                      : selected.employee_id === data.employee.id &&
+                        !!data.clock.shift
+                  }
                   onDirty={setDirty}
                   onApproveNext={async (approved) => {
                     setPeriod(approved.period_start);
@@ -859,21 +931,40 @@ function PersonalHistory({
   );
 }
 
+/**
+ * The running clock. A worker sees their own clock: in, breaks, out, "Missed clock-out?", and
+ * (Craig, 2026-11-07) "Fix start time" and "Cancel this clock-in", each with a short reason.
+ * An admin opening someone else's sheet sees that person's clock (`subject`) and can fix the
+ * start, stop it at a given time, or cancel it, always with a reason.
+ */
 function ClockPanel({
   clock,
   disabled,
   onChange,
+  subject,
 }: {
   clock: Clock;
   disabled: boolean;
   onChange: (body: Record<string, unknown>) => Promise<void>;
+  subject?: { employeeId: string; name: string };
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [correct, setCorrect] = useState(false),
-    [end, setEnd] = useState(""),
+    [form, setForm] = useState<"" | "end" | "start" | "cancel">(""),
+    [at, setAt] = useState(""),
     [reason, setReason] = useState("");
   const openBreak = clock.shift?.breaks.some((b) => b.start && !b.end);
+  const admin = !!subject;
+  function open(next: typeof form) {
+    setForm(form === next ? "" : next);
+    setError("");
+    setReason("");
+    setAt(
+      next === "start" && clock.shift
+        ? `${localDate(new Date(clock.shift.start))}T${localTime(clock.shift.start)}`
+        : "",
+    );
+  }
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (disabled) {
       setError("Save your timesheet changes before using the clock.");
@@ -883,77 +974,129 @@ function ClockPanel({
     setError("");
     try {
       await onChange({
-        op: "clock",
+        ...(admin
+          ? { op: "adminClock", employeeId: subject.employeeId }
+          : { op: "clock" }),
         action,
         clockVersion: clock.version,
         ...extra,
       });
-      setCorrect(false);
+      setForm("");
+      setReason("");
     } catch (e) {
       setError(errorText(e));
     } finally {
       setBusy(false);
     }
   }
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    try {
+      if (form === "cancel") {
+        void act("cancel", { reason });
+        return;
+      }
+      const [date, time] = at.split("T");
+      const when = wallTime(admin || form === "end" ? date : localDate(), time);
+      if (form === "start") void act("fix_start", { start: when, reason });
+      else void act(admin ? "stop" : "correct", { end: when, reason });
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+  const started = clock.shift
+    ? `Started ${displayDate(localDate(new Date(clock.shift.start)))} at ${displayTime(localTime(clock.shift.start))}`
+    : "";
   return (
-    <section className="tk-clock">
+    <section className={`tk-clock${admin ? " tk-clock-admin" : ""}`}>
       <div>
         <span className={`tk-dot ${clock.shift ? "on" : ""}`} />
         <div>
           <strong>
-            {openBreak
-              ? "On a break"
-              : clock.shift
-                ? "Clocked in"
-                : "Ready when you are"}
+            {admin
+              ? clock.shift
+                ? `${subject.name} is ${openBreak ? "clocked in, on a break" : "clocked in"}`
+                : `${subject.name} is not clocked in`
+              : openBreak
+                ? "On a break"
+                : clock.shift
+                  ? "Clocked in"
+                  : "Ready when you are"}
           </strong>
           <p>
             {clock.shift
-              ? `Started ${localDate(new Date(clock.shift.start))} at ${displayTime(localTime(clock.shift.start))}`
-              : "Use the clock, or enter an exception in your sheet below."}
+              ? admin
+                ? `${started}. Today and later days on this sheet are locked until the clock stops.`
+                : started
+              : admin
+                ? "Their running clock shows here while they're clocked in."
+                : "Use the clock, or enter an exception in your sheet below."}
           </p>
         </div>
       </div>
       <div className="tk-toolbar">
         {!clock.shift ? (
-          <button
-            className="tk-primary"
-            disabled={busy}
-            onClick={() => act("in")}
-          >
-            <Clock3 size={17} /> Clock in
-          </button>
-        ) : (
-          <>
-            {openBreak ? (
-              <button disabled={busy} onClick={() => act("resume")}>
-                End break
-              </button>
-            ) : (
-              <>
-                <button
-                  disabled={busy}
-                  onClick={() => act("break", { paid: false })}
-                >
-                  <Coffee size={15} /> Unpaid break
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => act("break", { paid: true })}
-                >
-                  Paid break
-                </button>
-              </>
-            )}
+          !admin && (
             <button
               className="tk-primary"
               disabled={busy}
-              onClick={() => act("out")}
+              onClick={() => act("in")}
             >
-              Clock out
+              <Clock3 size={17} /> Clock in
             </button>
-            <button disabled={busy} onClick={() => setCorrect(!correct)}>
-              Missed clock-out?
+          )
+        ) : (
+          <>
+            {!admin &&
+              (openBreak ? (
+                <button disabled={busy} onClick={() => act("resume")}>
+                  End break
+                </button>
+              ) : (
+                <>
+                  <button
+                    disabled={busy}
+                    onClick={() => act("break", { paid: false })}
+                  >
+                    <Coffee size={15} /> Unpaid break
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => act("break", { paid: true })}
+                  >
+                    Paid break
+                  </button>
+                </>
+              ))}
+            {!admin && (
+              <button
+                className="tk-primary"
+                disabled={busy}
+                onClick={() => act("out")}
+              >
+                Clock out
+              </button>
+            )}
+            <button
+              disabled={busy}
+              aria-expanded={form === "end"}
+              onClick={() => open("end")}
+            >
+              {admin ? "Stop clock" : "Missed clock-out?"}
+            </button>
+            <button
+              disabled={busy}
+              aria-expanded={form === "start"}
+              onClick={() => open("start")}
+            >
+              Fix start time
+            </button>
+            <button
+              disabled={busy}
+              aria-expanded={form === "cancel"}
+              onClick={() => open("cancel")}
+            >
+              Cancel this clock-in
             </button>
           </>
         )}
@@ -963,50 +1106,80 @@ function ClockPanel({
           {error}
         </p>
       )}
-      {correct && (
-        <form
-          className="tk-correction"
-          onSubmit={(e) => {
-            e.preventDefault();
-            try {
-              const [date, time] = end.split("T");
-              void act("correct", { end: wallTime(date, time), reason });
-            } catch (err) {
-              setError(errorText(err));
-            }
-          }}
-        >
+      {form && clock.shift && (
+        <form className="tk-correction" onSubmit={submit}>
+          {form === "cancel" ? (
+            <p>
+              {admin
+                ? `Cancel ${subject.name}'s clock-in from ${displayTime(localTime(clock.shift.start))}?`
+                : "Cancel this clock-in?"}{" "}
+              Nothing goes on the sheet and the day’s planned hours come back.
+              The cancelled entry stays in the change history with your reason.
+            </p>
+          ) : (
+            <>
+              {(admin || form === "end") && (
+                <label>
+                  {form === "start" ? "Actual start date" : "Actual end date"}{" "}
+                  (Pacific)
+                  <input
+                    required
+                    type="date"
+                    value={at.split("T")[0] || ""}
+                    max={localDate()}
+                    onChange={(e) =>
+                      setAt(`${e.target.value}T${at.split("T")[1] || "12:00"}`)
+                    }
+                  />
+                </label>
+              )}
+              <label>
+                {form === "start"
+                  ? admin
+                    ? "Actual start time (Pacific)"
+                    : "Actual start time today (Pacific)"
+                  : "Actual end time (Pacific)"}
+                <TimeSelect
+                  allowExact
+                  value={at.split("T")[1] || ""}
+                  onChange={(value) =>
+                    setAt(`${at.split("T")[0] || localDate()}T${value}`)
+                  }
+                />
+              </label>
+              {form === "start" && !admin && (
+                <small>
+                  Today only, and not before your last clock-out. For an older
+                  start, ask an administrator.
+                </small>
+              )}
+            </>
+          )}
           <label>
-            Actual end date (Pacific)
-            <input
-              required
-              type="date"
-              value={end.split("T")[0] || ""}
-              onChange={(e) =>
-                setEnd(`${e.target.value}T${end.split("T")[1] || "12:00"}`)
-              }
-            />
-          </label>
-          <label>
-            Actual end time (Pacific)
-            <TimeSelect
-              allowExact
-              value={end.split("T")[1] || ""}
-              onChange={(value) =>
-                setEnd(`${end.split("T")[0] || localDate()}T${value}`)
-              }
-            />
-          </label>
-          <label>
-            Correction reason
+            Reason
             <input
               required
               maxLength={2000}
               value={reason}
+              placeholder={
+                form === "cancel"
+                  ? "Clocked in by mistake"
+                  : form === "start"
+                    ? "Forgot to clock in when I started"
+                    : "Forgot to clock out"
+              }
               onChange={(e) => setReason(e.target.value)}
             />
           </label>
-          <button disabled={busy}>Record corrected clock-out</button>
+          <button disabled={busy || !reason.trim()}>
+            {form === "cancel"
+              ? "Cancel clock-in"
+              : form === "start"
+                ? "Save corrected start"
+                : admin
+                  ? "Stop clock at this time"
+                  : "Record corrected clock-out"}
+          </button>
         </form>
       )}
     </section>
@@ -1609,9 +1782,9 @@ function SheetEditor({
       )}
       {clockOpen && (
         <div className="tk-notice">
-          Your clock is running. You can still fix earlier days; today and
-          later days unlock when you clock out. Clock out before submitting.
-          Edits are recorded in the change history.
+          {own
+            ? "Your clock is running. You can still fix earlier days; today and later days unlock when you clock out. Clock out before submitting. Edits are recorded in the change history."
+            : `${initial.employee_name} is clocked in. You can still correct earlier days; today and later days are locked until their clock stops. Use the clock panel above to fix, stop or cancel it.`}
         </div>
       )}
       {error && (
@@ -1885,7 +2058,7 @@ function SheetEditor({
         {events?.map((ev) => (
           <details key={ev.id}>
             <summary>
-              {ev.action} · {ev.actor} ·{" "}
+              {EVENT_LABELS[ev.action] ?? ev.action} · {ev.actor} ·{" "}
               {new Date(ev.created_at).toLocaleString()}
               {ev.reason ? ` — ${ev.reason}` : ""}
             </summary>

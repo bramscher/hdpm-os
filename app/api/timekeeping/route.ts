@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   bootstrap,
+  clockFor,
   command,
   context,
   exportRows,
@@ -28,7 +29,9 @@ export async function GET(request: Request) {
               ? await history(ctx, url.searchParams.get("id") || "")
               : view === "exports"
                 ? await exportRows(ctx)
-                : await bootstrap(ctx);
+                : view === "clock"
+                  ? await clockFor(ctx, url.searchParams.get("employeeId") || "")
+                  : await bootstrap(ctx);
     return NextResponse.json(data, {
       headers: { "Cache-Control": "private, no-store" },
     });
