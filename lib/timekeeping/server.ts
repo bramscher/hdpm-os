@@ -31,6 +31,7 @@ import {
 import {
   checkFixStart,
   collect,
+  lockedSheetFor,
   merge,
   removePlanned,
   restorePlanned,
@@ -819,6 +820,18 @@ export async function clockFor(ctx: Context, employeeId: string): Promise<Clock>
   return row ?? { employee_id: employeeId, version: 1, shift: null };
 }
 
+/** A locked sheet under the running shift's start (old or corrected) needs return or reopen first. */
+function refuseLocked(sheets: Sheet[], dates: string[], admin: boolean) {
+  const locked = lockedSheetFor(sheets, dates);
+  if (locked)
+    throw new TimeError(
+      `The ${locked.period_start} to ${locked.period_end} timesheet is ${locked.state}. ${
+        admin ? "Reopen it first" : "Ask your manager to reopen it"
+      }, then fix the clock.`,
+      409,
+    );
+}
+
 /** Work out the new clock entry and the sheet changes for one clock action. Writes nothing. */
 async function planClock(
   employee: Employee,
@@ -914,6 +927,7 @@ async function planClock(
       }
       const from = localDate(new Date(shift.start)),
         to = localDate(new Date(start));
+      refuseLocked(own, [from, to], admin);
       if (from !== to) {
         // Moving to another day: the old day gets its planned hours back, the new day loses them.
         const target = own.flatMap((s) => s.days).find((d) => d.date === to);
@@ -931,7 +945,9 @@ async function planClock(
     } else if (action === "cancel") {
       // A clock-in started by mistake: the running entry is cleared (the event log keeps it, with
       // who and why) and nothing goes on the sheet. The clock-in day's planned hours come back.
-      changes = restorePlanned(own, employee, localDate(new Date(shift.start)));
+      const from = localDate(new Date(shift.start));
+      refuseLocked(own, [from], admin);
+      changes = restorePlanned(own, employee, from);
       shift = null;
     } else if (action === "out" || action === "correct") {
       let ended = at;

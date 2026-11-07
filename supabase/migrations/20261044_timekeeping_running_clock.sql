@@ -11,6 +11,8 @@
 -- 2. New timekeeping_admin_clock: an administrator (access_role 'admin', not reviewers) fixes the
 --    start, cancels, or stops another employee's running clock. A reason is always required.
 --    Every change writes timekeeping_event rows with the admin as actor. Nothing is deleted.
+-- Both refuse a fix whose running shift starts, or would start, on a submitted/approved/removed
+-- sheet (looked up by the employee's period, not trusted from the request): reopen it first.
 
 CREATE OR REPLACE FUNCTION timekeeping_apply(p_actor text, p_request jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -77,6 +79,16 @@ BEGIN
     IF clock_action IN ('fix_start','cancel') AND c.shift IS NULL THEN RAISE EXCEPTION 'The clock is not running'; END IF;
     IF clock_action = 'cancel' AND jsonb_typeof(p_request->'shift') IS DISTINCT FROM 'null' THEN RAISE EXCEPTION 'A cancelled clock-in has no running entry'; END IF;
     IF clock_action = 'fix_start' AND (p_request->'shift'->>'id') IS DISTINCT FROM (c.shift->>'id') THEN RAISE EXCEPTION 'Fixing the start keeps the same running entry'; END IF;
+    -- The sheets covering the running shift's start and the corrected start must still be editable,
+    -- whether or not any of their days change (looked up here, not taken from the request).
+    IF clock_action IN ('correct','fix_start','cancel') AND EXISTS(
+      SELECT 1 FROM timekeeping_sheet ts
+      WHERE ts.employee_id = a.id AND ts.state NOT IN ('draft','returned')
+        AND EXISTS(SELECT 1 FROM (VALUES (c.shift->>'start'), (p_request->'shift'->>'start')) AS st(v)
+          WHERE st.v IS NOT NULL
+            AND ts.period_start <= ((st.v)::timestamptz AT TIME ZONE 'America/Los_Angeles')::date
+            AND ts.period_end >= ((st.v)::timestamptz AT TIME ZONE 'America/Los_Angeles')::date)
+    ) THEN RAISE EXCEPTION 'Clock time overlaps a locked timesheet; ask your manager to reopen it'; END IF;
     old := to_jsonb(c);
     FOR item IN SELECT * FROM jsonb_array_elements(coalesce(p_request->'sheets','[]'::jsonb)) LOOP
       SELECT * INTO s FROM timekeeping_sheet WHERE id = (item->>'id')::uuid FOR UPDATE;
@@ -186,6 +198,16 @@ BEGIN
   IF c.version <> (p_request->>'clockVersion')::integer THEN RAISE EXCEPTION 'CONFLICT: the clock changed; reload before continuing'; END IF;
   IF clock_action IN ('cancel','stop') AND jsonb_typeof(p_request->'shift') IS DISTINCT FROM 'null' THEN RAISE EXCEPTION 'Cancel and stop leave no running entry'; END IF;
   IF clock_action = 'fix_start' AND (p_request->'shift'->>'id') IS DISTINCT FROM (c.shift->>'id') THEN RAISE EXCEPTION 'Fixing the start keeps the same running entry'; END IF;
+  -- The sheets covering the running shift's start and the corrected start must still be editable,
+  -- whether or not any of their days change (looked up here, not taken from the request).
+  IF EXISTS(
+    SELECT 1 FROM timekeeping_sheet ts
+    WHERE ts.employee_id = e.id AND ts.state NOT IN ('draft','returned')
+      AND EXISTS(SELECT 1 FROM (VALUES (c.shift->>'start'), (p_request->'shift'->>'start')) AS st(v)
+        WHERE st.v IS NOT NULL
+          AND ts.period_start <= ((st.v)::timestamptz AT TIME ZONE 'America/Los_Angeles')::date
+          AND ts.period_end >= ((st.v)::timestamptz AT TIME ZONE 'America/Los_Angeles')::date)
+  ) THEN RAISE EXCEPTION 'Clock time overlaps a locked timesheet; reopen it first'; END IF;
   old := to_jsonb(c);
   FOR item IN SELECT * FROM jsonb_array_elements(coalesce(p_request->'sheets','[]'::jsonb)) LOOP
     SELECT * INTO s FROM timekeeping_sheet WHERE id = (item->>'id')::uuid FOR UPDATE;

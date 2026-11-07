@@ -330,4 +330,69 @@ describe("20261044 running-clock migration in PGlite", () => {
     expect(event).toMatchObject({ actor: "admin@example.test", action: "admin_clock_cancel", reason: "Pocket tap", sheet_id: sheetId });
     expect(((event.before_data as Row).shift as Row).id).toBe("w3");
   });
+  // Review of 0f32dae: a clock-only request (no changed sheets) must still respect the lock on the
+  // sheet under the running shift's start and the corrected start. A refusal changes nothing.
+  describe("locked sheets under the running shift", () => {
+    const snapshot = async (who: string, sheet: string) => ({
+      clock: await clock(who),
+      sheet: (await db.query<Row>("SELECT state, version, days FROM timekeeping_sheet WHERE id = $1", [sheet])).rows[0],
+      events: Number((await db.query<Row>("SELECT count(*)::int AS n FROM timekeeping_event")).rows[0].n),
+    });
+
+    it("refuses worker and admin cancel with no changed sheets when the origin sheet is approved", async () => {
+      // Seeded state: Other's running clock starts on their approved current sheet.
+      await db.query(
+        `INSERT INTO timekeeping_clock(employee_id, version, shift) VALUES($1, 3, $2::jsonb)
+         ON CONFLICT (employee_id) DO UPDATE SET version = 3, shift = EXCLUDED.shift`,
+        [ids.Other, JSON.stringify(shift("o1", ago(20)))],
+      );
+      const before = await snapshot("Other", lockedId);
+      await expect(
+        apply("other@example.test", { op: "clock", clockAction: "cancel", clockVersion: 3, shift: null, reason: "Mistake", sheets: [] }),
+      ).rejects.toThrow(/locked timesheet; ask your manager to reopen it/);
+      await expect(
+        admin("admin@example.test", { employeeId: ids.Other, clockAction: "cancel", clockVersion: 3, shift: null, reason: "Pocket tap", sheets: [] }),
+      ).rejects.toThrow(/locked timesheet; reopen it first/);
+      await expect(
+        apply("other@example.test", { op: "clock", clockAction: "fix_start", clockVersion: 3, shift: shift("o1", ago(30)), reason: "Earlier", sheets: [] }),
+      ).rejects.toThrow(/locked timesheet/);
+      expect(await snapshot("Other", lockedId)).toEqual(before);
+    });
+
+    it("allows a same-day fix start on a draft sheet with no changed sheets", async () => {
+      const v = Number((await clock("Worker")).version);
+      await apply("worker@example.test", { op: "clock", clockAction: "in", clockVersion: v, shift: shift("w4", ago(10)), sheets: [] });
+      const fixed = ago(15);
+      const c = await apply("worker@example.test", { op: "clock", clockAction: "fix_start", clockVersion: v + 1, shift: shift("w4", fixed), reason: "Same day", sheets: [] });
+      expect((c.shift as Row).start).toBe(fixed);
+    });
+
+    it("refuses a cross-period fix start onto a locked, empty earlier day", async () => {
+      await db.query(`INSERT INTO timekeeping_period(start_date,end_date) VALUES('2026-01-01','2026-01-15') ON CONFLICT DO NOTHING`);
+      const earlier = String(
+        (
+          await db.query<Row>(
+            `INSERT INTO timekeeping_sheet(employee_id,period_start,period_end,employee_name,days,state)
+             VALUES($1,'2026-01-01','2026-01-15','Test Worker','[]','approved') RETURNING id`,
+            [ids.Worker],
+          )
+        ).rows[0].id,
+      );
+      const v = Number((await clock("Worker")).version);
+      const before = await snapshot("Worker", earlier);
+      const draftBefore = await snapshot("Worker", sheetId);
+      await expect(
+        admin("admin@example.test", { employeeId: ids.Worker, clockAction: "fix_start", clockVersion: v, shift: shift("w4", "2026-01-15T18:00:00.000Z"), reason: "Earlier", sheets: [] }),
+      ).rejects.toThrow(/locked timesheet; reopen it first/);
+      await expect(
+        apply("worker@example.test", { op: "clock", clockAction: "fix_start", clockVersion: v, shift: shift("w4", "2026-01-15T18:00:00.000Z"), reason: "Earlier", sheets: [] }),
+      ).rejects.toThrow(/locked timesheet/);
+      expect(await snapshot("Worker", earlier)).toEqual(before);
+      expect((await snapshot("Worker", sheetId)).sheet).toEqual(draftBefore.sheet);
+      // A version conflict is still reported as a conflict.
+      await expect(
+        admin("admin@example.test", { employeeId: ids.Worker, clockAction: "cancel", clockVersion: v - 1, shift: null, reason: "x" }),
+      ).rejects.toThrow(/CONFLICT/);
+    });
+  });
 });

@@ -158,6 +158,22 @@ export function checkFixStart(
   return new Date(at).toISOString();
 }
 
+/**
+ * The first sheet covering one of `dates` that can no longer change (submitted, approved or
+ * removed). Fix-start and cancel check this whether or not any day on that sheet changes:
+ * a locked sheet needs return or reopen first. The database checks the same under its lock.
+ */
+export function lockedSheetFor(
+  sheets: Sheet[],
+  dates: string[],
+): Sheet | undefined {
+  return sheets.find(
+    (s) =>
+      !["draft", "returned"].includes(s.state) &&
+      dates.some((d) => s.period_start <= d && s.period_end >= d),
+  );
+}
+
 /** Replace sheets in `base` with their changed versions. */
 export function merge(base: Sheet[], changes: Sheet[]): Sheet[] {
   return base.map((s) => changes.find((c) => c.id === s.id) ?? s);

@@ -525,3 +525,86 @@ describe("HDPM Field cancel", () => {
     ).toThrow("Unknown clock action");
   });
 });
+
+describe("locked sheets under the running shift (review of 0f32dae)", () => {
+  const approved = (sheet: Sheet): Sheet => ({
+    ...sheet,
+    state: "approved",
+    employee_signed_at: "2026-01-15T20:00:00.000Z",
+  });
+  it("same-day fix start on a draft sheet sends no sheet changes", async () => {
+    queueClock(clock(), [clockedInSheet()]);
+    await command(workerCtx, {
+      op: "clock",
+      action: "fix_start",
+      clockVersion: 7,
+      start: "2026-01-08T16:15:00.000Z",
+      reason: "Started at 8:15",
+    });
+    expect(mock.rpc.mock.calls[0][1].p_request).toMatchObject({
+      clockAction: "fix_start",
+      sheets: [],
+    });
+  });
+  it("refuses a cross-period fix start onto a locked, already empty day", async () => {
+    // Jan 16, 9 AM Pacific. Jan 1–15 is approved and Jan 15 is already an empty exception day,
+    // so moving the start there changes no days; the lock must still refuse it.
+    vi.setSystemTime(new Date("2026-01-16T17:00:00Z"));
+    const early = approved(planned());
+    const jan15 = early.days.find((d) => d.date === "2026-01-15")!;
+    Object.assign(jan15, { off: false, exception: true, shifts: [] });
+    const late: Sheet = {
+      ...planned(),
+      id: "late",
+      period_start: "2026-01-16",
+      period_end: "2026-01-31",
+      days: buildDays(worker, "2026-01-16", "2026-01-31"),
+    };
+    const lateClockedIn = removePlanned([late], "2026-01-16")[0];
+    mock.results.push(worker);
+    queueClock(clock(running("2026-01-16T16:30:00.000Z")), [early, lateClockedIn]);
+    await expect(
+      command(adminCtx, {
+        op: "adminClock",
+        employeeId: worker.id,
+        action: "fix_start",
+        clockVersion: 7,
+        start: "2026-01-16T07:30:00.000Z", // Jan 15, 11:30 PM
+        reason: "Started the night before",
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining("2026-01-01 to 2026-01-15 timesheet is approved. Reopen it first"),
+    });
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
+  it("refuses a worker cancel when the running shift's sheet is locked, with no changed days", async () => {
+    queueClock(clock(), [approved(clockedInSheet())]);
+    await expect(
+      command(workerCtx, {
+        op: "clock",
+        action: "cancel",
+        clockVersion: 7,
+        reason: "Mistake",
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining("Ask your manager to reopen it"),
+    });
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
+  it("refuses an admin cancel when the running shift's sheet is locked", async () => {
+    mock.results.push(worker);
+    queueClock(clock(), [approved(clockedInSheet())]);
+    await expect(
+      command(adminCtx, {
+        op: "adminClock",
+        employeeId: worker.id,
+        action: "cancel",
+        clockVersion: 7,
+        reason: "Pocket tap",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(mock.rpc).not.toHaveBeenCalled();
+  });
+});
