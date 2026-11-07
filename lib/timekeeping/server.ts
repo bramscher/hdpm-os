@@ -28,6 +28,13 @@ import {
   type Sheet,
   type Shift,
 } from "./model";
+import {
+  checkFixStart,
+  collect,
+  merge,
+  removePlanned,
+  restorePlanned,
+} from "./running-clock";
 
 export class TimeError extends Error {
   constructor(
@@ -396,6 +403,22 @@ const version = (value: unknown): number => {
   return Number(value);
 };
 
+/** Same day content, whatever the key order; a missing `exception` flag equals false. */
+function sameDay(a: Day | undefined, b: Day | undefined): boolean {
+  const canon = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(canon)
+      : v && typeof v === "object"
+        ? Object.fromEntries(
+            Object.entries(v)
+              .filter(([k, x]) => x !== undefined && !(k === "exception" && !x))
+              .sort(([x], [y]) => x.localeCompare(y))
+              .map(([k, x]) => [k, canon(x)]),
+          )
+        : v;
+  return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+}
+
 export async function command(ctx: Context, body: Record<string, unknown>) {
   const op = body.op;
   if (
@@ -562,6 +585,7 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
     return apply(ctx, { op, period: body.period });
   }
   if (op === "clock") return clockCommand(ctx, body);
+  if (op === "adminClock") return adminClockCommand(ctx, body);
   if (
     !["save", "submit", "approve", "return", "reopen", "refresh", "remove"].includes(
       String(op),
@@ -577,7 +601,8 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
   let days = sheet.days;
   let reason = noteText(body.reason ?? "");
   if (op === "save") {
-    days = validateDays(body.days, sheet.period_start, sheet.period_end);
+    const input = validateDays(body.days, sheet.period_start, sheet.period_end);
+    days = input;
     // Any altered scheduled/clocked entry becomes a manual exception. Clients
     // cannot manufacture a clock source or retain scheduled status for future actuals.
     days = days.map((d) => ({
@@ -597,10 +622,24 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
     }));
     validateDays(days, sheet.period_start, sheet.period_end);
     if ((await getClock(sheet.employee_id)).shift) {
-      // A running clock owns today and later: keep those days exactly as saved
-      // (the database rejects any change). Earlier days stay editable, and the
-      // timekeeping_event audit row labels the edit.
+      // A running clock owns today and later (the database rejects any change
+      // there). Earlier days stay editable and the timekeeping_event audit row
+      // labels the edit. A change to today or later is refused with a clear
+      // message instead of being quietly dropped, for the worker and for an
+      // admin editing someone who is clocked in.
       const today = localDate();
+      const blocked = input.some(
+        (d) =>
+          d.date >= today &&
+          !sameDay(d, sheet.days.find((x) => x.date === d.date)),
+      );
+      if (blocked)
+        throw new TimeError(
+          sheet.employee_id === ctx.employee.id
+            ? "Your clock is running. Clock out before changing today or later days. Nothing was saved."
+            : `${sheet.employee_name} is clocked in. Today and later days can't change until their clock stops. Nothing was saved.`,
+          409,
+        );
       days = days.map((d) =>
         d.date >= today ? (sheet.days.find((x) => x.date === d.date) ?? d) : d,
       );
@@ -667,6 +706,7 @@ export async function command(ctx: Context, body: Record<string, unknown>) {
   });
 }
 
+/** A worker's own clock: in, break, resume, out, correct (missed clock-out), fix_start and cancel. */
 export async function clockCommand(ctx: Context, body: Record<string, unknown>) {
   if (!recordsEmployeeTime(ctx.employee.staff_person))
     throw new TimeError(
@@ -681,15 +721,136 @@ export async function clockCommand(ctx: Context, body: Record<string, unknown>) 
       "The clock changed on another device. Reload before continuing.",
       409,
     );
+  const plan = await planClock(ctx.employee, clock, body, false);
+  return apply(ctx, {
+    op: "clock",
+    clockAction: plan.action,
+    clockVersion: clock.version,
+    shift: plan.shift,
+    reason: plan.reason,
+    sheets: plan.changes.map((s) => ({
+      id: s.id,
+      version: s.version,
+      days: s.days,
+    })),
+  });
+}
+
+/**
+ * An administrator fixes someone else's running clock (Craig, 2026-11-07): fix the start, cancel
+ * it, or stop it at a given time. Admins only (not reviewers), always with a reason. Saved by
+ * timekeeping_admin_clock (20261044 migration), which checks both again.
+ */
+export async function adminClockCommand(
+  ctx: Context,
+  body: Record<string, unknown>,
+) {
+  if (!ctx.isAdmin)
+    throw new TimeError(
+      "Only an administrator can change another employee's clock.",
+      403,
+    );
+  const employeeId = String(body.employeeId ?? "");
+  if (!employeeId || employeeId === ctx.employee.id)
+    throw new TimeError("Use your own clock panel for your own clock.");
+  const action = String(body.action);
+  if (!["fix_start", "cancel", "stop"].includes(action))
+    throw new TimeError("Unknown clock action.");
+  if (!noteText(body.reason ?? "").trim())
+    throw new TimeError("Enter the reason for this clock change.");
+  const target = checked(
+    await getSupabaseAdmin()
+      .from("timekeeping_employee")
+      .select("*")
+      .eq("id", employeeId)
+      .maybeSingle(),
+  ) as Employee | null;
+  if (
+    !target ||
+    !recordsEmployeeTime(target.staff_person) ||
+    !participatesInTimekeeping(target.staff_person)
+  )
+    throw new TimeError("Choose an employee who records time.", 403);
+  const clock = await getClock(target.id);
+  if (clock.version !== version(body.clockVersion))
+    throw new TimeError(
+      "This clock just changed. Reload before continuing.",
+      409,
+    );
+  const plan = await planClock(
+    target,
+    clock,
+    { ...body, action: action === "stop" ? "correct" : action },
+    true,
+  );
+  const result = await getSupabaseAdmin().rpc("timekeeping_admin_clock", {
+    p_actor: ctx.email,
+    p_request: {
+      employeeId: target.id,
+      clockAction: action,
+      clockVersion: clock.version,
+      shift: plan.shift,
+      reason: plan.reason,
+      sheets: plan.changes.map((s) => ({
+        id: s.id,
+        version: s.version,
+        days: s.days,
+      })),
+    },
+  });
+  if (result.error?.code === "PGRST202" || result.error?.code === "42883")
+    throw new TimeError(
+      "Fixing another employee's clock needs the 20261044 timekeeping SQL update. Nothing was changed.",
+      503,
+    );
+  return checked(result);
+}
+
+/** Admin read of someone's clock (the sheet view shows when they're clocked in). Never writes. */
+export async function clockFor(ctx: Context, employeeId: string): Promise<Clock> {
+  if (!ctx.isAdmin) throw new TimeError("Admin access required.", 403);
+  const row = checked(
+    await getSupabaseAdmin()
+      .from("timekeeping_clock")
+      .select("*")
+      .eq("employee_id", employeeId)
+      .maybeSingle(),
+  ) as Clock | null;
+  return row ?? { employee_id: employeeId, version: 1, shift: null };
+}
+
+/** Work out the new clock entry and the sheet changes for one clock action. Writes nothing. */
+async function planClock(
+  employee: Employee,
+  clock: Clock,
+  body: Record<string, unknown>,
+  admin: boolean,
+): Promise<{
+  action: string;
+  shift: Shift | null;
+  changes: Sheet[];
+  reason: string;
+}> {
   const now = new Date(),
     at = now.toISOString(),
-    today = localDate(now),
-    changes: Sheet[] = [];
-  await ensureSheets(ctx.employee, today);
-  const own = await ownSheets(ctx.employee.id),
+    today = localDate(now);
+  let changes: Sheet[] = [];
+  await ensureSheets(employee, today);
+  const own = await ownSheets(employee.id),
     current = currentSheet(own, today);
   let shift: Shift | null = clock.shift ? structuredClone(clock.shift) : null;
-  const action = body.action;
+  const action = String(body.action);
+  const reason = ["correct", "fix_start", "cancel"].includes(action)
+    ? noteText(body.reason ?? "").trim()
+    : "";
+  if (["correct", "fix_start", "cancel"].includes(action) && !reason)
+    throw new TimeError(
+      action === "correct"
+        ? "Explain the clock correction."
+        : action === "cancel"
+          ? "Say why you're cancelling this clock-in."
+          : "Say why the start time needs fixing.",
+    );
   if (action === "in") {
     if (shift) throw new TimeError("You are already clocked in.");
     const sheet = own.find((s) => s.period_start === periodFor(today).start);
@@ -714,36 +875,8 @@ export async function clockCommand(ctx: Context, body: Record<string, unknown>) 
       throw new TimeError(
         "Resolve today’s leave or overlapping time before clocking in.",
       );
-    const nextDay: Day = {
-      ...day,
-      off: false,
-      exception: true,
-      shifts: day.shifts.filter((s) => s.source !== "scheduled"),
-    };
-    // Remove the continuation of tonight's scheduled shift from tomorrow, too.
-    const placeholderIds = new Set(
-      day.shifts
-        .filter((s) => s.source === "scheduled")
-        .map((s) => s.id.split(":").slice(0, 2).join(":")),
-    );
-    for (const candidate of own) {
-      const days = candidate.days.map((d) =>
-        d.date === today
-          ? nextDay
-          : d.date < today
-            ? d
-            : {
-                ...d,
-                shifts: d.shifts.filter(
-                  (s) =>
-                    s.source !== "scheduled" ||
-                    !placeholderIds.has(s.id.split(":").slice(0, 2).join(":")),
-                ),
-              },
-      );
-      if (JSON.stringify(days) !== JSON.stringify(candidate.days))
-        changes.push({ ...candidate, days });
-    }
+    // Today's planned hours, and tonight's carry-over into tomorrow, come off the sheet.
+    changes = removePlanned(own, today);
     shift = {
       id: crypto.randomUUID(),
       start: at,
@@ -754,7 +887,8 @@ export async function clockCommand(ctx: Context, body: Record<string, unknown>) 
       ...(body.callout === true ? { emergencyAfterHours: true } : {}),
     };
   } else {
-    if (!shift) throw new TimeError("Clock in first.");
+    if (!shift)
+      throw new TimeError(admin ? "This person isn't clocked in." : "Clock in first.");
     const open = shift.breaks.find((b) => b.start && !b.end);
     if (action === "break") {
       if (open) throw new TimeError("You already have an open break.");
@@ -770,6 +904,35 @@ export async function clockCommand(ctx: Context, body: Record<string, unknown>) 
     } else if (action === "resume") {
       if (!open) throw new TimeError("There is no open break.");
       open.end = at;
+    } else if (action === "fix_start") {
+      // The running entry is edited in place: nothing is deleted and the clock doesn't restart.
+      let start: string;
+      try {
+        start = checkFixStart(shift, body.start, own, now, !admin);
+      } catch (e) {
+        throw new TimeError((e as Error).message);
+      }
+      const from = localDate(new Date(shift.start)),
+        to = localDate(new Date(start));
+      if (from !== to) {
+        // Moving to another day: the old day gets its planned hours back, the new day loses them.
+        const target = own.flatMap((s) => s.days).find((d) => d.date === to);
+        if (target?.leave.length)
+          throw new TimeError(
+            "That day has leave on the sheet. Resolve it before moving the start there.",
+          );
+        const restored = restorePlanned(own, employee, from);
+        changes = collect(
+          restored,
+          removePlanned(merge(own, restored), to),
+        );
+      }
+      shift.start = start;
+    } else if (action === "cancel") {
+      // A clock-in started by mistake: the running entry is cleared (the event log keeps it, with
+      // who and why) and nothing goes on the sheet. The clock-in day's planned hours come back.
+      changes = restorePlanned(own, employee, localDate(new Date(shift.start)));
+      shift = null;
     } else if (action === "out" || action === "correct") {
       let ended = at;
       if (action === "correct") {
@@ -779,19 +942,19 @@ export async function clockCommand(ctx: Context, body: Record<string, unknown>) 
           Date.parse(String(body.end)) > now.getTime()
         )
           throw new TimeError("Enter a valid past clock-out time.");
-        if (!noteText(body.reason ?? "").trim())
-          throw new TimeError("Explain the clock correction.");
         ended = new Date(String(body.end)).toISOString();
+        if (Date.parse(ended) <= Date.parse(shift.start))
+          throw new TimeError("The clock-out must be after the start.");
       }
       if (open) open.end = ended;
       shift.end = ended;
       for (const part of splitShift(shift)) {
-        await ensureSheets(ctx.employee, part.date);
+        await ensureSheets(employee, part.date);
         let sheet = changes.find(
           (s) => s.period_start === periodFor(part.date).start,
         );
         if (!sheet) {
-          const found = (await ownSheets(ctx.employee.id)).find(
+          const found = (await ownSheets(employee.id)).find(
             (s) => s.period_start === periodFor(part.date).start,
           );
           if (!found)
@@ -819,17 +982,7 @@ export async function clockCommand(ctx: Context, body: Record<string, unknown>) 
       shift = null;
     } else throw new TimeError("Unknown clock action.");
   }
-  return apply(ctx, {
-    op: "clock",
-    clockVersion: clock.version,
-    shift,
-    reason: action === "correct" ? noteText(body.reason) : "",
-    sheets: changes.map((s) => ({
-      id: s.id,
-      version: s.version,
-      days: s.days,
-    })),
-  });
+  return { action, shift, changes, reason };
 }
 
 export async function exportRows(ctx: Context, id?: string) {

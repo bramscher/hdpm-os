@@ -414,22 +414,32 @@ describe("timekeeping server identity and signatures", () => {
       vi.useRealTimers();
     }
   });
-  it("while clocked in, saves earlier days with an audit reason and keeps today and later as saved", async () => {
+  it("while clocked in, saves earlier days with an audit reason and refuses changes to today or later", async () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-01-10T17:00:00Z")); // Jan 10, 9 AM Pacific
       const s = sheet();
       const edited = structuredClone(s.days);
       edited[2] = { ...edited[2], off: false, note: "Fixed Jan 3" }; // earlier day
-      edited[9] = { ...edited[9], note: "Tried to change today" }; // today
-      edited[12] = { ...edited[12], note: "Tried to change a later day" };
       mock.results.push(s, [s], ...clockedOut({ id: "running" }));
       await command(ctx, { op: "save", sheetId: s.id, version: 1, days: edited });
       const request = mock.rpc.mock.calls.at(-1)![1].p_request;
       expect(request.days[2].note).toBe("Fixed Jan 3");
       expect(request.days[9]).toEqual(s.days[9]);
-      expect(request.days[12]).toEqual(s.days[12]);
       expect(request.reason).toBe("Edited earlier days while clocked in");
+      // Before 20261044 these were quietly dropped; now the save is refused and says why.
+      for (const i of [9, 12]) {
+        const later = structuredClone(edited);
+        later[i] = { ...later[i], note: "Tried to change today or later" };
+        mock.results.push(s, [s], ...clockedOut({ id: "running" }));
+        await expect(
+          command(ctx, { op: "save", sheetId: s.id, version: 1, days: later }),
+        ).rejects.toMatchObject({
+          status: 409,
+          message: expect.stringContaining("Your clock is running"),
+        });
+      }
+      expect(mock.rpc).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
