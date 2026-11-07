@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { recordsEmployeeTime } from "@/lib/timekeeping/eligibility";
 import {
   reviewPeriods,
@@ -122,11 +122,11 @@ function TimekeepingView() {
   const [period, setPeriod] = useState(""),
     [person, setPerson] = useState("");
   const [payrollReady, setPayrollReady] = useState("");
-  async function load() {
+  const load = useCallback(async () => {
     const d = await api<Boot>();
     setData(d);
     return d;
-  }
+  }, [api]);
   useEffect(() => {
     load()
       .then(async (boot) => {
@@ -136,8 +136,7 @@ function TimekeepingView() {
         }
       })
       .catch((e) => setError(errorText(e)));
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- load is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR); api is context
-  }, []);
+  }, [api, load]);
   async function perform(action: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -754,7 +753,7 @@ function PersonalHistory({
   const [period, setPeriod] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setBusy(true);
     setError("");
     try {
@@ -764,11 +763,10 @@ function PersonalHistory({
     } finally {
       setBusy(false);
     }
-  }
+  }, [api]);
   useEffect(() => {
     void refresh();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR)
-  }, []);
+  }, [refresh]);
   const selected =
     sheets?.find((s) => s.period_start === period) || sheets?.[0];
   const statusLabel = (sheet: Sheet) =>
@@ -1495,13 +1493,18 @@ function SheetEditor({
     await request;
     if (saved.current < revision.current) return save();
   }
+  // The autosave timer calls the latest save (current reason and draft), so
+  // the effect only restarts on an edit (tick), never because save was rebuilt.
+  const latestSave = useRef(save);
+  useEffect(() => {
+    latestSave.current = save;
+  });
   useEffect(() => {
     if (!tick) return;
     const timer = setTimeout(() => {
-      save().catch(() => {});
+      latestSave.current().catch(() => {});
     }, 800);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- save is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR); tick is the trigger
   }, [tick]); // refs serialize overlapping autosaves
   useEffect(() => {
     const guard = (e: BeforeUnloadEvent) => {

@@ -95,6 +95,9 @@ export function PaymentReconcileModal({
     };
   }, [handleKeyDown]);
 
+  // The saved choice as of opening: payments load once per open, and edits
+  // (which update savedPayment through onPaymentChange) must not reload them.
+  const [openingPayment] = useState(savedPayment);
   useEffect(() => {
     (async () => {
       try {
@@ -103,7 +106,7 @@ export function PaymentReconcileModal({
         if (!res.ok) throw new Error(data.error || "Could not load payments");
         const list: Payment[] = data.payments || [];
         setPayments(availableReconciliationPayments(list));
-        const choice = reconciliationPaymentChoice(list, savedPayment);
+        const choice = reconciliationPaymentChoice(list, openingPayment);
         setMode(choice.mode);
         setSelectedPaymentId(choice.selectedPaymentId);
       } catch (error) {
@@ -112,8 +115,7 @@ export function PaymentReconcileModal({
         setLoadingPayments(false);
       }
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- loads payments once when the modal opens; re-running when savedPayment changes would reload them mid-edit (behavior decision, see PR)
-  }, []);
+  }, [openingPayment]);
 
   // Charged split of the selected invoices (void excluded by aggregate()).
   const totals = useMemo(() => aggregate(invoices), [invoices]);

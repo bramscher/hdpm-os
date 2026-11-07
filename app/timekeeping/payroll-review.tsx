@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TimekeepingApi } from "@/lib/timekeeping/client";
 import { addDays, hours, type Employee } from "@/lib/timekeeping/model";
 import {
@@ -29,16 +29,22 @@ export default function PayrollReview({
   const [review, setReview] = useState<Review | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  async function refresh() {
+  // onReady is an inline arrow in the parent; reading it through a ref keeps
+  // refresh stable, so reporting readiness can't trigger another check.
+  const latestOnReady = useRef(onReady);
+  useEffect(() => {
+    latestOnReady.current = onReady;
+  });
+  const refresh = useCallback(async () => {
     setBusy(true);
     setError("");
-    onReady(false);
+    latestOnReady.current(false);
     try {
       const next = await request<Review>(
         `?view=payroll-check&period=${period}`,
       );
       setReview(next);
-      onReady(
+      latestOnReady.current(
         next.reports.length > 0 && next.reports.every((r) => !r.issues.length),
       );
     } catch (e) {
@@ -46,11 +52,10 @@ export default function PayrollReview({
     } finally {
       setBusy(false);
     }
-  }
+  }, [request, period]);
   useEffect(() => {
     void refresh();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR)
-  }, [period]);
+  }, [refresh]);
   return (
     <section className="tk-panel" aria-label="Overtime and payroll setup">
       <div className="tk-section-heading">

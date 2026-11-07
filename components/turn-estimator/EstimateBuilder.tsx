@@ -144,7 +144,7 @@ export default function EstimateBuilder({
   }>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const specForRow = (r: Row) => {
+  const specForRow = useCallback((r: Row) => {
     const item = itemByCode.get(r.item_code);
     if (!item || r.included === false) return null;
     const spec: Record<string, unknown> = { item_code: r.item_code };
@@ -154,12 +154,11 @@ export default function EstimateBuilder({
     if (r.room) spec.room = r.room;
     if (r.description) spec.description = r.description;
     return spec;
-  };
+  }, [itemByCode]);
 
   const validSpecs = useCallback(
     () => rows.map(specForRow).filter(Boolean) as Record<string, unknown>[],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, itemByCode]
+    [rows, specForRow]
   );
 
   // Debounced live preview.
@@ -193,8 +192,7 @@ export default function EstimateBuilder({
       }
     }, 350);
     return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- specForRow is recreated every render, so listing it would re-run this effect every render; making it stable needs a useCallback refactor (behavior decision, see PR)
-  }, [rows, authLimit, issued, validSpecs]);
+  }, [rows, authLimit, issued, validSpecs, specForRow]);
 
   function setRow(key: string, patch: Partial<Row>) {
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
